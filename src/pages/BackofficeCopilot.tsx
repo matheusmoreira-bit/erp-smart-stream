@@ -79,7 +79,7 @@ export default function BackofficeCopilot() {
           Authorization: `Bearer ${token}`,
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
         },
-        body: JSON.stringify({ messages: nextMsgs }),
+        body: JSON.stringify({ messages: nextMsgs.map((m) => ({ role: m.role, content: m.content })) }),
       });
 
       if (!resp.ok || !resp.body) {
