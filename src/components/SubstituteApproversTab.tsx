@@ -227,11 +227,17 @@ export default function SubstituteApproversTab({ isAdmin = false }: { isAdmin?: 
             <span className="ml-1.5 text-[10px] font-mono bg-background/40 px-1.5 py-0.5 rounded">{history.length}</span>
           </Button>
         </div>
-        {isAdmin && (
-          <Button size="sm" onClick={openCreate} className="gap-1.5">
-            <UserPlus className="w-4 h-4" /> Nova substituição
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant={canManage ? "outline" : "default"} onClick={() => openCreate(true)} className="gap-1.5">
+            <CalendarClock className="w-4 h-4" /> Definir meu substituto (férias)
           </Button>
-        )}
+          {canManage && (
+            <Button size="sm" onClick={() => openCreate(false)} className="gap-1.5">
+              <UserPlus className="w-4 h-4" /> Nova substituição
+            </Button>
+          )}
+        </div>
+
       </div>
 
       <div className="glass-card overflow-hidden">
