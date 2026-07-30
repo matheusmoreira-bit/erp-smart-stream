@@ -41,8 +41,28 @@ Deno.serve(async (req) => {
     const { data: cfgs, error: cfgErr } = await q;
     if (cfgErr) throw cfgErr;
 
+    // Empresas alvo: as com config habilitada + as que já executaram cruzamento antes
+    // (config ausente = auto_conciliar default true).
+    const alvos = new Set<string>((cfgs || []).map((c: any) => c.empresa_id));
+    if (!body.empresa_id) {
+      const { data: cfgOff } = await supabase
+        .from("auditoria_cruzamento_config")
+        .select("empresa_id")
+        .eq("auto_conciliar", false);
+      const desligadas = new Set<string>((cfgOff || []).map((c: any) => c.empresa_id));
+      const { data: prev } = await supabase
+        .from("auditoria_cruzamento_fiscal")
+        .select("empresa_id")
+        .limit(5000);
+      for (const r of prev || []) {
+        if (!desligadas.has((r as any).empresa_id)) alvos.add((r as any).empresa_id);
+      }
+    } else {
+      alvos.add(body.empresa_id);
+    }
+
     const results: any[] = [];
-    for (const cfg of cfgs || []) {
+    for (const cfg of Array.from(alvos).map((empresa_id) => ({ empresa_id }))) {
       try {
         const res = await fetch(`${supabaseUrl}/functions/v1/audit-cross-fiscal-run`, {
           method: "POST",
