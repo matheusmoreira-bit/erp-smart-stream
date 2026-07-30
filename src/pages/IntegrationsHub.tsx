@@ -14,5 +14,5 @@ const TABS: readonly HubTabDef<TabKey>[] = [
 ];
 
 export default function IntegrationsHub({ tab }: { tab: TabKey }) {
-  return <TabsHub tabs={TABS} active={tab} />;
+  return <TabsHub tabs={TABS} active={tab} moduleLabel="Integrações" />;
 }
