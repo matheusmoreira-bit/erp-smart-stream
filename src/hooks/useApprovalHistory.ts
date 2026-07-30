@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { expenseRead } from "@/lib/expense-read";
+import { displayUserNameOrEmpty } from "@/lib/user-display";
+
 
 export interface ApprovalHistoryRow {
   id: string;
