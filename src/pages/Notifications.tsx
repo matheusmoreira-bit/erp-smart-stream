@@ -239,6 +239,12 @@ export default function NotificationsPage() {
           </TabsContent>
         </Tabs>
       </main>
+      <DocumentMilestonesDialog
+        expenseId={milestonesId}
+        open={!!milestonesId}
+        onOpenChange={(o) => { if (!o) setMilestonesId(null); }}
+      />
     </div>
+
   );
 }
