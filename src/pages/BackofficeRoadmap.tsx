@@ -50,6 +50,14 @@ const CHANGELOG: RoadmapItem[] = [
   // ---- Fase 6 — Experiência e inteligência (jul/2026)
   {
     date: "2026-07-30",
+    title: "Revisão periódica de acessos",
+    kind: "seguranca",
+    track: "Governança e segurança",
+    description:
+      "Campanhas trimestrais de recertificação: retrato automático de grupos e alçadas, decisão de manter/alterar/revogar com justificativa, revogação aplicada na hora e exportação de evidência para auditoria.",
+  },
+  {
+    date: "2026-07-30",
     title: "Identidade canônica do usuário SAP",
     kind: "melhoria",
     track: "Governança e segurança",
@@ -579,12 +587,6 @@ const BACKLOG: { group: string; items: BacklogItem[] }[] = [
         impact: "alto",
         effort: "alto",
         description: "Substituir o login local por identidade corporativa, com MFA obrigatório.",
-      },
-      {
-        title: "Revisão periódica de acessos",
-        impact: "médio",
-        effort: "médio",
-        description: "Campanha trimestral de recertificação de grupos e alçadas, com evidência para auditoria.",
       },
       {
         title: "Desprovisionamento automático via IdP",
