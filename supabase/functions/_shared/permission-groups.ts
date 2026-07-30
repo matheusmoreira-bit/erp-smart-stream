@@ -61,5 +61,62 @@ export async function canViewAllDocuments(
   identities: Array<string | null | undefined>,
 ): Promise<boolean> {
   const groups = await getPermissionGroups(admin, identities);
-  return groups.some((g) => !BASIC_GROUPS.has(normalizeGroupName(g)));
+  // "Usuário Administrativo" não é visão total: é escopo por diretoria.
+  return groups.some(
+    (g) => !BASIC_GROUPS.has(normalizeGroupName(g)) && !isDirectorateGroup(g),
+  );
+}
+
+/**
+ * Grupo "Usuário Administrativo": vê todos os documentos da própria diretoria
+ * (centro de custo de 2º nível informado pelo IdP), e não a base inteira.
+ */
+export function isDirectorateGroup(name: unknown): boolean {
+  const n = normalizeGroupName(name);
+  return n === "usuario administrativo" || n === "usuarios administrativos";
+}
+
+/** Ramo (diretoria) de um centro de custo: "1.6.1.2" → "1.6". */
+export function costCenterBranch(costCenter: unknown): string | null {
+  const cc = String(costCenter ?? "").trim();
+  if (!cc) return null;
+  const parts = cc.split(".").filter(Boolean);
+  if (parts.length < 2) return null;
+  return `${parts[0]}.${parts[1]}`;
+}
+
+export function costCenterInBranch(costCenter: unknown, branch: string | null): boolean {
+  if (!branch) return false;
+  const cc = String(costCenter ?? "").trim();
+  if (!cc) return false;
+  return cc === branch || cc.startsWith(`${branch}.`);
+}
+
+/**
+ * Diretoria visível para o caller quando ele pertence ao grupo
+ * "Usuário Administrativo". Retorna null quando não é do grupo ou quando o IdP
+ * não define o centro de custo (nesse caso ele continua vendo só os próprios).
+ */
+export async function resolveDirectorateBranch(
+  admin: SupabaseClient,
+  identities: Array<string | null | undefined>,
+): Promise<string | null> {
+  const groups = await getPermissionGroups(admin, identities);
+  if (!groups.some((g) => isDirectorateGroup(g))) return null;
+
+  const wanted = identities.map(canonicalIdentity).filter(Boolean);
+  if (!wanted.length) return null;
+  const { data } = await admin
+    .from("idp_user_mapping")
+    .select("sap_email, idp_email, sap_user_code, cost_center_code");
+  for (const row of (data || []) as any[]) {
+    const hit = [row.sap_email, row.idp_email, row.sap_user_code].some((v) =>
+      wanted.some((w) => identityMatches(v, w)),
+    );
+    if (hit) {
+      const branch = costCenterBranch(row.cost_center_code);
+      if (branch) return branch;
+    }
+  }
+  return null;
 }
