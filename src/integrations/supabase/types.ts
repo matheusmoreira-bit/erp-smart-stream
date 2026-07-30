@@ -4035,6 +4035,72 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_settings: {
+        Row: {
+          body_template: string | null
+          channels: string[]
+          company_db: string | null
+          created_at: string
+          description: string | null
+          enabled: boolean
+          event_key: string
+          frequency: string
+          frequency_minutes: number | null
+          html_template: string | null
+          id: string
+          label: string
+          subject_template: string | null
+          trigger_config: Json
+          updated_at: string
+          updated_by: string | null
+          weekdays_only: boolean
+          window_end_hour: number | null
+          window_start_hour: number | null
+        }
+        Insert: {
+          body_template?: string | null
+          channels?: string[]
+          company_db?: string | null
+          created_at?: string
+          description?: string | null
+          enabled?: boolean
+          event_key: string
+          frequency?: string
+          frequency_minutes?: number | null
+          html_template?: string | null
+          id?: string
+          label: string
+          subject_template?: string | null
+          trigger_config?: Json
+          updated_at?: string
+          updated_by?: string | null
+          weekdays_only?: boolean
+          window_end_hour?: number | null
+          window_start_hour?: number | null
+        }
+        Update: {
+          body_template?: string | null
+          channels?: string[]
+          company_db?: string | null
+          created_at?: string
+          description?: string | null
+          enabled?: boolean
+          event_key?: string
+          frequency?: string
+          frequency_minutes?: number | null
+          html_template?: string | null
+          id?: string
+          label?: string
+          subject_template?: string | null
+          trigger_config?: Json
+          updated_at?: string
+          updated_by?: string | null
+          weekdays_only?: boolean
+          window_end_hour?: number | null
+          window_start_hour?: number | null
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           body: string | null
@@ -6677,6 +6743,27 @@ export type Database = {
           document_status: string
           sap_update_date: string
           series: number
+        }[]
+      }
+      get_notification_deliveries: {
+        Args: {
+          p_company_db?: string
+          p_from?: string
+          p_limit?: number
+          p_to?: string
+        }
+        Returns: {
+          channel: string
+          company_db: string
+          error_message: string
+          event: string
+          id: string
+          metadata: Json
+          occurred_at: string
+          recipient: string
+          source: string
+          status: string
+          subject: string
         }[]
       }
       get_sap_sync_health: { Args: { _last_n?: number }; Returns: Json }
