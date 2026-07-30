@@ -699,7 +699,7 @@ async function actionReactivate(admin: SupabaseClient, caller: Caller, body: any
     .update({
       status: "rascunho",
       current_approver: null,
-      current_level_order: null,
+      current_level_order: 1,
       sap_integration_error: null,
     })
     .eq("id", expenseId);
