@@ -101,7 +101,7 @@ export function ApprovalRuleExplainDialog({
   currentApprover,
   docTitle,
 }: Props) {
-  const { rules, loading } = useApprovalRules();
+  const { rules, isLoading: loading } = useApprovalRules();
 
   const result = useMemo(
     () => explainApproval(rules || [], vars, appliedRuleId),
