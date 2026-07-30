@@ -257,6 +257,54 @@ export type Database = {
         }
         Relationships: []
       }
+      approval_action_tokens: {
+        Row: {
+          approver_email: string
+          approver_name: string | null
+          channel: string
+          created_at: string
+          expense_id: string
+          expires_at: string
+          id: string
+          level_order: number | null
+          token_hash: string
+          used_action: string | null
+          used_at: string | null
+          used_ip: string | null
+          used_user_agent: string | null
+        }
+        Insert: {
+          approver_email: string
+          approver_name?: string | null
+          channel?: string
+          created_at?: string
+          expense_id: string
+          expires_at: string
+          id?: string
+          level_order?: number | null
+          token_hash: string
+          used_action?: string | null
+          used_at?: string | null
+          used_ip?: string | null
+          used_user_agent?: string | null
+        }
+        Update: {
+          approver_email?: string
+          approver_name?: string | null
+          channel?: string
+          created_at?: string
+          expense_id?: string
+          expires_at?: string
+          id?: string
+          level_order?: number | null
+          token_hash?: string
+          used_action?: string | null
+          used_at?: string | null
+          used_ip?: string | null
+          used_user_agent?: string | null
+        }
+        Relationships: []
+      }
       approval_history: {
         Row: {
           approver_code: string | null
