@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ShieldCheck,
@@ -46,7 +46,10 @@ import {
   type MatrixRow,
 } from "@/lib/approval-matrix";
 
+const VIEW_STORAGE_KEY = "erp:approval-matrix:view";
+
 const FLOW_TABS: { key: "all" | MatrixFlow; label: string }[] = [
+
   { key: "all", label: "Todos os fluxos" },
   { key: "purchase", label: "Compras" },
   { key: "sales", label: "Vendas" },
@@ -105,9 +108,21 @@ export default function ApprovalMatrix() {
   const [category, setCategory] = useState<"all" | MatrixCategory>("all");
   const [search, setSearch] = useState("");
   const [onlyActive, setOnlyActive] = useState(true);
-  const [view, setView] = useState<"list" | "map">("list");
+  const [view, setView] = useState<"list" | "map">(() => {
+    if (typeof window === "undefined") return "list";
+    return window.localStorage.getItem(VIEW_STORAGE_KEY) === "map" ? "map" : "list";
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, view);
+    } catch {
+      /* ignore */
+    }
+  }, [view]);
 
   const companyLabel = getLabel(session?.companyDB || "") || session?.companyDB || "—";
+
 
   const rows = useMemo(() => {
     const all = rules.map(toMatrixRow);
@@ -320,6 +335,8 @@ export default function ApprovalMatrix() {
           <ApprovalMatrixMindMap
             rows={rows}
             rootLabel={companyLabel}
+            storageKey={session?.companyDB || "default"}
+
             onOpenList={(f) => {
               if (f.flow) setFlow(f.flow === "both" ? "all" : f.flow);
               if (f.category) setCategory(f.category);
