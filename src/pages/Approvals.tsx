@@ -2833,10 +2833,9 @@ export default function ApprovalsPage() {
               );
             })()}
             <ThemeToggle />
-            <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-foreground">
-              <LogOut className="w-4 h-4" />
-            </Button>
             </div>
+            <UserCompanyMenu />
+
           </div>
         </div>
 
