@@ -151,7 +151,7 @@ const CHANGELOG: RoadmapItem[] = [
     kind: "automacao",
     track: "Integrações e dados",
     description:
-      "Reprocessamento de falhas transitórias com backoff progressivo, jitter, recuperação de itens travados e contingência sem anexo na última tentativa.",
+      "Reprocessamento de falhas transitórias com backoff progressivo, jitter e recuperação de itens travados. Falhas de anexo não são integradas automaticamente sem anexo — exigem decisão manual.",
   },
   {
     date: "2026-07-30",
