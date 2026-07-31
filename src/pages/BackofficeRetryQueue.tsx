@@ -74,6 +74,12 @@ function docTrailLink(row: Pick<Row, "ref_id">): string {
   return `/backoffice/trilha-documento?q=${encodeURIComponent(row.ref_id)}&doc=${encodeURIComponent(row.ref_id)}`;
 }
 
+/** Link da tela onde o documento é operado (pedido de compra). */
+function docPageLink(row: Pick<Row, "ref_id">): string {
+  return `/compras?doc=${encodeURIComponent(row.ref_id)}`;
+}
+
+
 
 function fmtDate(iso: string | null) {
   if (!iso) return "-";
