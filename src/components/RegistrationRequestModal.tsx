@@ -27,6 +27,27 @@ import {
 } from "@/lib/supplier-request-email";
 import { RegistrationFilePicker } from "@/components/RegistrationFilePicker";
 import { uploadRegistrationAttachments } from "@/lib/registration-attachments";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+interface DuplicateRequest {
+  id: string;
+  title: string;
+  status: string;
+  requester_email: string;
+  requester_name: string | null;
+  due_at: string;
+  created_at: string;
+  already_linked: boolean;
+}
 
 export interface RegistrationRequestModalProps {
   open: boolean;
