@@ -93,5 +93,6 @@ export function ModuleSubmenu() {
     />
   );
 
-  return host ? createPortal(bar, host) : null;
+  if (host) return createPortal(bar, host);
+  return inline ? bar : null;
 }
