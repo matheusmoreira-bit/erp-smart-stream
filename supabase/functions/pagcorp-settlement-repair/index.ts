@@ -210,15 +210,75 @@ Deno.serve(async (req) => {
       }
 
       for (const [paymentEntry, logRows] of byPayment) {
+      for (const [paymentEntry, logRows] of byPayment) {
         const payment = await fetchPayment(baseUrl, cookie, paymentEntry);
+        const isCancelled = !payment || String(payment.Cancelled || "tNO") === "tYES";
+
+        // ---- Modo "reset_cancelled": confirma o cancelamento manual feito no
+        // ERP e limpa os relacionamentos de baixa, devolvendo o log para a fila.
+        if (mode === "reset_cancelled") {
+          const base = {
+            companyDb,
+            paymentDocEntry: paymentEntry,
+            paymentDocNum: payment?.DocNum ?? null,
+            paymentDate: payment?.DocDate ?? null,
+            cardName: payment?.CardName ?? payment?.CardCode ?? null,
+            currency: payment?.DocCurrency ?? null,
+            cancelledInSap: isCancelled,
+            logIds: logRows.map((r) => r.id),
+          };
+          if (!isCancelled) {
+            actions.push({ ...base, action: "skipped", reason: "payment_still_active" });
+            continue;
+          }
+          if (dryRun) {
+            actions.push({ ...base, action: "would_reset" });
+            continue;
+          }
+          const note = payment
+            ? `Baixa ${payment.DocNum} cancelada manualmente no ERP — relacionamento limpo para novo lançamento.`
+            : `Pagamento ${paymentEntry} não encontrado no ERP — relacionamento limpo para novo lançamento.`;
+          const { error: updErr } = await sb
+            .from("pagcorp_integration_log")
+            .update({
+              settlement_status: "pending",
+              settlement_payment_doc_entry: null,
+              settlement_payment_doc_num: null,
+              settlement_invoice_doc_entry: null,
+              settlement_invoice_doc_num: null,
+              settlement_ptax_rate: null,
+              settlement_ptax_date: null,
+              settlement_ptax_source: null,
+              settlement_completed_at: null,
+              settlement_locked_at: null,
+              settlement_retry_after: null,
+              settlement_attempts: 0,
+              settlement_error: note,
+            })
+            .in("id", logRows.map((r) => r.id));
+
+          await sb.rpc("insert_audit_log", {
+            p_action: "pagcorp_settlement_reset",
+            p_entity_type: "vendor_payment",
+            p_entity_id: String(paymentEntry),
+            p_actor_email: adminId,
+            p_company_db: companyDb,
+            p_details: base as unknown as Record<string, unknown>,
+          }).then(() => {}, () => {});
+
+          actions.push({ ...base, action: "reset_and_requeued", updateError: updErr?.message ?? null });
+          continue;
+        }
+
         if (!payment) {
           actions.push({ companyDb, paymentDocEntry: paymentEntry, action: "skipped", reason: "payment_not_found" });
           continue;
         }
-        if (String(payment.Cancelled || "tNO") === "tYES") {
+        if (isCancelled) {
           actions.push({ companyDb, paymentDocEntry: paymentEntry, action: "skipped", reason: "already_cancelled" });
           continue;
         }
+
 
         // Valor esperado = soma das transações PagCorp deste pagamento,
         // convertidas pela PTAX gravada quando não são BRL.
