@@ -22,6 +22,7 @@ interface Props {
   onClose: () => void;
 }
 
+import { CurrencyField } from "@/components/CurrencyField";
 const CURRENCIES = ["BRL", "USD", "EUR", "ARS", "GBP"];
 
 interface SupplierOpt extends SapSearchOption {
