@@ -19,3 +19,4 @@
 - [Delegação de alçada](mem://features/approver-substitutes.md) — Substituto com vigência, autoatendimento de férias, audit log e notificações via approver-substitute-manage.
 - [Identidade única de usuário](mem://features/user-identity.md) — Usuário SAP como chave (1 nome, N e-mails), tabelas sap_user_directory/sap_user_emails e chave canônica em permissões.
 - [Grupos e capacidades](mem://features/permission-groups-capabilities.md) — Catálogo de capacidades GRUPO > USER, hooks useMyCapabilities e helpers server-side.
+- [Baixa PagCorp valor exato](mem://features/pagcorp-baixa-valor-exato.md) — Baixa automática do PagCorp = fatia do PC na conta a pagar; reparo via pagcorp-settlement-repair.
