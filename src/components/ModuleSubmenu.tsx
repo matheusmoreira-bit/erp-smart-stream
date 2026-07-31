@@ -16,14 +16,21 @@ export function ModuleSubmenu() {
   const { session } = useSap();
   const { userModules } = useModuleAccess();
   const [host, setHost] = useState<HTMLElement | null>(null);
+  // Quando a tela não tem um <header> próprio, renderizamos a régua inline
+  // (no topo do conteúdo) em vez de sumir com o breadcrumb.
+  const [inline, setInline] = useState(false);
 
   // Monta um container logo abaixo do <header> sticky da página atual,
   // para que o breadcrumb apareça sob a logo (e não acima dela).
   useEffect(() => {
     let cancelled = false;
+    setHost(null);
+    setInline(false);
     const attach = () => {
       if (cancelled) return true;
-      const header = document.querySelector<HTMLElement>("header.border-b");
+      const header =
+        document.querySelector<HTMLElement>("header.border-b") ||
+        document.querySelector<HTMLElement>("header");
       if (!header || !header.parentElement) return false;
       let el = document.getElementById("module-submenu-host");
       if (!el) {
@@ -40,16 +47,21 @@ export function ModuleSubmenu() {
       const t = window.setInterval(() => {
         if (attach()) window.clearInterval(t);
       }, 50);
-      window.setTimeout(() => window.clearInterval(t), 3000);
+      const to = window.setTimeout(() => {
+        window.clearInterval(t);
+        if (!cancelled) setInline(true);
+      }, 1500);
       return () => {
         cancelled = true;
         window.clearInterval(t);
+        window.clearTimeout(to);
       };
     }
     return () => {
       cancelled = true;
     };
   }, [pathname]);
+
 
   if (!session?.userName) return null;
   if (pathname === "/" || pathname.startsWith("/backoffice")) return null;
@@ -81,5 +93,6 @@ export function ModuleSubmenu() {
     />
   );
 
-  return host ? createPortal(bar, host) : null;
+  if (host) return createPortal(bar, host);
+  return inline ? bar : null;
 }
