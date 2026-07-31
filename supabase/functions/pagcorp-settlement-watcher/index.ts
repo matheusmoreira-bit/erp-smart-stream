@@ -438,18 +438,36 @@ async function createVendorPayment(
   if (args.project) body.ProjectCode = args.project;
 
 
-  const r = await fetch(`${baseUrl}/VendorPayments`, {
-    method: "POST",
-    headers: { Cookie: cookie, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!r.ok) throw new Error(`VendorPayments falhou ${r.status}: ${(await r.text()).slice(0, 300)}`);
+  const post = async (payload: Record<string, unknown>) =>
+    await fetch(`${baseUrl}/VendorPayments`, {
+      method: "POST",
+      headers: { Cookie: cookie, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+  let r = await post(body);
+  if (!r.ok) {
+    const errText = (await r.text()).slice(0, 300);
+    // Período contábil fechado / data fora do intervalo permitido: reposta
+    // o pagamento na data da NF (comportamento anterior) em vez de falhar.
+    const dateIssue = /permissible range|posting period|período|periodo|date/i.test(errText);
+    if (dateIssue && postDate !== args.invoiceDate) {
+      const retryBody = { ...body, DocDate: args.invoiceDate, TaxDate: args.invoiceDate, DueDate: args.invoiceDate, TransferDate: args.invoiceDate };
+      r = await post(retryBody);
+      if (!r.ok) {
+        throw new Error(`VendorPayments falhou ${r.status}: ${(await r.text()).slice(0, 300)}`);
+      }
+    } else {
+      throw new Error(`VendorPayments falhou ${r.status}: ${errText}`);
+    }
+  }
   const j = await r.json();
   return {
     docEntry: Number(j.DocEntry),
     docNum: Number(j.DocNum ?? j.DocEntry),
   };
 }
+
 
 Deno.serve(async (req) => {
   const requestId = crypto.randomUUID();
