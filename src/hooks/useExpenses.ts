@@ -9,6 +9,8 @@ import { sapQuery, type SapSession } from "@/lib/sap-client";
 import { useSap } from "@/contexts/SapContext";
 import { createNotification } from "@/lib/notifications";
 import { expenseRead } from "@/lib/expense-read";
+import { pickHierarchicalFallbackRule } from "@/lib/approval-fallback";
+
 import {
   enqueueOutbox,
   isErpUnavailable,
