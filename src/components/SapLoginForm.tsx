@@ -420,8 +420,7 @@ export function SapLoginForm() {
           </p>
         </div>
 
-        {/* Aviso temporário de indisponibilidade do ERP */}
-        <ErpOutageBanner />
+
 
 
 
