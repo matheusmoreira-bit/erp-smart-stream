@@ -276,6 +276,9 @@ Deno.serve(async (req) => {
         appliedToInvoice: Number(appliedToInvoice.toFixed(2)),
         expectedFromPagcorp: expectedRounded,
         difference: diff,
+        differencePct: diffPct,
+        fxVariation: isFxVariation,
+
         invoiceDocEntry: invoiceEntry,
         invoiceDocNum: invoice?.docNum ?? logRows[0].settlement_invoice_doc_num ?? null,
         invoiceTotal: invoice ? Number(invoice.docTotal.toFixed(2)) : null,
