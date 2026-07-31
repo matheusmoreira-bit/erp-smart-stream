@@ -251,7 +251,7 @@ async function findInvoicesForPO(
   poEntry: number,
   cardCode: string,
 ): Promise<
-  Array<{ DocEntry: number; DocNum: number; CardCode: string; CardName: string; DocTotal: number; DocTotalSys: number; PaidToDate: number; PaidToDateSys: number; DocumentStatus: string; DocCurrency: string; DocRate: number; DocDate: string; BPLId?: number }>
+  Array<{ DocEntry: number; DocNum: number; CardCode: string; CardName: string; DocTotal: number; DocTotalSys: number; PaidToDate: number; PaidToDateSys: number; DocumentStatus: string; DocCurrency: string; DocRate: number; DocDate: string; BPLId?: number; PoShare: number }>
 > {
   // SAP B1 SL v2 rejeita `DocumentLines/any()` no $filter ("Query string error -
   // Invalid symbol"), então buscamos as PurchaseInvoices do fornecedor pelo
@@ -271,22 +271,46 @@ async function findInvoicesForPO(
       (l: any) => Number(l?.BaseEntry) === poEntry && Number(l?.BaseType) === 22,
     ),
   );
-  return matched.map((inv: any) => ({
-    DocEntry: Number(inv.DocEntry),
-    DocNum: Number(inv.DocNum),
-    CardCode: String(inv.CardCode),
-    CardName: String(inv.CardName ?? ""),
-    DocTotal: Number(inv.DocTotal),
-    DocTotalSys: Number(inv.DocTotalSys ?? inv.DocTotal ?? 0),
-    PaidToDate: Number(inv.PaidToDate ?? 0),
-    PaidToDateSys: Number(inv.PaidToDateSys ?? 0),
-    DocumentStatus: String(inv.DocumentStatus ?? ""),
-    DocCurrency: String(inv.DocCurrency ?? ""),
-    DocRate: Number(inv.DocRate ?? 0),
-    DocDate: String(inv.DocDate),
-    BPLId: inv.BPL_IDAssignedToInvoice != null ? Number(inv.BPL_IDAssignedToInvoice) : undefined,
-  }));
+  // Valor da linha considerado para o rateio: usa o total bruto quando o SAP
+  // devolve (inclui impostos embutidos); senão cai para LineTotal (líquido).
+  const lineValue = (l: any) => {
+    const gross = Number(l?.GrossTotal ?? 0);
+    if (Number.isFinite(gross) && gross > 0) return gross;
+    const net = Number(l?.LineTotal ?? 0);
+    return Number.isFinite(net) ? net : 0;
+  };
+  return matched.map((inv: any) => {
+    const lines: any[] = Array.isArray(inv.DocumentLines) ? inv.DocumentLines : [];
+    const allSum = lines.reduce((a, l) => a + lineValue(l), 0);
+    const poSum = lines
+      .filter((l) => Number(l?.BaseEntry) === poEntry && Number(l?.BaseType) === 22)
+      .reduce((a, l) => a + lineValue(l), 0);
+    const docTotal = Number(inv.DocTotal);
+    // Parcela da NF que pertence a ESTE pedido de compra. Quando a NF cobre
+    // vários PCs (consolidação de contas a pagar), a baixa deve aplicar só a
+    // fatia do PC — nunca o total do documento.
+    const poShare = allSum > 0
+      ? +(docTotal * (poSum / allSum)).toFixed(2)
+      : docTotal;
+    return {
+      DocEntry: Number(inv.DocEntry),
+      DocNum: Number(inv.DocNum),
+      CardCode: String(inv.CardCode),
+      CardName: String(inv.CardName ?? ""),
+      DocTotal: docTotal,
+      DocTotalSys: Number(inv.DocTotalSys ?? inv.DocTotal ?? 0),
+      PaidToDate: Number(inv.PaidToDate ?? 0),
+      PaidToDateSys: Number(inv.PaidToDateSys ?? 0),
+      DocumentStatus: String(inv.DocumentStatus ?? ""),
+      DocCurrency: String(inv.DocCurrency ?? ""),
+      DocRate: Number(inv.DocRate ?? 0),
+      DocDate: String(inv.DocDate),
+      BPLId: inv.BPL_IDAssignedToInvoice != null ? Number(inv.BPL_IDAssignedToInvoice) : undefined,
+      PoShare: Math.max(0, poShare),
+    };
+  });
 }
+
 
 
 /**
