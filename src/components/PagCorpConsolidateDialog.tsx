@@ -142,7 +142,7 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
           };
         }
       });
-      await onConfirm(supplier, map);
+      await onConfirm(supplier, map, documentDate || null);
     } finally {
       setSubmitting(false);
     }
