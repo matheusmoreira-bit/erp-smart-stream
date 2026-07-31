@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ClipboardList, Clock, Loader2, RefreshCw, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -316,11 +316,18 @@ export default function RegistrationRequests() {
   const { session } = useSap();
   const { requests, mine, loading, isAgent, reload, updateStatus, addComment } = useRegistrationRequests();
   const [scope, setScope] = useState<"mine" | "all">("mine");
+  const [scopeTouched, setScopeTouched] = useState(false);
   const [status, setStatus] = useState<"todos" | RegistrationStatus>("todos");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<RegistrationRequest | null>(null);
 
+  // Agentes (Facilities/Admin) abrem direto na fila do time.
+  useEffect(() => {
+    if (isAgent && !scopeTouched) setScope("all");
+  }, [isAgent, scopeTouched]);
+
   const base = scope === "all" && isAgent ? requests : mine;
+
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -371,7 +378,7 @@ export default function RegistrationRequests() {
       <div className="border-b border-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex flex-wrap items-end gap-3">
           {isAgent && (
-            <Tabs value={scope} onValueChange={(v) => setScope(v as "mine" | "all")}>
+            <Tabs value={scope} onValueChange={(v) => { setScopeTouched(true); setScope(v as "mine" | "all"); }}>
               <TabsList>
                 <TabsTrigger value="mine">Minhas</TabsTrigger>
                 <TabsTrigger value="all">Fila do time</TabsTrigger>
