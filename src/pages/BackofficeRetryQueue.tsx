@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { RefreshCw, X, PlayCircle, TrendingUp, AlertTriangle, CheckCircle2, Clock, History, Send, Search, Paperclip } from "lucide-react";
+import { RefreshCw, X, PlayCircle, TrendingUp, AlertTriangle, CheckCircle2, Clock, History, Send, Search, Paperclip, ExternalLink } from "lucide-react";
+import { Link } from "react-router-dom";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 
 type MetricsRow = {
@@ -60,6 +61,17 @@ const CATEGORY_LABELS: Record<string, string> = {
 function categoryLabel(cat: string | null): string {
   if (!cat) return "Sem categoria";
   return CATEGORY_LABELS[cat] || cat;
+}
+
+/** A falha é de anexo? (categoria gravada pelo retry ou mensagem do SAP) */
+function isAttachmentFailure(row: Pick<Row, "error_category" | "last_error">): boolean {
+  if (row.error_category === "attachment") return true;
+  return /attachment|anexo/i.test(row.last_error || "");
+}
+
+/** Link da trilha unificada do documento (abre a linha do tempo já filtrada). */
+function docTrailLink(row: Pick<Row, "ref_id">): string {
+  return `/backoffice/trilha-documento?q=${encodeURIComponent(row.ref_id)}&doc=${encodeURIComponent(row.ref_id)}`;
 }
 
 
@@ -566,12 +578,24 @@ export default function BackofficeRetryQueue() {
                   {r.last_error || "-"}
                 </TableCell>
                 <TableCell className="text-right space-x-1 whitespace-nowrap">
+                  {r.doc_type === "expense" && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      asChild
+                      title="Abrir a trilha completa deste documento"
+                    >
+                      <Link to={docTrailLink(r)} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-3 w-3 mr-1" />Ver documento
+                      </Link>
+                    </Button>
+                  )}
                   {canDispatch && (
                     <Button size="sm" variant="outline" onClick={() => retryNow(r.id)}>
                       <PlayCircle className="h-3 w-3 mr-1" />Reenviar
                     </Button>
                   )}
-                  {canDispatch && r.doc_type === "expense" && (
+                  {canDispatch && r.doc_type === "expense" && isAttachmentFailure(r) && (
                     <Button
                       size="sm"
                       variant="secondary"
@@ -583,6 +607,7 @@ export default function BackofficeRetryQueue() {
                       {skippingId === r.id ? "Integrando..." : "Integrar sem anexo"}
                     </Button>
                   )}
+
 
                   {r.status !== "cancelled" && r.status !== "succeeded" && (
                     <Button size="sm" variant="ghost" onClick={() => cancel(r.id)} aria-label="Cancelar">
