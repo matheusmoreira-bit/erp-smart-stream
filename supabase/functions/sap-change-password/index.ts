@@ -20,6 +20,7 @@ import { ensurePasswordNeverExpires } from "../_shared/sap-password-never-expire
 import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { consumeCsrfToken, CSRF_HEADER } from "../_shared/csrf.ts";
 import { revokeErpSession } from "../_shared/session-revocation.ts";
+import { encryptSecret } from "../_shared/sap-cred-crypto.ts";
 
 
 
