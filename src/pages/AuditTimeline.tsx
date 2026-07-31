@@ -1,14 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { History, Search, Loader2 } from "lucide-react";
+import { History, Search, Loader2, ExternalLink } from "lucide-react";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 import { DocumentTimeline } from "@/components/DocumentTimeline";
 import { expenseRead } from "@/lib/expense-read";
 import { cn } from "@/lib/utils";
+
+/** Link para a tela onde o documento é operado (compras ou vendas), já filtrado. */
+function docPageLink(doc: { id: string; doc_type: string | null }): string {
+  const base = doc.doc_type === "sales" ? "/vendas/pedidos" : "/compras";
+  return `${base}?doc=${encodeURIComponent(doc.id)}`;
+}
+
 
 interface DocRow {
   id: string;
@@ -157,19 +164,32 @@ export default function AuditTimeline() {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">
-              {selected
-                ? `${selected.doc_type === "sales" ? "Pedido de venda" : "Pedido de compra"}${
-                    selected.sap_doc_num ? ` · SAP ${selected.sap_doc_num}` : ""
-                  }`
-                : "Linha do tempo"}
-            </CardTitle>
-            {selected && (
-              <p className="text-xs text-muted-foreground">
-                {[selected.supplier_name, selected.company_db, selected.status].filter(Boolean).join(" · ")}
-              </p>
-            )}
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">
+                  {selected
+                    ? `${selected.doc_type === "sales" ? "Pedido de venda" : "Pedido de compra"}${
+                        selected.sap_doc_num ? ` · SAP ${selected.sap_doc_num}` : ""
+                      }`
+                    : "Linha do tempo"}
+                </CardTitle>
+                {selected && (
+                  <p className="text-xs text-muted-foreground">
+                    {[selected.supplier_name, selected.company_db, selected.status].filter(Boolean).join(" · ")}
+                  </p>
+                )}
+              </div>
+              {selected && (
+                <Button size="sm" variant="outline" asChild title="Abrir o documento na tela de origem">
+                  <Link to={docPageLink(selected)} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-3 w-3 mr-1" />
+                    Ver documento
+                  </Link>
+                </Button>
+              )}
+            </div>
           </CardHeader>
+
           <CardContent>
             {selected ? (
               <DocumentTimeline expenseId={selected.id} />

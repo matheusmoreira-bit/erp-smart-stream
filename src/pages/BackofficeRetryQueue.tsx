@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { RefreshCw, X, PlayCircle, TrendingUp, AlertTriangle, CheckCircle2, Clock, History, Send, Search, Paperclip, ExternalLink } from "lucide-react";
+import { RefreshCw, X, PlayCircle, TrendingUp, AlertTriangle, CheckCircle2, Clock, History, Send, Search, Paperclip, ExternalLink, FileText } from "lucide-react";
 import { Link } from "react-router-dom";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 
@@ -73,6 +73,12 @@ function isAttachmentFailure(row: Pick<Row, "error_category" | "last_error">): b
 function docTrailLink(row: Pick<Row, "ref_id">): string {
   return `/backoffice/trilha-documento?q=${encodeURIComponent(row.ref_id)}&doc=${encodeURIComponent(row.ref_id)}`;
 }
+
+/** Link da tela onde o documento é operado (pedido de compra). */
+function docPageLink(row: Pick<Row, "ref_id">): string {
+  return `/compras?doc=${encodeURIComponent(row.ref_id)}`;
+}
+
 
 
 function fmtDate(iso: string | null) {
@@ -579,17 +585,30 @@ export default function BackofficeRetryQueue() {
                 </TableCell>
                 <TableCell className="text-right space-x-1 whitespace-nowrap">
                   {r.doc_type === "expense" && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      asChild
-                      title="Abrir a trilha completa deste documento"
-                    >
-                      <Link to={docTrailLink(r)} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-3 w-3 mr-1" />Ver documento
-                      </Link>
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        asChild
+                        title="Abrir o documento na tela de compras"
+                      >
+                        <Link to={docPageLink(r)} target="_blank" rel="noopener noreferrer">
+                          <FileText className="h-3 w-3 mr-1" />Ver documento
+                        </Link>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        asChild
+                        title="Abrir a trilha completa deste documento"
+                      >
+                        <Link to={docTrailLink(r)} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="h-3 w-3 mr-1" />Trilha
+                        </Link>
+                      </Button>
+                    </>
                   )}
+
                   {canDispatch && (
                     <Button size="sm" variant="outline" onClick={() => retryNow(r.id)}>
                       <PlayCircle className="h-3 w-3 mr-1" />Reenviar
