@@ -82,3 +82,6 @@ verify_jwt = false
 
 [functions.approver-substitute-manage]
 verify_jwt = false
+
+[functions.expense-reassign-approver]
+verify_jwt = false

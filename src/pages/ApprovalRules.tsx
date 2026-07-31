@@ -62,6 +62,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
+
 import {
   useApprovalRules,
   OPERATOR_LABELS,
@@ -1498,6 +1500,51 @@ export default function ApprovalRulesPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [activeTab, setActiveTab] = useState<"standard" | "custom" | "substitutes" | "health">("standard");
   const { isAdmin } = useAuth();
+  const [reprocessing, setReprocessing] = useState(false);
+
+  // Reprocessa o roteamento dos documentos pendentes que ficaram sem regra
+  // (caíram no aprovador administrativo padrão) usando a matriz atual.
+  const reprocessRouting = useCallback(async () => {
+    if (reprocessing) return;
+    setReprocessing(true);
+    try {
+      const call = async (dryRun: boolean) => {
+        const resp = await sapFunctionFetch("expense-reassign-approver", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            company_db: session?.companyDB || null,
+            dry_run: dryRun,
+            only_unmatched: true,
+          }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data?.error || "Falha ao reprocessar roteamento.");
+        return data as { scanned: number; reassigned: number };
+      };
+
+      const preview = await call(true);
+      if (!preview.reassigned) {
+        toast.info(
+          preview.scanned
+            ? `Nenhum dos ${preview.scanned} documentos pendentes precisa ser redirecionado.`
+            : "Nenhum documento pendente sem regra encontrado.",
+        );
+        return;
+      }
+      const ok = window.confirm(
+        `${preview.reassigned} de ${preview.scanned} documento(s) pendente(s) serão redirecionados para o aprovador correto da matriz. Confirmar?`,
+      );
+      if (!ok) return;
+      const applied = await call(false);
+      toast.success(`${applied.reassigned} documento(s) redirecionado(s) e aprovadores notificados.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao reprocessar roteamento.");
+    } finally {
+      setReprocessing(false);
+    }
+  }, [reprocessing, session?.companyDB]);
+
 
   const CUSTOM_PRIORITY = 9999;
   const isCustomRule = (r: ApprovalRule) => (r.priority || 0) >= CUSTOM_PRIORITY;
@@ -1621,6 +1668,19 @@ export default function ApprovalRulesPage() {
             <Button variant="outline" onClick={() => setShowSimulator(true)} className="gap-1.5">
               <PlayCircle className="w-4 h-4" /> Simular pedido
             </Button>
+            {isAdmin && (
+              <Button
+                variant="outline"
+                onClick={reprocessRouting}
+                disabled={reprocessing}
+                className="gap-1.5"
+                title="Reavalia documentos pendentes que ficaram sem regra e envia ao aprovador correto"
+              >
+                <RefreshCw className={`w-4 h-4 ${reprocessing ? "animate-spin" : ""}`} />
+                Reprocessar roteamento
+              </Button>
+            )}
+
             <Button onClick={openCreate} className="gap-1.5">
               <Plus className="w-4 h-4" /> Nova Regra
             </Button>
