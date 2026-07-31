@@ -274,7 +274,7 @@ Deno.serve(async (req) => {
 
     await admin.from("expense_approval_log").insert({
       expense_id: expenseId,
-      decision: "attachment_backfill",
+      decision: "integrated",
       approver_name: caller.identity,
       approver_email: caller.email,
       remarks: `Anexo(s) adicionado(s) ao documento ${endpoint}(${docEntry}) no SAP: ${files.map((f) => f.name).join(", ")}`,
