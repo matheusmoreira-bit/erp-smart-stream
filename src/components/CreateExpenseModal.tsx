@@ -73,7 +73,10 @@ import {
   findExistingClaims,
   claimDocumentHashes,
   hasInFlightGuardTripped,
+  type ExistingClaim,
 } from "@/lib/expense-dedupe";
+import { logAuditAction } from "@/hooks/useAuditLog";
+
 import {
   saveQueueState,
   loadQueueState,
@@ -486,6 +489,12 @@ export function CreateExpenseModal({
   // Registro dos hashes já reivindicados pelo usuário nesta sessão do modal
   // — usado para não recontar duplicatas em retries do mesmo submit.
   const claimedHashesRef = useRef<Set<string>>(new Set());
+  // Duplicata de anexo confirmada pelo usuário (ex.: duas transações PagCorp
+  // distintas com o mesmo comprovante). Libera o submit uma única vez.
+  const allowDuplicateRef = useRef<boolean>(false);
+  const [dupConfirm, setDupConfirm] = useState<ExistingClaim[] | null>(null);
+
+
 
   // Prefixo de versão da chave do cache. Sempre que os campos que compõem
   // a chave mudarem, bump aqui — entradas antigas viram misses automáticos
@@ -1974,23 +1983,32 @@ export function CreateExpenseModal({
       try {
         fileHashes = await Promise.all(files.map((f) => hashFileContent(f)));
         const novel = fileHashes.filter((h) => !claimedHashesRef.current.has(h));
-        if (novel.length > 0) {
+        if (novel.length > 0 && !allowDuplicateRef.current) {
           const existing = await findExistingClaims(supabase, novel);
           if (existing.length > 0) {
-            const names = existing
-              .map((e) => e.file_name || e.file_hash.slice(0, 8))
-              .join(", ");
             console.warn(DEDUP_LOG, "duplicata cross-user detectada", { existing });
-            toast.error(
-              `Este documento já foi lançado por outro usuário: ${names}. ` +
-                `Remova o anexo duplicado ou verifique com o responsável antes de continuar.`,
-              { duration: 10000 },
-            );
+            setDupConfirm(existing);
             submitInFlightRef.current = false;
             setIsCreating(false);
             return;
           }
         }
+        if (allowDuplicateRef.current) {
+          const { data: userRes } = await supabase.auth.getUser();
+          await logAuditAction({
+            action: "expense_duplicate_attachment_override",
+            entity_type: "expense",
+            actor_email: userRes?.user?.email || undefined,
+            company_db: sapSession?.companyDB || undefined,
+            details: {
+              supplier: supplier.name,
+              doc_type: mode,
+              file_names: files.map((f) => f.name),
+              file_hashes: fileHashes,
+            },
+          });
+        }
+
       } catch (e) {
         console.error(DEDUP_LOG, "verificação de duplicata falhou (abortando submit):", e);
         toast.error("Não foi possível verificar duplicidade dos anexos. Tente novamente.");
@@ -2171,6 +2189,7 @@ export function CreateExpenseModal({
     } finally {
       setIsCreating(false);
       submitInFlightRef.current = false;
+      allowDuplicateRef.current = false;
       console.info(DEDUP_LOG, "handleSubmit END");
     }
   };
@@ -3248,6 +3267,46 @@ export function CreateExpenseModal({
       onConfirm={handleCcAlertConfirm}
       onChange={handleCcAlertChange}
     />
+
+    <AlertDialog open={!!dupConfirm} onOpenChange={(v) => { if (!v) setDupConfirm(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Anexo já utilizado em outro lançamento</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-2 text-sm">
+              <p>
+                O(s) arquivo(s) abaixo já foram usados em um documento lançado anteriormente.
+                Se forem transações realmente distintas (ex.: duas transações PagCorp com o
+                mesmo comprovante), você pode continuar — a decisão fica registrada em auditoria.
+              </p>
+              <ul className="list-disc pl-5">
+                {(dupConfirm || []).map((c) => (
+                  <li key={c.file_hash}>
+                    {c.file_name || c.file_hash.slice(0, 8)}
+                    {c.supplier_label ? ` — ${c.supplier_label}` : ""}
+                    {c.created_at ? ` (${new Date(c.created_at).toLocaleString("pt-BR")})` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+          <AlertDialogCancel autoFocus>Revisar anexos</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              setDupConfirm(null);
+              allowDuplicateRef.current = true;
+              void handleSubmit();
+            }}
+          >
+            São transações distintas — continuar
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+
 
 
     <AlertDialog open={closeConfirm} onOpenChange={setCloseConfirm}>
