@@ -93,7 +93,7 @@ export function slaInfo(req: RegistrationRequest) {
   return { closed, overdue, label, due };
 }
 
-export function useRegistrationRequests(options?: { onlyMine?: boolean }) {
+export function useRegistrationRequests(options?: { onlyMine?: boolean; companyDb?: string | null }) {
   const [requests, setRequests] = useState<RegistrationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
