@@ -7,7 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { RefreshCw, AlertTriangle, ShieldCheck, Search, Download } from "lucide-react";
+import { RefreshCw, AlertTriangle, ShieldCheck, Search, Download, Wrench, Undo2 } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 
 interface AuditTx {
@@ -17,6 +21,18 @@ interface AuditTx {
   currency: string;
   ptax: number | null;
   expectedLocal: number | null;
+}
+
+interface RepairAction {
+  companyDb: string;
+  paymentDocEntry: number;
+  paymentDocNum?: number | null;
+  cardName?: string | null;
+  applied?: number;
+  expected?: number;
+  difference?: number;
+  action: string;
+  error?: string | null;
 }
 
 interface AuditFinding {
@@ -77,6 +93,32 @@ export default function PagCorpSettlementAudit() {
   const [ran, setRan] = useState(false);
   const [search, setSearch] = useState("");
   const [onlyIssues, setOnlyIssues] = useState(true);
+  const [repairing, setRepairing] = useState(false);
+  const [repairPreview, setRepairPreview] = useState<RepairAction[] | null>(null);
+  const [confirmRepair, setConfirmRepair] = useState(false);
+
+  const runRepair = useCallback(async (dryRun: boolean) => {
+    setRepairing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("pagcorp-settlement-repair", {
+        body: { companyDbs: ["SBO_ANAGAMING", "SBO_CACTUS"], limit: 300, dryRun },
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || "Falha no reparo das baixas");
+      const acts = (data.actions || []) as RepairAction[];
+      if (dryRun) {
+        setRepairPreview(acts.filter((a) => a.action === "would_cancel_and_requeue"));
+        toast.success(`${data.toFix} baixa(s) divergente(s) seriam canceladas e relançadas`);
+      } else {
+        setRepairPreview(null);
+        toast.success(`${data.fixed} baixa(s) cancelada(s) e devolvida(s) à fila${data.failed ? ` · ${data.failed} falha(s)` : ""}`);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível reparar as baixas");
+    } finally {
+      setRepairing(false);
+    }
+  }, []);
 
   const run = useCallback(async () => {
     setLoading(true);
@@ -166,6 +208,16 @@ export default function PagCorpSettlementAudit() {
           <Button variant="outline" onClick={exportCsv} disabled={!visible.length}>
             <Download className="w-4 h-4 mr-2" /> Exportar CSV
           </Button>
+          <Button variant="outline" onClick={() => runRepair(true)} disabled={repairing}>
+            <Wrench className={`w-4 h-4 mr-2 ${repairing ? "animate-pulse" : ""}`} /> Simular reparo
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => setConfirmRepair(true)}
+            disabled={repairing || !repairPreview?.length}
+          >
+            <Undo2 className="w-4 h-4 mr-2" /> Cancelar e refazer divergentes
+          </Button>
           <div className="relative ml-auto w-full sm:w-64">
             <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
             <Input
@@ -176,6 +228,28 @@ export default function PagCorpSettlementAudit() {
             />
           </div>
         </div>
+
+        {repairPreview && (
+          <Alert variant={repairPreview.length ? "destructive" : "default"}>
+            <Wrench className="h-4 w-4" />
+            <AlertTitle>
+              {repairPreview.length
+                ? `${repairPreview.length} baixa(s) automática(s) do PagCorp com divergência`
+                : "Nenhuma baixa divergente para reparar"}
+            </AlertTitle>
+            <AlertDescription className="space-y-1">
+              {repairPreview.slice(0, 12).map((a) => (
+                <div key={`${a.companyDb}-${a.paymentDocEntry}`} className="text-xs font-mono">
+                  {a.companyDb} · baixa {a.paymentDocNum ?? a.paymentDocEntry} · aplicado {money(a.applied ?? 0)} ×
+                  esperado {money(a.expected ?? 0)}
+                </div>
+              ))}
+              {repairPreview.length > 12 && (
+                <div className="text-xs">e mais {repairPreview.length - 12}…</div>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
 
         {errors.length > 0 && (
           <Alert variant="destructive">
@@ -283,6 +357,31 @@ export default function PagCorpSettlementAudit() {
           </Table>
         </Card>
       </main>
+
+      <AlertDialog open={confirmRepair} onOpenChange={setConfirmRepair}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar baixas divergentes no ERP?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Serão canceladas {repairPreview?.length ?? 0} baixa(s) criada(s) automaticamente pelo
+              PagCorp cujo valor difere da transação de origem. Cada lançamento volta para a fila de
+              baixa e será relançado com o valor exato do pedido de compra / NF. Documentos lançados
+              manualmente no ERP não são afetados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmRepair(false);
+                void runRepair(false);
+              }}
+            >
+              Cancelar e refazer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
