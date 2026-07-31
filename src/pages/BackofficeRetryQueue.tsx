@@ -577,12 +577,24 @@ export default function BackofficeRetryQueue() {
                   {r.last_error || "-"}
                 </TableCell>
                 <TableCell className="text-right space-x-1 whitespace-nowrap">
+                  {r.doc_type === "expense" && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      asChild
+                      title="Abrir a trilha completa deste documento"
+                    >
+                      <Link to={docTrailLink(r)} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-3 w-3 mr-1" />Ver documento
+                      </Link>
+                    </Button>
+                  )}
                   {canDispatch && (
                     <Button size="sm" variant="outline" onClick={() => retryNow(r.id)}>
                       <PlayCircle className="h-3 w-3 mr-1" />Reenviar
                     </Button>
                   )}
-                  {canDispatch && r.doc_type === "expense" && (
+                  {canDispatch && r.doc_type === "expense" && isAttachmentFailure(r) && (
                     <Button
                       size="sm"
                       variant="secondary"
@@ -594,6 +606,7 @@ export default function BackofficeRetryQueue() {
                       {skippingId === r.id ? "Integrando..." : "Integrar sem anexo"}
                     </Button>
                   )}
+
 
                   {r.status !== "cancelled" && r.status !== "succeeded" && (
                     <Button size="sm" variant="ghost" onClick={() => cancel(r.id)} aria-label="Cancelar">
