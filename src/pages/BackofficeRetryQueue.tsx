@@ -62,6 +62,17 @@ function categoryLabel(cat: string | null): string {
   return CATEGORY_LABELS[cat] || cat;
 }
 
+/** A falha é de anexo? (categoria gravada pelo retry ou mensagem do SAP) */
+function isAttachmentFailure(row: Pick<Row, "error_category" | "last_error">): boolean {
+  if (row.error_category === "attachment") return true;
+  return /attachment|anexo/i.test(row.last_error || "");
+}
+
+/** Link da trilha unificada do documento (abre a linha do tempo já filtrada). */
+function docTrailLink(row: Pick<Row, "ref_id">): string {
+  return `/backoffice/trilha-documento?q=${encodeURIComponent(row.ref_id)}&doc=${encodeURIComponent(row.ref_id)}`;
+}
+
 
 function fmtDate(iso: string | null) {
   if (!iso) return "-";
