@@ -1198,6 +1198,9 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
    * Anexa novos arquivos a uma despesa já criada (útil para pedidos em
    * fluxo de aprovação). Autorização (owner / admin / super) é validada
    * no edge function; aqui apenas orquestramos upload + registro.
+   *
+   * Quando o pedido já está integrado ao ERP (mas ainda sem NF de entrada),
+   * o anexo é também enviado ao SAP (backfill) — nenhum outro campo muda.
    */
   const addAttachments = useCallback(
     async (expenseId: string, files: File[]) => {
@@ -1218,14 +1221,38 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           attachments: rows,
         });
       }
+
+      // Backfill no ERP para documentos já integrados.
+      let sapWarning: string | null = null;
+      const target = expenses.find((e) => e.id === expenseId);
+      if (rows.length > 0 && (target?.sap_doc_entry || target?.sap_doc_num)) {
+        try {
+          const resp = await sapFunctionFetch("expense-attachment-sap-backfill", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ expense_id: expenseId }),
+          });
+          const payload = await resp.json().catch(() => ({}));
+          if (!resp.ok || payload?.error) {
+            sapWarning = payload?.error || `Falha ao enviar anexo ao ERP (HTTP ${resp.status})`;
+          }
+        } catch (err) {
+          sapWarning = err instanceof Error ? err.message : String(err);
+        }
+      }
+
       await fetchExpenses();
       if (failed.length > 0) {
         throw new Error(`Falha ao enviar ${failed.length} anexo(s): ${failed.join("; ")}`);
       }
+      if (sapWarning) {
+        throw new Error(`Anexo salvo, mas o envio ao ERP falhou: ${sapWarning}`);
+      }
       return { inserted: rows.length };
     },
-    [fetchExpenses]
+    [fetchExpenses, expenses]
   );
+
 
 
 

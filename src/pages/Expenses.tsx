@@ -2244,7 +2244,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         canApprove={selectedExpense ? canApprove(selectedExpense) : false}
         canAddAttachments={
           !!selectedExpense &&
-          (selectedExpense.status === "rascunho" || selectedExpense.status === "pendente_aprovacao") &&
+          !["nf_entrada", "pagamento", "finalizado", "cancelado", "rejeitado"].includes(selectedExpense.status) &&
           (isAdmin || canCancel(selectedExpense))
         }
         isSubmitting={isSubmitting}
