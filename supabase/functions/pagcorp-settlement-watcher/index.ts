@@ -794,8 +794,20 @@ Deno.serve(async (req) => {
               let firstPtaxMissingMsg: string | null = null;
               let firstPtax: { rate: number; ptaxDate: string; source: string } | null = null;
               for (const invoice of invoices) {
-                const openAmount = Math.max(0, +(invoice.DocTotal - invoice.PaidToDate).toFixed(2));
+                const invoiceOpen = Math.max(0, +(invoice.DocTotal - invoice.PaidToDate).toFixed(2));
+                // A baixa automática NUNCA pode exceder a fatia da NF que
+                // pertence a este pedido de compra. Quando a conta a pagar
+                // consolida vários PCs, pagar o saldo inteiro geraria baixa
+                // muito maior que o PC/NF de origem (divergência PagCorp).
+                const poShare = invoice.PoShare > 0 ? invoice.PoShare : invoiceOpen;
+                const openAmount = Math.min(invoiceOpen, poShare);
+                if (poShare < invoiceOpen - 0.05) {
+                  settlementNoteEarly.push(
+                    `NF ${invoice.DocNum} consolida outros pedidos — baixa parcial de ${openAmount.toFixed(2)} (saldo da NF: ${invoiceOpen.toFixed(2)})`,
+                  );
+                }
                 const alreadyClosed = invoice.DocumentStatus === "bost_Close" || openAmount <= 0;
+
 
                 // Prioriza a moeda da NF do SAP; se vier vazia ou como símbolo
                 // (ex.: "R$"), cai para a moeda do payload PagCorp (BRL/USD).
