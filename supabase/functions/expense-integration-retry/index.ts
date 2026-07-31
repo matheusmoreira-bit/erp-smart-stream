@@ -76,20 +76,33 @@ Deno.serve(async (req) => {
   const startedAt = new Date();
   const cutoff = new Date(Date.now() - RETRY_COOLDOWN_MINUTES * 60_000).toISOString();
 
+  // Permite forçar o reprocessamento de um documento específico.
+  let targetId: string | null = null;
+  try {
+    const body = await req.json().catch(() => ({}));
+    const raw = (body as any)?.expense_id;
+    if (typeof raw === "string" && /^[0-9a-f-]{36}$/i.test(raw)) targetId = raw;
+  } catch { /* sem body */ }
+
+  const SELECT_COLS =
+    "id, company_db, doc_type, supplier_name, supplier_code, requester_name, requester_email, total_amount, currency, sap_integration_last_attempt_at, sap_integration_error, origin";
+
   // 1. Selecionar candidatos: aprovados, sem doc_entry no SAP, não em curso,
   //    fora do cooldown e não originados no próprio ERP (para não duplicar).
-  const { data: candidates, error: qErr } = await admin
-    .from("expenses")
-    .select(
-      "id, company_db, doc_type, supplier_name, supplier_code, requester_name, requester_email, total_amount, currency, sap_integration_last_attempt_at, sap_integration_error, origin",
-    )
-    .eq("status", "aprovado")
-    .eq("doc_type", "purchase")
-    .is("sap_doc_entry", null)
-    .neq("sap_purchase_order_status", "success")
-    .or(`sap_integration_last_attempt_at.is.null,sap_integration_last_attempt_at.lt.${cutoff}`)
-    .order("sap_integration_last_attempt_at", { ascending: true, nullsFirst: true })
-    .limit(MAX_DOCS_PER_RUN);
+  let query = admin.from("expenses").select(SELECT_COLS);
+  if (targetId) {
+    query = query.eq("id", targetId);
+  } else {
+    query = query
+      .eq("status", "aprovado")
+      .eq("doc_type", "purchase")
+      .is("sap_doc_entry", null)
+      .or("sap_purchase_order_status.is.null,sap_purchase_order_status.neq.success")
+      .or(`sap_integration_last_attempt_at.is.null,sap_integration_last_attempt_at.lt.${cutoff}`)
+      .order("sap_integration_last_attempt_at", { ascending: true, nullsFirst: true })
+      .limit(MAX_DOCS_PER_RUN);
+  }
+  const { data: candidates, error: qErr } = await query;
 
   if (qErr) {
     console.error("[retry] failed to query candidates", qErr);
