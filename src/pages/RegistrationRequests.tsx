@@ -408,13 +408,23 @@ export default function RegistrationRequests() {
               </SelectContent>
             </Select>
           </div>
+          {isAgent && (
+            <Button
+              variant={allCompanies ? "default" : "outline"}
+              onClick={() => setAllCompanies((v) => !v)}
+              className="gap-2"
+            >
+              {allCompanies ? "Todas as empresas" : "Somente esta empresa"}
+            </Button>
+          )}
           <Button variant="outline" onClick={() => void reload()} disabled={loading} className="gap-2">
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             Atualizar
           </Button>
         </div>
         <p className="text-xs text-muted-foreground mt-2 max-w-7xl mx-auto">
-          Em aberto: {openCount} · Fora do SLA: {overdueCount} · Exibindo: {filtered.length}
+          Empresa: {allCompanies ? "todas" : session?.companyDB || "—"} · Em aberto: {openCount} · Fora do SLA:{" "}
+          {overdueCount} · Exibindo: {filtered.length}
         </p>
       </div>
 
