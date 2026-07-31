@@ -36,30 +36,46 @@ export function SubmenuBar({ moduleLabel, items, active, onSelect }: SubmenuBarP
   return (
     <div className="sticky top-[var(--app-header-h,72px)] z-20 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 h-12 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => navigate("/")}
-          aria-label="Ir para os módulos"
-          className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
-        >
-          <LayoutGrid className="w-4 h-4" />
-        </button>
+        <nav aria-label="Trilha de navegação" className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            onClick={() => navigate("/")}
+            aria-label="Ir para o painel de módulos"
+            title="Painel"
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+          >
+            <LayoutGrid className="w-4 h-4" />
+          </button>
 
-        {moduleLabel ? (
-          <>
-            <span className="text-sm text-muted-foreground truncate max-w-[35vw] sm:max-w-none">
-              {moduleLabel}
-            </span>
-            <span className="text-muted-foreground/50">/</span>
-          </>
-        ) : null}
+          {moduleLabel ? (
+            <>
+              <button
+                type="button"
+                onClick={() => navigate("/")}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors truncate max-w-[35vw] sm:max-w-none"
+              >
+                {moduleLabel}
+              </button>
+              <span aria-hidden="true" className="text-muted-foreground/50">/</span>
+            </>
+          ) : null}
+
+          <span
+            aria-current="page"
+            className="hidden md:inline text-sm font-semibold text-foreground truncate max-w-[28vw]"
+          >
+            {current?.label}
+          </span>
+        </nav>
 
         {items.length <= 1 ? (
-          <span className="text-sm font-semibold text-foreground truncate">
+          <span className="md:hidden text-sm font-semibold text-foreground truncate">
             {current?.label}
           </span>
         ) : (
         <>
+          <span aria-hidden="true" className="hidden md:inline text-muted-foreground/50">/</span>
+
           {/* Desktop: pílulas horizontais */}
           <nav className="hidden md:flex items-center gap-1 overflow-x-auto rounded-full bg-muted/50 p-1">
             {items.map((item) => (
