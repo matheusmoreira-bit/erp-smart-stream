@@ -2189,6 +2189,7 @@ export function CreateExpenseModal({
     } finally {
       setIsCreating(false);
       submitInFlightRef.current = false;
+      allowDuplicateRef.current = false;
       console.info(DEDUP_LOG, "handleSubmit END");
     }
   };
