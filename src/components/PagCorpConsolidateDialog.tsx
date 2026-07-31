@@ -186,7 +186,38 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
                 required
               />
             </div>
+
+            <div>
+              <label
+                htmlFor="consolidate-doc-date"
+                className="text-xs font-medium text-muted-foreground mb-1 block"
+              >
+                Data de emissão da nota (data do documento)
+              </label>
+              <input
+                id="consolidate-doc-date"
+                type="date"
+                value={documentDate}
+                onChange={(e) => setDocumentDate(e.target.value)}
+                className="h-9 w-full sm:w-56 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Usada como data do documento, data do imposto e vencimento do Pedido de Compra.
+                Cada linha mantém a data real da transação.
+              </p>
+            </div>
+
+            {crossMonth && (
+              <div className="text-xs text-warning bg-warning/10 border border-warning/30 rounded p-2">
+                ⚠ A seleção contém transações de <strong>{months.size} meses diferentes</strong>{" "}
+                ({[...months].sort().join(", ")}). Isso é esperado em fornecedores que cobram
+                durante o mês e faturam no mês seguinte (ex.: Google Cloud). Informe acima a data
+                de emissão da nota para que o Pedido de Compra seja lançado nessa competência.
+              </div>
+            )}
           </div>
+
+
 
 
           {/* ====== Padrões aplicados ====== */}
