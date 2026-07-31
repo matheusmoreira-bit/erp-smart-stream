@@ -712,24 +712,11 @@ export default function PagCorp() {
         });
         return;
       }
-      // 2) Datas divergentes → confirmar e seguir apenas com a data mais antiga.
-      const dates = new Set(
-        selected.map((t) => String(t.date || "").slice(0, 10)).filter(Boolean),
-      );
-      if (dates.size > 1) {
-        const oldest = [...dates].sort()[0];
-        const filtered = selected.filter(
-          (t) => String(t.date || "").slice(0, 10) === oldest,
-        );
-        setDateConflictDialog({
-          open: true,
-          oldest,
-          kept: filtered.length,
-          dropped: selected.length - filtered.length,
-          filtered,
-        });
-        return;
-      }
+      // 2) Datas divergentes não bloqueiam mais: o PC consolidado permite
+      //    informar a data de emissão da nota (ex.: Google Cloud cobra ao
+      //    longo do mês e fatura no mês seguinte). Cada linha mantém a data
+      //    real da transação.
+
     }
     proceedBatchUnified(selected);
   };
