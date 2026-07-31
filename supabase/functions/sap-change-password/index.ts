@@ -367,6 +367,42 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
     // Timeout individual por empresa (ms). Ajustável via secret.
     const PER_COMPANY_TIMEOUT_MS = Number(Deno.env.get("SAP_CHANGE_PASSWORD_TIMEOUT_MS") || "25000");
 
+    // Login gerenciado: a senha só é gravada no banco DEPOIS que o login com a
+    // nova senha foi confirmado no Service Layer daquela empresa, usando
+    // exatamente a mesma string enviada no PATCH. Isso garante que banco e SAP
+    // nunca fiquem divergentes (antes o front salvava também em empresas
+    // "ignoradas"/com erro, onde o SAP mantinha a senha antiga).
+    const saveManaged = body.save_managed === true;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(callerId);
+    const managedUserId = saveManaged && isUuid && userCode.toLowerCase() === (callerUserCode || "").toLowerCase()
+      ? callerId
+      : null;
+
+    async function persistManagedCredential(companyDb: string): Promise<boolean> {
+      if (!managedUserId) return false;
+      try {
+        const encrypted = await encryptSecret(newPassword);
+        const { error } = await admin.from("user_sap_credentials").upsert(
+          {
+            user_id: managedUserId,
+            company_db: companyDb,
+            sap_user: userCode,
+            sap_password_encrypted: encrypted,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,company_db" },
+        );
+        if (error) throw error;
+        return true;
+      } catch (e) {
+        console.error("[sap-change-password] falha ao salvar login gerenciado", {
+          companyDb, error: e instanceof Error ? e.message : String(e),
+        });
+        return false;
+      }
+    }
+
+
     async function changeForCompany(companyDb: string): Promise<ResultRow> {
       const displayName = nameMap.get(companyDb) || companyDb;
       const ctrl = new AbortController();
