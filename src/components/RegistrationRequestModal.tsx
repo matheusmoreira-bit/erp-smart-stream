@@ -110,12 +110,72 @@ export function RegistrationRequestModal({
     return null;
   };
 
+  /** Vincula o solicitante a um chamado já aberto do mesmo fornecedor/item. */
+  const linkToExisting = async (dup: DuplicateRequest) => {
+    setSaving(true);
+    try {
+      const extra = notes.trim();
+      const { error } = await supabase.rpc("join_registration_request", {
+        p_request_id: dup.id,
+        p_note: extra
+          ? `Também precisa deste cadastro. Observações: ${extra}`
+          : null,
+        p_author_name: session?.userName || null,
+      });
+      if (error) throw error;
+      toast.success(
+        `Você foi vinculado ao chamado #${dup.id.slice(0, 8).toUpperCase()}, já aberto para este ${
+          isItem ? "item" : "fornecedor"
+        }.`,
+      );
+      setDuplicate(null);
+      onCreated?.(dup.id);
+      onOpenChange(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível vincular ao chamado existente.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSubmit = async () => {
     const problem = validate();
     if (problem) {
       toast.error(problem);
       return;
     }
+
+    // Antes de abrir um novo chamado, procura uma solicitação em aberto para o
+    // mesmo CNPJ/CPF (ou mesmo nome) e oferece o vínculo, evitando duplicidade.
+    setSaving(true);
+    try {
+      const { data: dupRows } = await supabase.rpc("find_open_registration_duplicate", {
+        p_type: type,
+        p_tax_id: isItem ? null : taxId.trim() || null,
+        p_title: name.trim() || null,
+      });
+      const dup = (Array.isArray(dupRows) ? dupRows[0] : null) as DuplicateRequest | null;
+      if (dup) {
+        setSaving(false);
+        if (dup.already_linked) {
+          toast.info(
+            `Você já está vinculado ao chamado #${dup.id.slice(0, 8).toUpperCase()} para "${dup.title}".`,
+          );
+          onCreated?.(dup.id);
+          onOpenChange(false);
+          return;
+        }
+        setDuplicate(dup);
+        return;
+      }
+    } catch {
+      /* checagem best-effort: segue para a criação normal */
+    }
+
+    await createRequest();
+  };
+
+  const createRequest = async () => {
     setSaving(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
