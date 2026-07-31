@@ -378,7 +378,7 @@ export default function RegistrationRequests() {
       <div className="border-b border-border px-6 py-4">
         <div className="max-w-7xl mx-auto flex flex-wrap items-end gap-3">
           {isAgent && (
-            <Tabs value={scope} onValueChange={(v) => setScope(v as "mine" | "all")}>
+            <Tabs value={scope} onValueChange={(v) => { setScopeTouched(true); setScope(v as "mine" | "all"); }}>
               <TabsList>
                 <TabsTrigger value="mine">Minhas</TabsTrigger>
                 <TabsTrigger value="all">Fila do time</TabsTrigger>
