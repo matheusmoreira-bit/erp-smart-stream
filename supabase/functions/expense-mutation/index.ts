@@ -732,6 +732,15 @@ async function actionAttachmentsAdd(admin: SupabaseClient, caller: Caller, body:
     return json(403, { error: "Você não pode anexar arquivos a esta despesa" });
   }
 
+  // Documento integrado ao ERP continua aceitando NOVOS anexos (backfill) até
+  // que a NF de entrada seja lançada. Depois disso, nada mais pode ser incluído.
+  const attachBlocked = new Set(["nf_entrada", "pagamento", "finalizado", "cancelado", "rejeitado"]);
+  if (attachBlocked.has(String(current.status))) {
+    return json(409, {
+      error: "Documento encerrado (NF de entrada lançada ou cancelado) — não é possível adicionar anexos.",
+    });
+  }
+
   const rows = attachments.map((a) => ({
     expense_id: expenseId,
     file_path: String(a.file_path || ""),
