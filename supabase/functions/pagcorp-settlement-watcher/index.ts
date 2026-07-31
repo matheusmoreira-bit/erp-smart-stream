@@ -793,6 +793,7 @@ Deno.serve(async (req) => {
               let firstMissingAccountMsg: string | null = null;
               let firstPtaxMissingMsg: string | null = null;
               let firstPtax: { rate: number; ptaxDate: string; source: string } | null = null;
+              const settlementNoteEarly: string[] = [];
               for (const invoice of invoices) {
                 const invoiceOpen = Math.max(0, +(invoice.DocTotal - invoice.PaidToDate).toFixed(2));
                 // A baixa automática NUNCA pode exceder a fatia da NF que
@@ -951,7 +952,7 @@ Deno.serve(async (req) => {
                 continue;
               }
 
-              const settlementNote: string[] = [];
+              const settlementNote: string[] = [...settlementNoteEarly];
               if (paymentEntries.length > 1) settlementNote.push(`${paymentEntries.length} pagamentos emitidos (docs: ${paymentNums.join(", ")})`);
               if (skippedAlreadyPaid.length > 0) settlementNote.push(`${skippedAlreadyPaid.length} NF(s) já quitadas`);
               if (firstMissingAccountMsg) settlementNote.push(firstMissingAccountMsg);
