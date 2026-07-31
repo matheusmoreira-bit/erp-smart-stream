@@ -5266,6 +5266,7 @@ export type Database = {
           currency: string | null
           due_at: string
           federal_tax_id: string | null
+          followers: string[]
           id: string
           notes: string | null
           payment_method: string | null
@@ -5296,6 +5297,7 @@ export type Database = {
           currency?: string | null
           due_at?: string
           federal_tax_id?: string | null
+          followers?: string[]
           id?: string
           notes?: string | null
           payment_method?: string | null
@@ -5326,6 +5328,7 @@ export type Database = {
           currency?: string | null
           due_at?: string
           federal_tax_id?: string | null
+          followers?: string[]
           id?: string
           notes?: string | null
           payment_method?: string | null
@@ -7076,6 +7079,19 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      find_open_registration_duplicate: {
+        Args: { p_tax_id?: string; p_title?: string; p_type: string }
+        Returns: {
+          already_linked: boolean
+          created_at: string
+          due_at: string
+          id: string
+          requester_email: string
+          requester_name: string
+          status: string
+          title: string
+        }[]
+      }
       get_default_expense_approver: {
         Args: { _company_db?: string }
         Returns: string
@@ -7228,6 +7244,10 @@ export type Database = {
         Returns: boolean
       }
       is_sap_user_admin: { Args: { _sap_username: string }; Returns: boolean }
+      join_registration_request: {
+        Args: { p_author_name?: string; p_note?: string; p_request_id: string }
+        Returns: string
+      }
       list_baixas_by_invoice: {
         Args: { p_company_db: string; p_invoice_doc_entry: number }
         Returns: {
