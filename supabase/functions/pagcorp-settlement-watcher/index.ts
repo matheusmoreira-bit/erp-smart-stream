@@ -387,6 +387,8 @@ async function createVendorPayment(
     invoiceEntry: number;
     invoiceDocNum: number;
     invoiceDate: string;
+    /** Data em que o pagamento é lançado (para USD = data da compra). */
+    paymentDate?: string;
     cardCode: string;
     cardName: string;
     docCurrency: string;
@@ -409,17 +411,18 @@ async function createVendorPayment(
   const journalRemarks =
     `PAGAMENTO REF. CP Nº ${args.invoiceDocNum} - ${args.cardCode} - ${args.cardName}`.slice(0, 50);
 
+  const postDate = args.paymentDate || args.invoiceDate;
   const body: Record<string, unknown> = {
     DocType: "rSupplier",
     CardCode: args.cardCode,
-    DocDate: args.invoiceDate,
-    TaxDate: args.invoiceDate,
-    DueDate: args.invoiceDate,
+    DocDate: postDate,
+    TaxDate: postDate,
+    DueDate: postDate,
     JournalRemarks: journalRemarks,
     Reference1: String(args.invoiceDocNum),
     TransferAccount: args.accountCode,
     TransferSum: args.transferSumLocal,
-    TransferDate: args.invoiceDate,
+    TransferDate: postDate,
     PaymentInvoices: [
       {
         DocEntry: args.invoiceEntry,
@@ -433,6 +436,7 @@ async function createVendorPayment(
   if (args.bplId != null) body.BPLID = args.bplId;
   if (args.costCenter) body.CostingCode = args.costCenter;
   if (args.project) body.ProjectCode = args.project;
+
 
   const r = await fetch(`${baseUrl}/VendorPayments`, {
     method: "POST",
