@@ -38,10 +38,12 @@ async function enrichItemsWithGroup(
   const result: Record<string, EnrichedItem> = {};
   if (codes.length === 0) return result;
 
-  // Fetch item -> group code
+  // Fetch item -> group code (com 1 retry: falha de sessão SAP deixava o
+  // grupo vazio e derrubava regras do tipo "Grupo de Itens like %impostos%",
+  // fazendo o documento cair no aprovador administrativo padrão).
   const codeToGroup: Record<string, number | null> = {};
-  await Promise.all(
-    codes.map(async (code) => {
+  const fetchGroupCode = async (code: string): Promise<number | null> => {
+    for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const { data } = await sapQuery(
           session,
@@ -50,10 +52,18 @@ async function enrichItemsWithGroup(
           true,
         );
         const g = (data as any)?.ItemsGroupCode;
-        codeToGroup[code] = typeof g === "number" ? g : null;
+        if (typeof g === "number") return g;
+        return null;
       } catch {
-        codeToGroup[code] = null;
+        if (attempt === 1) return null;
+        await new Promise((r) => setTimeout(r, 400));
       }
+    }
+    return null;
+  };
+  await Promise.all(
+    codes.map(async (code) => {
+      codeToGroup[code] = await fetchGroupCode(code);
     }),
   );
 
@@ -64,16 +74,20 @@ async function enrichItemsWithGroup(
   const groupToName: Record<number, string | null> = {};
   await Promise.all(
     groupCodes.map(async (gc) => {
-      try {
-        const { data } = await sapQuery(
-          session,
-          `ItemGroups(${gc})`,
-          { $select: "Number,GroupName" },
-          true,
-        );
-        groupToName[gc] = (data as any)?.GroupName ?? null;
-      } catch {
-        groupToName[gc] = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const { data } = await sapQuery(
+            session,
+            `ItemGroups(${gc})`,
+            { $select: "Number,GroupName" },
+            true,
+          );
+          groupToName[gc] = (data as any)?.GroupName ?? null;
+          return;
+        } catch {
+          if (attempt === 1) groupToName[gc] = null;
+          else await new Promise((r) => setTimeout(r, 400));
+        }
       }
     }),
   );
@@ -86,8 +100,33 @@ async function enrichItemsWithGroup(
       items_group_name: gc != null ? groupToName[gc] ?? null : null,
     };
   }
+
+  // Fallback: para itens cujo grupo o SAP não devolveu, reaproveita o último
+  // grupo já persistido para o mesmo código em documentos anteriores. Assim as
+  // regras por Grupo de Itens continuam batendo mesmo com o ERP instável.
+  const missing = codes.filter((c) => !result[c]?.items_group_name);
+  if (missing.length > 0) {
+    try {
+      const { data: hist } = await supabase
+        .from("expense_items")
+        .select("item_code, items_group_name, created_at")
+        .in("item_code", missing)
+        .not("items_group_name", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      for (const row of (hist || []) as any[]) {
+        const c = String(row.item_code || "").trim();
+        if (!c || !result[c] || result[c].items_group_name) continue;
+        result[c].items_group_name = row.items_group_name;
+      }
+    } catch {
+      /* histórico indisponível — segue sem fallback */
+    }
+  }
+
   return result;
 }
+
 
 function buildItemCtx(
   items: Array<{ item_code?: string | null; description?: string | null }>,
