@@ -146,6 +146,8 @@ Deno.serve(async (req) => {
     paymentDocEntries?: number[];
     fxTolerancePct?: number;
     includeFxVariation?: boolean;
+    /** "divergences" (padrão) | "reset_cancelled" */
+    mode?: string;
   } = {};
   try {
     body = await req.json();
@@ -156,6 +158,7 @@ Deno.serve(async (req) => {
     : ["SBO_ANAGAMING", "SBO_CACTUS"];
   const limit = Math.min(Math.max(Number(body.limit) || 200, 1), 500);
   const dryRun = body.dryRun !== false;
+  const mode = body.mode === "reset_cancelled" ? "reset_cancelled" : "divergences";
   const fxRel = Number.isFinite(Number(body.fxTolerancePct))
     ? Math.min(Math.max(Number(body.fxTolerancePct) / 100, 0), 0.2)
     : FX_REL_TOLERANCE_DEFAULT;
@@ -163,6 +166,7 @@ Deno.serve(async (req) => {
   const onlyEntries = Array.isArray(body.paymentDocEntries)
     ? new Set(body.paymentDocEntries.map((n) => Number(n)).filter((n) => Number.isFinite(n)))
     : null;
+
 
   const actions: Array<Record<string, unknown>> = [];
   const errors: Array<{ companyDb: string; message: string }> = [];
