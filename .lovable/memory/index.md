@@ -21,3 +21,4 @@
 - [Grupos e capacidades](mem://features/permission-groups-capabilities.md) — Catálogo de capacidades GRUPO > USER, hooks useMyCapabilities e helpers server-side.
 - [Baixa PagCorp valor exato](mem://features/pagcorp-baixa-valor-exato.md) — Baixa automática do PagCorp = fatia do PC na conta a pagar; reparo via pagcorp-settlement-repair.
 - [Variação cambial nas baixas PagCorp](mem://features/pagcorp-baixa-variacao-cambial.md) — Diferença até 3% (máx. R$ 250) em moeda estrangeira é variação cambial e nunca é cancelada.
+- [Baixa PagCorp USD/PTAX](mem://features/pagcorp-baixa-usd-ptax-data.md) — USD usa conta própria, PTAX BCB da data da compra e pagamento lançado nessa mesma data; modo reset_cancelled no repair.
