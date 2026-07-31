@@ -144,6 +144,8 @@ Deno.serve(async (req) => {
     limit?: number;
     dryRun?: boolean;
     paymentDocEntries?: number[];
+    fxTolerancePct?: number;
+    includeFxVariation?: boolean;
   } = {};
   try {
     body = await req.json();
@@ -154,6 +156,10 @@ Deno.serve(async (req) => {
     : ["SBO_ANAGAMING", "SBO_CACTUS"];
   const limit = Math.min(Math.max(Number(body.limit) || 200, 1), 500);
   const dryRun = body.dryRun !== false;
+  const fxRel = Number.isFinite(Number(body.fxTolerancePct))
+    ? Math.min(Math.max(Number(body.fxTolerancePct) / 100, 0), 0.2)
+    : FX_REL_TOLERANCE_DEFAULT;
+  const includeFx = body.includeFxVariation === true;
   const onlyEntries = Array.isArray(body.paymentDocEntries)
     ? new Set(body.paymentDocEntries.map((n) => Number(n)).filter((n) => Number.isFinite(n)))
     : null;
