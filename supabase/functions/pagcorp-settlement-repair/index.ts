@@ -292,6 +292,8 @@ Deno.serve(async (req) => {
           applied: Number(applied.toFixed(2)),
           expected: expectedRounded,
           difference: diff,
+          differencePct: Number(((diff / expectedRounded) * 100).toFixed(2)),
+          fxVariation: isFxVariation,
           logIds: logRows.map((r) => r.id),
         };
 
