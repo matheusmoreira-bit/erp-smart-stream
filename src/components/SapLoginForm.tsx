@@ -17,6 +17,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
 import { assertIdpBinding, assertSapLoginIdpBinding, upsertGoogleIdpMapping, upsertLocalAdminMapping } from "@/lib/idp-binding";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
+import { ErpOutageBanner } from "@/components/ErpOutageBanner";
 
 
 const OMIE_PENDING_KEY = "omie_google_pending_company_db";
@@ -418,6 +419,11 @@ export function SapLoginForm() {
             Conecte-se ao seu ERP
           </p>
         </div>
+
+        {/* Aviso temporário de indisponibilidade do ERP */}
+        <ErpOutageBanner />
+
+
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="glass-card p-6 space-y-5">
