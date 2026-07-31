@@ -157,19 +157,32 @@ export default function AuditTimeline() {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">
-              {selected
-                ? `${selected.doc_type === "sales" ? "Pedido de venda" : "Pedido de compra"}${
-                    selected.sap_doc_num ? ` · SAP ${selected.sap_doc_num}` : ""
-                  }`
-                : "Linha do tempo"}
-            </CardTitle>
-            {selected && (
-              <p className="text-xs text-muted-foreground">
-                {[selected.supplier_name, selected.company_db, selected.status].filter(Boolean).join(" · ")}
-              </p>
-            )}
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">
+                  {selected
+                    ? `${selected.doc_type === "sales" ? "Pedido de venda" : "Pedido de compra"}${
+                        selected.sap_doc_num ? ` · SAP ${selected.sap_doc_num}` : ""
+                      }`
+                    : "Linha do tempo"}
+                </CardTitle>
+                {selected && (
+                  <p className="text-xs text-muted-foreground">
+                    {[selected.supplier_name, selected.company_db, selected.status].filter(Boolean).join(" · ")}
+                  </p>
+                )}
+              </div>
+              {selected && (
+                <Button size="sm" variant="outline" asChild title="Abrir o documento na tela de origem">
+                  <Link to={docPageLink(selected)} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-3 w-3 mr-1" />
+                    Ver documento
+                  </Link>
+                </Button>
+              )}
+            </div>
           </CardHeader>
+
           <CardContent>
             {selected ? (
               <DocumentTimeline expenseId={selected.id} />
