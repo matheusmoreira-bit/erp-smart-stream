@@ -153,6 +153,7 @@ export function RegistrationRequestModal({
         p_type: type,
         p_tax_id: isItem ? null : taxId.trim() || null,
         p_title: name.trim() || null,
+        p_company_db: defaults?.companyDb || session?.companyDB || null,
       });
       const dup = (Array.isArray(dupRows) ? dupRows[0] : null) as DuplicateRequest | null;
       if (dup) {
