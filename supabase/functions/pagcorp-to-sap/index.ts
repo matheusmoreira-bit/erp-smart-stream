@@ -671,11 +671,17 @@ Deno.serve(async (req) => {
       .sort();
     const lastTxDate = txDates.length > 0 ? txDates[txDates.length - 1] : txDate;
 
+    // Quando o usuário informa a data de emissão da nota (caso Google Cloud:
+    // compras de meses distintos faturadas em uma única NF), ela vira a data
+    // do documento, do imposto e do vencimento do PC.
+    const headerDocDate = documentDate || txDate;
+    const headerDueDate = documentDate || lastTxDate;
+
     const baseDoc: Record<string, unknown> = {
       CardCode: supplierCode,
-      DocDate: txDate,
-      DocDueDate: lastTxDate,
-      TaxDate: txDate,
+      DocDate: headerDocDate,
+      DocDueDate: headerDueDate,
+      TaxDate: headerDocDate,
       BPL_IDAssignedToInvoice: branchId,
       Comments: description,
       DocumentLines: documentLines,
