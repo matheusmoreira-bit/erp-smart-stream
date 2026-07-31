@@ -489,6 +489,12 @@ export function CreateExpenseModal({
   // Registro dos hashes já reivindicados pelo usuário nesta sessão do modal
   // — usado para não recontar duplicatas em retries do mesmo submit.
   const claimedHashesRef = useRef<Set<string>>(new Set());
+  // Duplicata de anexo confirmada pelo usuário (ex.: duas transações PagCorp
+  // distintas com o mesmo comprovante). Libera o submit uma única vez.
+  const allowDuplicateRef = useRef<boolean>(false);
+  const [dupConfirm, setDupConfirm] = useState<ExistingClaim[] | null>(null);
+
+
 
   // Prefixo de versão da chave do cache. Sempre que os campos que compõem
   // a chave mudarem, bump aqui — entradas antigas viram misses automáticos
