@@ -128,7 +128,9 @@ export default function PagCorpSettlementAudit() {
       const acts = (data.actions || []) as RepairAction[];
       if (dryRun) {
         setRepairPreview(acts.filter((a) => a.action === "would_cancel_and_requeue"));
-        toast.success(`${data.toFix} baixa(s) divergente(s) seriam canceladas e relançadas`);
+        toast.success(
+          `${data.toFix} baixa(s) divergente(s) seriam canceladas${data.fxSkipped ? ` · ${data.fxSkipped} ignorada(s) por variação cambial (até ${data.fxTolerancePct}%)` : ""}`,
+        );
       } else {
         setRepairPreview(null);
         toast.success(`${data.fixed} baixa(s) cancelada(s) e devolvida(s) à fila${data.failed ? ` · ${data.failed} falha(s)` : ""}`);
