@@ -7079,19 +7079,38 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
-      find_open_registration_duplicate: {
-        Args: { p_tax_id?: string; p_title?: string; p_type: string }
-        Returns: {
-          already_linked: boolean
-          created_at: string
-          due_at: string
-          id: string
-          requester_email: string
-          requester_name: string
-          status: string
-          title: string
-        }[]
-      }
+      find_open_registration_duplicate:
+        | {
+            Args: { p_tax_id?: string; p_title?: string; p_type: string }
+            Returns: {
+              already_linked: boolean
+              created_at: string
+              due_at: string
+              id: string
+              requester_email: string
+              requester_name: string
+              status: string
+              title: string
+            }[]
+          }
+        | {
+            Args: {
+              p_company_db?: string
+              p_tax_id?: string
+              p_title?: string
+              p_type: string
+            }
+            Returns: {
+              already_linked: boolean
+              created_at: string
+              due_at: string
+              id: string
+              requester_email: string
+              requester_name: string
+              status: string
+              title: string
+            }[]
+          }
       get_default_expense_approver: {
         Args: { _company_db?: string }
         Returns: string

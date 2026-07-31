@@ -314,7 +314,10 @@ function DetailDialog({
 export default function RegistrationRequests() {
   const navigate = useNavigate();
   const { session } = useSap();
-  const { requests, mine, loading, isAgent, reload, updateStatus, addComment } = useRegistrationRequests();
+  const [allCompanies, setAllCompanies] = useState(false);
+  const { requests, mine, loading, isAgent, reload, updateStatus, addComment } = useRegistrationRequests({
+    companyDb: allCompanies ? null : session?.companyDB ?? null,
+  });
   const [scope, setScope] = useState<"mine" | "all">("mine");
   const [scopeTouched, setScopeTouched] = useState(false);
   const [status, setStatus] = useState<"todos" | RegistrationStatus>("todos");
@@ -405,13 +408,23 @@ export default function RegistrationRequests() {
               </SelectContent>
             </Select>
           </div>
+          {isAgent && (
+            <Button
+              variant={allCompanies ? "default" : "outline"}
+              onClick={() => setAllCompanies((v) => !v)}
+              className="gap-2"
+            >
+              {allCompanies ? "Todas as empresas" : "Somente esta empresa"}
+            </Button>
+          )}
           <Button variant="outline" onClick={() => void reload()} disabled={loading} className="gap-2">
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             Atualizar
           </Button>
         </div>
         <p className="text-xs text-muted-foreground mt-2 max-w-7xl mx-auto">
-          Em aberto: {openCount} · Fora do SLA: {overdueCount} · Exibindo: {filtered.length}
+          Empresa: {allCompanies ? "todas" : session?.companyDB || "—"} · Em aberto: {openCount} · Fora do SLA:{" "}
+          {overdueCount} · Exibindo: {filtered.length}
         </p>
       </div>
 
@@ -423,6 +436,7 @@ export default function RegistrationRequests() {
                 <TableHead>Chamado</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Título</TableHead>
+                <TableHead>Empresa</TableHead>
                 <TableHead>Solicitante</TableHead>
                 <TableHead>Abertura</TableHead>
                 <TableHead>SLA</TableHead>
@@ -432,7 +446,7 @@ export default function RegistrationRequests() {
             <TableBody>
               {loading && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
                     <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
                     Carregando solicitações…
                   </TableCell>
@@ -440,7 +454,7 @@ export default function RegistrationRequests() {
               )}
               {!loading && filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
                     Nenhuma solicitação encontrada.
                   </TableCell>
                 </TableRow>
@@ -453,6 +467,7 @@ export default function RegistrationRequests() {
                       <TableCell className="font-mono text-xs">#{r.id.slice(0, 8).toUpperCase()}</TableCell>
                       <TableCell>{TYPE_LABELS[r.request_type]}</TableCell>
                       <TableCell className="font-medium max-w-[280px] truncate">{r.title}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{r.company_db || "—"}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{r.requester_email}</TableCell>
                       <TableCell className="text-xs">{fmt(r.created_at)}</TableCell>
                       <TableCell className={`text-xs ${!sla.closed && sla.overdue ? "text-destructive font-medium" : ""}`}>

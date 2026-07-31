@@ -93,7 +93,7 @@ export function slaInfo(req: RegistrationRequest) {
   return { closed, overdue, label, due };
 }
 
-export function useRegistrationRequests(options?: { onlyMine?: boolean }) {
+export function useRegistrationRequests(options?: { onlyMine?: boolean; companyDb?: string | null }) {
   const [requests, setRequests] = useState<RegistrationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -117,6 +117,11 @@ export function useRegistrationRequests(options?: { onlyMine?: boolean }) {
         .order("created_at", { ascending: false })
         .limit(500);
 
+      // Segregação por empresa: cada base só enxerga os próprios chamados.
+      if (options?.companyDb) {
+        query = query.eq("company_db", options.companyDb);
+      }
+
       if (options?.onlyMine && userData.user?.email) {
         query = query.eq("requester_email", userData.user.email.toLowerCase());
       }
@@ -130,7 +135,7 @@ export function useRegistrationRequests(options?: { onlyMine?: boolean }) {
     } finally {
       setLoading(false);
     }
-  }, [options?.onlyMine]);
+  }, [options?.onlyMine, options?.companyDb]);
 
   useEffect(() => {
     void load();
