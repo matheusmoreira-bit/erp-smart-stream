@@ -26,6 +26,11 @@ const cors = {
 };
 
 const TOLERANCE = 0.05;
+// Variação cambial (PTAX da compra × PTAX da baixa) não é erro de lançamento:
+// diferenças em moeda estrangeira até 3% do esperado (máx. R$ 250) são
+// contabilizadas como variação/juros e NÃO são canceladas.
+const FX_REL_TOLERANCE_DEFAULT = 0.03;
+const FX_ABS_CAP = 250;
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
