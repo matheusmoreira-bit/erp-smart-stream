@@ -190,11 +190,13 @@ export default function PagCorpSettlementAudit() {
       <main className="container mx-auto px-4 py-6 space-y-4">
         <Alert>
           <ShieldCheck className="h-4 w-4" />
-          <AlertTitle>Modo somente leitura</AlertTitle>
+          <AlertTitle>Auditoria e reparo controlado</AlertTitle>
           <AlertDescription>
-            Esta tela não cancela nem altera documentos no ERP. Ela apenas lista as baixas
-            geradas pela automação para revisão manual e exportação.
+            A auditoria é somente leitura. O reparo age exclusivamente em baixas criadas
+            automaticamente pelo PagCorp com valor divergente: cancela o pagamento no ERP e devolve
+            o lançamento à fila para ser refeito com o valor exato do pedido de compra / NF.
           </AlertDescription>
+
         </Alert>
 
         <div className="flex flex-wrap items-center gap-2">
