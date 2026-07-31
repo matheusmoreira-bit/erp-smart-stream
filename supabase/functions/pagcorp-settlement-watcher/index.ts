@@ -387,6 +387,8 @@ async function createVendorPayment(
     invoiceEntry: number;
     invoiceDocNum: number;
     invoiceDate: string;
+    /** Data em que o pagamento é lançado (para USD = data da compra). */
+    paymentDate?: string;
     cardCode: string;
     cardName: string;
     docCurrency: string;
@@ -409,17 +411,18 @@ async function createVendorPayment(
   const journalRemarks =
     `PAGAMENTO REF. CP Nº ${args.invoiceDocNum} - ${args.cardCode} - ${args.cardName}`.slice(0, 50);
 
+  const postDate = args.paymentDate || args.invoiceDate;
   const body: Record<string, unknown> = {
     DocType: "rSupplier",
     CardCode: args.cardCode,
-    DocDate: args.invoiceDate,
-    TaxDate: args.invoiceDate,
-    DueDate: args.invoiceDate,
+    DocDate: postDate,
+    TaxDate: postDate,
+    DueDate: postDate,
     JournalRemarks: journalRemarks,
     Reference1: String(args.invoiceDocNum),
     TransferAccount: args.accountCode,
     TransferSum: args.transferSumLocal,
-    TransferDate: args.invoiceDate,
+    TransferDate: postDate,
     PaymentInvoices: [
       {
         DocEntry: args.invoiceEntry,
@@ -434,18 +437,37 @@ async function createVendorPayment(
   if (args.costCenter) body.CostingCode = args.costCenter;
   if (args.project) body.ProjectCode = args.project;
 
-  const r = await fetch(`${baseUrl}/VendorPayments`, {
-    method: "POST",
-    headers: { Cookie: cookie, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!r.ok) throw new Error(`VendorPayments falhou ${r.status}: ${(await r.text()).slice(0, 300)}`);
+
+  const post = async (payload: Record<string, unknown>) =>
+    await fetch(`${baseUrl}/VendorPayments`, {
+      method: "POST",
+      headers: { Cookie: cookie, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+  let r = await post(body);
+  if (!r.ok) {
+    const errText = (await r.text()).slice(0, 300);
+    // Período contábil fechado / data fora do intervalo permitido: reposta
+    // o pagamento na data da NF (comportamento anterior) em vez de falhar.
+    const dateIssue = /permissible range|posting period|período|periodo|date/i.test(errText);
+    if (dateIssue && postDate !== args.invoiceDate) {
+      const retryBody = { ...body, DocDate: args.invoiceDate, TaxDate: args.invoiceDate, DueDate: args.invoiceDate, TransferDate: args.invoiceDate };
+      r = await post(retryBody);
+      if (!r.ok) {
+        throw new Error(`VendorPayments falhou ${r.status}: ${(await r.text()).slice(0, 300)}`);
+      }
+    } else {
+      throw new Error(`VendorPayments falhou ${r.status}: ${errText}`);
+    }
+  }
   const j = await r.json();
   return {
     docEntry: Number(j.DocEntry),
     docNum: Number(j.DocNum ?? j.DocEntry),
   };
 }
+
 
 Deno.serve(async (req) => {
   const requestId = crypto.randomUUID();
@@ -839,6 +861,10 @@ Deno.serve(async (req) => {
                   // são baixadas pelo valor local (openAmount), sem conversão.
                   const invCur = (invoice.DocCurrency || "").toUpperCase();
                   let docRate: number | null = null;
+                  // Data em que o pagamento é lançado. Para USD, a regra é
+                  // lançar o contas a pagar na MESMA data da compra (mesma data
+                  // usada para buscar a PTAX). Para BRL, mantém a data da NF.
+                  let paymentDate = invoice.DocDate;
                   if (invCur === "USD") {
                     // Preferimos a data da TRANSAÇÃO no cartão (evento cambial).
                     // Se não vier no payload, cai para a data da NF (comportamento antigo).
@@ -853,6 +879,7 @@ Deno.serve(async (req) => {
                       continue;
                     }
                     docRate = ptax.rate;
+                    paymentDate = ptaxDateBase;
                     if (!firstPtax) {
                       firstPtax = {
                         rate: ptax.rate,
@@ -878,6 +905,8 @@ Deno.serve(async (req) => {
                     invoiceEntry: invoice.DocEntry,
                     invoiceDocNum: invoice.DocNum,
                     invoiceDate: invoice.DocDate,
+                    paymentDate,
+
                     cardCode: invoice.CardCode,
                     cardName: invoice.CardName,
                     docCurrency: invoice.DocCurrency,

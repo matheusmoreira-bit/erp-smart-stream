@@ -102,6 +102,53 @@ export default function PagCorpSettlementAudit() {
   const [repairing, setRepairing] = useState(false);
   const [repairPreview, setRepairPreview] = useState<RepairAction[] | null>(null);
   const [confirmRepair, setConfirmRepair] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetPreview, setResetPreview] = useState<
+    { cancelled: RepairAction[]; stillActive: RepairAction[] } | null
+  >(null);
+
+  // Confirma no ERP se as baixas automáticas do PagCorp foram canceladas
+  // (manualmente) e, na execução real, limpa os relacionamentos de baixa
+  // devolvendo os lançamentos para a fila do watcher.
+  const runReset = useCallback(async (dryRun: boolean) => {
+    if (!dryRun && !resetPreview?.cancelled.length) {
+      toast.error("Rode a verificação antes de limpar os relacionamentos");
+      return;
+    }
+    setResetting(true);
+    try {
+      const entries = !dryRun ? resetPreview!.cancelled.map((a) => a.paymentDocEntry) : undefined;
+      const { data, error } = await supabase.functions.invoke("pagcorp-settlement-repair", {
+        body: {
+          mode: "reset_cancelled",
+          companyDbs: ["SBO_ANAGAMING", "SBO_CACTUS"],
+          limit: 500,
+          dryRun,
+          ...(entries ? { paymentDocEntries: entries } : {}),
+        },
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || "Falha ao verificar as baixas");
+      const acts = (data.actions || []) as RepairAction[];
+      if (dryRun) {
+        setResetPreview({
+          cancelled: acts.filter((a) => a.action === "would_reset"),
+          stillActive: acts.filter((a) => a.reason === "payment_still_active"),
+        });
+        toast.success(
+          `${data.toFix} baixa(s) confirmada(s) como cancelada(s) no ERP${data.stillActive ? ` · ${data.stillActive} ainda ativa(s)` : ""}`,
+        );
+      } else {
+        setResetPreview(null);
+        toast.success(`${data.reset} relacionamento(s) limpo(s) e devolvido(s) à fila de baixa`);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível limpar os relacionamentos");
+    } finally {
+      setResetting(false);
+    }
+  }, [resetPreview]);
+
 
   const runRepair = useCallback(async (dryRun: boolean) => {
     // Na execução real, restringe o cancelamento exatamente aos documentos
@@ -243,6 +290,17 @@ export default function PagCorpSettlementAudit() {
           >
             <Undo2 className="w-4 h-4 mr-2" /> Cancelar e refazer divergentes
           </Button>
+          <Button variant="outline" onClick={() => runReset(true)} disabled={resetting}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${resetting ? "animate-spin" : ""}`} /> Verificar cancelamentos
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => runReset(false)}
+            disabled={resetting || !resetPreview?.cancelled.length}
+          >
+            <Undo2 className="w-4 h-4 mr-2" /> Limpar relacionamentos e refazer
+          </Button>
+
           <div className="relative ml-auto w-full sm:w-64">
             <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
             <Input
@@ -254,7 +312,30 @@ export default function PagCorpSettlementAudit() {
           </div>
         </div>
 
+        {resetPreview && (
+          <Alert>
+            <RefreshCw className="h-4 w-4" />
+            <AlertTitle>
+              {resetPreview.cancelled.length} baixa(s) confirmada(s) como cancelada(s) no ERP
+              {resetPreview.stillActive.length ? ` · ${resetPreview.stillActive.length} ainda ativa(s)` : ""}
+            </AlertTitle>
+            <AlertDescription className="space-y-1">
+              {resetPreview.stillActive.slice(0, 10).map((a) => (
+                <div key={`active-${a.companyDb}-${a.paymentDocEntry}`} className="text-xs font-mono">
+                  ainda ativa: {a.companyDb} · baixa {a.paymentDocNum ?? a.paymentDocEntry}
+                </div>
+              ))}
+              {resetPreview.cancelled.slice(0, 10).map((a) => (
+                <div key={`cancel-${a.companyDb}-${a.paymentDocEntry}`} className="text-xs font-mono">
+                  cancelada: {a.companyDb} · baixa {a.paymentDocNum ?? a.paymentDocEntry}
+                </div>
+              ))}
+            </AlertDescription>
+          </Alert>
+        )}
+
         {repairPreview && (
+
           <Alert variant={repairPreview.length ? "destructive" : "default"}>
             <Wrench className="h-4 w-4" />
             <AlertTitle>

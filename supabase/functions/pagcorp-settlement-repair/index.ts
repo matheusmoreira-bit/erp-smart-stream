@@ -146,6 +146,8 @@ Deno.serve(async (req) => {
     paymentDocEntries?: number[];
     fxTolerancePct?: number;
     includeFxVariation?: boolean;
+    /** "divergences" (padrão) | "reset_cancelled" */
+    mode?: string;
   } = {};
   try {
     body = await req.json();
@@ -156,6 +158,7 @@ Deno.serve(async (req) => {
     : ["SBO_ANAGAMING", "SBO_CACTUS"];
   const limit = Math.min(Math.max(Number(body.limit) || 200, 1), 500);
   const dryRun = body.dryRun !== false;
+  const mode = body.mode === "reset_cancelled" ? "reset_cancelled" : "divergences";
   const fxRel = Number.isFinite(Number(body.fxTolerancePct))
     ? Math.min(Math.max(Number(body.fxTolerancePct) / 100, 0), 0.2)
     : FX_REL_TOLERANCE_DEFAULT;
@@ -163,6 +166,7 @@ Deno.serve(async (req) => {
   const onlyEntries = Array.isArray(body.paymentDocEntries)
     ? new Set(body.paymentDocEntries.map((n) => Number(n)).filter((n) => Number.isFinite(n)))
     : null;
+
 
   const actions: Array<Record<string, unknown>> = [];
   const errors: Array<{ companyDb: string; message: string }> = [];
@@ -206,15 +210,75 @@ Deno.serve(async (req) => {
       }
 
       for (const [paymentEntry, logRows] of byPayment) {
+
         const payment = await fetchPayment(baseUrl, cookie, paymentEntry);
+        const isCancelled = !payment || String(payment.Cancelled || "tNO") === "tYES";
+
+        // ---- Modo "reset_cancelled": confirma o cancelamento manual feito no
+        // ERP e limpa os relacionamentos de baixa, devolvendo o log para a fila.
+        if (mode === "reset_cancelled") {
+          const base = {
+            companyDb,
+            paymentDocEntry: paymentEntry,
+            paymentDocNum: payment?.DocNum ?? null,
+            paymentDate: payment?.DocDate ?? null,
+            cardName: payment?.CardName ?? payment?.CardCode ?? null,
+            currency: payment?.DocCurrency ?? null,
+            cancelledInSap: isCancelled,
+            logIds: logRows.map((r) => r.id),
+          };
+          if (!isCancelled) {
+            actions.push({ ...base, action: "skipped", reason: "payment_still_active" });
+            continue;
+          }
+          if (dryRun) {
+            actions.push({ ...base, action: "would_reset" });
+            continue;
+          }
+          const note = payment
+            ? `Baixa ${payment.DocNum} cancelada manualmente no ERP — relacionamento limpo para novo lançamento.`
+            : `Pagamento ${paymentEntry} não encontrado no ERP — relacionamento limpo para novo lançamento.`;
+          const { error: updErr } = await sb
+            .from("pagcorp_integration_log")
+            .update({
+              settlement_status: "pending",
+              settlement_payment_doc_entry: null,
+              settlement_payment_doc_num: null,
+              settlement_invoice_doc_entry: null,
+              settlement_invoice_doc_num: null,
+              settlement_ptax_rate: null,
+              settlement_ptax_date: null,
+              settlement_ptax_source: null,
+              settlement_completed_at: null,
+              settlement_locked_at: null,
+              settlement_retry_after: null,
+              settlement_attempts: 0,
+              settlement_error: note,
+            })
+            .in("id", logRows.map((r) => r.id));
+
+          await sb.rpc("insert_audit_log", {
+            p_action: "pagcorp_settlement_reset",
+            p_entity_type: "vendor_payment",
+            p_entity_id: String(paymentEntry),
+            p_actor_email: adminId,
+            p_company_db: companyDb,
+            p_details: base as unknown as Record<string, unknown>,
+          }).then(() => {}, () => {});
+
+          actions.push({ ...base, action: "reset_and_requeued", updateError: updErr?.message ?? null });
+          continue;
+        }
+
         if (!payment) {
           actions.push({ companyDb, paymentDocEntry: paymentEntry, action: "skipped", reason: "payment_not_found" });
           continue;
         }
-        if (String(payment.Cancelled || "tNO") === "tYES") {
+        if (isCancelled) {
           actions.push({ companyDb, paymentDocEntry: paymentEntry, action: "skipped", reason: "already_cancelled" });
           continue;
         }
+
 
         // Valor esperado = soma das transações PagCorp deste pagamento,
         // convertidas pela PTAX gravada quando não são BRL.
@@ -343,16 +407,20 @@ Deno.serve(async (req) => {
   return json(200, {
     ok: true,
     dryRun,
+    mode,
     generatedAt: new Date().toISOString(),
     companyDbs,
     fxTolerancePct: Number((fxRel * 100).toFixed(2)),
     includeFxVariation: includeFx,
     total: actions.length,
-    toFix: actions.filter((a) => a.action === "would_cancel_and_requeue").length,
+    toFix: actions.filter((a) => a.action === "would_cancel_and_requeue" || a.action === "would_reset").length,
     fxSkipped: actions.filter((a) => a.reason === "fx_variation").length,
+    stillActive: actions.filter((a) => a.reason === "payment_still_active").length,
+    reset: actions.filter((a) => a.action === "reset_and_requeued").length,
     fixed: actions.filter((a) => a.action === "cancelled_and_requeued").length,
     failed: actions.filter((a) => a.action === "cancel_failed").length,
     actions,
     errors,
   });
+
 });
