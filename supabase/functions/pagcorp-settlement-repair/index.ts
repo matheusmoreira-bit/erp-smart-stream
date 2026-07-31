@@ -290,13 +290,13 @@ Deno.serve(async (req) => {
           })
           .in("id", logRows.map((r) => r.id));
 
-        await sb.from("audit_trail").insert({
-          action: "pagcorp_settlement_cancelled",
-          entity_type: "vendor_payment",
-          entity_id: String(paymentEntry),
-          company_db: companyDb,
-          user_id: adminId,
-          details: base as unknown as Record<string, unknown>,
+        await sb.rpc("insert_audit_log", {
+          p_action: "pagcorp_settlement_cancelled",
+          p_entity_type: "vendor_payment",
+          p_entity_id: String(paymentEntry),
+          p_actor_email: adminId,
+          p_company_db: companyDb,
+          p_details: base as unknown as Record<string, unknown>,
         }).then(() => {}, () => {});
 
         actions.push({ ...base, action: "cancelled_and_requeued", updateError: updErr?.message ?? null });
