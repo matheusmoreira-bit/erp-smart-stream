@@ -290,6 +290,17 @@ export default function PagCorpSettlementAudit() {
           >
             <Undo2 className="w-4 h-4 mr-2" /> Cancelar e refazer divergentes
           </Button>
+          <Button variant="outline" onClick={() => runReset(true)} disabled={resetting}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${resetting ? "animate-spin" : ""}`} /> Verificar cancelamentos
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => runReset(false)}
+            disabled={resetting || !resetPreview?.cancelled.length}
+          >
+            <Undo2 className="w-4 h-4 mr-2" /> Limpar relacionamentos e refazer
+          </Button>
+
           <div className="relative ml-auto w-full sm:w-64">
             <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
             <Input
