@@ -133,26 +133,35 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
         newPassword,
         Array.from(targets),
         currentPassword,
+        managed,
       );
 
       setSummary(allResults);
 
       if (managed) {
-        const okDbs = allResults
-          .filter((r) => r.status === "success" || r.status === "skipped")
-          .map((r) => r.companyDB);
+        // O servidor grava o login gerenciado logo após confirmar o login com a
+        // nova senha (mesma string exata). Só salvamos pelo cliente quando o
+        // servidor não conseguiu — e NUNCA em empresas onde a troca não foi
+        // confirmada, para não deixar banco e SAP divergentes.
+        const pending = allResults.filter((r) => r.verified === true && r.managedSaved !== true);
+        const alreadySaved = allResults.filter((r) => r.managedSaved === true).length;
         const saveResults = await Promise.allSettled(
-          okDbs.map((db) => saveUserSapCredential(db, session.userName, newPassword)),
+          pending.map((r) => saveUserSapCredential(r.companyDB, session.userName, newPassword)),
         );
-        const savedOk = saveResults.filter((r) => r.status === "fulfilled").length;
-        const savedFail = saveResults.length - savedOk;
+        const savedOk = alreadySaved + saveResults.filter((r) => r.status === "fulfilled").length;
+        const savedFail = saveResults.filter((r) => r.status === "rejected").length;
+        const notVerified = allResults.filter((r) => r.verified !== true).length;
         if (savedOk > 0) {
           toast.success(`Login gerenciado salvo em ${savedOk} empresa(s).`);
         }
         if (savedFail > 0) {
           toast.warning(`Falha ao salvar login gerenciado em ${savedFail} empresa(s).`);
         }
+        if (notVerified > 0) {
+          toast.info(`${notVerified} empresa(s) sem troca confirmada — login gerenciado não foi salvo nelas.`);
+        }
       }
+
 
       const successes = allResults.filter((r) => r.status === "success").length;
       const skipped = allResults.filter((r) => r.status === "skipped").length;
