@@ -79,6 +79,7 @@ export function RegistrationRequestModal({
   const [notes, setNotes] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
+  const [duplicate, setDuplicate] = useState<DuplicateRequest | null>(null);
 
   useEffect(() => {
     if (!open) return;
