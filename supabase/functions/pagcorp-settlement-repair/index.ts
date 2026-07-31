@@ -26,6 +26,11 @@ const cors = {
 };
 
 const TOLERANCE = 0.05;
+// Variação cambial (PTAX da compra × PTAX da baixa) não é erro de lançamento:
+// diferenças em moeda estrangeira até 3% do esperado (máx. R$ 250) são
+// contabilizadas como variação/juros e NÃO são canceladas.
+const FX_REL_TOLERANCE_DEFAULT = 0.03;
+const FX_ABS_CAP = 250;
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -139,6 +144,8 @@ Deno.serve(async (req) => {
     limit?: number;
     dryRun?: boolean;
     paymentDocEntries?: number[];
+    fxTolerancePct?: number;
+    includeFxVariation?: boolean;
   } = {};
   try {
     body = await req.json();
@@ -149,6 +156,10 @@ Deno.serve(async (req) => {
     : ["SBO_ANAGAMING", "SBO_CACTUS"];
   const limit = Math.min(Math.max(Number(body.limit) || 200, 1), 500);
   const dryRun = body.dryRun !== false;
+  const fxRel = Number.isFinite(Number(body.fxTolerancePct))
+    ? Math.min(Math.max(Number(body.fxTolerancePct) / 100, 0), 0.2)
+    : FX_REL_TOLERANCE_DEFAULT;
+  const includeFx = body.includeFxVariation === true;
   const onlyEntries = Array.isArray(body.paymentDocEntries)
     ? new Set(body.paymentDocEntries.map((n) => Number(n)).filter((n) => Number.isFinite(n)))
     : null;
@@ -209,12 +220,14 @@ Deno.serve(async (req) => {
         // convertidas pela PTAX gravada quando não são BRL.
         let expected = 0;
         let ptaxGap = false;
+        let hasForeign = false;
         for (const r of logRows) {
           const raw = (r.pagcorp_data || {}) as Record<string, unknown>;
           const tx = (raw.transaction || raw) as Record<string, unknown>;
           const amount = num(tx.amount ?? tx.value ?? tx.expenseValue);
           const currency = String(tx.currency || raw.currency || "BRL").toUpperCase();
           const ptax = num(r.settlement_ptax_rate);
+          if (currency !== "BRL") hasForeign = true;
           if (currency === "BRL") expected += amount;
           else if (ptax > 0) expected += amount * ptax;
           else ptaxGap = true;
@@ -249,6 +262,25 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Variação cambial: não cancela (o ERP absorve como variação/juros).
+        const fxLimit = Math.min(Math.max(expectedRounded * fxRel, TOLERANCE), FX_ABS_CAP);
+        const isFxVariation = hasForeign && Math.abs(diff) <= fxLimit;
+        if (isFxVariation && !includeFx) {
+          actions.push({
+            companyDb,
+            paymentDocEntry: paymentEntry,
+            paymentDocNum: payment.DocNum,
+            action: "skipped",
+            reason: "fx_variation",
+            applied: Number(applied.toFixed(2)),
+            expected: expectedRounded,
+            difference: diff,
+            differencePct: Number(((diff / expectedRounded) * 100).toFixed(2)),
+          });
+          continue;
+        }
+
+
         const base = {
           companyDb,
           paymentDocEntry: paymentEntry,
@@ -260,6 +292,8 @@ Deno.serve(async (req) => {
           applied: Number(applied.toFixed(2)),
           expected: expectedRounded,
           difference: diff,
+          differencePct: Number(((diff / expectedRounded) * 100).toFixed(2)),
+          fxVariation: isFxVariation,
           logIds: logRows.map((r) => r.id),
         };
 
@@ -311,8 +345,11 @@ Deno.serve(async (req) => {
     dryRun,
     generatedAt: new Date().toISOString(),
     companyDbs,
+    fxTolerancePct: Number((fxRel * 100).toFixed(2)),
+    includeFxVariation: includeFx,
     total: actions.length,
     toFix: actions.filter((a) => a.action === "would_cancel_and_requeue").length,
+    fxSkipped: actions.filter((a) => a.reason === "fx_variation").length,
     fixed: actions.filter((a) => a.action === "cancelled_and_requeued").length,
     failed: actions.filter((a) => a.action === "cancel_failed").length,
     actions,

@@ -31,6 +31,9 @@ interface RepairAction {
   applied?: number;
   expected?: number;
   difference?: number;
+  differencePct?: number | null;
+  fxVariation?: boolean;
+  reason?: string;
   action: string;
   error?: string | null;
 }
@@ -47,6 +50,8 @@ interface AuditFinding {
   appliedToInvoice: number;
   expectedFromPagcorp: number;
   difference: number;
+  differencePct?: number | null;
+  fxVariation?: boolean;
   invoiceDocEntry: number | null;
   invoiceDocNum: number | null;
   invoiceTotal: number | null;
@@ -61,6 +66,7 @@ const ISSUE_LABELS: Record<string, string> = {
   cancelled_in_sap: "Já cancelada no ERP",
   applied_greater_than_expected: "Baixa maior que a transação",
   applied_less_than_expected: "Baixa menor que a transação",
+  fx_variation: "Variação cambial (não é erro)",
   batch_payment: "Pagamento em lote",
   missing_ptax: "Sem PTAX gravada",
   invoice_cancelled: "NF cancelada",
@@ -122,7 +128,9 @@ export default function PagCorpSettlementAudit() {
       const acts = (data.actions || []) as RepairAction[];
       if (dryRun) {
         setRepairPreview(acts.filter((a) => a.action === "would_cancel_and_requeue"));
-        toast.success(`${data.toFix} baixa(s) divergente(s) seriam canceladas e relançadas`);
+        toast.success(
+          `${data.toFix} baixa(s) divergente(s) seriam canceladas${data.fxSkipped ? ` · ${data.fxSkipped} ignorada(s) por variação cambial (até ${data.fxTolerancePct}%)` : ""}`,
+        );
       } else {
         setRepairPreview(null);
         toast.success(`${data.fixed} baixa(s) cancelada(s) e devolvida(s) à fila${data.failed ? ` · ${data.failed} falha(s)` : ""}`);
