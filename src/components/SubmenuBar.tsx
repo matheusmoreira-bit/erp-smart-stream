@@ -19,6 +19,8 @@ export interface SubmenuItem {
 interface SubmenuBarProps {
   /** Nome do módulo pai (ex.: "Vendas") */
   moduleLabel?: string;
+  /** Rota inicial do módulo (usada no link do breadcrumb) */
+  moduleHref?: string;
   items: SubmenuItem[];
   active: string;
   onSelect: (key: string) => void;
@@ -29,9 +31,10 @@ interface SubmenuBarProps {
  * Substitui a antiga régua de abas por um seletor em dropdown,
  * que funciona bem tanto no desktop quanto no mobile.
  */
-export function SubmenuBar({ moduleLabel, items, active, onSelect }: SubmenuBarProps) {
+export function SubmenuBar({ moduleLabel, moduleHref, items, active, onSelect }: SubmenuBarProps) {
   const navigate = useNavigate();
   const current = items.find((i) => i.key === active) ?? items[0];
+  const homeHref = moduleHref ?? items[0]?.key ?? "/";
 
   return (
     <div className="sticky top-[var(--app-header-h,72px)] z-20 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70">
@@ -51,7 +54,8 @@ export function SubmenuBar({ moduleLabel, items, active, onSelect }: SubmenuBarP
             <>
               <button
                 type="button"
-                onClick={() => navigate("/")}
+                onClick={() => navigate(homeHref)}
+                title={`Ir para ${moduleLabel}`}
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors truncate max-w-[35vw] sm:max-w-none"
               >
                 {moduleLabel}
@@ -59,6 +63,7 @@ export function SubmenuBar({ moduleLabel, items, active, onSelect }: SubmenuBarP
               <span aria-hidden="true" className="text-muted-foreground/50">/</span>
             </>
           ) : null}
+
 
           <span
             aria-current="page"
