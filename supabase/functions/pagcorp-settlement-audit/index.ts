@@ -239,11 +239,20 @@ Deno.serve(async (req) => {
       const diff = Number((appliedToInvoice - expectedRounded).toFixed(2));
       const hasPtaxGap = txs.some((t) => t.currency !== "BRL" && !t.ptax);
 
+      // Diferenças pequenas em documentos em moeda estrangeira são variação
+      // cambial (PTAX do dia da baixa × PTAX gravada) e vão para conta de
+      // juros/variação no ERP — não são erro de lançamento.
+      const hasForeignCurrency = txs.some((t) => t.currency !== "BRL");
+      const fxLimit = Math.min(Math.max(expectedRounded * FX_REL_TOLERANCE, 0.05), FX_ABS_CAP);
+      const isFxVariation = hasForeignCurrency && Math.abs(diff) > 0.05 && Math.abs(diff) <= fxLimit;
+      const diffPct = expectedRounded > 0 ? Number(((diff / expectedRounded) * 100).toFixed(2)) : null;
+
       const issues: string[] = [];
       if (!payment) issues.push("payment_not_found");
       if (payment && String(payment.Cancelled || "tNO") === "tYES") issues.push("cancelled_in_sap");
       if (payment && expectedRounded > 0 && Math.abs(diff) > 0.05) {
-        issues.push(diff > 0 ? "applied_greater_than_expected" : "applied_less_than_expected");
+        if (isFxVariation) issues.push("fx_variation");
+        else issues.push(diff > 0 ? "applied_greater_than_expected" : "applied_less_than_expected");
       }
       if (payment && Math.abs(transferSum - appliedTotal) > 0.05) issues.push("batch_payment");
       if (hasPtaxGap) issues.push("missing_ptax");
