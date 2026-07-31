@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 
 /** Link para a tela onde o documento é operado (compras ou vendas), já filtrado. */
 function docPageLink(doc: { id: string; doc_type: string | null }): string {
-  const base = doc.doc_type === "sales" ? "/vendas" : "/compras";
+  const base = doc.doc_type === "sales" ? "/vendas/pedidos" : "/compras";
   return `${base}?doc=${encodeURIComponent(doc.id)}`;
 }
 
