@@ -446,7 +446,7 @@ export default function RegistrationRequests() {
             <TableBody>
               {loading && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
                     <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
                     Carregando solicitações…
                   </TableCell>
@@ -454,7 +454,7 @@ export default function RegistrationRequests() {
               )}
               {!loading && filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
                     Nenhuma solicitação encontrada.
                   </TableCell>
                 </TableRow>
@@ -467,6 +467,7 @@ export default function RegistrationRequests() {
                       <TableCell className="font-mono text-xs">#{r.id.slice(0, 8).toUpperCase()}</TableCell>
                       <TableCell>{TYPE_LABELS[r.request_type]}</TableCell>
                       <TableCell className="font-medium max-w-[280px] truncate">{r.title}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{r.company_db || "—"}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{r.requester_email}</TableCell>
                       <TableCell className="text-xs">{fmt(r.created_at)}</TableCell>
                       <TableCell className={`text-xs ${!sla.closed && sla.overdue ? "text-destructive font-medium" : ""}`}>
