@@ -826,6 +826,7 @@ export default function PagCorp() {
   const handleConfirmConsolidate = async (
     supplier: SapSearchOption,
     lineOverrides: Record<string, { costCenter?: string | null; project?: string | null }> = {},
+    documentDate?: string | null,
   ) => {
     const txs = consolidateDialog.transactions;
     if (txs.length === 0 || !session?.companyDB) return;
@@ -837,6 +838,8 @@ export default function PagCorp() {
         supplier.name,
         session.userName || undefined,
         lineOverrides,
+        undefined,
+        documentDate ?? null,
       );
       toast.success("Pedido de Compra consolidado criado no SAP", {
         description: `PC #${result.purchaseOrder?.DocNum} • ${txs.length} transações`,
