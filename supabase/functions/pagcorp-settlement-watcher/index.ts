@@ -861,6 +861,10 @@ Deno.serve(async (req) => {
                   // são baixadas pelo valor local (openAmount), sem conversão.
                   const invCur = (invoice.DocCurrency || "").toUpperCase();
                   let docRate: number | null = null;
+                  // Data em que o pagamento é lançado. Para USD, a regra é
+                  // lançar o contas a pagar na MESMA data da compra (mesma data
+                  // usada para buscar a PTAX). Para BRL, mantém a data da NF.
+                  let paymentDate = invoice.DocDate;
                   if (invCur === "USD") {
                     // Preferimos a data da TRANSAÇÃO no cartão (evento cambial).
                     // Se não vier no payload, cai para a data da NF (comportamento antigo).
@@ -875,6 +879,7 @@ Deno.serve(async (req) => {
                       continue;
                     }
                     docRate = ptax.rate;
+                    paymentDate = ptaxDateBase;
                     if (!firstPtax) {
                       firstPtax = {
                         rate: ptax.rate,
@@ -900,6 +905,8 @@ Deno.serve(async (req) => {
                     invoiceEntry: invoice.DocEntry,
                     invoiceDocNum: invoice.DocNum,
                     invoiceDate: invoice.DocDate,
+                    paymentDate,
+
                     cardCode: invoice.CardCode,
                     cardName: invoice.CardName,
                     docCurrency: invoice.DocCurrency,
