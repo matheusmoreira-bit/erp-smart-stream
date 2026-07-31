@@ -445,7 +445,6 @@ export function RegistrationRequestModal({
           </Button>
         </DialogFooter>
       </DialogContent>
-      </DialogContent>
     </Dialog>
 
     <AlertDialog open={!!duplicate} onOpenChange={(o) => !o && setDuplicate(null)}>
