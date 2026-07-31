@@ -436,6 +436,7 @@ export default function RegistrationRequests() {
                 <TableHead>Chamado</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Título</TableHead>
+                <TableHead>Empresa</TableHead>
                 <TableHead>Solicitante</TableHead>
                 <TableHead>Abertura</TableHead>
                 <TableHead>SLA</TableHead>
