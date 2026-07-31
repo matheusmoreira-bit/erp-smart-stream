@@ -387,6 +387,20 @@ Deno.serve(async (req) => {
     const supplierName: string | undefined = body.supplierName;
     const integratedBy: string | null = body.integratedBy || null;
     const nondeductible: boolean = body.nondeductible === true;
+    // Data do documento informada pelo usuário (ex.: emissão da NF do Google
+    // Cloud, que fatura no mês seguinte às compras). Só é aceita no formato
+    // ISO e dentro de uma janela de ±1 ano para evitar o erro do SAP
+    // "Specify a date within the permissible range".
+    const documentDate: string | null = (() => {
+      const raw = typeof body.documentDate === "string" ? body.documentDate.slice(0, 10) : "";
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+      const d = new Date(`${raw}T00:00:00Z`).getTime();
+      if (isNaN(d)) return null;
+      const now = Date.now();
+      const year = 365 * 24 * 60 * 60 * 1000;
+      if (d < now - year || d > now + year) return null;
+      return raw;
+    })();
     // Optional per-line overrides from integrate modal: { [txId]: { costCenter?, project? } }
     const lineOverrides: Record<string, { costCenter?: string | null; project?: string | null; item?: string | null }> =
       body.lineOverrides && typeof body.lineOverrides === "object" ? body.lineOverrides : {};
