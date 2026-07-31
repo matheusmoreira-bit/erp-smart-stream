@@ -220,32 +220,13 @@ Deno.serve(async (req) => {
       continue;
     }
 
-    let cls = classifySapError(httpStatus, errText);
+    const cls = classifySapError(httpStatus, errText);
     const isLastAttempt = !cls.retryable || attempts >= (row.max_attempts || 5);
 
-    // Contingência automática: falhas de anexo em despesas travavam a fila até
-    // esgotar e exigiam o botão manual "integrar sem anexo". Na última tentativa
-    // fazemos isso sozinhos — o anexo segue por e-mail ao fiscal da empresa.
-    if (
-      isLastAttempt &&
-      row.doc_type === "expense" &&
-      cls.category === "attachment" &&
-      !(row.payload || {}).__no_attachment_fallback
-    ) {
-      const fallback = await invoke({ ...dispatch.body, skip_attachments: true });
-      if (fallback.ok) {
-        await admin.from("sap_retry_queue").update({
-          status: "succeeded",
-          attempts,
-          last_error: "Integrado automaticamente sem anexo (anexo enviado por e-mail ao fiscal)",
-        }).eq("id", row.id);
-        results.push({ id: row.id, ok: true, action: "succeeded_without_attachment" });
-        continue;
-      }
-      errText = `${errText} | contingência sem anexo também falhou: ${fallback.error}`;
-      httpStatus = fallback.status;
-      cls = classifySapError(httpStatus, fallback.error);
-    }
+    // NÃO integrar automaticamente sem anexo. Falha de anexo é encerrada como
+    // "exhausted" e fica aguardando a decisão manual ("Integrar sem anexo" na
+    // fila de retentativas), já que isso exige lançamento manual do anexo no ERP.
+
 
     // Not retryable or attempts exhausted → mark exhausted + notify.
     if (isLastAttempt) {
