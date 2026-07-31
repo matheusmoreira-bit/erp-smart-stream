@@ -210,7 +210,7 @@ Deno.serve(async (req) => {
       }
 
       for (const [paymentEntry, logRows] of byPayment) {
-      for (const [paymentEntry, logRows] of byPayment) {
+
         const payment = await fetchPayment(baseUrl, cookie, paymentEntry);
         const isCancelled = !payment || String(payment.Cancelled || "tNO") === "tYES";
 
