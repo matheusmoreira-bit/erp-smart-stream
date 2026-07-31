@@ -293,14 +293,23 @@ Deno.serve(async (req) => {
     await fetch(`${baseUrl}/Logout`, { method: "POST", headers: { Cookie: cookie } }).catch(() => {});
   }
 
-  findings.sort((a, b) => (b.issues as string[]).length - (a.issues as string[]).length);
+  const isReal = (f: Record<string, unknown>) =>
+    (f.issues as string[]).some((i) => i !== "fx_variation");
+  findings.sort((a, b) => {
+    const ra = isReal(a) ? 1 : 0;
+    const rb = isReal(b) ? 1 : 0;
+    if (ra !== rb) return rb - ra;
+    return Math.abs(Number(b.difference)) - Math.abs(Number(a.difference));
+  });
 
   return json(200, {
     ok: true,
     generatedAt: new Date().toISOString(),
     companyDbs,
+    fxTolerancePct: FX_REL_TOLERANCE * 100,
     total: findings.length,
     withIssues: findings.filter((f) => (f.issues as string[]).length > 0).length,
+    fxOnly: findings.filter((f) => f.fxVariation === true && !isReal(f)).length,
     findings,
     errors,
   });
