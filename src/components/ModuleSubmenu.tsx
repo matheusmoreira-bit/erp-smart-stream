@@ -87,6 +87,8 @@ export function ModuleSubmenu() {
   const bar = (
     <SubmenuBar
       moduleLabel={mod.label}
+      moduleHref={items[0].path}
+
       items={items.map((i) => ({ key: i.path, label: i.label }))}
       active={active}
       onSelect={(key) => navigate(key)}
