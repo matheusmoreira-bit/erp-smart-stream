@@ -98,10 +98,24 @@ export default function PagCorpSettlementAudit() {
   const [confirmRepair, setConfirmRepair] = useState(false);
 
   const runRepair = useCallback(async (dryRun: boolean) => {
+    // Na execução real, restringe o cancelamento exatamente aos documentos
+    // listados na simulação — nada fora dessa lista é tocado.
+    const entries = !dryRun && repairPreview?.length
+      ? repairPreview.map((a) => a.paymentDocEntry)
+      : undefined;
+    if (!dryRun && !entries?.length) {
+      toast.error("Rode a simulação antes de executar o cancelamento");
+      return;
+    }
     setRepairing(true);
     try {
       const { data, error } = await supabase.functions.invoke("pagcorp-settlement-repair", {
-        body: { companyDbs: ["SBO_ANAGAMING", "SBO_CACTUS"], limit: 300, dryRun },
+        body: {
+          companyDbs: ["SBO_ANAGAMING", "SBO_CACTUS"],
+          limit: 300,
+          dryRun,
+          ...(entries ? { paymentDocEntries: entries } : {}),
+        },
       });
       if (error) throw error;
       if (!data?.ok) throw new Error(data?.error || "Falha no reparo das baixas");
@@ -118,7 +132,8 @@ export default function PagCorpSettlementAudit() {
     } finally {
       setRepairing(false);
     }
-  }, []);
+  }, [repairPreview]);
+
 
   const run = useCallback(async () => {
     setLoading(true);
