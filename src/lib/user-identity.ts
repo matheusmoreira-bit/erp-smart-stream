@@ -215,7 +215,14 @@ export async function syncDirectoryFromSapUsers(rows: RawSapUser[]): Promise<voi
       })),
       { onConflict: "user_key" },
     );
-    const emailRows = merged.flatMap((u) => u.emails.map((email) => ({ user_key: u.user_key, email })));
+    // Um e-mail só pode aparecer uma vez no mesmo upsert (ON CONFLICT).
+    const seen = new Set<string>();
+    const emailRows = merged.flatMap((u) =>
+      u.emails
+        .map((e) => e.trim().toLowerCase())
+        .filter((email) => email && !seen.has(email) && seen.add(email))
+        .map((email) => ({ user_key: u.user_key, email })),
+    );
     if (emailRows.length > 0) {
       await supabase.from("sap_user_emails").upsert(emailRows, { onConflict: "email" });
     }
