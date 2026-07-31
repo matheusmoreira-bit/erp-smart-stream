@@ -100,6 +100,7 @@ import {
 import { useCurrentUserCostCenter, isItemAllowedForCostCenter, isCostCenterAllowedForUser, costCenterBranch, isRateioTypeAllowedForCostCenter } from "@/hooks/useCurrentUserCostCenter";
 import { useCanSeeAllCostCenters } from "@/hooks/useCanSeeAllCostCenters";
 import { useCustomerBrandMap, filterProjectsForCustomer } from "@/hooks/useCustomerBrandMap";
+import { CurrencyField } from "@/components/CurrencyField";
 
 // Logger tagueado — usado nas verificações de dedup e nos guards de fluxo
 // (cancelar/retentar). Sempre em `console.info`/`warn` para facilitar filtro
