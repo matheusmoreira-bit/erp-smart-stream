@@ -419,6 +419,11 @@ export function SapLoginForm() {
           </p>
         </div>
 
+        {/* Aviso temporário de indisponibilidade do ERP */}
+        <ErpOutageBanner />
+
+
+
         {/* Form */}
         <form onSubmit={handleSubmit} className="glass-card p-6 space-y-5">
           {/* Database Selection */}
