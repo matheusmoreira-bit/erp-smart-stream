@@ -29,7 +29,23 @@ interface Props {
   open: boolean;
   onClose: () => void;
   transactions: PagCorpTransaction[];
-  onConfirm: (supplier: SapSearchOption, lineOverrides: LineOverrideMap) => Promise<void>;
+  onConfirm: (
+    supplier: SapSearchOption,
+    lineOverrides: LineOverrideMap,
+    documentDate?: string | null,
+  ) => Promise<void>;
+}
+
+/** Extrai yyyy-mm-dd de uma data em ISO ou dd/mm/aaaa. */
+function toIsoDate(value: unknown): string | null {
+  if (!value) return null;
+  const s = String(value);
+  const br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+  const iso = s.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 }
 
 export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfirm }: Props) {
@@ -39,6 +55,16 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
   const [headerPR, setHeaderPR] = useState<SapSearchOption | null>(null);
   const [perLineCC, setPerLineCC] = useState<Record<string, SapSearchOption | null>>({});
   const [perLinePR, setPerLinePR] = useState<Record<string, SapSearchOption | null>>({});
+  const [documentDate, setDocumentDate] = useState<string>("");
+
+  // Meses distintos na seleção (caso Google Cloud: cobranças ao longo do mês,
+  // nota emitida no mês seguinte).
+  const txDates = useMemo(
+    () => transactions.map((t) => toIsoDate((t as any).date)).filter((d): d is string => !!d).sort(),
+    [transactions],
+  );
+  const months = useMemo(() => new Set(txDates.map((d) => d.slice(0, 7))), [txDates]);
+  const crossMonth = months.size > 1;
 
   useEffect(() => {
     if (open) {
@@ -48,8 +74,11 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
       setHeaderPR(null);
       setPerLineCC({});
       setPerLinePR({});
+      setDocumentDate(txDates.length > 0 ? txDates[txDates.length - 1] : "");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
 
   const ccMap = useCallback((row: any) => ({ code: row.CenterCode, name: row.CenterName }), []);
   const prMap = useCallback((row: any) => ({ code: row.Code, name: row.Name }), []);
@@ -113,7 +142,7 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
           };
         }
       });
-      await onConfirm(supplier, map);
+      await onConfirm(supplier, map, documentDate || null);
     } finally {
       setSubmitting(false);
     }
@@ -157,7 +186,38 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
                 required
               />
             </div>
+
+            <div>
+              <label
+                htmlFor="consolidate-doc-date"
+                className="text-xs font-medium text-muted-foreground mb-1 block"
+              >
+                Data de emissão da nota (data do documento)
+              </label>
+              <input
+                id="consolidate-doc-date"
+                type="date"
+                value={documentDate}
+                onChange={(e) => setDocumentDate(e.target.value)}
+                className="h-9 w-full sm:w-56 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Usada como data do documento, data do imposto e vencimento do Pedido de Compra.
+                Cada linha mantém a data real da transação.
+              </p>
+            </div>
+
+            {crossMonth && (
+              <div className="text-xs text-warning bg-warning/10 border border-warning/30 rounded p-2">
+                ⚠ A seleção contém transações de <strong>{months.size} meses diferentes</strong>{" "}
+                ({[...months].sort().join(", ")}). Isso é esperado em fornecedores que cobram
+                durante o mês e faturam no mês seguinte (ex.: Google Cloud). Informe acima a data
+                de emissão da nota para que o Pedido de Compra seja lançado nessa competência.
+              </div>
+            )}
           </div>
+
+
 
 
           {/* ====== Padrões aplicados ====== */}

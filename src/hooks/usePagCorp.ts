@@ -528,6 +528,8 @@ export function usePagCorp() {
     integratedBy?: string,
     lineOverrides?: Record<string, { costCenter?: string | null; project?: string | null; item?: string | null }>,
     nondeductible?: boolean,
+    /** Data de emissão da NF (yyyy-mm-dd) — usada como data do documento no SAP. */
+    documentDate?: string | null,
   ) => {
     const { sapFunctionFetch } = await import("@/lib/auth-fetch");
     const res = await sapFunctionFetch("pagcorp-to-sap", {
@@ -542,8 +544,10 @@ export function usePagCorp() {
         integratedBy,
         lineOverrides: lineOverrides || {},
         nondeductible: !!nondeductible,
+        ...(documentDate ? { documentDate } : {}),
       }),
     });
+
     const result = await res.json().catch(() => ({}));
     if (!res.ok || result.success === false) {
       throw new Error(result.error || `Erro ${res.status}`);
