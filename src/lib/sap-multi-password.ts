@@ -95,6 +95,7 @@ export async function changePasswordInCompanies(
         new_password: newPassword,
         ...(currentPassword ? { current_password: currentPassword } : {}),
         company_dbs: companyDbs,
+        save_managed: saveManaged,
       }),
     });
 
