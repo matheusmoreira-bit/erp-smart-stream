@@ -407,16 +407,20 @@ Deno.serve(async (req) => {
   return json(200, {
     ok: true,
     dryRun,
+    mode,
     generatedAt: new Date().toISOString(),
     companyDbs,
     fxTolerancePct: Number((fxRel * 100).toFixed(2)),
     includeFxVariation: includeFx,
     total: actions.length,
-    toFix: actions.filter((a) => a.action === "would_cancel_and_requeue").length,
+    toFix: actions.filter((a) => a.action === "would_cancel_and_requeue" || a.action === "would_reset").length,
     fxSkipped: actions.filter((a) => a.reason === "fx_variation").length,
+    stillActive: actions.filter((a) => a.reason === "payment_still_active").length,
+    reset: actions.filter((a) => a.action === "reset_and_requeued").length,
     fixed: actions.filter((a) => a.action === "cancelled_and_requeued").length,
     failed: actions.filter((a) => a.action === "cancel_failed").length,
     actions,
     errors,
   });
+
 });
