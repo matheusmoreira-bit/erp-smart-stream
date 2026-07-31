@@ -445,7 +445,46 @@ export function RegistrationRequestModal({
           </Button>
         </DialogFooter>
       </DialogContent>
+      </DialogContent>
     </Dialog>
+
+    <AlertDialog open={!!duplicate} onOpenChange={(o) => !o && setDuplicate(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Já existe um chamado aberto</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-2 text-sm">
+              <p>
+                O {isItem ? "item" : "fornecedor"} <strong>{duplicate?.title}</strong> já possui a
+                solicitação <strong>#{duplicate?.id.slice(0, 8).toUpperCase()}</strong> em andamento,
+                aberta por {duplicate?.requester_name || duplicate?.requester_email}
+                {duplicate?.created_at
+                  ? ` em ${new Date(duplicate.created_at).toLocaleDateString("pt-BR")}`
+                  : ""}
+                .
+              </p>
+              <p>
+                Em vez de abrir um novo chamado, você será vinculado a esse — acompanhará o andamento
+                e receberá o aviso de conclusão.
+              </p>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={saving}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={saving}
+            onClick={(e) => {
+              e.preventDefault();
+              if (duplicate) void linkToExisting(duplicate);
+            }}
+          >
+            Vincular ao chamado existente
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 
