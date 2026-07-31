@@ -312,7 +312,30 @@ export default function PagCorpSettlementAudit() {
           </div>
         </div>
 
+        {resetPreview && (
+          <Alert>
+            <RefreshCw className="h-4 w-4" />
+            <AlertTitle>
+              {resetPreview.cancelled.length} baixa(s) confirmada(s) como cancelada(s) no ERP
+              {resetPreview.stillActive.length ? ` · ${resetPreview.stillActive.length} ainda ativa(s)` : ""}
+            </AlertTitle>
+            <AlertDescription className="space-y-1">
+              {resetPreview.stillActive.slice(0, 10).map((a) => (
+                <div key={`active-${a.companyDb}-${a.paymentDocEntry}`} className="text-xs font-mono">
+                  ainda ativa: {a.companyDb} · baixa {a.paymentDocNum ?? a.paymentDocEntry}
+                </div>
+              ))}
+              {resetPreview.cancelled.slice(0, 10).map((a) => (
+                <div key={`cancel-${a.companyDb}-${a.paymentDocEntry}`} className="text-xs font-mono">
+                  cancelada: {a.companyDb} · baixa {a.paymentDocNum ?? a.paymentDocEntry}
+                </div>
+              ))}
+            </AlertDescription>
+          </Alert>
+        )}
+
         {repairPreview && (
+
           <Alert variant={repairPreview.length ? "destructive" : "default"}>
             <Wrench className="h-4 w-4" />
             <AlertTitle>
