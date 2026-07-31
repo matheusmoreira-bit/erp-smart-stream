@@ -3268,6 +3268,46 @@ export function CreateExpenseModal({
       onChange={handleCcAlertChange}
     />
 
+    <AlertDialog open={!!dupConfirm} onOpenChange={(v) => { if (!v) setDupConfirm(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Anexo já utilizado em outro lançamento</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-2 text-sm">
+              <p>
+                O(s) arquivo(s) abaixo já foram usados em um documento lançado anteriormente.
+                Se forem transações realmente distintas (ex.: duas transações PagCorp com o
+                mesmo comprovante), você pode continuar — a decisão fica registrada em auditoria.
+              </p>
+              <ul className="list-disc pl-5">
+                {(dupConfirm || []).map((c) => (
+                  <li key={c.file_hash}>
+                    {c.file_name || c.file_hash.slice(0, 8)}
+                    {c.supplier_label ? ` — ${c.supplier_label}` : ""}
+                    {c.created_at ? ` (${new Date(c.created_at).toLocaleString("pt-BR")})` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+          <AlertDialogCancel autoFocus>Revisar anexos</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              setDupConfirm(null);
+              allowDuplicateRef.current = true;
+              void handleSubmit();
+            }}
+          >
+            São transações distintas — continuar
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+
+
 
     <AlertDialog open={closeConfirm} onOpenChange={setCloseConfirm}>
       <AlertDialogContent
