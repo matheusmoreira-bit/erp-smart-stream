@@ -6,6 +6,10 @@ export interface MultiCompanyPasswordResult {
   displayName: string;
   status: "success" | "error" | "skipped";
   message?: string;
+  /** Login com a nova senha confirmado no Service Layer desta empresa. */
+  verified?: boolean;
+  /** Login gerenciado gravado no banco com exatamente a mesma senha. */
+  managedSaved?: boolean;
 }
 
 /**
