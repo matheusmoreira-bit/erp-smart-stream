@@ -316,11 +316,18 @@ export default function RegistrationRequests() {
   const { session } = useSap();
   const { requests, mine, loading, isAgent, reload, updateStatus, addComment } = useRegistrationRequests();
   const [scope, setScope] = useState<"mine" | "all">("mine");
+  const [scopeTouched, setScopeTouched] = useState(false);
   const [status, setStatus] = useState<"todos" | RegistrationStatus>("todos");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<RegistrationRequest | null>(null);
 
+  // Agentes (Facilities/Admin) abrem direto na fila do time.
+  useEffect(() => {
+    if (isAgent && !scopeTouched) setScope("all");
+  }, [isAgent, scopeTouched]);
+
   const base = scope === "all" && isAgent ? requests : mine;
+
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
