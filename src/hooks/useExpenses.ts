@@ -659,20 +659,59 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
             currentApprover = match.firstApprover?.name || null;
             matchedRuleId = match.rule.id;
           } else {
-            // Sem regra correspondente: NUNCA auto-aprovar. Vai para aprovação
-            // administrativa — busca um admin padrão para exibir como aprovador.
+            // Sem regra exata para o CC. Antes de mandar para um admin qualquer,
+            // procuramos a alçada do RAMO do centro de custo (1.80.1.x → 1.80.x):
+            // é o aprovador natural daquele grupo de CCs.
             status = "pendente_aprovacao";
             matchedRuleId = null;
+            let resolved = false;
             try {
-              const { data: fallback } = await (supabase as any).rpc(
-                "get_default_expense_approver",
-                { _company_db: session.companyDB || null },
+              const { data: allRules } = await supabase
+                .from("approval_rules")
+                .select("*")
+                .eq("company_db", session.companyDB || "")
+                .eq("is_active", true);
+              const ccForFallback = headerCc || itemCostCenters[0] || "";
+              const hier = pickHierarchicalFallbackRule(
+                (allRules || []) as any,
+                {
+                  total_amount: totalAmount,
+                  cost_center: ccForFallback,
+                  project: input.project || "",
+                  currency: input.currency || "BRL",
+                  doc_type: docType,
+                },
+                docType,
               );
-              currentApprover = (typeof fallback === "string" && fallback.trim()) || "Administrador";
-            } catch {
-              currentApprover = "Administrador";
+              if (hier) {
+                const { data: levels } = await supabase
+                  .from("approval_rule_levels")
+                  .select("*")
+                  .eq("rule_id", hier.rule.id)
+                  .order("level_order", { ascending: true })
+                  .limit(1);
+                const first = levels && levels.length > 0 ? (levels[0] as RuleLevelRow) : null;
+                if (first?.approver_name || first?.approver_email) {
+                  currentApprover = first.approver_name || first.approver_email;
+                  matchedRuleId = hier.rule.id;
+                  resolved = true;
+                }
+              }
+            } catch { /* segue para o admin padrão */ }
+
+            if (!resolved) {
+              try {
+                const { data: fallback } = await (supabase as any).rpc(
+                  "get_default_expense_approver",
+                  { _company_db: session.companyDB || null },
+                );
+                currentApprover = (typeof fallback === "string" && fallback.trim()) || "Administrador";
+              } catch {
+                currentApprover = "Administrador";
+              }
             }
           }
+
         }
       }
 
