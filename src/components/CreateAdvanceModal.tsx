@@ -22,6 +22,7 @@ interface Props {
   onClose: () => void;
 }
 
+import { CurrencyField } from "@/components/CurrencyField";
 const CURRENCIES = ["BRL", "USD", "EUR", "ARS", "GBP"];
 
 interface SupplierOpt extends SapSearchOption {
@@ -199,24 +200,14 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
 
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-2">
-              <Label>
-                Moeda
-                {currencyLocked && (
-                  <span className="ml-1 text-[10px] text-muted-foreground">(do fornecedor)</span>
-                )}
-              </Label>
-              <select
+              <CurrencyField
+                id="advance-currency"
                 value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-                disabled={currencyLocked}
-                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                {(currencyLocked ? [supplierCurrency] : CURRENCIES).map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+                onChange={currencyLocked ? undefined : setCurrency}
+                options={currencyLocked ? [supplierCurrency] : CURRENCIES}
+                locked={currencyLocked}
+                required={false}
+              />
             </div>
             <div className="space-y-2 col-span-2">
               <Label>Data prevista</Label>

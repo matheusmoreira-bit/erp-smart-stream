@@ -100,6 +100,7 @@ import {
 import { useCurrentUserCostCenter, isItemAllowedForCostCenter, isCostCenterAllowedForUser, costCenterBranch, isRateioTypeAllowedForCostCenter } from "@/hooks/useCurrentUserCostCenter";
 import { useCanSeeAllCostCenters } from "@/hooks/useCanSeeAllCostCenters";
 import { useCustomerBrandMap, filterProjectsForCustomer } from "@/hooks/useCustomerBrandMap";
+import { CurrencyField } from "@/components/CurrencyField";
 
 // Logger tagueado — usado nas verificações de dedup e nos guards de fluxo
 // (cancelar/retentar). Sempre em `console.info`/`warn` para facilitar filtro
@@ -2881,46 +2882,14 @@ export function CreateExpenseModal({
           {/* Currency + Dates — filial usa o padrão configurado no cadastro da empresa.
               Padrão visual: verde + check quando preenchido, âmbar + triângulo quando obrigatório vazio. */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
-                <span>Moeda *</span>
-                {currency ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-green-500" aria-label="Preenchido" />
-                ) : (
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-label="Obrigatório" />
-                )}
-                {loadingCurrencies && <span className="ml-1 text-muted-foreground">(carregando…)</span>}
-              </label>
-              {currencyOptions ? (
-                <Select value={currency} onValueChange={setCurrency}>
-                  <SelectTrigger
-                    className={`text-sm h-9 ${
-                      currency
-                        ? "bg-green-500/5 border-green-500/50 font-medium"
-                        : "bg-amber-500/5 border-amber-500/50"
-                    }`}
-                  >
-                    <SelectValue placeholder="Selecione a moeda" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {currencyOptions.map((c) => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Input
-                  value={currency}
-                  readOnly
-                  placeholder="Definida pelo fornecedor"
-                  className={`text-sm h-9 ${
-                    currency
-                      ? "bg-green-500/5 border-green-500/50 font-medium"
-                      : "bg-amber-500/5 border-amber-500/50"
-                  }`}
-                />
-              )}
-            </div>
+            <CurrencyField
+              value={currency}
+              onChange={currencyOptions ? setCurrency : undefined}
+              options={currencyOptions}
+              locked={!currencyOptions}
+              lockedHint="Definida pelo cadastro do fornecedor"
+              loading={loadingCurrencies}
+            />
             <div>
               <label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
                 <span>Data do Documento *</span>
