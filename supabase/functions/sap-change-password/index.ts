@@ -474,7 +474,8 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
         let verifySession: Session | null = null;
         try {
           verifySession = await sapLogin(baseUrl, creds.sapCompanyDb, userCode, newPassword, ctrl.signal);
-          return { companyDB: companyDb, displayName, status: "success" };
+          const managedSaved = await persistManagedCredential(companyDb);
+          return { companyDB: companyDb, displayName, status: "success", verified: true, managedSaved };
         } catch (e) {
           const raw = e instanceof Error ? e.message : "Falha ao validar nova senha";
           console.error(`[sap-change-password] verify login failed`, { companyDb, userCode, sapCompanyDb: creds.sapCompanyDb, raw });
