@@ -1668,6 +1668,19 @@ export default function ApprovalRulesPage() {
             <Button variant="outline" onClick={() => setShowSimulator(true)} className="gap-1.5">
               <PlayCircle className="w-4 h-4" /> Simular pedido
             </Button>
+            {isAdmin && (
+              <Button
+                variant="outline"
+                onClick={reprocessRouting}
+                disabled={reprocessing}
+                className="gap-1.5"
+                title="Reavalia documentos pendentes que ficaram sem regra e envia ao aprovador correto"
+              >
+                <RefreshCw className={`w-4 h-4 ${reprocessing ? "animate-spin" : ""}`} />
+                Reprocessar roteamento
+              </Button>
+            )}
+
             <Button onClick={openCreate} className="gap-1.5">
               <Plus className="w-4 h-4" /> Nova Regra
             </Button>
