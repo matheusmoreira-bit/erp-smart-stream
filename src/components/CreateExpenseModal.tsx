@@ -1983,23 +1983,32 @@ export function CreateExpenseModal({
       try {
         fileHashes = await Promise.all(files.map((f) => hashFileContent(f)));
         const novel = fileHashes.filter((h) => !claimedHashesRef.current.has(h));
-        if (novel.length > 0) {
+        if (novel.length > 0 && !allowDuplicateRef.current) {
           const existing = await findExistingClaims(supabase, novel);
           if (existing.length > 0) {
-            const names = existing
-              .map((e) => e.file_name || e.file_hash.slice(0, 8))
-              .join(", ");
             console.warn(DEDUP_LOG, "duplicata cross-user detectada", { existing });
-            toast.error(
-              `Este documento já foi lançado por outro usuário: ${names}. ` +
-                `Remova o anexo duplicado ou verifique com o responsável antes de continuar.`,
-              { duration: 10000 },
-            );
+            setDupConfirm(existing);
             submitInFlightRef.current = false;
             setIsCreating(false);
             return;
           }
         }
+        if (allowDuplicateRef.current) {
+          const { data: userRes } = await supabase.auth.getUser();
+          await logAuditAction({
+            action: "expense_duplicate_attachment_override",
+            entity_type: "expense",
+            actor_email: userRes?.user?.email || undefined,
+            company_db: sapSession?.companyDB || undefined,
+            details: {
+              supplier: supplier.name,
+              doc_type: mode,
+              file_names: files.map((f) => f.name),
+              file_hashes: fileHashes,
+            },
+          });
+        }
+
       } catch (e) {
         console.error(DEDUP_LOG, "verificação de duplicata falhou (abortando submit):", e);
         toast.error("Não foi possível verificar duplicidade dos anexos. Tente novamente.");
