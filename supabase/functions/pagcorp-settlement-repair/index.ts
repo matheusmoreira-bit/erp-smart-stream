@@ -220,12 +220,14 @@ Deno.serve(async (req) => {
         // convertidas pela PTAX gravada quando não são BRL.
         let expected = 0;
         let ptaxGap = false;
+        let hasForeign = false;
         for (const r of logRows) {
           const raw = (r.pagcorp_data || {}) as Record<string, unknown>;
           const tx = (raw.transaction || raw) as Record<string, unknown>;
           const amount = num(tx.amount ?? tx.value ?? tx.expenseValue);
           const currency = String(tx.currency || raw.currency || "BRL").toUpperCase();
           const ptax = num(r.settlement_ptax_rate);
+          if (currency !== "BRL") hasForeign = true;
           if (currency === "BRL") expected += amount;
           else if (ptax > 0) expected += amount * ptax;
           else ptaxGap = true;
@@ -259,6 +261,25 @@ Deno.serve(async (req) => {
           });
           continue;
         }
+
+        // Variação cambial: não cancela (o ERP absorve como variação/juros).
+        const fxLimit = Math.min(Math.max(expectedRounded * fxRel, TOLERANCE), FX_ABS_CAP);
+        const isFxVariation = hasForeign && Math.abs(diff) <= fxLimit;
+        if (isFxVariation && !includeFx) {
+          actions.push({
+            companyDb,
+            paymentDocEntry: paymentEntry,
+            paymentDocNum: payment.DocNum,
+            action: "skipped",
+            reason: "fx_variation",
+            applied: Number(applied.toFixed(2)),
+            expected: expectedRounded,
+            difference: diff,
+            differencePct: Number(((diff / expectedRounded) * 100).toFixed(2)),
+          });
+          continue;
+        }
+
 
         const base = {
           companyDb,
