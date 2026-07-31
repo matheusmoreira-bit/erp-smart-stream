@@ -6,6 +6,10 @@ export interface MultiCompanyPasswordResult {
   displayName: string;
   status: "success" | "error" | "skipped";
   message?: string;
+  /** Login com a nova senha confirmado no Service Layer desta empresa. */
+  verified?: boolean;
+  /** Login gerenciado gravado no banco com exatamente a mesma senha. */
+  managedSaved?: boolean;
 }
 
 /**
@@ -58,6 +62,7 @@ export async function changePasswordInCompanies(
   newPassword: string,
   companyDbs: string[],
   currentPassword?: string,
+  saveManaged = false,
 ): Promise<MultiCompanyPasswordResult[]> {
   if (companyDbs.length === 0) return [];
 
@@ -90,6 +95,7 @@ export async function changePasswordInCompanies(
         new_password: newPassword,
         ...(currentPassword ? { current_password: currentPassword } : {}),
         company_dbs: companyDbs,
+        save_managed: saveManaged,
       }),
     });
 

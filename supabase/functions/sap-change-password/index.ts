@@ -20,6 +20,7 @@ import { ensurePasswordNeverExpires } from "../_shared/sap-password-never-expire
 import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { consumeCsrfToken, CSRF_HEADER } from "../_shared/csrf.ts";
 import { revokeErpSession } from "../_shared/session-revocation.ts";
+import { encryptSecret } from "../_shared/sap-cred-crypto.ts";
 
 
 
@@ -149,7 +150,16 @@ function isSamePasswordError(message: string): boolean {
   );
 }
 
-interface ResultRow { companyDB: string; displayName: string; status: "success" | "error" | "skipped"; message?: string }
+interface ResultRow {
+  companyDB: string;
+  displayName: string;
+  status: "success" | "error" | "skipped";
+  message?: string;
+  /** true quando o login com a NOVA senha foi confirmado no Service Layer. */
+  verified?: boolean;
+  /** true quando o login gerenciado foi gravado no banco com a mesma senha. */
+  managedSaved?: boolean;
+}
 
 const TRIVIAL_PASSWORDS = [
   "123456", "12345678", "123456789", "1234567890", "password", "senha", "qwerty",
@@ -357,6 +367,42 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
     // Timeout individual por empresa (ms). Ajustável via secret.
     const PER_COMPANY_TIMEOUT_MS = Number(Deno.env.get("SAP_CHANGE_PASSWORD_TIMEOUT_MS") || "25000");
 
+    // Login gerenciado: a senha só é gravada no banco DEPOIS que o login com a
+    // nova senha foi confirmado no Service Layer daquela empresa, usando
+    // exatamente a mesma string enviada no PATCH. Isso garante que banco e SAP
+    // nunca fiquem divergentes (antes o front salvava também em empresas
+    // "ignoradas"/com erro, onde o SAP mantinha a senha antiga).
+    const saveManaged = body.save_managed === true;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(callerId);
+    const managedUserId = saveManaged && isUuid && userCode.toLowerCase() === (callerUserCode || "").toLowerCase()
+      ? callerId
+      : null;
+
+    async function persistManagedCredential(companyDb: string): Promise<boolean> {
+      if (!managedUserId) return false;
+      try {
+        const encrypted = await encryptSecret(newPassword);
+        const { error } = await admin.from("user_sap_credentials").upsert(
+          {
+            user_id: managedUserId,
+            company_db: companyDb,
+            sap_user: userCode,
+            sap_password_encrypted: encrypted,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,company_db" },
+        );
+        if (error) throw error;
+        return true;
+      } catch (e) {
+        console.error("[sap-change-password] falha ao salvar login gerenciado", {
+          companyDb, error: e instanceof Error ? e.message : String(e),
+        });
+        return false;
+      }
+    }
+
+
     async function changeForCompany(companyDb: string): Promise<ResultRow> {
       const displayName = nameMap.get(companyDb) || companyDb;
       const ctrl = new AbortController();
@@ -428,7 +474,8 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
         let verifySession: Session | null = null;
         try {
           verifySession = await sapLogin(baseUrl, creds.sapCompanyDb, userCode, newPassword, ctrl.signal);
-          return { companyDB: companyDb, displayName, status: "success" };
+          const managedSaved = await persistManagedCredential(companyDb);
+          return { companyDB: companyDb, displayName, status: "success", verified: true, managedSaved };
         } catch (e) {
           const raw = e instanceof Error ? e.message : "Falha ao validar nova senha";
           console.error(`[sap-change-password] verify login failed`, { companyDb, userCode, sapCompanyDb: creds.sapCompanyDb, raw });
@@ -464,6 +511,24 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
         message: r.reason instanceof Error ? r.reason.message : "Erro inesperado",
       };
     });
+
+    // Empresas onde a nova senha NÃO foi confirmada não podem manter um login
+    // gerenciado gravado (ficaria divergente do SAP e o auto-login tentaria a
+    // senha errada, podendo bloquear o usuário). Removemos o registro para que
+    // o usuário faça login manual nessas bases.
+    if (managedUserId) {
+      const stale = results.filter((r) => r.verified !== true).map((r) => r.companyDB);
+      if (stale.length > 0) {
+        const { error } = await admin
+          .from("user_sap_credentials")
+          .delete()
+          .eq("user_id", managedUserId)
+          .in("company_db", stale);
+        if (error) console.error("[sap-change-password] falha ao limpar credenciais divergentes", error.message);
+      }
+    }
+
+
 
     // Invalidação das sessões ERP ativas do usuário após a troca de senha.
     // O B1SESSION apresentado na requisição é revogado no gateway (o Service
