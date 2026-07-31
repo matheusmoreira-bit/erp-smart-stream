@@ -512,6 +512,24 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
       };
     });
 
+    // Empresas onde a nova senha NÃO foi confirmada não podem manter um login
+    // gerenciado gravado (ficaria divergente do SAP e o auto-login tentaria a
+    // senha errada, podendo bloquear o usuário). Removemos o registro para que
+    // o usuário faça login manual nessas bases.
+    if (managedUserId) {
+      const stale = results.filter((r) => r.verified !== true).map((r) => r.companyDB);
+      if (stale.length > 0) {
+        const { error } = await admin
+          .from("user_sap_credentials")
+          .delete()
+          .eq("user_id", managedUserId)
+          .in("company_db", stale);
+        if (error) console.error("[sap-change-password] falha ao limpar credenciais divergentes", error.message);
+      }
+    }
+
+
+
     // Invalidação das sessões ERP ativas do usuário após a troca de senha.
     // O B1SESSION apresentado na requisição é revogado no gateway (o Service
     // Layer continuaria aceitando-o por até 30 min).
