@@ -29,7 +29,23 @@ interface Props {
   open: boolean;
   onClose: () => void;
   transactions: PagCorpTransaction[];
-  onConfirm: (supplier: SapSearchOption, lineOverrides: LineOverrideMap) => Promise<void>;
+  onConfirm: (
+    supplier: SapSearchOption,
+    lineOverrides: LineOverrideMap,
+    documentDate?: string | null,
+  ) => Promise<void>;
+}
+
+/** Extrai yyyy-mm-dd de uma data em ISO ou dd/mm/aaaa. */
+function toIsoDate(value: unknown): string | null {
+  if (!value) return null;
+  const s = String(value);
+  const br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+  const iso = s.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 }
 
 export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfirm }: Props) {
@@ -39,6 +55,16 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
   const [headerPR, setHeaderPR] = useState<SapSearchOption | null>(null);
   const [perLineCC, setPerLineCC] = useState<Record<string, SapSearchOption | null>>({});
   const [perLinePR, setPerLinePR] = useState<Record<string, SapSearchOption | null>>({});
+  const [documentDate, setDocumentDate] = useState<string>("");
+
+  // Meses distintos na seleção (caso Google Cloud: cobranças ao longo do mês,
+  // nota emitida no mês seguinte).
+  const txDates = useMemo(
+    () => transactions.map((t) => toIsoDate((t as any).date)).filter((d): d is string => !!d).sort(),
+    [transactions],
+  );
+  const months = useMemo(() => new Set(txDates.map((d) => d.slice(0, 7))), [txDates]);
+  const crossMonth = months.size > 1;
 
   useEffect(() => {
     if (open) {
@@ -48,8 +74,11 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
       setHeaderPR(null);
       setPerLineCC({});
       setPerLinePR({});
+      setDocumentDate(txDates.length > 0 ? txDates[txDates.length - 1] : "");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
 
   const ccMap = useCallback((row: any) => ({ code: row.CenterCode, name: row.CenterName }), []);
   const prMap = useCallback((row: any) => ({ code: row.Code, name: row.Name }), []);
