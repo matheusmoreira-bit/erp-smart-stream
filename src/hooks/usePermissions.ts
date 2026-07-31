@@ -314,25 +314,35 @@ export function useUserAssignments(_companyDb?: string) {
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  const assign = async (sap_email: string, group_id: string) => {
-    // Identidade canônica do usuário SAP (nunca e-mail cru).
+  /**
+   * Define o grupo do usuário globalmente. `aliases` são todas as chaves
+   * equivalentes da mesma pessoa (variações de usuário SAP / e-mails):
+   * todas são apagadas e fica UMA única linha na chave canônica.
+   * Erros são propagados para a UI (nunca falhar em silêncio).
+   */
+  const assign = async (sap_email: string, group_id: string, aliases: string[] = []) => {
     const email = canonicalUserKey(sap_email) || sap_email.toLowerCase();
-    // Global assignment — remove other groups for this user first.
-    await supabase
+    const keys = Array.from(
+      new Set([email, ...aliases.map((a) => canonicalUserKey(a)).filter(Boolean)]),
+    );
+
+    const { error: delError } = await supabase
       .from("user_group_assignments")
       .delete()
-      .eq("sap_email", email)
-      .neq("group_id", group_id);
+      .in("sap_email", keys);
+    if (delError) throw new Error(delError.message);
 
-    await supabase.from("user_group_assignments").upsert(
+    const { error: insError } = await supabase.from("user_group_assignments").upsert(
       { sap_email: email, group_id, company_db: null },
       { onConflict: "sap_email,group_id" }
     );
+    if (insError) throw new Error(insError.message);
     await fetch();
   };
 
   const remove = async (id: string) => {
-    await supabase.from("user_group_assignments").delete().eq("id", id);
+    const { error } = await supabase.from("user_group_assignments").delete().eq("id", id);
+    if (error) throw new Error(error.message);
     await fetch();
   };
 

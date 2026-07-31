@@ -510,23 +510,29 @@ function UsersView({
 
   const handlePick = async (groupId: string) => {
     if (!sheetUser) return;
-    // Grava para todas as chaves equivalentes — vale para todas as bases.
-    for (const key of aliasesOf(sheetUser)) {
-      await assign(key, groupId);
+    try {
+      // Uma única gravação: limpa todas as chaves equivalentes e grava a canônica.
+      await assign(sheetUser.user_key, groupId, aliasesOf(sheetUser));
+      toast.success("Permissão atualizada");
+      setSheetUser(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível alterar o grupo");
     }
-    toast.success("Permissão atualizada");
-    setSheetUser(null);
   };
 
   const handleReset = async () => {
     if (!sheetUser) return;
     const keys = aliasesOf(sheetUser);
     const stale = assignments.filter((a) => keys.includes(canonicalUserKey(a.sap_email)));
-    for (const a of stale) {
-      await remove(a.id);
+    try {
+      for (const a of stale) {
+        await remove(a.id);
+      }
+      if (stale.length > 0) toast.success("Voltou ao padrão");
+      setSheetUser(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível voltar ao padrão");
     }
-    if (stale.length > 0) toast.success("Voltou ao padrão");
-    setSheetUser(null);
   };
 
 
