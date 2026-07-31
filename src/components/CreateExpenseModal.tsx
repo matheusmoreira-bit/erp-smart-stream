@@ -73,7 +73,10 @@ import {
   findExistingClaims,
   claimDocumentHashes,
   hasInFlightGuardTripped,
+  type ExistingClaim,
 } from "@/lib/expense-dedupe";
+import { logAuditAction } from "@/hooks/useAuditLog";
+
 import {
   saveQueueState,
   loadQueueState,
