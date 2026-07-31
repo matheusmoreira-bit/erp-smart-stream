@@ -1,14 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { History, Search, Loader2 } from "lucide-react";
+import { History, Search, Loader2, ExternalLink } from "lucide-react";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 import { DocumentTimeline } from "@/components/DocumentTimeline";
 import { expenseRead } from "@/lib/expense-read";
 import { cn } from "@/lib/utils";
+
+/** Link para a tela onde o documento é operado (compras ou vendas), já filtrado. */
+function docPageLink(doc: { id: string; doc_type: string | null }): string {
+  const base = doc.doc_type === "sales" ? "/vendas" : "/compras";
+  return `${base}?doc=${encodeURIComponent(doc.id)}`;
+}
+
 
 interface DocRow {
   id: string;
