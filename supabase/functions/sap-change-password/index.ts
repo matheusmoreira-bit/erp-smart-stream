@@ -150,7 +150,16 @@ function isSamePasswordError(message: string): boolean {
   );
 }
 
-interface ResultRow { companyDB: string; displayName: string; status: "success" | "error" | "skipped"; message?: string }
+interface ResultRow {
+  companyDB: string;
+  displayName: string;
+  status: "success" | "error" | "skipped";
+  message?: string;
+  /** true quando o login com a NOVA senha foi confirmado no Service Layer. */
+  verified?: boolean;
+  /** true quando o login gerenciado foi gravado no banco com a mesma senha. */
+  managedSaved?: boolean;
+}
 
 const TRIVIAL_PASSWORDS = [
   "123456", "12345678", "123456789", "1234567890", "password", "senha", "qwerty",
