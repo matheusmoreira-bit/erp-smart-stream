@@ -117,6 +117,11 @@ export function useRegistrationRequests(options?: { onlyMine?: boolean; companyD
         .order("created_at", { ascending: false })
         .limit(500);
 
+      // Segregação por empresa: cada base só enxerga os próprios chamados.
+      if (options?.companyDb) {
+        query = query.eq("company_db", options.companyDb);
+      }
+
       if (options?.onlyMine && userData.user?.email) {
         query = query.eq("requester_email", userData.user.email.toLowerCase());
       }
@@ -130,7 +135,7 @@ export function useRegistrationRequests(options?: { onlyMine?: boolean; companyD
     } finally {
       setLoading(false);
     }
-  }, [options?.onlyMine]);
+  }, [options?.onlyMine, options?.companyDb]);
 
   useEffect(() => {
     void load();
