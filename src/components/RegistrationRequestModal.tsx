@@ -27,6 +27,27 @@ import {
 } from "@/lib/supplier-request-email";
 import { RegistrationFilePicker } from "@/components/RegistrationFilePicker";
 import { uploadRegistrationAttachments } from "@/lib/registration-attachments";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+interface DuplicateRequest {
+  id: string;
+  title: string;
+  status: string;
+  requester_email: string;
+  requester_name: string | null;
+  due_at: string;
+  created_at: string;
+  already_linked: boolean;
+}
 
 export interface RegistrationRequestModalProps {
   open: boolean;
@@ -58,6 +79,7 @@ export function RegistrationRequestModal({
   const [notes, setNotes] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
+  const [duplicate, setDuplicate] = useState<DuplicateRequest | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -88,12 +110,72 @@ export function RegistrationRequestModal({
     return null;
   };
 
+  /** Vincula o solicitante a um chamado já aberto do mesmo fornecedor/item. */
+  const linkToExisting = async (dup: DuplicateRequest) => {
+    setSaving(true);
+    try {
+      const extra = notes.trim();
+      const { error } = await supabase.rpc("join_registration_request", {
+        p_request_id: dup.id,
+        p_note: extra
+          ? `Também precisa deste cadastro. Observações: ${extra}`
+          : null,
+        p_author_name: session?.userName || null,
+      });
+      if (error) throw error;
+      toast.success(
+        `Você foi vinculado ao chamado #${dup.id.slice(0, 8).toUpperCase()}, já aberto para este ${
+          isItem ? "item" : "fornecedor"
+        }.`,
+      );
+      setDuplicate(null);
+      onCreated?.(dup.id);
+      onOpenChange(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível vincular ao chamado existente.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSubmit = async () => {
     const problem = validate();
     if (problem) {
       toast.error(problem);
       return;
     }
+
+    // Antes de abrir um novo chamado, procura uma solicitação em aberto para o
+    // mesmo CNPJ/CPF (ou mesmo nome) e oferece o vínculo, evitando duplicidade.
+    setSaving(true);
+    try {
+      const { data: dupRows } = await supabase.rpc("find_open_registration_duplicate", {
+        p_type: type,
+        p_tax_id: isItem ? null : taxId.trim() || null,
+        p_title: name.trim() || null,
+      });
+      const dup = (Array.isArray(dupRows) ? dupRows[0] : null) as DuplicateRequest | null;
+      if (dup) {
+        setSaving(false);
+        if (dup.already_linked) {
+          toast.info(
+            `Você já está vinculado ao chamado #${dup.id.slice(0, 8).toUpperCase()} para "${dup.title}".`,
+          );
+          onCreated?.(dup.id);
+          onOpenChange(false);
+          return;
+        }
+        setDuplicate(dup);
+        return;
+      }
+    } catch {
+      /* checagem best-effort: segue para a criação normal */
+    }
+
+    await createRequest();
+  };
+
+  const createRequest = async () => {
     setSaving(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
@@ -184,6 +266,7 @@ export function RegistrationRequestModal({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -363,6 +446,44 @@ export function RegistrationRequestModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={!!duplicate} onOpenChange={(o) => !o && setDuplicate(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Já existe um chamado aberto</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-2 text-sm">
+              <p>
+                O {isItem ? "item" : "fornecedor"} <strong>{duplicate?.title}</strong> já possui a
+                solicitação <strong>#{duplicate?.id.slice(0, 8).toUpperCase()}</strong> em andamento,
+                aberta por {duplicate?.requester_name || duplicate?.requester_email}
+                {duplicate?.created_at
+                  ? ` em ${new Date(duplicate.created_at).toLocaleDateString("pt-BR")}`
+                  : ""}
+                .
+              </p>
+              <p>
+                Em vez de abrir um novo chamado, você será vinculado a esse — acompanhará o andamento
+                e receberá o aviso de conclusão.
+              </p>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={saving}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={saving}
+            onClick={(e) => {
+              e.preventDefault();
+              if (duplicate) void linkToExisting(duplicate);
+            }}
+          >
+            Vincular ao chamado existente
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 
