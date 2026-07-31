@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
     .eq("status", "aprovado")
     .eq("doc_type", "purchase")
     .is("sap_doc_entry", null)
-    .neq("sap_purchase_order_status", "success")
+    .or("sap_purchase_order_status.is.null,sap_purchase_order_status.neq.success")
     .or(`sap_integration_last_attempt_at.is.null,sap_integration_last_attempt_at.lt.${cutoff}`)
     .order("sap_integration_last_attempt_at", { ascending: true, nullsFirst: true })
     .limit(MAX_DOCS_PER_RUN);
