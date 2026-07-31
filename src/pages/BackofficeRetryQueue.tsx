@@ -585,17 +585,30 @@ export default function BackofficeRetryQueue() {
                 </TableCell>
                 <TableCell className="text-right space-x-1 whitespace-nowrap">
                   {r.doc_type === "expense" && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      asChild
-                      title="Abrir a trilha completa deste documento"
-                    >
-                      <Link to={docTrailLink(r)} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-3 w-3 mr-1" />Ver documento
-                      </Link>
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        asChild
+                        title="Abrir o documento na tela de compras"
+                      >
+                        <Link to={docPageLink(r)} target="_blank" rel="noopener noreferrer">
+                          <FileText className="h-3 w-3 mr-1" />Ver documento
+                        </Link>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        asChild
+                        title="Abrir a trilha completa deste documento"
+                      >
+                        <Link to={docTrailLink(r)} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="h-3 w-3 mr-1" />Trilha
+                        </Link>
+                      </Button>
+                    </>
                   )}
+
                   {canDispatch && (
                     <Button size="sm" variant="outline" onClick={() => retryNow(r.id)}>
                       <PlayCircle className="h-3 w-3 mr-1" />Reenviar
