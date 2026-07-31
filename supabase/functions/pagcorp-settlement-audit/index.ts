@@ -23,6 +23,12 @@ const cors = {
     "authorization, x-client-info, apikey, content-type, x-sap-auth-token",
 };
 
+// Tolerância de variação cambial: diferenças em moeda estrangeira até 3% do
+// valor esperado (limitadas a R$ 250) são tratadas como variação de PTAX
+// entre a data da compra e a data da baixa, não como erro de lançamento.
+const FX_REL_TOLERANCE = 0.03;
+const FX_ABS_CAP = 250;
+
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
     status,
