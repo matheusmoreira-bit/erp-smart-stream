@@ -314,7 +314,10 @@ function DetailDialog({
 export default function RegistrationRequests() {
   const navigate = useNavigate();
   const { session } = useSap();
-  const { requests, mine, loading, isAgent, reload, updateStatus, addComment } = useRegistrationRequests();
+  const [allCompanies, setAllCompanies] = useState(false);
+  const { requests, mine, loading, isAgent, reload, updateStatus, addComment } = useRegistrationRequests({
+    companyDb: allCompanies ? null : session?.companyDB ?? null,
+  });
   const [scope, setScope] = useState<"mine" | "all">("mine");
   const [scopeTouched, setScopeTouched] = useState(false);
   const [status, setStatus] = useState<"todos" | RegistrationStatus>("todos");
