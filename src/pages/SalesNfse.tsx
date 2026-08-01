@@ -599,7 +599,7 @@ export default function SalesNfse() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-            Nenhum pedido de venda aprovado encontrado para esta empresa.
+            Nenhum pedido de venda encontrado para esta empresa.
           </div>
         ) : (
           <div className="rounded-lg border border-border overflow-hidden bg-card">
@@ -607,6 +607,7 @@ export default function SalesNfse() {
               <thead className="bg-muted/40 text-xs text-muted-foreground">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium">Pedido</th>
+                  <th className="text-left px-3 py-2 font-medium">Origem</th>
                   <th className="text-left px-3 py-2 font-medium">Cliente</th>
                   <th className="text-left px-3 py-2 font-medium">Data</th>
                   <th className="text-right px-3 py-2 font-medium">Valor</th>
@@ -627,6 +628,15 @@ export default function SalesNfse() {
                           <span className="ml-2 text-[11px] text-muted-foreground">não integrado</span>
                         )}
                       </td>
+                      <td className="px-3 py-2">
+                        <Badge variant="outline" className="text-[11px]">
+                          {o.source === "erp_flow" ? "ERP Flow" : "ERP"}
+                        </Badge>
+                        {o.erp_closed && (
+                          <span className="ml-2 text-[11px] text-muted-foreground">fechado</span>
+                        )}
+                      </td>
+
                       <td className="px-3 py-2">
                         <div className="font-medium">{o.supplier_name}</div>
                         <div className="text-xs text-muted-foreground font-mono">{o.supplier_code || "—"}</div>
