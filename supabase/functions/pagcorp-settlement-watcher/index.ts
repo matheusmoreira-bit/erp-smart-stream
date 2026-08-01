@@ -495,6 +495,12 @@ Deno.serve(async (req) => {
   // permanecem sendo o fluxo do cron (varredura de várias linhas).
   let manualLogId: string | null = null;
   let manualForceRetry = false;
+  // Baixa manual disparada pela tela "Baixas PagCorp": conta contábil (e
+  // opcionalmente CC/projeto) escolhida pelo usuário sobrepõe o cadastro.
+  let manualAccountCode: string | null = null;
+  let manualCostCenter: string | null = null;
+  let manualProject: string | null = null;
+
   // Sessão SAP do usuário (quando a UI dispara "Reprocessar baixa"). Usada
   // como fallback caso as credenciais salvas em system_credentials estejam
   // bloqueadas por SSO ("Fail to NONE-SSO login from SLD").
