@@ -16,6 +16,7 @@ import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { logIntegrationCall } from "../_shared/integration-log.ts";
 import { linkNfToAp } from "../_shared/link-nf-ap.ts";
+import { notifyPagcorpSettlementPending } from "../_shared/pagcorp-settlement-notify.ts";
 
 const sapCorsHeaders = {
   ...baseCorsHeaders,
@@ -495,6 +496,12 @@ Deno.serve(async (req) => {
   // permanecem sendo o fluxo do cron (varredura de várias linhas).
   let manualLogId: string | null = null;
   let manualForceRetry = false;
+  // Baixa manual disparada pela tela "Baixas PagCorp": conta contábil (e
+  // opcionalmente CC/projeto) escolhida pelo usuário sobrepõe o cadastro.
+  let manualAccountCode: string | null = null;
+  let manualCostCenter: string | null = null;
+  let manualProject: string | null = null;
+
   // Sessão SAP do usuário (quando a UI dispara "Reprocessar baixa"). Usada
   // como fallback caso as credenciais salvas em system_credentials estejam
   // bloqueadas por SSO ("Fail to NONE-SSO login from SLD").
@@ -511,9 +518,19 @@ Deno.serve(async (req) => {
       if (body && typeof body.logId === "string" && body.logId.length > 0) {
         manualLogId = body.logId;
         manualForceRetry = body.forceRetry !== false;
+        if (typeof body.accountCode === "string" && body.accountCode.trim()) {
+          manualAccountCode = body.accountCode.trim();
+        }
+        if (typeof body.costCenter === "string" && body.costCenter.trim()) {
+          manualCostCenter = body.costCenter.trim();
+        }
+        if (typeof body.project === "string" && body.project.trim()) {
+          manualProject = body.project.trim();
+        }
       }
     } catch { /* ignore */ }
   }
+
 
   safeLog(requestId, "request_received", {
     method: req.method,
@@ -580,7 +597,7 @@ Deno.serve(async (req) => {
         q = q.eq("id", manualLogId);
       } else {
         q = q
-          .in("settlement_status", ["pending", "awaiting_invoice", "awaiting_settlement", "error"])
+          .in("settlement_status", ["pending", "awaiting_invoice", "awaiting_settlement", "awaiting_manual", "error"])
           .or(`settlement_locked_at.is.null,settlement_locked_at.lt.${cutoffLockIso}`)
           .or(`settlement_retry_after.is.null,settlement_retry_after.lt.${nowIso}`);
       }
@@ -797,6 +814,51 @@ Deno.serve(async (req) => {
                 continue;
               }
 
+              // 2.b BAIXA AUTOMÁTICA DESATIVADA (ago/2026).
+              // No fluxo do cron apenas detectamos que a NF de entrada foi
+              // lançada, marcamos a transação como "aguardando baixa manual" e
+              // notificamos a responsável. A baixa só é emitida quando a tela
+              // "Cartões → Baixas PagCorp" chama esta função com `logId`.
+              if (!manualLogId) {
+                const firstInv = invoices[0];
+                const curH = (firstInv.DocCurrency || "").toUpperCase();
+                const isFc = curH !== "" && curH !== "BRL" && curH !== "R$" && firstInv.DocTotalFC > 0;
+                const totalDoc = isFc ? firstInv.DocTotalFC : firstInv.DocTotal;
+                const paidDoc = isFc ? firstInv.PaidToDateFC : firstInv.PaidToDate;
+                const openDoc = Math.max(0, +(totalDoc - paidDoc).toFixed(2));
+                const share = +(totalDoc * firstInv.PoRatio).toFixed(2);
+                const pending = share > 0 ? Math.min(openDoc, share) : openDoc;
+                const alreadyPaid = firstInv.DocumentStatus === "bost_Close" || pending <= 0;
+
+                const patch: Record<string, unknown> = {
+                  settlement_status: alreadyPaid ? "settled" : "awaiting_manual",
+                  settlement_invoice_doc_entry: firstInv.DocEntry,
+                  settlement_invoice_doc_num: firstInv.DocNum,
+                  settlement_locked_at: null,
+                  settlement_attempted_at: new Date().toISOString(),
+                  settlement_error: alreadyPaid
+                    ? "NF já quitada no SAP"
+                    : "Aguardando baixa manual (Cartões → Baixas PagCorp)",
+                };
+                if (alreadyPaid) patch.settlement_completed_at = new Date().toISOString();
+                await sb.from("pagcorp_integration_log").update(patch).eq("id", row.id);
+
+                // Notifica somente na transição para "aguardando baixa manual".
+                if (!alreadyPaid && row.settlement_status !== "awaiting_manual") {
+                  await notifyPagcorpSettlementPending(sb, {
+                    companyDb,
+                    poDocNum: row.sap_doc_num ?? row.sap_doc_entry,
+                    invoiceDocNum: firstInv.DocNum,
+                    vendorName: firstInv.CardName,
+                    amount: pending,
+                    currency: isFc ? curH : "BRL",
+                  });
+                }
+                results.push({ id: row.id, status: alreadyPaid ? "settled" : "awaiting_manual" });
+                continue;
+              }
+
+
               // 3. Card key + classificação do evento (primária) + moeda (fallback).
               //    A conta contábil é resolvida por NF: prioriza o mapeamento por
               //    `eventClassification` retornado pela API do PagCorp; se não
@@ -856,7 +918,16 @@ Deno.serve(async (req) => {
                 })();
                 const invCurRaw = (invoice.DocCurrency || "").toUpperCase();
                 const invCurNorm = invCurRaw === "BRL" || invCurRaw === "USD" ? invCurRaw : (payloadCur || invCurRaw || "BRL");
-                const account = await resolveSettlementAccount(sb, companyDb, cardKey, invCurNorm, eventClass);
+                const account = manualAccountCode
+                  ? {
+                      settlement_account_code: manualAccountCode,
+                      cost_center: manualCostCenter,
+                      project: manualProject,
+                      currency: null,
+                      event_classification: null,
+                    } as SettlementAccount
+                  : await resolveSettlementAccount(sb, companyDb, cardKey, invCurNorm, eventClass);
+
                 if (!account) {
                   if (!firstMissingAccountMsg) {
                     firstMissingAccountMsg = eventClass

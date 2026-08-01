@@ -21,6 +21,7 @@ import ApprovalMatrix from "./pages/ApprovalMatrix.tsx";
 import PagCorp from "./pages/PagCorp.tsx";
 import PagCorpMapping from "./pages/PagCorpMapping.tsx";
 import PagCorpNondeductible from "./pages/PagCorpNondeductible.tsx";
+import PagCorpSettlements from "./pages/PagCorpSettlements.tsx";
 import IntegrationHistory from "./pages/IntegrationHistory.tsx";
 import UsersHub from "./pages/UsersHub.tsx";
 import Suppliers from "./pages/Suppliers.tsx";
@@ -135,6 +136,7 @@ const App = () => (
               <Route path="/cartoes/transacoes" element={<PagCorp />} />
               <Route path="/cartoes/mapeamento" element={<PagCorpMapping />} />
               <Route path="/cartoes/indedutiveis" element={<PagCorpNondeductible />} />
+              <Route path="/cartoes/baixas" element={<PagCorpSettlements />} />
               <Route path="/cartoes/historico" element={<IntegrationHistory />} />
 
               {/* Auditoria */}
