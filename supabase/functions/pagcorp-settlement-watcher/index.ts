@@ -511,9 +511,19 @@ Deno.serve(async (req) => {
       if (body && typeof body.logId === "string" && body.logId.length > 0) {
         manualLogId = body.logId;
         manualForceRetry = body.forceRetry !== false;
+        if (typeof body.accountCode === "string" && body.accountCode.trim()) {
+          manualAccountCode = body.accountCode.trim();
+        }
+        if (typeof body.costCenter === "string" && body.costCenter.trim()) {
+          manualCostCenter = body.costCenter.trim();
+        }
+        if (typeof body.project === "string" && body.project.trim()) {
+          manualProject = body.project.trim();
+        }
       }
     } catch { /* ignore */ }
   }
+
 
   safeLog(requestId, "request_received", {
     method: req.method,
