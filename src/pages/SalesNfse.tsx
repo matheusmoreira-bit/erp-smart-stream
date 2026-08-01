@@ -125,6 +125,7 @@ export default function SalesNfse() {
   const [error, setError] = useState<string | null>(null);
   const [erpWarning, setErpWarning] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [originFilter, setOriginFilter] = useState<"all" | "erp_flow" | "erp">("all");
   const [confirmOrder, setConfirmOrder] = useState<SalesOrderRow | null>(null);
   const [emitting, setEmitting] = useState(false);
   const [syncing, setSyncing] = useState(false);
