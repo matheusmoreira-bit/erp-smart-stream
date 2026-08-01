@@ -259,6 +259,20 @@ export function CreateExpenseModal({
     mapRow: projectMapRow,
   });
 
+  // Vendas: lista de "Utilização" (NotaFiscalUsages) da empresa ativa no SAP.
+  const usageMapRow = useCallback(
+    (row: any) => ({ code: String(row.Code ?? row.AbsEntry ?? ""), name: row.Name || "" }),
+    [],
+  );
+  const { options: usageOptions, isLoading: usagesLoading } = useSapCachedList({
+    cacheKey: "nota_fiscal_usages_v1",
+    endpoint: "NotaFiscalUsages",
+    params: { $select: "Code,Name" },
+    mapRow: usageMapRow,
+    enabled: isSales,
+  });
+
+
   // Vendas: cada cliente libera apenas as marcas vinculadas (até 3) ou o
   // projeto homônimo ao cliente. Sem mapeamento, mantém a lista integral.
   const { brandsForCustomer } = useCustomerBrandMap();
