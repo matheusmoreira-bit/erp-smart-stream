@@ -417,10 +417,18 @@ export default function SalesNfse() {
   const invoiceByExpense = useMemo(() => {
     const map = new Map<string, NfseRow>();
     for (const row of invoices) {
-      const current = map.get(row.expense_id);
+      // pedidos do ERP Flow são indexados pelo expense_id; pedidos nativos do
+      // ERP pelo DocEntry do pedido (chave `erp:<DocEntry>`).
+      const key = row.expense_id
+        ? row.expense_id
+        : row.sap_order_doc_entry != null
+          ? `erp:${row.sap_order_doc_entry}`
+          : null;
+      if (!key) continue;
+      const current = map.get(key);
       // prioriza a nota válida mais recente sobre tentativas com falha
       if (!current || (current.status === "failed" && row.status !== "failed")) {
-        map.set(row.expense_id, row);
+        map.set(key, row);
       }
     }
     return map;
@@ -428,8 +436,10 @@ export default function SalesNfse() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return orders;
-    return orders.filter((o) => {
+    let base = orders;
+    if (originFilter !== "all") base = base.filter((o) => o.source === originFilter);
+    if (!q) return base;
+    return base.filter((o) => {
       const inv = invoiceByExpense.get(o.id);
       return (
         o.supplier_name.toLowerCase().includes(q) ||
@@ -438,7 +448,7 @@ export default function SalesNfse() {
         (inv?.nfse_number || "").toLowerCase().includes(q)
       );
     });
-  }, [orders, search, invoiceByExpense]);
+  }, [orders, search, invoiceByExpense, originFilter]);
 
   const pendentes = filtered.filter((o) => !invoiceByExpense.get(o.id)?.sap_invoice_doc_entry);
 
@@ -446,10 +456,21 @@ export default function SalesNfse() {
     if (!confirmOrder) return;
     setEmitting(true);
     try {
+      const payload =
+        confirmOrder.source === "erp"
+          ? {
+              action: "emit",
+              company_db: companyDb,
+              sap_order_doc_entry: confirmOrder.sap_doc_entry,
+              customer_name: confirmOrder.supplier_name,
+              total_amount: confirmOrder.total_amount,
+              currency: confirmOrder.currency,
+            }
+          : { action: "emit", expense_id: confirmOrder.id };
       const res = await sapFunctionFetch("sales-nfse-emit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "emit", expense_id: confirmOrder.id }),
+        body: JSON.stringify(payload),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok || body?.error) throw new Error(body?.error || `Falha ao emitir (${res.status})`);
@@ -461,7 +482,7 @@ export default function SalesNfse() {
     } finally {
       setEmitting(false);
     }
-  }, [confirmOrder, load]);
+  }, [confirmOrder, load, companyDb]);
 
   const syncStatus = useCallback(async () => {
     setSyncing(true);
