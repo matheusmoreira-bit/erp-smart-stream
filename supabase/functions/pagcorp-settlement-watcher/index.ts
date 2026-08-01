@@ -251,7 +251,8 @@ async function findInvoicesForPO(
   poEntry: number,
   cardCode: string,
 ): Promise<
-  Array<{ DocEntry: number; DocNum: number; CardCode: string; CardName: string; DocTotal: number; DocTotalSys: number; PaidToDate: number; PaidToDateSys: number; DocumentStatus: string; DocCurrency: string; DocRate: number; DocDate: string; BPLId?: number; PoShare: number }>
+  Array<{ DocEntry: number; DocNum: number; CardCode: string; CardName: string; DocTotal: number; DocTotalSys: number; DocTotalFC: number; PaidToDate: number; PaidToDateSys: number; PaidToDateFC: number; DocumentStatus: string; DocCurrency: string; DocRate: number; DocDate: string; BPLId?: number; PoShare: number; PoRatio: number }>
+
 > {
   // SAP B1 SL v2 rejeita `DocumentLines/any()` no $filter ("Query string error -
   // Invalid symbol"), então buscamos as PurchaseInvoices do fornecedor pelo
@@ -286,12 +287,11 @@ async function findInvoicesForPO(
       .filter((l) => Number(l?.BaseEntry) === poEntry && Number(l?.BaseType) === 22)
       .reduce((a, l) => a + lineValue(l), 0);
     const docTotal = Number(inv.DocTotal);
-    // Parcela da NF que pertence a ESTE pedido de compra. Quando a NF cobre
+    // Proporção da NF que pertence a ESTE pedido de compra. Quando a NF cobre
     // vários PCs (consolidação de contas a pagar), a baixa deve aplicar só a
-    // fatia do PC — nunca o total do documento.
-    const poShare = allSum > 0
-      ? +(docTotal * (poSum / allSum)).toFixed(2)
-      : docTotal;
+    // fatia do PC — nunca o total do documento. A razão é independente de moeda.
+    const poRatio = allSum > 0 ? Math.min(1, poSum / allSum) : 1;
+    const poShare = +(docTotal * poRatio).toFixed(2);
     return {
       DocEntry: Number(inv.DocEntry),
       DocNum: Number(inv.DocNum),
@@ -299,14 +299,19 @@ async function findInvoicesForPO(
       CardName: String(inv.CardName ?? ""),
       DocTotal: docTotal,
       DocTotalSys: Number(inv.DocTotalSys ?? inv.DocTotal ?? 0),
+      // Em documentos de moeda estrangeira o SAP devolve DocTotal em moeda
+      // LOCAL e DocTotalFC na moeda do documento (USD).
+      DocTotalFC: Number(inv.DocTotalFC ?? 0),
       PaidToDate: Number(inv.PaidToDate ?? 0),
       PaidToDateSys: Number(inv.PaidToDateSys ?? 0),
+      PaidToDateFC: Number(inv.PaidToDateFC ?? 0),
       DocumentStatus: String(inv.DocumentStatus ?? ""),
       DocCurrency: String(inv.DocCurrency ?? ""),
       DocRate: Number(inv.DocRate ?? 0),
       DocDate: String(inv.DocDate),
       BPLId: inv.BPL_IDAssignedToInvoice != null ? Number(inv.BPL_IDAssignedToInvoice) : undefined,
       PoShare: Math.max(0, poShare),
+      PoRatio: poRatio,
     };
   });
 }
@@ -817,14 +822,24 @@ Deno.serve(async (req) => {
               let firstPtax: { rate: number; ptaxDate: string; source: string } | null = null;
               const settlementNoteEarly: string[] = [];
               for (const invoice of invoices) {
-                const invoiceOpen = Math.max(0, +(invoice.DocTotal - invoice.PaidToDate).toFixed(2));
+                // ATENÇÃO: em NF de moeda estrangeira o SAP devolve DocTotal /
+                // PaidToDate em moeda LOCAL (BRL) e DocTotalFC / PaidToDateFC na
+                // moeda do documento (USD). O valor da baixa tem que ser sempre
+                // na MOEDA DO DOCUMENTO — usar o total local e multiplicar pela
+                // PTAX gera dupla conversão (ex.: R$ 1.280.608 em vez de US$ 5,5k).
+                const invCurHeader = (invoice.DocCurrency || "").toUpperCase();
+                const isFcInvoice = invCurHeader !== "" && invCurHeader !== "BRL" && invCurHeader !== "R$" &&
+                  invoice.DocTotalFC > 0;
+                const invoiceTotalDoc = isFcInvoice ? invoice.DocTotalFC : invoice.DocTotal;
+                const invoicePaidDoc = isFcInvoice ? invoice.PaidToDateFC : invoice.PaidToDate;
+                const invoiceOpen = Math.max(0, +(invoiceTotalDoc - invoicePaidDoc).toFixed(2));
                 // A baixa automática NUNCA pode exceder a fatia da NF que
                 // pertence a este pedido de compra. Quando a conta a pagar
                 // consolida vários PCs, pagar o saldo inteiro geraria baixa
                 // muito maior que o PC/NF de origem (divergência PagCorp).
-                const poShare = invoice.PoShare > 0 ? invoice.PoShare : invoiceOpen;
-                const openAmount = Math.min(invoiceOpen, poShare);
-                if (poShare < invoiceOpen - 0.05) {
+                const poShare = +(invoiceTotalDoc * invoice.PoRatio).toFixed(2);
+                const openAmount = poShare > 0 ? Math.min(invoiceOpen, poShare) : invoiceOpen;
+                if (poShare > 0 && poShare < invoiceOpen - 0.05) {
                   settlementNoteEarly.push(
                     `NF ${invoice.DocNum} consolida outros pedidos — baixa parcial de ${openAmount.toFixed(2)} (saldo da NF: ${invoiceOpen.toFixed(2)})`,
                   );
@@ -859,7 +874,8 @@ Deno.serve(async (req) => {
                   // PTAX só se aplica a pagamentos em USD (dólar). Compras em
                   // BRL (real) — ou qualquer outra moeda que não seja USD —
                   // são baixadas pelo valor local (openAmount), sem conversão.
-                  const invCur = (invoice.DocCurrency || "").toUpperCase();
+                  // Usa a moeda normalizada (a NF pode vir com símbolo "US$"/vazio).
+                  const invCur = isFcInvoice ? (invCurNorm || "USD") : invCurNorm;
                   let docRate: number | null = null;
                   // Data em que o pagamento é lançado. Para USD, a regra é
                   // lançar o contas a pagar na MESMA data da compra (mesma data
@@ -944,8 +960,9 @@ Deno.serve(async (req) => {
                     companyDb,
                     apDocEntry: invoice.DocEntry,
                     apDocNum: invoice.DocNum,
-                    apTotal: invoice.DocTotal,
-                    apPaid: (invoice.PaidToDate || 0) + (paymentDocEntry ? openAmount : 0),
+                    // Totais na MESMA moeda do documento (FC quando houver).
+                    apTotal: invoiceTotalDoc,
+                    apPaid: (invoicePaidDoc || 0) + (paymentDocEntry ? openAmount : 0),
                     apCurrency: invoice.DocCurrency || null,
                     linkedBy: "pagcorp-settlement-watcher",
                     notes: paymentDocEntry
