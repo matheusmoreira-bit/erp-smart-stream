@@ -3018,8 +3018,27 @@ export function CreateExpenseModal({
             </div>
           )}
 
+          {/* Vendas — Utilização (obrigatória no SAP Brasil) */}
+          {isSales && (
+            <div className="space-y-1.5">
+              <CachedSearchCombobox
+                label="Utilização *"
+                options={usageOptions}
+                isLoading={usagesLoading}
+                value={salesUsage}
+                onChange={setSalesUsage}
+                placeholder="Selecione a utilização da nota…"
+                portalContainer={dialogContainer}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Campo obrigatório no SAP — define a utilização fiscal aplicada a todas as linhas do pedido.
+              </p>
+            </div>
+          )}
+
           {/* Vendas — define se a NFS-e sai unificada ou uma por marca/projeto */}
           {isSales && (
+
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Emissão da NFS-e</label>
               <Select value={nfseSplitMode} onValueChange={(v) => setNfseSplitMode(v as "unified" | "per_brand")}>
