@@ -960,8 +960,9 @@ Deno.serve(async (req) => {
                     companyDb,
                     apDocEntry: invoice.DocEntry,
                     apDocNum: invoice.DocNum,
-                    apTotal: invoice.DocTotal,
-                    apPaid: (invoice.PaidToDate || 0) + (paymentDocEntry ? openAmount : 0),
+                    // Totais na MESMA moeda do documento (FC quando houver).
+                    apTotal: invoiceTotalDoc,
+                    apPaid: (invoicePaidDoc || 0) + (paymentDocEntry ? openAmount : 0),
                     apCurrency: invoice.DocCurrency || null,
                     linkedBy: "pagcorp-settlement-watcher",
                     notes: paymentDocEntry
