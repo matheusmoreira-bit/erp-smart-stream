@@ -26,6 +26,7 @@ import { pickApproverSkippingRequester, SELF_APPROVAL_FALLBACK } from "../_share
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
 import { notifySalesMilestone } from "../_shared/sales-notify.ts";
 import { notifyApprovalPending } from "../_shared/approval-notify.ts";
+import { notifyActionCompleted } from "../_shared/action-notify.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 const corsHeaders = {
