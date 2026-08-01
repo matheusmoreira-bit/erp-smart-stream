@@ -26,6 +26,7 @@ import { pickApproverSkippingRequester, SELF_APPROVAL_FALLBACK } from "../_share
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
 import { notifySalesMilestone } from "../_shared/sales-notify.ts";
 import { notifyApprovalPending } from "../_shared/approval-notify.ts";
+import { notifyActionCompleted } from "../_shared/action-notify.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 const corsHeaders = {
@@ -791,6 +792,23 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
       action_role: actionRole,
     } as any);
     await writeAuditLog("rejected", currentLevel);
+
+    // Fluxo paralelo: avisa o solicitante do desfecho da ação pedida.
+    await notifyActionCompleted(admin, {
+      actionKey: "approval",
+      refId: `${expenseId}:rejected`,
+      recipient: (exp as any).requester_email || (exp as any).requester_name,
+      companyDb: (exp as any).company_db,
+      title: "Seu documento foi reprovado",
+      summary: `A aprovação solicitada foi concluída por ${actor} com decisão de reprovação.`,
+      link: "/aprovacoes?tab=history",
+      details: [
+        { label: "Fornecedor/Cliente", value: (exp as any).supplier_name },
+        { label: "Valor", value: `${(exp as any).currency || "BRL"} ${Number((exp as any).total_amount || 0).toFixed(2)}` },
+        { label: "Empresa", value: (exp as any).company_db },
+        { label: "Motivo", value: remarks || null },
+      ],
+    });
     stageLog("update_reject", "info", { requestId, expenseId, currentLevel });
     return await respond(200, {
       ok: true,
@@ -919,6 +937,23 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     });
   }
   stageLog("update_final_approve", "info", { requestId, expenseId, currentLevel });
+
+  // Fluxo paralelo: avisa o solicitante que a ação pedida foi concluída.
+  await notifyActionCompleted(admin, {
+    actionKey: "approval",
+    refId: `${expenseId}:approved`,
+    recipient: (exp as any).requester_email || (exp as any).requester_name,
+    companyDb: (exp as any).company_db,
+    title: "Seu documento foi aprovado",
+    summary: `A aprovação solicitada foi concluída por ${actor}.`,
+    link: "/aprovacoes?tab=history",
+    details: [
+      { label: String((exp as any).doc_type) === "sales" ? "Cliente" : "Fornecedor", value: (exp as any).supplier_name },
+      { label: "Valor", value: `${(exp as any).currency || "BRL"} ${Number((exp as any).total_amount || 0).toFixed(2)}` },
+      { label: "Empresa", value: (exp as any).company_db },
+      { label: "Aprovador", value: actor },
+    ],
+  });
 
   if (String((exp as any).doc_type) === "sales") {
     await notifySalesMilestone(admin, {

@@ -25,6 +25,7 @@ export function NotificationBell() {
     integration: "⚡",
     system: "🔔",
     credential: "🔑",
+  action: "✅",
   };
 
   const trigger = (

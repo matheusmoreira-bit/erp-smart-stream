@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { createNotification } from "@/lib/notifications";
 
 export interface SupplierRequestAttachment {
   name?: string | null;
@@ -323,7 +324,19 @@ export async function requestSupplierRegistration(payload: SupplierRequestPayloa
     },
   });
   if (error) throw error;
+
+  // Fluxo paralelo: avisa o time responsável de que há uma nova ação solicitada.
+  await createNotification({
+    user_identifier: TARGET_EMAIL,
+    title: "Nova solicitação de cadastro aguardando atendimento",
+    body: `${payload.cardName || "Solicitação de cadastro"} · Solicitante: ${requesterEmail || "—"}`,
+    category: "action",
+    company_db: payload.companyDb ?? undefined,
+    link: "/solicitacoes",
+    metadata: { action_key: "registration", kind: "requested" },
+  });
 }
+
 
 /**
  * Notifica o solicitante quando o chamado é concluído (fornecedor/item cadastrado)
@@ -378,8 +391,21 @@ export async function sendRegistrationStatusEmail(params: {
     .filter(Boolean)
     .join("\n");
 
+  // Fluxo paralelo: avisa o solicitante em app sobre o desfecho do chamado.
+  await createNotification({
+    user_identifier: params.to,
+    title: done ? `Cadastro de ${kind} concluído` : "Atualização da sua solicitação",
+    body: [`Chamado #${ticket}`, params.title, `Status: ${params.statusLabel}`, params.sapCardCode ? `Código no ERP: ${params.sapCardCode}` : null]
+      .filter(Boolean)
+      .join(" · "),
+    category: "action",
+    link: "/solicitacoes",
+    metadata: { action_key: "registration", kind: "completed", request_id: params.requestId },
+  });
+
   const { error } = await supabase.functions.invoke("send-smtp-email", {
     body: { to: [params.to], subject, html, text },
   });
   if (error) throw error;
 }
+
