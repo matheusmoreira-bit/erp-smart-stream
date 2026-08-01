@@ -16,6 +16,7 @@ import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { logIntegrationCall } from "../_shared/integration-log.ts";
 import { linkNfToAp } from "../_shared/link-nf-ap.ts";
+import { notifyPagcorpSettlementPending } from "../_shared/pagcorp-settlement-notify.ts";
 
 const sapCorsHeaders = {
   ...baseCorsHeaders,
@@ -596,7 +597,7 @@ Deno.serve(async (req) => {
         q = q.eq("id", manualLogId);
       } else {
         q = q
-          .in("settlement_status", ["pending", "awaiting_invoice", "awaiting_settlement", "error"])
+          .in("settlement_status", ["pending", "awaiting_invoice", "awaiting_settlement", "awaiting_manual", "error"])
           .or(`settlement_locked_at.is.null,settlement_locked_at.lt.${cutoffLockIso}`)
           .or(`settlement_retry_after.is.null,settlement_retry_after.lt.${nowIso}`);
       }
