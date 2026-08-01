@@ -74,7 +74,25 @@ interface SalesOrderRow {
   sap_doc_num: number | null;
   project: string | null;
   nfse_split_mode: string | null;
+  /** erp_flow = pedido criado nesta aplicação · erp = pedido criado direto no SAP */
+  source: "erp_flow" | "erp";
+  /** true quando o pedido já está fechado/faturado no ERP */
+  erp_closed?: boolean;
 }
+
+interface SapOrder {
+  DocEntry: number;
+  DocNum: number;
+  CardCode: string;
+  CardName: string;
+  DocDate: string;
+  DocTotal: number;
+  DocCurrency: string;
+  DocumentStatus: string;
+  Cancelled?: string;
+  Project?: string | null;
+}
+
 
 interface NfseRow {
   id: string;
