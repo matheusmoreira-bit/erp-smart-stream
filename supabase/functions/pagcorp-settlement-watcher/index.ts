@@ -287,12 +287,11 @@ async function findInvoicesForPO(
       .filter((l) => Number(l?.BaseEntry) === poEntry && Number(l?.BaseType) === 22)
       .reduce((a, l) => a + lineValue(l), 0);
     const docTotal = Number(inv.DocTotal);
-    // Parcela da NF que pertence a ESTE pedido de compra. Quando a NF cobre
+    // Proporção da NF que pertence a ESTE pedido de compra. Quando a NF cobre
     // vários PCs (consolidação de contas a pagar), a baixa deve aplicar só a
-    // fatia do PC — nunca o total do documento.
-    const poShare = allSum > 0
-      ? +(docTotal * (poSum / allSum)).toFixed(2)
-      : docTotal;
+    // fatia do PC — nunca o total do documento. A razão é independente de moeda.
+    const poRatio = allSum > 0 ? Math.min(1, poSum / allSum) : 1;
+    const poShare = +(docTotal * poRatio).toFixed(2);
     return {
       DocEntry: Number(inv.DocEntry),
       DocNum: Number(inv.DocNum),
@@ -300,14 +299,19 @@ async function findInvoicesForPO(
       CardName: String(inv.CardName ?? ""),
       DocTotal: docTotal,
       DocTotalSys: Number(inv.DocTotalSys ?? inv.DocTotal ?? 0),
+      // Em documentos de moeda estrangeira o SAP devolve DocTotal em moeda
+      // LOCAL e DocTotalFC na moeda do documento (USD).
+      DocTotalFC: Number(inv.DocTotalFC ?? 0),
       PaidToDate: Number(inv.PaidToDate ?? 0),
       PaidToDateSys: Number(inv.PaidToDateSys ?? 0),
+      PaidToDateFC: Number(inv.PaidToDateFC ?? 0),
       DocumentStatus: String(inv.DocumentStatus ?? ""),
       DocCurrency: String(inv.DocCurrency ?? ""),
       DocRate: Number(inv.DocRate ?? 0),
       DocDate: String(inv.DocDate),
       BPLId: inv.BPL_IDAssignedToInvoice != null ? Number(inv.BPL_IDAssignedToInvoice) : undefined,
       PoShare: Math.max(0, poShare),
+      PoRatio: poRatio,
     };
   });
 }
