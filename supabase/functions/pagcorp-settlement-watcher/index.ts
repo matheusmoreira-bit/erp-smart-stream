@@ -813,6 +813,51 @@ Deno.serve(async (req) => {
                 continue;
               }
 
+              // 2.b BAIXA AUTOMÁTICA DESATIVADA (ago/2026).
+              // No fluxo do cron apenas detectamos que a NF de entrada foi
+              // lançada, marcamos a transação como "aguardando baixa manual" e
+              // notificamos a responsável. A baixa só é emitida quando a tela
+              // "Cartões → Baixas PagCorp" chama esta função com `logId`.
+              if (!manualLogId) {
+                const firstInv = invoices[0];
+                const curH = (firstInv.DocCurrency || "").toUpperCase();
+                const isFc = curH !== "" && curH !== "BRL" && curH !== "R$" && firstInv.DocTotalFC > 0;
+                const totalDoc = isFc ? firstInv.DocTotalFC : firstInv.DocTotal;
+                const paidDoc = isFc ? firstInv.PaidToDateFC : firstInv.PaidToDate;
+                const openDoc = Math.max(0, +(totalDoc - paidDoc).toFixed(2));
+                const share = +(totalDoc * firstInv.PoRatio).toFixed(2);
+                const pending = share > 0 ? Math.min(openDoc, share) : openDoc;
+                const alreadyPaid = firstInv.DocumentStatus === "bost_Close" || pending <= 0;
+
+                const patch: Record<string, unknown> = {
+                  settlement_status: alreadyPaid ? "settled" : "awaiting_manual",
+                  settlement_invoice_doc_entry: firstInv.DocEntry,
+                  settlement_invoice_doc_num: firstInv.DocNum,
+                  settlement_locked_at: null,
+                  settlement_attempted_at: new Date().toISOString(),
+                  settlement_error: alreadyPaid
+                    ? "NF já quitada no SAP"
+                    : "Aguardando baixa manual (Cartões → Baixas PagCorp)",
+                };
+                if (alreadyPaid) patch.settlement_completed_at = new Date().toISOString();
+                await sb.from("pagcorp_integration_log").update(patch).eq("id", row.id);
+
+                // Notifica somente na transição para "aguardando baixa manual".
+                if (!alreadyPaid && row.settlement_status !== "awaiting_manual") {
+                  await notifyPagcorpSettlementPending(sb, {
+                    companyDb,
+                    poDocNum: row.sap_doc_num ?? row.sap_doc_entry,
+                    invoiceDocNum: firstInv.DocNum,
+                    vendorName: firstInv.CardName,
+                    amount: pending,
+                    currency: isFc ? curH : "BRL",
+                  });
+                }
+                results.push({ id: row.id, status: alreadyPaid ? "settled" : "awaiting_manual" });
+                continue;
+              }
+
+
               // 3. Card key + classificação do evento (primária) + moeda (fallback).
               //    A conta contábil é resolvida por NF: prioriza o mapeamento por
               //    `eventClassification` retornado pela API do PagCorp; se não
