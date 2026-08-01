@@ -249,16 +249,19 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
             <div className="space-y-2">
-              <Label htmlFor="current-pw">Senha Atual</Label>
+              <Label htmlFor="current-pw">
+                Senha Atual <span className="text-xs text-muted-foreground">(opcional)</span>
+              </Label>
               <Input
                 id="current-pw"
                 type="password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                required
                 autoComplete="current-password"
+                placeholder="Deixe em branco se não lembrar"
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="new-pw">Nova Senha</Label>
               <div className="flex gap-2">
