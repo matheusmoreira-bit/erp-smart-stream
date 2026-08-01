@@ -2068,6 +2068,7 @@ export function CreateExpenseModal({
         due_date: dueDate || undefined,
         rateio_type: !isSales ? rateioType : undefined,
         nfse_split_mode: isSales ? nfseSplitMode : undefined,
+        sales_usage: isSales ? salesUsage?.code || undefined : undefined,
         items: items.map(({ sapItem, sapCostCenter, sapProject, searchHint, ...rest }) => rest),
         files: files.length > 0 ? files : undefined,
       });
