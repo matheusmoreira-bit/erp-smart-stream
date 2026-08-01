@@ -272,6 +272,8 @@ export interface CreateExpenseInput {
   rateio_type?: RateioType | null;
   /** Vendas: emitir NFS-e unificada ou uma nota por marca/projeto. */
   nfse_split_mode?: "unified" | "per_brand";
+  /** Vendas: código da Utilização (NotaFiscalUsage) exigida pelo SAP. */
+  sales_usage?: string;
   items: Omit<ExpenseItem, "id">[];
   files?: File[];
 }
