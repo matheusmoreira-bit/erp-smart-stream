@@ -732,7 +732,8 @@ export default function SalesNfse() {
                           <Button
                             size="sm"
                             variant={emitted ? "ghost" : "default"}
-                            disabled={emitted || !o.sap_doc_entry}
+                            disabled={emitted || !o.sap_doc_entry || !!o.erp_closed}
+                            title={o.erp_closed ? "Pedido já faturado/fechado no ERP" : undefined}
                             onClick={() => setConfirmOrder(o)}
                           >
                             {emitted ? "Emitida" : "Emitir NFS-e"}
