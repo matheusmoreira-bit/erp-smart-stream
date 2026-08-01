@@ -1916,6 +1916,11 @@ export function CreateExpenseModal({
       toast.error("Informe a data de vencimento");
       return;
     }
+    if (isSales && usageOptions.length > 0 && !salesUsage) {
+      toast.error("Informe a Utilização (obrigatória no SAP para pedidos de venda)");
+      return;
+    }
+
     // Alçada por CC no tipo de rateio: "imposto" só para 1.2.2.%; "folha" só para 1.5.1.3.
     if (!isSales && !isRateioTypeAllowedForCostCenter(rateioType, userCostCenter, bypassCcItemRules)) {
       toast.error(
