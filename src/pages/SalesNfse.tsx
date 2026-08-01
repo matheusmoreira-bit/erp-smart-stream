@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { sapFunctionFetch, authFetch } from "@/lib/auth-fetch";
+import { sapQueryAll } from "@/lib/sap-client";
 import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
 import { PageHeader } from "@/components/PageHeader";
