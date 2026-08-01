@@ -525,7 +525,7 @@ export default function SalesNfse() {
         icon={<FileText className="w-5 h-5 text-primary" />}
         title="Vendas"
         titleAccent="NFS-e"
-        subtitle="Emissão da nota fiscal de serviço a partir dos pedidos de venda aprovados"
+        subtitle="Emissão manual da NFS-e para pedidos de venda do ERP Flow e criados direto no ERP"
         companyLabel={getLabel(companyDb)}
         userName={session?.userName}
         onLogout={logout}
