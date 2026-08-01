@@ -556,6 +556,23 @@ export default function SalesNfse() {
               className="pl-8 h-9 text-sm"
             />
           </div>
+          <div className="flex items-center gap-1 rounded-md border border-border/60 bg-background p-0.5">
+            {([
+              { key: "all", label: "Todos" },
+              { key: "erp_flow", label: "ERP Flow" },
+              { key: "erp", label: "ERP" },
+            ] as const).map((opt) => (
+              <Button
+                key={opt.key}
+                size="sm"
+                variant={originFilter === opt.key ? "secondary" : "ghost"}
+                className="h-7 px-2.5 text-xs"
+                onClick={() => setOriginFilter(opt.key)}
+              >
+                {opt.label}
+              </Button>
+            ))}
+          </div>
           <div className="ml-auto text-xs text-muted-foreground">
             {filtered.length} pedido(s) · {pendentes.length} aguardando emissão
           </div>
@@ -566,6 +583,13 @@ export default function SalesNfse() {
             {error}
           </div>
         )}
+
+        {erpWarning && (
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-600">
+            {erpWarning}
+          </div>
+        )}
+
 
         {loading && orders.length === 0 ? (
           <div className="space-y-2">
