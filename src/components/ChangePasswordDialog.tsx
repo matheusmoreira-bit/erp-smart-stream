@@ -100,14 +100,11 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
     e.preventDefault();
     if (!session) return;
 
-    if (!currentPassword) {
-      toast.error("Informe a senha atual para confirmar a alteração.");
-      return;
-    }
-    if (currentPassword === newPassword) {
+    if (currentPassword && currentPassword === newPassword) {
       toast.error("A nova senha deve ser diferente da senha atual.");
       return;
     }
+
     if (newPassword !== confirmPassword) {
       toast.error("A nova senha e a confirmação não coincidem.");
       return;
@@ -252,16 +249,19 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
             <div className="space-y-2">
-              <Label htmlFor="current-pw">Senha Atual</Label>
+              <Label htmlFor="current-pw">
+                Senha Atual <span className="text-xs text-muted-foreground">(opcional)</span>
+              </Label>
               <Input
                 id="current-pw"
                 type="password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                required
                 autoComplete="current-password"
+                placeholder="Deixe em branco se não lembrar"
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="new-pw">Nova Senha</Label>
               <div className="flex gap-2">
@@ -411,10 +411,10 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
               className="w-full"
               disabled={
                 loading ||
-                !currentPassword ||
                 !checkPasswordPolicy(newPassword, session.userName).valid ||
                 newPassword !== confirmPassword
               }
+
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               Alterar Senha
