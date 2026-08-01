@@ -311,9 +311,9 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
       });
     }
 
-    // Anti-CSRF / anti-replay (pentest 3.3): troca da própria senha exige a
-    // senha atual, validada no Service Layer. Admin redefinindo a senha de
-    // terceiros continua isento (não conhece a senha do usuário).
+    // Anti-CSRF / anti-replay (pentest 3.3): troca da própria senha exige token
+    // anti-CSRF de uso único. A senha atual passou a ser OPCIONAL — quando
+    // informada, continua sendo validada no Service Layer.
     const isSelfChange = !isAdmin
       || userCode.toLowerCase() === (callerUserCode || "").toLowerCase();
     if (isSelfChange) {
@@ -333,24 +333,22 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
       }
 
       const currentPassword = String(body.current_password || "");
-      if (!currentPassword) {
-        return new Response(JSON.stringify({ error: "Informe a senha atual para confirmar a alteração.", code: "current_password_required" }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (currentPassword === newPassword) {
-        return new Response(JSON.stringify({ error: "A nova senha deve ser diferente da senha atual." }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const verified = await verifyCurrentPassword(service(), targets, userCode, currentPassword);
-      if (!verified.ok) {
-        console.warn("[sap-change-password] current password check failed", { userCode, reason: verified.reason });
-        return new Response(JSON.stringify({ error: verified.reason || "Senha atual incorreta." }), {
-          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      if (currentPassword) {
+        if (currentPassword === newPassword) {
+          return new Response(JSON.stringify({ error: "A nova senha deve ser diferente da senha atual." }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const verified = await verifyCurrentPassword(service(), targets, userCode, currentPassword);
+        if (!verified.ok) {
+          console.warn("[sap-change-password] current password check failed", { userCode, reason: verified.reason });
+          return new Response(JSON.stringify({ error: verified.reason || "Senha atual incorreta." }), {
+            status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
       }
     }
+
 
 
 
