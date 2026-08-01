@@ -251,7 +251,8 @@ async function findInvoicesForPO(
   poEntry: number,
   cardCode: string,
 ): Promise<
-  Array<{ DocEntry: number; DocNum: number; CardCode: string; CardName: string; DocTotal: number; DocTotalSys: number; PaidToDate: number; PaidToDateSys: number; DocumentStatus: string; DocCurrency: string; DocRate: number; DocDate: string; BPLId?: number; PoShare: number }>
+  Array<{ DocEntry: number; DocNum: number; CardCode: string; CardName: string; DocTotal: number; DocTotalSys: number; DocTotalFC: number; PaidToDate: number; PaidToDateSys: number; PaidToDateFC: number; DocumentStatus: string; DocCurrency: string; DocRate: number; DocDate: string; BPLId?: number; PoShare: number; PoRatio: number }>
+
 > {
   // SAP B1 SL v2 rejeita `DocumentLines/any()` no $filter ("Query string error -
   // Invalid symbol"), então buscamos as PurchaseInvoices do fornecedor pelo
