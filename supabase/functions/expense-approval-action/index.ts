@@ -792,6 +792,23 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
       action_role: actionRole,
     } as any);
     await writeAuditLog("rejected", currentLevel);
+
+    // Fluxo paralelo: avisa o solicitante do desfecho da ação pedida.
+    await notifyActionCompleted(admin, {
+      actionKey: "approval",
+      refId: `${expenseId}:rejected`,
+      recipient: (exp as any).requester_email || (exp as any).requester_name,
+      companyDb: (exp as any).company_db,
+      title: "Seu documento foi reprovado",
+      summary: `A aprovação solicitada foi concluída por ${actor} com decisão de reprovação.`,
+      link: "/aprovacoes?tab=history",
+      details: [
+        { label: "Fornecedor/Cliente", value: (exp as any).supplier_name },
+        { label: "Valor", value: `${(exp as any).currency || "BRL"} ${Number((exp as any).total_amount || 0).toFixed(2)}` },
+        { label: "Empresa", value: (exp as any).company_db },
+        { label: "Motivo", value: remarks || null },
+      ],
+    });
     stageLog("update_reject", "info", { requestId, expenseId, currentLevel });
     return await respond(200, {
       ok: true,
