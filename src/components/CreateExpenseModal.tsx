@@ -200,6 +200,8 @@ export function CreateExpenseModal({
   const [headerProject, setHeaderProject] = useState<SapSearchOption | null>(null);
   const [rateioType, setRateioType] = useState<RateioType>("padrao");
   const [nfseSplitMode, setNfseSplitMode] = useState<"unified" | "per_brand">("unified");
+  // Vendas: campo "Utilização" (NotaFiscalUsage) — obrigatório no SAP Brasil.
+  const [salesUsage, setSalesUsage] = useState<SapSearchOption | null>(null);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
 
@@ -256,6 +258,20 @@ export function CreateExpenseModal({
     params: { $filter: "Active eq 'tYES'", $select: "Code,Name" },
     mapRow: projectMapRow,
   });
+
+  // Vendas: lista de "Utilização" (NotaFiscalUsages) da empresa ativa no SAP.
+  const usageMapRow = useCallback(
+    (row: any) => ({ code: String(row.Code ?? row.AbsEntry ?? ""), name: row.Name || "" }),
+    [],
+  );
+  const { options: usageOptions, isLoading: usagesLoading } = useSapCachedList({
+    cacheKey: "nota_fiscal_usages_v1",
+    endpoint: "NotaFiscalUsages",
+    params: { $select: "Code,Name" },
+    mapRow: usageMapRow,
+    enabled: isSales,
+  });
+
 
   // Vendas: cada cliente libera apenas as marcas vinculadas (até 3) ou o
   // projeto homônimo ao cliente. Sem mapeamento, mantém a lista integral.
@@ -1900,6 +1916,11 @@ export function CreateExpenseModal({
       toast.error("Informe a data de vencimento");
       return;
     }
+    if (isSales && usageOptions.length > 0 && !salesUsage) {
+      toast.error("Informe a Utilização (obrigatória no SAP para pedidos de venda)");
+      return;
+    }
+
     // Alçada por CC no tipo de rateio: "imposto" só para 1.2.2.%; "folha" só para 1.5.1.3.
     if (!isSales && !isRateioTypeAllowedForCostCenter(rateioType, userCostCenter, bypassCcItemRules)) {
       toast.error(
@@ -2047,6 +2068,7 @@ export function CreateExpenseModal({
         due_date: dueDate || undefined,
         rateio_type: !isSales ? rateioType : undefined,
         nfse_split_mode: isSales ? nfseSplitMode : undefined,
+        sales_usage: isSales ? salesUsage?.code || undefined : undefined,
         items: items.map(({ sapItem, sapCostCenter, sapProject, searchHint, ...rest }) => rest),
         files: files.length > 0 ? files : undefined,
       });
@@ -2996,8 +3018,27 @@ export function CreateExpenseModal({
             </div>
           )}
 
+          {/* Vendas — Utilização (obrigatória no SAP Brasil) */}
+          {isSales && (
+            <div className="space-y-1.5">
+              <CachedSearchCombobox
+                label="Utilização *"
+                options={usageOptions}
+                isLoading={usagesLoading}
+                value={salesUsage}
+                onChange={setSalesUsage}
+                placeholder="Selecione a utilização da nota…"
+                portalContainer={dialogContainer}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Campo obrigatório no SAP — define a utilização fiscal aplicada a todas as linhas do pedido.
+              </p>
+            </div>
+          )}
+
           {/* Vendas — define se a NFS-e sai unificada ou uma por marca/projeto */}
           {isSales && (
+
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Emissão da NFS-e</label>
               <Select value={nfseSplitMode} onValueChange={(v) => setNfseSplitMode(v as "unified" | "per_brand")}>

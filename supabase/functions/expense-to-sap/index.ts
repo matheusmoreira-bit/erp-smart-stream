@@ -1222,6 +1222,10 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       ...(/ANAGAMING/i.test(String(expense.company_db || "")) ? { U_FGR_CONTRATO: "N" } : {}),
       ...headerCustom,
       DocumentLines: items.map((it: any) => {
+        // Vendas (localização Brasil): campo "Utilização" obrigatório por linha.
+        const usageCode = Number((expense as any).sales_usage);
+        const usageLine =
+          isSales && Number.isFinite(usageCode) && usageCode > 0 ? { Usage: usageCode } : {};
         const hasItem = !!it.item_code;
         const qty = Number(it.quantity) || 1;
         let unit = Number(it.unit_price) || 0;
@@ -1237,6 +1241,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
           Quantity: qty,
           UnitPrice: unit,
           ...(/^[A-Z]{3}$/.test(lineCurrency) && lineCurrency !== "BRL" && lineCurrency !== "R$" ? { Currency: lineCurrency } : {}),
+          ...usageLine,
           ...lineCustom,
         };
         if (hasItem) {

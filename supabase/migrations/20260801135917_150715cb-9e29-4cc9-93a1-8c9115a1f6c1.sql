@@ -1,0 +1,2 @@
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS sales_usage text;
+COMMENT ON COLUMN public.expenses.sales_usage IS 'Código da Utilização (NotaFiscalUsage) do SAP — obrigatório em pedidos de venda no Brasil.';

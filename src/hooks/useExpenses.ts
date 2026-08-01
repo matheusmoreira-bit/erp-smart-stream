@@ -272,6 +272,8 @@ export interface CreateExpenseInput {
   rateio_type?: RateioType | null;
   /** Vendas: emitir NFS-e unificada ou uma nota por marca/projeto. */
   nfse_split_mode?: "unified" | "per_brand";
+  /** Vendas: código da Utilização (NotaFiscalUsage) exigida pelo SAP. */
+  sales_usage?: string;
   items: Omit<ExpenseItem, "id">[];
   files?: File[];
 }
@@ -799,6 +801,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           due_date: input.due_date || null,
           rateio_type: input.rateio_type || null,
           nfse_split_mode: input.nfse_split_mode || "unified",
+          sales_usage: input.sales_usage || null,
           items: enrichedItems,
         },
       });
