@@ -39,7 +39,7 @@ interface RelationRow {
   company_db: string | null;
 }
 
-interface NfRow { doc_entry: number; doc_num: number | null; doc_date: string | null; doc_total: number | null; doc_currency: string | null; document_status: string | null }
+interface NfRow { doc_entry: number; doc_num: number | null; doc_date: string | null; doc_total: number | null; doc_total_fc?: number | null; doc_currency: string | null; document_status: string | null }
 interface PayRow { doc_entry: number; doc_num: number | null; doc_date: string | null; doc_total: number | null; doc_total_fc: number | null; doc_currency: string | null; invoice_links: Array<{ docEntry?: number; invoiceType?: string; sumApplied?: number; appliedFC?: number }> }
 
 interface RelationDetailsResponse {
