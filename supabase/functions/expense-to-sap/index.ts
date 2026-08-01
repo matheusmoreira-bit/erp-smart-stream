@@ -1241,6 +1241,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
           Quantity: qty,
           UnitPrice: unit,
           ...(/^[A-Z]{3}$/.test(lineCurrency) && lineCurrency !== "BRL" && lineCurrency !== "R$" ? { Currency: lineCurrency } : {}),
+          ...usageLine,
           ...lineCustom,
         };
         if (hasItem) {
