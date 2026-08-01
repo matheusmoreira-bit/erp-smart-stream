@@ -165,7 +165,7 @@ export default function PagCorpSettlementAudit() {
       const { data, error } = await supabase.functions.invoke("pagcorp-settlement-repair", {
         body: {
           companyDbs: ["SBO_ANAGAMING", "SBO_CACTUS"],
-          limit: 300,
+          limit: 500,
           dryRun,
           ...(entries ? { paymentDocEntries: entries } : {}),
         },
@@ -194,7 +194,7 @@ export default function PagCorpSettlementAudit() {
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("pagcorp-settlement-audit", {
-        body: { companyDbs: ["SBO_ANAGAMING", "SBO_CACTUS"], limit: 300 },
+        body: { companyDbs: ["SBO_ANAGAMING", "SBO_CACTUS"], limit: 500 },
       });
       if (error) throw error;
       if (!data?.ok) throw new Error(data?.error || "Falha na auditoria");
