@@ -100,14 +100,11 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
     e.preventDefault();
     if (!session) return;
 
-    if (!currentPassword) {
-      toast.error("Informe a senha atual para confirmar a alteração.");
-      return;
-    }
-    if (currentPassword === newPassword) {
+    if (currentPassword && currentPassword === newPassword) {
       toast.error("A nova senha deve ser diferente da senha atual.");
       return;
     }
+
     if (newPassword !== confirmPassword) {
       toast.error("A nova senha e a confirmação não coincidem.");
       return;
