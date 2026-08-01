@@ -801,6 +801,7 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
           due_date: input.due_date || null,
           rateio_type: input.rateio_type || null,
           nfse_split_mode: input.nfse_split_mode || "unified",
+          sales_usage: input.sales_usage || null,
           items: enrichedItems,
         },
       });
