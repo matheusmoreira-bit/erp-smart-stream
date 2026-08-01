@@ -97,7 +97,8 @@ interface SapOrder {
 
 interface NfseRow {
   id: string;
-  expense_id: string;
+  expense_id: string | null;
+  sap_order_doc_entry: number | null;
   sap_invoice_doc_entry: number | null;
   sap_invoice_doc_num: number | null;
   nfse_number: string | null;
