@@ -5454,7 +5454,7 @@ export type Database = {
           created_at: string
           created_by_email: string | null
           currency: string
-          expense_id: string
+          expense_id: string | null
           id: string
           last_error: string | null
           nfse_number: string | null
@@ -5462,6 +5462,7 @@ export type Database = {
           sap_invoice_doc_entry: number | null
           sap_invoice_doc_num: number | null
           sap_order_doc_entry: number | null
+          sap_order_doc_num: number | null
           series: string | null
           status: string
           total_amount: number
@@ -5473,7 +5474,7 @@ export type Database = {
           created_at?: string
           created_by_email?: string | null
           currency?: string
-          expense_id: string
+          expense_id?: string | null
           id?: string
           last_error?: string | null
           nfse_number?: string | null
@@ -5481,6 +5482,7 @@ export type Database = {
           sap_invoice_doc_entry?: number | null
           sap_invoice_doc_num?: number | null
           sap_order_doc_entry?: number | null
+          sap_order_doc_num?: number | null
           series?: string | null
           status?: string
           total_amount?: number
@@ -5492,7 +5494,7 @@ export type Database = {
           created_at?: string
           created_by_email?: string | null
           currency?: string
-          expense_id?: string
+          expense_id?: string | null
           id?: string
           last_error?: string | null
           nfse_number?: string | null
@@ -5500,6 +5502,7 @@ export type Database = {
           sap_invoice_doc_entry?: number | null
           sap_invoice_doc_num?: number | null
           sap_order_doc_entry?: number | null
+          sap_order_doc_num?: number | null
           series?: string | null
           status?: string
           total_amount?: number
