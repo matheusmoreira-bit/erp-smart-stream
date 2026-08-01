@@ -160,8 +160,14 @@ export default function SalesNfse() {
     if (!companyDb) return;
     setLoading(true);
     setError(null);
+    setErpWarning(null);
     try {
-      const [{ data: exp, error: e1 }, { data: inv, error: e2 }] = await Promise.all([expenseRead("expenses").viewAll()
+      const cutoff = new Date();
+      cutoff.setMonth(cutoff.getMonth() - 12);
+      const cutoffIso = cutoff.toISOString().slice(0, 10);
+
+      const [{ data: exp, error: e1 }, { data: inv, error: e2 }, erpRes] = await Promise.all([
+        expenseRead("expenses").viewAll()
           .select("id, supplier_code, supplier_name, total_amount, currency, status, doc_date, requester_name, sap_doc_entry, sap_doc_num, project, nfse_split_mode")
           .eq("company_db", companyDb)
           .eq("doc_type", "sales")
@@ -174,10 +180,59 @@ export default function SalesNfse() {
           .eq("company_db", companyDb)
           .order("created_at", { ascending: false })
           .limit(500),
+        session && session.erpType === "sap"
+          ? sapQueryAll(
+              session,
+              "Orders",
+              {
+                $select:
+                  "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocCurrency,DocumentStatus,Cancelled,Project",
+                $filter: `DocDate ge '${cutoffIso}' and Cancelled ne 'tYES'`,
+                $orderby: "DocDate desc",
+              },
+              true,
+            ).catch((err: unknown) => {
+              console.warn("SAP Orders fetch failed:", (err as Error).message);
+              setErpWarning(
+                "Não foi possível ler os pedidos de venda direto do ERP. Exibindo apenas os pedidos do ERP Flow.",
+              );
+              return { data: { value: [] as unknown[] } };
+            })
+          : Promise.resolve({ data: { value: [] as unknown[] } }),
       ]);
       if (e1) throw e1;
       if (e2) throw e2;
-      setOrders((exp || []) as SalesOrderRow[]);
+
+      const flowRows = ((exp || []) as Omit<SalesOrderRow, "source">[]).map((o) => ({
+        ...o,
+        source: "erp_flow" as const,
+      }));
+      const flowDocEntries = new Set(
+        flowRows.map((o) => Number(o.sap_doc_entry)).filter((n) => Number.isFinite(n)),
+      );
+
+      const erpRows: SalesOrderRow[] = (((erpRes as { data?: { value?: unknown[] } })?.data?.value ||
+        []) as SapOrder[])
+        .filter((o) => o && Number.isFinite(Number(o.DocEntry)))
+        .filter((o) => !flowDocEntries.has(Number(o.DocEntry)))
+        .map((o) => ({
+          id: `erp:${o.DocEntry}`,
+          supplier_code: o.CardCode || null,
+          supplier_name: o.CardName || o.CardCode || "—",
+          total_amount: Number(o.DocTotal || 0),
+          currency: o.DocCurrency || "BRL",
+          status: o.DocumentStatus === "bost_Close" ? "fechado" : "aberto",
+          doc_date: o.DocDate || null,
+          requester_name: null,
+          sap_doc_entry: Number(o.DocEntry),
+          sap_doc_num: Number(o.DocNum),
+          project: o.Project || null,
+          nfse_split_mode: null,
+          source: "erp" as const,
+          erp_closed: o.DocumentStatus === "bost_Close",
+        }));
+
+      setOrders([...flowRows, ...erpRows]);
       setInvoices((inv || []) as NfseRow[]);
       await loadPdfIndex();
     } catch (e) {
@@ -185,7 +240,7 @@ export default function SalesNfse() {
     } finally {
       setLoading(false);
     }
-  }, [companyDb, loadPdfIndex]);
+  }, [companyDb, loadPdfIndex, session]);
 
   useEffect(() => {
     void load();
