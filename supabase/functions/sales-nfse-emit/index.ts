@@ -274,9 +274,10 @@ Deno.serve(async (req) => {
     if (!res.ok) {
       const msg = invoice?.error?.message?.value || JSON.stringify(invoice);
       await supabase.from("sales_order_invoices").insert({
-        expense_id: expenseId,
+        expense_id: expense.id,
         company_db: expense.company_db,
         sap_order_doc_entry: Number(expense.sap_doc_entry),
+        sap_order_doc_num: Number(order.DocNum) || null,
         total_amount: Number(expense.total_amount || 0),
         currency: expense.currency || "BRL",
         status: "failed",
@@ -289,9 +290,10 @@ Deno.serve(async (req) => {
     const { data: inserted, error: insErr } = await supabase
       .from("sales_order_invoices")
       .insert({
-        expense_id: expenseId,
+        expense_id: expense.id,
         company_db: expense.company_db,
         sap_order_doc_entry: Number(expense.sap_doc_entry),
+        sap_order_doc_num: Number(order.DocNum) || null,
         sap_invoice_doc_entry: Number(invoice.DocEntry),
         sap_invoice_doc_num: Number(invoice.DocNum),
         rps_number: invoice.SequenceSerial ? String(invoice.SequenceSerial) : null,
