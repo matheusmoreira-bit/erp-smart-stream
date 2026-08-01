@@ -298,7 +298,7 @@ async function loadDetails(sb: ReturnType<typeof createClient>, logId: string) {
   if (companyDb && nfEntries.length > 0) {
     const { data, error } = await sb
       .from("sap_nf_entrada_cache")
-      .select("doc_entry, doc_num, doc_date, doc_total, doc_currency, document_status")
+      .select("doc_entry, doc_num, doc_date, doc_total, doc_total_fc, doc_currency, document_status")
       .eq("company_db", companyDb)
       .in("doc_entry", nfEntries);
     if (error) throw new Error(`notas: ${error.message}`);

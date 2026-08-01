@@ -39,7 +39,7 @@ interface RelationRow {
   company_db: string | null;
 }
 
-interface NfRow { doc_entry: number; doc_num: number | null; doc_date: string | null; doc_total: number | null; doc_currency: string | null; document_status: string | null }
+interface NfRow { doc_entry: number; doc_num: number | null; doc_date: string | null; doc_total: number | null; doc_total_fc?: number | null; doc_currency: string | null; document_status: string | null }
 interface PayRow { doc_entry: number; doc_num: number | null; doc_date: string | null; doc_total: number | null; doc_total_fc: number | null; doc_currency: string | null; invoice_links: Array<{ docEntry?: number; invoiceType?: string; sumApplied?: number; appliedFC?: number }> }
 
 interface RelationDetailsResponse {
@@ -196,8 +196,13 @@ export function SapValidationDialog({ open, onClose, pagcorpLogId, docEntry, doc
             ) : (
               <ul className="space-y-1 text-xs">
                 {nfs.map((i) => {
-                  const cur = i.doc_currency || poCurrency;
-                  const total = Number(i.doc_total ?? 0);
+                  // doc_total é sempre o valor na moeda local (BRL); doc_total_fc é o valor
+                  // na moeda estrangeira. Só mostramos em moeda estrangeira quando existe FC.
+                  const rowCur = i.doc_currency || poCurrency;
+                  const rowForeign = !!rowCur && rowCur !== "BRL" && rowCur !== "R$";
+                  const fc = Number(i.doc_total_fc ?? 0);
+                  const cur = rowForeign && fc > 0 ? rowCur : "BRL";
+                  const total = rowForeign && fc > 0 ? fc : Number(i.doc_total ?? 0);
                   return (
                     <li key={i.doc_entry} className="flex justify-between gap-2">
                       <span>NF #{i.doc_num} • {i.doc_date?.slice(0, 10)}</span>
@@ -221,14 +226,21 @@ export function SapValidationDialog({ open, onClose, pagcorpLogId, docEntry, doc
             ) : (
               <ul className="space-y-1 text-xs">
                 {pays.map((p) => {
-                  const cur = p.doc_currency || poCurrency;
-                  const foreign = !!cur && cur !== "BRL" && cur !== "R$";
+                  const rowCur = p.doc_currency || poCurrency;
+                  const rowForeign = !!rowCur && rowCur !== "BRL" && rowCur !== "R$";
                   const nfSet = new Set(nfs.map((i) => i.doc_entry));
-                  const applied = (p.invoice_links || [])
+                  const appliedFc = (p.invoice_links || [])
                     .filter((pi) => (pi.invoiceType == null || pi.invoiceType === "it_PurchaseInvoice") && typeof pi.docEntry === "number" && nfSet.has(pi.docEntry))
-                    .reduce((s, pi) => s + Number((foreign ? (pi.appliedFC ?? pi.sumApplied) : pi.sumApplied) ?? 0), 0);
-                  const fallback = foreign ? Number(p.doc_total_fc ?? 0) : Number(p.doc_total ?? 0);
-                  const total = applied || fallback;
+                    .reduce((s, pi) => s + Number(pi.appliedFC ?? 0), 0);
+                  const appliedLocal = (p.invoice_links || [])
+                    .filter((pi) => (pi.invoiceType == null || pi.invoiceType === "it_PurchaseInvoice") && typeof pi.docEntry === "number" && nfSet.has(pi.docEntry))
+                    .reduce((s, pi) => s + Number(pi.sumApplied ?? 0), 0);
+                  const fc = appliedFc || Number(p.doc_total_fc ?? 0);
+                  const local = appliedLocal || Number(p.doc_total ?? 0);
+                  // Sem valor em moeda estrangeira, o total do SAP está na moeda local (BRL).
+                  const useForeign = rowForeign && fc > 0;
+                  const cur = useForeign ? rowCur : "BRL";
+                  const total = useForeign ? fc : local;
                   return (
                     <li key={p.doc_entry} className="flex justify-between gap-2">
                       <span>Pgto #{p.doc_num} • {p.doc_date?.slice(0, 10)}</span>
