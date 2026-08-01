@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { sapFunctionFetch, authFetch } from "@/lib/auth-fetch";
+import { sapQueryAll } from "@/lib/sap-client";
 import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
 import { PageHeader } from "@/components/PageHeader";
@@ -74,11 +75,30 @@ interface SalesOrderRow {
   sap_doc_num: number | null;
   project: string | null;
   nfse_split_mode: string | null;
+  /** erp_flow = pedido criado nesta aplicação · erp = pedido criado direto no SAP */
+  source: "erp_flow" | "erp";
+  /** true quando o pedido já está fechado/faturado no ERP */
+  erp_closed?: boolean;
 }
+
+interface SapOrder {
+  DocEntry: number;
+  DocNum: number;
+  CardCode: string;
+  CardName: string;
+  DocDate: string;
+  DocTotal: number;
+  DocCurrency: string;
+  DocumentStatus: string;
+  Cancelled?: string;
+  Project?: string | null;
+}
+
 
 interface NfseRow {
   id: string;
-  expense_id: string;
+  expense_id: string | null;
+  sap_order_doc_entry: number | null;
   sap_invoice_doc_entry: number | null;
   sap_invoice_doc_num: number | null;
   nfse_number: string | null;
@@ -103,7 +123,9 @@ export default function SalesNfse() {
   const [invoices, setInvoices] = useState<NfseRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [erpWarning, setErpWarning] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [originFilter, setOriginFilter] = useState<"all" | "erp_flow" | "erp">("all");
   const [confirmOrder, setConfirmOrder] = useState<SalesOrderRow | null>(null);
   const [emitting, setEmitting] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -142,8 +164,14 @@ export default function SalesNfse() {
     if (!companyDb) return;
     setLoading(true);
     setError(null);
+    setErpWarning(null);
     try {
-      const [{ data: exp, error: e1 }, { data: inv, error: e2 }] = await Promise.all([expenseRead("expenses").viewAll()
+      const cutoff = new Date();
+      cutoff.setMonth(cutoff.getMonth() - 12);
+      const cutoffIso = cutoff.toISOString().slice(0, 10);
+
+      const [{ data: exp, error: e1 }, { data: inv, error: e2 }, erpRes] = await Promise.all([
+        expenseRead("expenses").viewAll()
           .select("id, supplier_code, supplier_name, total_amount, currency, status, doc_date, requester_name, sap_doc_entry, sap_doc_num, project, nfse_split_mode")
           .eq("company_db", companyDb)
           .eq("doc_type", "sales")
@@ -156,10 +184,59 @@ export default function SalesNfse() {
           .eq("company_db", companyDb)
           .order("created_at", { ascending: false })
           .limit(500),
+        session && session.erpType === "sap"
+          ? sapQueryAll(
+              session,
+              "Orders",
+              {
+                $select:
+                  "DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocCurrency,DocumentStatus,Cancelled,Project",
+                $filter: `DocDate ge '${cutoffIso}' and Cancelled ne 'tYES'`,
+                $orderby: "DocDate desc",
+              },
+              true,
+            ).catch((err: unknown) => {
+              console.warn("SAP Orders fetch failed:", (err as Error).message);
+              setErpWarning(
+                "Não foi possível ler os pedidos de venda direto do ERP. Exibindo apenas os pedidos do ERP Flow.",
+              );
+              return { data: { value: [] as unknown[] } };
+            })
+          : Promise.resolve({ data: { value: [] as unknown[] } }),
       ]);
       if (e1) throw e1;
       if (e2) throw e2;
-      setOrders((exp || []) as SalesOrderRow[]);
+
+      const flowRows = ((exp || []) as Omit<SalesOrderRow, "source">[]).map((o) => ({
+        ...o,
+        source: "erp_flow" as const,
+      }));
+      const flowDocEntries = new Set(
+        flowRows.map((o) => Number(o.sap_doc_entry)).filter((n) => Number.isFinite(n)),
+      );
+
+      const erpRows: SalesOrderRow[] = (((erpRes as { data?: { value?: unknown[] } })?.data?.value ||
+        []) as SapOrder[])
+        .filter((o) => o && Number.isFinite(Number(o.DocEntry)))
+        .filter((o) => !flowDocEntries.has(Number(o.DocEntry)))
+        .map((o) => ({
+          id: `erp:${o.DocEntry}`,
+          supplier_code: o.CardCode || null,
+          supplier_name: o.CardName || o.CardCode || "—",
+          total_amount: Number(o.DocTotal || 0),
+          currency: o.DocCurrency || "BRL",
+          status: o.DocumentStatus === "bost_Close" ? "fechado" : "aberto",
+          doc_date: o.DocDate || null,
+          requester_name: null,
+          sap_doc_entry: Number(o.DocEntry),
+          sap_doc_num: Number(o.DocNum),
+          project: o.Project || null,
+          nfse_split_mode: null,
+          source: "erp" as const,
+          erp_closed: o.DocumentStatus === "bost_Close",
+        }));
+
+      setOrders([...flowRows, ...erpRows]);
       setInvoices((inv || []) as NfseRow[]);
       await loadPdfIndex();
     } catch (e) {
@@ -167,7 +244,7 @@ export default function SalesNfse() {
     } finally {
       setLoading(false);
     }
-  }, [companyDb, loadPdfIndex]);
+  }, [companyDb, loadPdfIndex, session]);
 
   useEffect(() => {
     void load();
@@ -342,10 +419,18 @@ export default function SalesNfse() {
   const invoiceByExpense = useMemo(() => {
     const map = new Map<string, NfseRow>();
     for (const row of invoices) {
-      const current = map.get(row.expense_id);
+      // pedidos do ERP Flow são indexados pelo expense_id; pedidos nativos do
+      // ERP pelo DocEntry do pedido (chave `erp:<DocEntry>`).
+      const key = row.expense_id
+        ? row.expense_id
+        : row.sap_order_doc_entry != null
+          ? `erp:${row.sap_order_doc_entry}`
+          : null;
+      if (!key) continue;
+      const current = map.get(key);
       // prioriza a nota válida mais recente sobre tentativas com falha
       if (!current || (current.status === "failed" && row.status !== "failed")) {
-        map.set(row.expense_id, row);
+        map.set(key, row);
       }
     }
     return map;
@@ -353,8 +438,10 @@ export default function SalesNfse() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return orders;
-    return orders.filter((o) => {
+    let base = orders;
+    if (originFilter !== "all") base = base.filter((o) => o.source === originFilter);
+    if (!q) return base;
+    return base.filter((o) => {
       const inv = invoiceByExpense.get(o.id);
       return (
         o.supplier_name.toLowerCase().includes(q) ||
@@ -363,7 +450,7 @@ export default function SalesNfse() {
         (inv?.nfse_number || "").toLowerCase().includes(q)
       );
     });
-  }, [orders, search, invoiceByExpense]);
+  }, [orders, search, invoiceByExpense, originFilter]);
 
   const pendentes = filtered.filter((o) => !invoiceByExpense.get(o.id)?.sap_invoice_doc_entry);
 
@@ -371,10 +458,21 @@ export default function SalesNfse() {
     if (!confirmOrder) return;
     setEmitting(true);
     try {
+      const payload =
+        confirmOrder.source === "erp"
+          ? {
+              action: "emit",
+              company_db: companyDb,
+              sap_order_doc_entry: confirmOrder.sap_doc_entry,
+              customer_name: confirmOrder.supplier_name,
+              total_amount: confirmOrder.total_amount,
+              currency: confirmOrder.currency,
+            }
+          : { action: "emit", expense_id: confirmOrder.id };
       const res = await sapFunctionFetch("sales-nfse-emit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "emit", expense_id: confirmOrder.id }),
+        body: JSON.stringify(payload),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok || body?.error) throw new Error(body?.error || `Falha ao emitir (${res.status})`);
@@ -386,7 +484,7 @@ export default function SalesNfse() {
     } finally {
       setEmitting(false);
     }
-  }, [confirmOrder, load]);
+  }, [confirmOrder, load, companyDb]);
 
   const syncStatus = useCallback(async () => {
     setSyncing(true);
@@ -427,7 +525,7 @@ export default function SalesNfse() {
         icon={<FileText className="w-5 h-5 text-primary" />}
         title="Vendas"
         titleAccent="NFS-e"
-        subtitle="Emissão da nota fiscal de serviço a partir dos pedidos de venda aprovados"
+        subtitle="Emissão manual da NFS-e para pedidos de venda do ERP Flow e criados direto no ERP"
         companyLabel={getLabel(companyDb)}
         userName={session?.userName}
         onLogout={logout}
@@ -458,6 +556,23 @@ export default function SalesNfse() {
               className="pl-8 h-9 text-sm"
             />
           </div>
+          <div className="flex items-center gap-1 rounded-md border border-border/60 bg-background p-0.5">
+            {([
+              { key: "all", label: "Todos" },
+              { key: "erp_flow", label: "ERP Flow" },
+              { key: "erp", label: "ERP" },
+            ] as const).map((opt) => (
+              <Button
+                key={opt.key}
+                size="sm"
+                variant={originFilter === opt.key ? "secondary" : "ghost"}
+                className="h-7 px-2.5 text-xs"
+                onClick={() => setOriginFilter(opt.key)}
+              >
+                {opt.label}
+              </Button>
+            ))}
+          </div>
           <div className="ml-auto text-xs text-muted-foreground">
             {filtered.length} pedido(s) · {pendentes.length} aguardando emissão
           </div>
@@ -469,6 +584,13 @@ export default function SalesNfse() {
           </div>
         )}
 
+        {erpWarning && (
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-600">
+            {erpWarning}
+          </div>
+        )}
+
+
         {loading && orders.length === 0 ? (
           <div className="space-y-2">
             <Skeleton className="h-14 w-full" />
@@ -477,7 +599,7 @@ export default function SalesNfse() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-            Nenhum pedido de venda aprovado encontrado para esta empresa.
+            Nenhum pedido de venda encontrado para esta empresa.
           </div>
         ) : (
           <div className="rounded-lg border border-border overflow-hidden bg-card">
@@ -485,6 +607,7 @@ export default function SalesNfse() {
               <thead className="bg-muted/40 text-xs text-muted-foreground">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium">Pedido</th>
+                  <th className="text-left px-3 py-2 font-medium">Origem</th>
                   <th className="text-left px-3 py-2 font-medium">Cliente</th>
                   <th className="text-left px-3 py-2 font-medium">Data</th>
                   <th className="text-right px-3 py-2 font-medium">Valor</th>
@@ -505,6 +628,15 @@ export default function SalesNfse() {
                           <span className="ml-2 text-[11px] text-muted-foreground">não integrado</span>
                         )}
                       </td>
+                      <td className="px-3 py-2">
+                        <Badge variant="outline" className="text-[11px]">
+                          {o.source === "erp_flow" ? "ERP Flow" : "ERP"}
+                        </Badge>
+                        {o.erp_closed && (
+                          <span className="ml-2 text-[11px] text-muted-foreground">fechado</span>
+                        )}
+                      </td>
+
                       <td className="px-3 py-2">
                         <div className="font-medium">{o.supplier_name}</div>
                         <div className="text-xs text-muted-foreground font-mono">{o.supplier_code || "—"}</div>
@@ -600,7 +732,8 @@ export default function SalesNfse() {
                           <Button
                             size="sm"
                             variant={emitted ? "ghost" : "default"}
-                            disabled={emitted || !o.sap_doc_entry}
+                            disabled={emitted || !o.sap_doc_entry || !!o.erp_closed}
+                            title={o.erp_closed ? "Pedido já faturado/fechado no ERP" : undefined}
                             onClick={() => setConfirmOrder(o)}
                           >
                             {emitted ? "Emitida" : "Emitir NFS-e"}
