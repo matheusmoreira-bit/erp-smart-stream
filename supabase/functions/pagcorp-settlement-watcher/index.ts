@@ -874,7 +874,8 @@ Deno.serve(async (req) => {
                   // PTAX só se aplica a pagamentos em USD (dólar). Compras em
                   // BRL (real) — ou qualquer outra moeda que não seja USD —
                   // são baixadas pelo valor local (openAmount), sem conversão.
-                  const invCur = (invoice.DocCurrency || "").toUpperCase();
+                  // Usa a moeda normalizada (a NF pode vir com símbolo "US$"/vazio).
+                  const invCur = isFcInvoice ? (invCurNorm || "USD") : invCurNorm;
                   let docRate: number | null = null;
                   // Data em que o pagamento é lançado. Para USD, a regra é
                   // lançar o contas a pagar na MESMA data da compra (mesma data
