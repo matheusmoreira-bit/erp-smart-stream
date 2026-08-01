@@ -236,7 +236,7 @@ Deno.serve(async (req) => {
     const order = await sapGet(
       baseUrl,
       session.cookies,
-      `Orders(${Number(expense.sap_doc_entry)})?$select=DocEntry,DocNum,CardCode,DocCurrency,BPL_IDAssignedToInvoice,DocumentStatus,Comments,DocumentLines`,
+      `Orders(${Number(expense.sap_doc_entry)})?$select=DocEntry,DocNum,CardCode,CardName,DocCurrency,BPL_IDAssignedToInvoice,DocumentStatus,Comments,DocumentLines`,
     );
     if (String(order?.DocumentStatus) === "bost_Close") {
       return json({ error: "Pedido já está fechado/faturado no ERP." }, 409);
@@ -314,7 +314,7 @@ Deno.serve(async (req) => {
       link: "/vendas/nfse",
       summary: "Uma NFS-e foi emitida a partir de um pedido de venda.",
       details: [
-        { label: "Cliente", value: expense.supplier_name },
+        { label: "Cliente", value: expense.supplier_name || order.CardName || order.CardCode },
         { label: "Documento SAP", value: Number(invoice.DocNum) },
         { label: "RPS/Série", value: invoice.SequenceSerial ? String(invoice.SequenceSerial) : null },
         { label: "Valor", value: `${invoice.DocCurrency || expense.currency || "BRL"} ${Number(invoice.DocTotal ?? expense.total_amount ?? 0).toFixed(2)}` },
