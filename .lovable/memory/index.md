@@ -20,5 +20,6 @@
 - [Identidade única de usuário](mem://features/user-identity.md) — Usuário SAP como chave (1 nome, N e-mails), tabelas sap_user_directory/sap_user_emails e chave canônica em permissões.
 - [Grupos e capacidades](mem://features/permission-groups-capabilities.md) — Catálogo de capacidades GRUPO > USER, hooks useMyCapabilities e helpers server-side.
 - [Baixa PagCorp valor exato](mem://features/pagcorp-baixa-valor-exato.md) — Baixa automática do PagCorp = fatia do PC na conta a pagar; reparo via pagcorp-settlement-repair.
+- [Baixa PagCorp moeda do documento](mem://features/pagcorp-baixa-moeda-documento.md) — DocTotal/PaidToDate são BRL e DocTotalFC/PaidToDateFC são USD; baixa sempre na moeda do documento (evita dupla conversão pela PTAX).
 - [Variação cambial nas baixas PagCorp](mem://features/pagcorp-baixa-variacao-cambial.md) — Diferença até 3% (máx. R$ 250) em moeda estrangeira é variação cambial e nunca é cancelada.
 - [Baixa PagCorp USD/PTAX](mem://features/pagcorp-baixa-usd-ptax-data.md) — USD usa conta própria, PTAX BCB da data da compra e pagamento lançado nessa mesma data; modo reset_cancelled no repair.
