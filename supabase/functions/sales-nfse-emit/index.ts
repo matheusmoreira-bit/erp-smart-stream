@@ -144,32 +144,88 @@ Deno.serve(async (req) => {
     /* ── emissão da NFS-e a partir do pedido de venda ──────────────── */
     if (action !== "emit") return json({ error: "Ação inválida" }, 400);
 
+    // Origem 1: pedido criado no ERP Flow (expense_id)
+    // Origem 2: pedido criado direto no ERP (company_db + sap_order_doc_entry)
     const expenseId = String(body?.expense_id || "").trim();
-    if (!/^[0-9a-f-]{36}$/i.test(expenseId)) return json({ error: "expense_id inválido" }, 400);
+    const rawOrderEntry = Number(body?.sap_order_doc_entry ?? NaN);
+    const nativeCompanyDb = String(body?.company_db || "").trim();
+    const isNative = !expenseId;
 
-    const { data: expense, error: expErr } = await supabase
-      .from("expenses")
-      .select("id, doc_type, status, company_db, company_db, supplier_code, supplier_name, total_amount, currency, sap_doc_entry, sap_doc_num, remarks")
-      .eq("id", expenseId)
-      .maybeSingle();
-    if (expErr) throw new Error(expErr.message);
-    if (!expense) return json({ error: "Pedido de venda não encontrado" }, 404);
-    if (expense.doc_type !== "sales") return json({ error: "Documento não é um pedido de venda" }, 400);
-    if (!expense.sap_doc_entry) {
-      return json({ error: "Pedido ainda não foi integrado ao ERP. Aguarde a integração." }, 400);
-    }
-    if (!["aprovado", "pc_lancado", "nf_entrada", "pagamento", "finalizado"].includes(String(expense.status))) {
-      return json({ error: "Pedido de venda não está aprovado." }, 400);
+    if (isNative) {
+      if (!nativeCompanyDb) return json({ error: "company_db obrigatório" }, 400);
+      if (!Number.isFinite(rawOrderEntry) || rawOrderEntry <= 0) {
+        return json({ error: "sap_order_doc_entry inválido" }, 400);
+      }
+    } else if (!/^[0-9a-f-]{36}$/i.test(expenseId)) {
+      return json({ error: "expense_id inválido" }, 400);
     }
 
-    const { data: already } = await supabase
-      .from("sales_order_invoices")
-      .select("id, sap_invoice_doc_num, status")
-      .eq("expense_id", expenseId)
-      .neq("status", "failed")
-      .maybeSingle();
-    if (already?.sap_invoice_doc_num) {
-      return json({ error: `Já existe NFS-e emitida para este pedido (doc ${already.sap_invoice_doc_num}).` }, 409);
+    let expense: {
+      id: string | null;
+      company_db: string;
+      supplier_name: string | null;
+      total_amount: number | null;
+      currency: string | null;
+      sap_doc_entry: number;
+    };
+
+    if (isNative) {
+      expense = {
+        id: null,
+        company_db: nativeCompanyDb,
+        supplier_name: String(body?.customer_name || "") || null,
+        total_amount: Number(body?.total_amount || 0),
+        currency: String(body?.currency || "BRL"),
+        sap_doc_entry: rawOrderEntry,
+      };
+      const { data: alreadyNative } = await supabase
+        .from("sales_order_invoices")
+        .select("id, sap_invoice_doc_num, status")
+        .eq("company_db", nativeCompanyDb)
+        .eq("sap_order_doc_entry", rawOrderEntry)
+        .is("expense_id", null)
+        .neq("status", "failed")
+        .maybeSingle();
+      if (alreadyNative?.sap_invoice_doc_num) {
+        return json(
+          { error: `Já existe NFS-e emitida para este pedido (doc ${alreadyNative.sap_invoice_doc_num}).` },
+          409,
+        );
+      }
+    } else {
+      const { data: exp, error: expErr } = await supabase
+        .from("expenses")
+        .select("id, doc_type, status, company_db, supplier_code, supplier_name, total_amount, currency, sap_doc_entry, sap_doc_num, remarks")
+        .eq("id", expenseId)
+        .maybeSingle();
+      if (expErr) throw new Error(expErr.message);
+      if (!exp) return json({ error: "Pedido de venda não encontrado" }, 404);
+      if (exp.doc_type !== "sales") return json({ error: "Documento não é um pedido de venda" }, 400);
+      if (!exp.sap_doc_entry) {
+        return json({ error: "Pedido ainda não foi integrado ao ERP. Aguarde a integração." }, 400);
+      }
+      if (!["aprovado", "pc_lancado", "nf_entrada", "pagamento", "finalizado"].includes(String(exp.status))) {
+        return json({ error: "Pedido de venda não está aprovado." }, 400);
+      }
+
+      const { data: already } = await supabase
+        .from("sales_order_invoices")
+        .select("id, sap_invoice_doc_num, status")
+        .eq("expense_id", expenseId)
+        .neq("status", "failed")
+        .maybeSingle();
+      if (already?.sap_invoice_doc_num) {
+        return json({ error: `Já existe NFS-e emitida para este pedido (doc ${already.sap_invoice_doc_num}).` }, 409);
+      }
+
+      expense = {
+        id: exp.id,
+        company_db: exp.company_db,
+        supplier_name: exp.supplier_name,
+        total_amount: Number(exp.total_amount || 0),
+        currency: exp.currency || "BRL",
+        sap_doc_entry: Number(exp.sap_doc_entry),
+      };
     }
 
     const creds = await loadCreds(supabase, expense.company_db);
