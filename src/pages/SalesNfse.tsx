@@ -122,6 +122,7 @@ export default function SalesNfse() {
   const [invoices, setInvoices] = useState<NfseRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [erpWarning, setErpWarning] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [confirmOrder, setConfirmOrder] = useState<SalesOrderRow | null>(null);
   const [emitting, setEmitting] = useState(false);
