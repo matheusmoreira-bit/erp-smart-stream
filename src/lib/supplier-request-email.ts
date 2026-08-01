@@ -323,7 +323,19 @@ export async function requestSupplierRegistration(payload: SupplierRequestPayloa
     },
   });
   if (error) throw error;
+
+  // Fluxo paralelo: avisa o time responsável de que há uma nova ação solicitada.
+  await createNotification({
+    user_identifier: TARGET_EMAIL,
+    title: "Nova solicitação de cadastro aguardando atendimento",
+    body: `${payload.legalName || payload.title || "Solicitação"} · Solicitante: ${requesterEmail || "—"}`,
+    category: "action",
+    company_db: payload.companyDb ?? undefined,
+    link: "/solicitacoes",
+    metadata: { action_key: "registration", kind: "requested" },
+  });
 }
+
 
 /**
  * Notifica o solicitante quando o chamado é concluído (fornecedor/item cadastrado)
