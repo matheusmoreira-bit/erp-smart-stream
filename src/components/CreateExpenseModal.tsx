@@ -200,6 +200,8 @@ export function CreateExpenseModal({
   const [headerProject, setHeaderProject] = useState<SapSearchOption | null>(null);
   const [rateioType, setRateioType] = useState<RateioType>("padrao");
   const [nfseSplitMode, setNfseSplitMode] = useState<"unified" | "per_brand">("unified");
+  // Vendas: campo "Utilização" (NotaFiscalUsage) — obrigatório no SAP Brasil.
+  const [salesUsage, setSalesUsage] = useState<SapSearchOption | null>(null);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
 
