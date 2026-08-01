@@ -917,7 +917,16 @@ Deno.serve(async (req) => {
                 })();
                 const invCurRaw = (invoice.DocCurrency || "").toUpperCase();
                 const invCurNorm = invCurRaw === "BRL" || invCurRaw === "USD" ? invCurRaw : (payloadCur || invCurRaw || "BRL");
-                const account = await resolveSettlementAccount(sb, companyDb, cardKey, invCurNorm, eventClass);
+                const account = manualAccountCode
+                  ? {
+                      settlement_account_code: manualAccountCode,
+                      cost_center: manualCostCenter,
+                      project: manualProject,
+                      currency: null,
+                      event_classification: null,
+                    } as SettlementAccount
+                  : await resolveSettlementAccount(sb, companyDb, cardKey, invCurNorm, eventClass);
+
                 if (!account) {
                   if (!firstMissingAccountMsg) {
                     firstMissingAccountMsg = eventClass
