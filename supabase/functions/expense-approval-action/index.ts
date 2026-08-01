@@ -921,6 +921,23 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
   }
   stageLog("update_final_approve", "info", { requestId, expenseId, currentLevel });
 
+  // Fluxo paralelo: avisa o solicitante que a ação pedida foi concluída.
+  await notifyActionCompleted(admin, {
+    actionKey: "approval",
+    refId: `${expenseId}:approved`,
+    recipient: (exp as any).requester_email || (exp as any).requester_name,
+    companyDb: (exp as any).company_db,
+    title: "Seu documento foi aprovado",
+    summary: `A aprovação solicitada foi concluída por ${actor}.`,
+    link: "/aprovacoes?tab=history",
+    details: [
+      { label: String((exp as any).doc_type) === "sales" ? "Cliente" : "Fornecedor", value: (exp as any).supplier_name },
+      { label: "Valor", value: `${(exp as any).currency || "BRL"} ${Number((exp as any).total_amount || 0).toFixed(2)}` },
+      { label: "Empresa", value: (exp as any).company_db },
+      { label: "Aprovador", value: actor },
+    ],
+  });
+
   if (String((exp as any).doc_type) === "sales") {
     await notifySalesMilestone(admin, {
       milestone: "approved",
