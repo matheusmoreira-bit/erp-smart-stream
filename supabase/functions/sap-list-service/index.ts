@@ -115,41 +115,83 @@ Deno.serve(async (req) => {
     const dbName = creds.company_db || companyDb;
     const session = await sapLogin(baseUrl, creds.username, creds.password, dbName);
 
+    // Alguns recursos de localização (ex.: Utilização da NF no Brasil) mudam de
+    // nome entre versões/localizações do Service Layer. Tentamos alternativas
+    // antes de desistir e, se nenhuma existir, devolvemos lista vazia (200)
+    // para não derrubar a tela.
+    const extraFallbacks: string[] = Array.isArray(body?.fallback_endpoints)
+      ? (body.fallback_endpoints as string[]).filter((e) => /^[A-Za-z0-9_/'()]+$/.test(e))
+      : [];
+    const builtin: Record<string, string[]> = {
+      NotaFiscalUsages: ["NotaFiscalUsage", "UsageForNotaFiscal", "Usages"],
+    };
+    const candidates = [endpoint, ...(builtin[endpoint] || []), ...extraFallbacks];
+
     const cookieHeader = `B1SESSION=${session.sessionId}${session.routeId ? `; B1ROUTEID=${session.routeId}` : ""}`;
     const all: any[] = [];
+    let resolvedEndpoint: string | null = null;
+    let lastError: string | null = null;
     try {
-      let skip = 0;
-      // Paginação: SL retorna @odata.nextLink com $skip; fazemos manualmente.
-      while (true) {
-        const qs = buildQS(params, { $top: pageSize, $skip: skip });
-        const url = `${baseUrl}/${endpoint}${qs}`;
-        const r = await sapFetch(url, {
-          method: "GET",
-          headers: {
-            Cookie: cookieHeader,
-            "B1S-PageSize": String(pageSize),
-            Prefer: `odata.maxpagesize=${pageSize}`,
-            "Content-Type": "application/json",
-          },
-          timeoutMs: 30_000,
-        });
-        if (!r.ok) {
-          const text = await r.text().catch(() => "");
-          throw new Error(`SAP ${endpoint} falhou [${r.status}]: ${text.slice(0, 300)}`);
+      for (const candidate of candidates) {
+        all.length = 0;
+        let skip = 0;
+        let ok = true;
+        // Paginação: SL retorna @odata.nextLink com $skip; fazemos manualmente.
+        while (true) {
+          const qs = buildQS(params, { $top: pageSize, $skip: skip });
+          const url = `${baseUrl}/${candidate}${qs}`;
+          const r = await sapFetch(url, {
+            method: "GET",
+            headers: {
+              Cookie: cookieHeader,
+              "B1S-PageSize": String(pageSize),
+              Prefer: `odata.maxpagesize=${pageSize}`,
+              "Content-Type": "application/json",
+            },
+            timeoutMs: 30_000,
+          });
+          if (!r.ok) {
+            const text = await r.text().catch(() => "");
+            lastError = `SAP ${candidate} falhou [${r.status}]: ${text.slice(0, 300)}`;
+            const unknownPath = (r.status === 400 || r.status === 404) &&
+              /Unrecognized resource path|not found|invalid/i.test(text);
+            if (unknownPath || skip === 0) {
+              ok = false; // tenta próximo candidato
+              break;
+            }
+            throw new Error(lastError);
+          }
+          const json = await r.json();
+          const rows: any[] = Array.isArray(json?.value) ? json.value : [];
+          all.push(...rows);
+          if (rows.length < pageSize) break;
+          skip += rows.length;
+          if (skip > 50_000) break; // safety
         }
-        const json = await r.json();
-        const rows: any[] = Array.isArray(json?.value) ? json.value : [];
-        all.push(...rows);
-        if (rows.length < pageSize) break;
-        skip += rows.length;
-        if (skip > 50_000) break; // safety
+        if (ok) {
+          resolvedEndpoint = candidate;
+          break;
+        }
       }
     } finally {
       await sapLogout(baseUrl, session);
     }
 
+    if (!resolvedEndpoint) {
+      return new Response(
+        JSON.stringify({
+          rows: [],
+          total: 0,
+          source: "apiuser",
+          code: "endpoint_unavailable",
+          warning: lastError ?? `Recurso ${endpoint} indisponível nesta base SAP`,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     return new Response(
-      JSON.stringify({ rows: all, total: all.length, source: "apiuser" }),
+      JSON.stringify({ rows: all, total: all.length, source: "apiuser", endpoint: resolvedEndpoint }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
