@@ -822,14 +822,24 @@ Deno.serve(async (req) => {
               let firstPtax: { rate: number; ptaxDate: string; source: string } | null = null;
               const settlementNoteEarly: string[] = [];
               for (const invoice of invoices) {
-                const invoiceOpen = Math.max(0, +(invoice.DocTotal - invoice.PaidToDate).toFixed(2));
+                // ATENÇÃO: em NF de moeda estrangeira o SAP devolve DocTotal /
+                // PaidToDate em moeda LOCAL (BRL) e DocTotalFC / PaidToDateFC na
+                // moeda do documento (USD). O valor da baixa tem que ser sempre
+                // na MOEDA DO DOCUMENTO — usar o total local e multiplicar pela
+                // PTAX gera dupla conversão (ex.: R$ 1.280.608 em vez de US$ 5,5k).
+                const invCurHeader = (invoice.DocCurrency || "").toUpperCase();
+                const isFcInvoice = invCurHeader !== "" && invCurHeader !== "BRL" && invCurHeader !== "R$" &&
+                  invoice.DocTotalFC > 0;
+                const invoiceTotalDoc = isFcInvoice ? invoice.DocTotalFC : invoice.DocTotal;
+                const invoicePaidDoc = isFcInvoice ? invoice.PaidToDateFC : invoice.PaidToDate;
+                const invoiceOpen = Math.max(0, +(invoiceTotalDoc - invoicePaidDoc).toFixed(2));
                 // A baixa automática NUNCA pode exceder a fatia da NF que
                 // pertence a este pedido de compra. Quando a conta a pagar
                 // consolida vários PCs, pagar o saldo inteiro geraria baixa
                 // muito maior que o PC/NF de origem (divergência PagCorp).
-                const poShare = invoice.PoShare > 0 ? invoice.PoShare : invoiceOpen;
-                const openAmount = Math.min(invoiceOpen, poShare);
-                if (poShare < invoiceOpen - 0.05) {
+                const poShare = +(invoiceTotalDoc * invoice.PoRatio).toFixed(2);
+                const openAmount = poShare > 0 ? Math.min(invoiceOpen, poShare) : invoiceOpen;
+                if (poShare > 0 && poShare < invoiceOpen - 0.05) {
                   settlementNoteEarly.push(
                     `NF ${invoice.DocNum} consolida outros pedidos — baixa parcial de ${openAmount.toFixed(2)} (saldo da NF: ${invoiceOpen.toFixed(2)})`,
                   );
