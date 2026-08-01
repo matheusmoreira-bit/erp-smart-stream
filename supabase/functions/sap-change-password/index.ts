@@ -526,6 +526,24 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
       }
     }
 
+    // Troca de senha SEM provisionamento (save_managed = false): qualquer login
+    // gerenciado gravado anteriormente para esse usuário ficaria com a senha
+    // antiga. Removemos o provisionamento nas empresas onde a senha mudou.
+    if (!saveManaged) {
+      const changed = results.filter((r) => r.status === "success").map((r) => r.companyDB);
+      if (changed.length > 0) {
+        const { error } = await admin
+          .from("user_sap_credentials")
+          .delete()
+          .ilike("sap_user", userCode)
+          .in("company_db", changed);
+        if (error) {
+          console.error("[sap-change-password] falha ao remover provisionamento", error.message);
+        }
+      }
+    }
+
+
 
 
     // Invalidação das sessões ERP ativas do usuário após a troca de senha.
