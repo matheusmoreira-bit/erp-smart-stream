@@ -202,6 +202,11 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     rateio_type: input.rateio_type || null,
     nfse_split_mode:
       (input as { nfse_split_mode?: string }).nfse_split_mode === "per_brand" ? "per_brand" : "unified",
+    sales_usage: (() => {
+      const u = (input as { sales_usage?: unknown }).sales_usage;
+      const s = u == null ? "" : String(u).trim();
+      return s.length > 0 && s.length <= 20 ? s : null;
+    })(),
     current_level_order: resolvedLevel || 1,
   };
 
