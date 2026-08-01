@@ -411,10 +411,10 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
               className="w-full"
               disabled={
                 loading ||
-                !currentPassword ||
                 !checkPasswordPolicy(newPassword, session.userName).valid ||
                 newPassword !== confirmPassword
               }
+
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               Alterar Senha
