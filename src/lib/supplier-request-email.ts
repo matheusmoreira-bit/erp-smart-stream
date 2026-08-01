@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { createNotification } from "@/lib/notifications";
 
 export interface SupplierRequestAttachment {
   name?: string | null;
@@ -328,7 +329,7 @@ export async function requestSupplierRegistration(payload: SupplierRequestPayloa
   await createNotification({
     user_identifier: TARGET_EMAIL,
     title: "Nova solicitação de cadastro aguardando atendimento",
-    body: `${payload.legalName || payload.title || "Solicitação"} · Solicitante: ${requesterEmail || "—"}`,
+    body: `${payload.cardName || "Solicitação de cadastro"} · Solicitante: ${requesterEmail || "—"}`,
     category: "action",
     company_db: payload.companyDb ?? undefined,
     link: "/solicitacoes",
