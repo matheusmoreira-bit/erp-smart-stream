@@ -391,8 +391,21 @@ export async function sendRegistrationStatusEmail(params: {
     .filter(Boolean)
     .join("\n");
 
+  // Fluxo paralelo: avisa o solicitante em app sobre o desfecho do chamado.
+  await createNotification({
+    user_identifier: params.to,
+    title: done ? `Cadastro de ${kind} concluído` : "Atualização da sua solicitação",
+    body: [`Chamado #${ticket}`, params.title, `Status: ${params.statusLabel}`, params.sapCardCode ? `Código no ERP: ${params.sapCardCode}` : null]
+      .filter(Boolean)
+      .join(" · "),
+    category: "action",
+    link: "/solicitacoes",
+    metadata: { action_key: "registration", kind: "completed", request_id: params.requestId },
+  });
+
   const { error } = await supabase.functions.invoke("send-smtp-email", {
     body: { to: [params.to], subject, html, text },
   });
   if (error) throw error;
 }
+
