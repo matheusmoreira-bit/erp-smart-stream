@@ -32,6 +32,7 @@ export const NOTIFICATION_CATEGORIES = [
   { key: "integration", label: "Integrações / Synapse" },
   { key: "system", label: "Sistema" },
   { key: "credential", label: "Credenciais" },
+  { key: "action", label: "Ações solicitadas / concluídas" },
 ] as const;
 
 export function useNotifications() {

@@ -21,6 +21,7 @@ const categoryIcon: Record<string, string> = {
   integration: "⚡",
   system: "🔔",
   credential: "🔑",
+  action: "✅",
 };
 
 export default function NotificationsPage() {
