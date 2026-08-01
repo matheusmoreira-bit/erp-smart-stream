@@ -196,8 +196,13 @@ export function SapValidationDialog({ open, onClose, pagcorpLogId, docEntry, doc
             ) : (
               <ul className="space-y-1 text-xs">
                 {nfs.map((i) => {
-                  const cur = i.doc_currency || poCurrency;
-                  const total = Number(i.doc_total ?? 0);
+                  // doc_total é sempre o valor na moeda local (BRL); doc_total_fc é o valor
+                  // na moeda estrangeira. Só mostramos em moeda estrangeira quando existe FC.
+                  const rowCur = i.doc_currency || poCurrency;
+                  const rowForeign = !!rowCur && rowCur !== "BRL" && rowCur !== "R$";
+                  const fc = Number(i.doc_total_fc ?? 0);
+                  const cur = rowForeign && fc > 0 ? rowCur : "BRL";
+                  const total = rowForeign && fc > 0 ? fc : Number(i.doc_total ?? 0);
                   return (
                     <li key={i.doc_entry} className="flex justify-between gap-2">
                       <span>NF #{i.doc_num} • {i.doc_date?.slice(0, 10)}</span>
