@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ClipboardList, Clock, Loader2, RefreshCw, Send } from "lucide-react";
+import { ArrowLeft, ClipboardList, Clock, Loader2, RefreshCw, Send, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +40,15 @@ import {
 import { PAYMENT_METHOD_LABELS, REGISTRATION_MODE_LABELS } from "@/lib/supplier-request-email";
 import { RegistrationAttachmentList } from "@/components/RegistrationAttachmentList";
 import { RegistrationFilePicker } from "@/components/RegistrationFilePicker";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
+
+interface KypResult {
+  status: "aprovado" | "pendente" | "reprovado" | "indisponivel";
+  motivo: string;
+  providerRefId?: string | null;
+  expiryDate?: string | null;
+}
+
 
 const statusVariant: Record<RegistrationStatus, string> = {
   aberto: "bg-blue-500/10 text-blue-600 border-blue-500/20",
@@ -78,10 +87,84 @@ function DetailDialog({
   const [comment, setComment] = useState("");
   const [commentFiles, setCommentFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
+  const [kyp, setKyp] = useState<KypResult | null>(null);
 
   if (!request) return null;
   const sla = slaInfo(request);
   const bank = request.bank_details || {};
+
+  const callSupplierFn = async (payload: Record<string, unknown>) => {
+    const res = await sapFunctionFetch("registration-supplier-create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ requestId: request.id, ...payload }),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, data } as {
+      ok: boolean;
+      status: number;
+      data: { error?: string; kyp?: KypResult; cardCode?: string; requiresAcknowledge?: boolean };
+    };
+  };
+
+  const runKyp = async () => {
+    setBusy(true);
+    try {
+      const { ok, data } = await callSupplierFn({ action: "kyp" });
+      if (data.kyp) setKyp(data.kyp);
+      if (!ok) {
+        toast.error(data.error || "Falha na validação de KYP");
+        return;
+      }
+      const k = data.kyp;
+      if (k?.status === "aprovado") toast.success("KYP aprovado — fornecedor liberado para cadastro.");
+      else if (k?.status === "reprovado") toast.error(`KYP reprovado: ${k.motivo}`);
+      else toast.warning(k?.motivo || "KYP pendente de análise.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha na validação de KYP");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const createSupplier = async (acknowledgePending: boolean) => {
+    if (!cardCode.trim()) {
+      toast.error("Informe o CardCode do fornecedor.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const { ok, status, data } = await callSupplierFn({
+        action: "create",
+        cardCode: cardCode.trim(),
+        acknowledgePending,
+      });
+      if (data.kyp) setKyp(data.kyp);
+      if (!ok) {
+        if (status === 409 && data.requiresAcknowledge) {
+          const proceed = window.confirm(
+            `${data.error}\n\nDeseja cadastrar mesmo assim, registrando a exceção na trilha de auditoria?`,
+          );
+          if (proceed) {
+            setBusy(false);
+            await createSupplier(true);
+            return;
+          }
+          toast.info("Cadastro cancelado — KYP não aprovado.");
+          return;
+        }
+        toast.error(data.error || "Falha ao cadastrar fornecedor no SAP");
+        return;
+      }
+      toast.success(`Fornecedor criado no SAP com o código ${data.cardCode}.`);
+      await reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao cadastrar fornecedor no SAP");
+    } finally {
+      setBusy(false);
+    }
+  };
+
 
   const act = async (status: RegistrationStatus) => {
     setBusy(true);
@@ -183,6 +266,12 @@ function DetailDialog({
                 </p>
               </div>
             )}
+            {bank.other && (
+              <div>
+                <p className="text-xs text-muted-foreground">Detalhe do pagamento</p>
+                <p className="font-medium break-words">{bank.other}</p>
+              </div>
+            )}
             {bank.holderName && (
               <div>
                 <p className="text-xs text-muted-foreground">Titular</p>
@@ -191,6 +280,17 @@ function DetailDialog({
                 </p>
               </div>
             )}
+            {request.request_type === "supplier" &&
+              !bank.pixKey &&
+              !bank.bank &&
+              !bank.account &&
+              !bank.other && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Dados de pagamento</p>
+                  <p className="font-medium text-muted-foreground">Não informados pelo solicitante</p>
+                </div>
+              )}
+
             {request.sap_card_code && (
               <div>
                 <p className="text-xs text-muted-foreground">Código no ERP</p>
@@ -288,6 +388,54 @@ function DetailDialog({
                   <Textarea id="rr-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
                 </div>
               </div>
+
+              {request.request_type === "supplier" && (
+                <div className="rounded-md border border-dashed border-border p-3 space-y-2">
+                  <p className="text-sm font-medium">Cadastro do fornecedor no ERP</p>
+                  <p className="text-xs text-muted-foreground">
+                    A validação de KYP (Know Your Partner) é obrigatória antes de criar o fornecedor no SAP.
+                  </p>
+                  {kyp && (
+                    <div
+                      className={`rounded-md border px-3 py-2 text-sm ${
+                        kyp.status === "aprovado"
+                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                          : kyp.status === "reprovado"
+                            ? "border-destructive/30 bg-destructive/10 text-destructive"
+                            : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 font-medium">
+                        {kyp.status === "aprovado" ? (
+                          <ShieldCheck className="w-4 h-4" />
+                        ) : (
+                          <ShieldAlert className="w-4 h-4" />
+                        )}
+                        KYP: {kyp.status}
+                      </div>
+                      <p className="text-xs mt-1">{kyp.motivo}</p>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" disabled={busy} onClick={() => void runKyp()} className="gap-2">
+                      {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                      Validar KYP
+                    </Button>
+                    <Button
+                      disabled={busy || !cardCode.trim() || kyp?.status === "reprovado"}
+                      onClick={() => void createSupplier(false)}
+                      className="gap-2"
+                    >
+                      {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+                      Cadastrar fornecedor no SAP
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Informe o CardCode acima. O KYP roda automaticamente antes da criação.
+                  </p>
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" disabled={busy} onClick={() => act("em_andamento")}>
                   Em andamento
