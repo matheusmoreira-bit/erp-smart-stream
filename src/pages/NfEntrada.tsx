@@ -225,6 +225,37 @@ export default function NfEntrada() {
     }
   }
 
+  /** Consulta o SAP agora: se a NF já existir lá, o status é atualizado para concluído. */
+  async function handleRecheckSap(id: string) {
+    setBusyId(id);
+    try {
+      const res = await recheckSap(id);
+      if (res?.skipped === "another_run_in_progress") {
+        toast({
+          title: "Verificação em andamento",
+          description: "Já existe uma checagem rodando. Tente novamente em alguns segundos.",
+        });
+        return;
+      }
+      const r = res?.results?.find((x) => x.id === id) ?? res?.results?.[0];
+      if (r?.status === "completed") {
+        toast({ title: "NF encontrada no SAP", description: "Status atualizado para concluído." });
+      } else if (r?.error) {
+        toast({ title: "Nada a atualizar", description: r.error, variant: "destructive" });
+      } else {
+        toast({
+          title: "Reconferência concluída",
+          description: "Nenhuma NF de entrada correspondente encontrada no SAP ainda.",
+        });
+      }
+    } catch (e) {
+      toast({ title: "Falha ao reconferir no SAP", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+
   async function handleCreateInvoiceDraft(it: NfEntradaImport) {
     if (!confirm(
       `Lançar esboço de NF de Entrada no SAP vinculado ao PC ${it.sap_matched_po_doc_entry}?`,
