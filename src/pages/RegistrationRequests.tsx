@@ -40,6 +40,15 @@ import {
 import { PAYMENT_METHOD_LABELS, REGISTRATION_MODE_LABELS } from "@/lib/supplier-request-email";
 import { RegistrationAttachmentList } from "@/components/RegistrationAttachmentList";
 import { RegistrationFilePicker } from "@/components/RegistrationFilePicker";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
+
+interface KypResult {
+  status: "aprovado" | "pendente" | "reprovado" | "indisponivel";
+  motivo: string;
+  providerRefId?: string | null;
+  expiryDate?: string | null;
+}
+
 
 const statusVariant: Record<RegistrationStatus, string> = {
   aberto: "bg-blue-500/10 text-blue-600 border-blue-500/20",
