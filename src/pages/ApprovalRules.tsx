@@ -1741,6 +1741,7 @@ export default function ApprovalRulesPage() {
 
         {activeTab === "health" ? (
           <div className="space-y-4">
+            <CoverageGapsPanel rules={rules} />
             <RuleConflictsPanel rules={rules} onOpenRule={(r) => openEdit(r)} />
             <RulesHealthMonitor
               rules={rules}
