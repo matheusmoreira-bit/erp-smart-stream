@@ -51,6 +51,7 @@ import IntegrationHealth from "./pages/IntegrationHealth.tsx";
 import AuditTimeline from "./pages/AuditTimeline.tsx";
 import AccessReview from "./pages/AccessReview.tsx";
 import SlaEscalation from "./pages/SlaEscalation.tsx";
+import SlaDashboard from "./pages/SlaDashboard.tsx";
 import BackofficeRetryQueue from "./pages/BackofficeRetryQueue.tsx";
 import BackofficeRoadmap from "./pages/BackofficeRoadmap.tsx";
 
