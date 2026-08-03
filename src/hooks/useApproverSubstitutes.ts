@@ -36,6 +36,8 @@ export interface ApproverSubstitute {
   revoked_by_id: string | null;
   revoked_by_email: string | null;
   revoked_reason: string | null;
+  /** Prefixos de CC que limitam a substituição (null/[] = todos os CCs). */
+  cost_center_prefixes: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -49,6 +51,7 @@ export interface CreateSubstituteInput {
   ends_at: string;
   reason?: string | null;
   company_db?: string | null;
+  cost_center_prefixes?: string[] | null;
 }
 
 export function statusOf(row: ApproverSubstitute, now = Date.now()): "active" | "scheduled" | "expired" | "revoked" {
@@ -104,7 +107,7 @@ export function useApproverSubstitutes() {
 export function useActiveOfficialsForMe() {
   const { session } = useSap();
   const [officials, setOfficials] = useState<
-    Array<{ official_email: string; official_name: string | null; id: string; ends_at: string }>
+    Array<{ official_email: string; official_name: string | null; id: string; ends_at: string; cost_center_prefixes: string[] | null }>
   >([]);
 
   const load = useCallback(async () => {
@@ -125,15 +128,15 @@ export function useActiveOfficialsForMe() {
     );
     const currentDb = (session?.companyDB || "").toLowerCase().trim();
     const seen = new Set<string>();
-    const merged: Array<{ official_email: string; official_name: string | null; id: string; ends_at: string }> = [];
+    const merged: Array<{ official_email: string; official_name: string | null; id: string; ends_at: string; cost_center_prefixes: string[] | null }> = [];
     for (const r of results) {
-      const rows = ((r.data as Array<{ id: string; official_email: string; official_name: string | null; ends_at: string; company_db: string | null }>) || []);
+      const rows = ((r.data as Array<{ id: string; official_email: string; official_name: string | null; ends_at: string; company_db: string | null; cost_center_prefixes: string[] | null }>) || []);
       for (const row of rows) {
         if (seen.has(row.id)) continue;
         const scope = (row.company_db || "").toLowerCase().trim();
         if (scope && currentDb && scope !== currentDb) continue;
         seen.add(row.id);
-        merged.push({ id: row.id, official_email: row.official_email, official_name: row.official_name, ends_at: row.ends_at });
+        merged.push({ id: row.id, official_email: row.official_email, official_name: row.official_name, ends_at: row.ends_at, cost_center_prefixes: row.cost_center_prefixes ?? null });
       }
     }
     setOfficials(merged);
@@ -154,6 +157,7 @@ export interface SubstituteGrantForMe {
   starts_at: string;
   ends_at: string;
   company_db: string | null;
+  cost_center_prefixes: string[] | null;
 }
 
 export function useSubstituteGrantsForMe() {
