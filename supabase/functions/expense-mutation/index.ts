@@ -687,10 +687,28 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
     approver_name: caller.identity,
     approver_email: caller.email || (caller.identity && caller.identity.includes("@") ? caller.identity : null),
     level_order: resolvedLevel,
-    remarks: fallbackUsed
+    remarks: matrixGapOnSubmit
+      ? `Sem regra de aprovação aplicável (lacuna na matriz) — direcionado para ${MATRIX_FALLBACK_APPROVER.name}.`
+      : fallbackUsed
       ? `Solicitante coincide com o(s) aprovador(es) da regra — direcionado para ${SELF_APPROVAL_FALLBACK.name}.`
       : null,
   } as any);
+
+  if (matrixGapOnSubmit) {
+    await notifyMatrixGap({
+      companyDb: String(current.company_db || ""),
+      docType: String(current.doc_type || "purchase"),
+      expenseId,
+      costCenter: current.cost_center,
+      project: current.project,
+      totalAmount: Number(current.total_amount || 0),
+      currency: current.currency,
+      requester: current.requester_name,
+      reason: "Submissão sem regra de aprovação aplicável",
+    });
+  }
+
+
 
   return json(200, { ok: true, expense: current });
 }
