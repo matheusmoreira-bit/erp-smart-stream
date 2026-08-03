@@ -1845,13 +1845,10 @@ function MyRequestsTab() {
     if (statusFilter !== "all" && r.status !== statusFilter) return false;
     if (!search) return true;
     const q = search.toLowerCase();
-    return (
-      String(r.docNum).includes(q) ||
-      r.cardName.toLowerCase().includes(q) ||
-      r.docTypeName.toLowerCase().includes(q) ||
-      r.approvalModel.toLowerCase().includes(q)
-    );
+    const has = (v: unknown) => String(v ?? "").toLowerCase().includes(q);
+    return has(r.docNum) || has(r.cardName) || has(r.docTypeName) || has(r.approvalModel);
   });
+
 
   const { visibleItems: visibleRequests, hasMore: reqHasMore, loadMore: reqLoadMore, sentinelRef: reqSentinelRef, total: reqTotal, initial: reqInitial } =
     useLazyList(filtered, { initial: 30, step: 10, resetDeps: [search, statusFilter] });
