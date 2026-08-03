@@ -48,7 +48,34 @@ function fmtMs(v: number | null | undefined) {
   return v < 1000 ? `${Math.round(v)}ms` : `${(v / 1000).toFixed(1)}s`;
 }
 
+// Fallback de destinatários: quando a integração não tem e-mails configurados,
+// usa a lista do secret HEALTH_ALERT_EMAILS e, por último, os admins do Cloud.
+let adminEmailsCache: string[] | null = null;
+async function resolveAdminEmails(sb: any): Promise<string[]> {
+  if (adminEmailsCache) return adminEmailsCache;
+  const envList = (Deno.env.get("HEALTH_ALERT_EMAILS") ?? "")
+    .split(",").map((e) => e.trim()).filter(Boolean);
+  if (envList.length > 0) {
+    adminEmailsCache = envList;
+    return envList;
+  }
+  const emails: string[] = [];
+  try {
+    const { data: roles } = await sb.from("user_roles").select("user_id").eq("role", "admin");
+    const ids = new Set((roles ?? []).map((r: any) => r.user_id));
+    if (ids.size > 0) {
+      const { data: list } = await sb.auth.admin.listUsers({ page: 1, perPage: 200 });
+      for (const u of list?.users ?? []) {
+        if (ids.has(u.id) && u.email) emails.push(u.email);
+      }
+    }
+  } catch { /* ignore */ }
+  adminEmailsCache = Array.from(new Set(emails));
+  return adminEmailsCache;
+}
+
 async function sendEmail(to: string[], subject: string, html: string): Promise<{ ok: boolean; detail: string }> {
+
   const url = Deno.env.get("SUPABASE_URL");
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!url || !key || to.length === 0) return { ok: false, detail: "sem destinatários" };
