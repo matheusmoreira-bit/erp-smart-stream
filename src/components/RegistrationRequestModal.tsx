@@ -14,8 +14,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Send } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertTriangle, ClipboardCheck, Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
+
 import {
   PAYMENT_METHOD_LABELS,
   REGISTRATION_MODE_LABELS,
