@@ -265,7 +265,13 @@ export function IntegrationHealthAlerts() {
                     }
                     disabled={!s.notify_email}
                   />
+                  {s.notify_email && (s.recipient_emails ?? []).length === 0 && (
+                    <p className="text-[11px] text-amber-600">
+                      Sem destinatários: o aviso será enviado aos administradores do sistema.
+                    </p>
+                  )}
                 </div>
+
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <Switch
