@@ -417,8 +417,47 @@ export function RegistrationRequestModal({
                   />
                 </div>
               </div>
+
+              <div className="rounded-md border border-dashed border-border bg-muted/30 p-3 space-y-3">
+                <div className="flex items-center gap-2">
+                  <ClipboardCheck className="w-4 h-4 text-muted-foreground" />
+                  <p className="text-sm font-medium">Revisão dos dados de pagamento</p>
+                </div>
+                <dl className="grid gap-2 sm:grid-cols-2 text-sm">
+                  {paymentSummary.map((row) => (
+                    <div key={row.label}>
+                      <dt className="text-xs text-muted-foreground">{row.label}</dt>
+                      <dd className={`font-medium break-all ${row.value ? "" : "text-muted-foreground italic"}`}>
+                        {row.value || "não informado"}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                {paymentWarnings.length > 0 && (
+                  <ul className="space-y-1 text-xs text-amber-700 dark:text-amber-400">
+                    {paymentWarnings.map((w) => (
+                      <li key={w} className="flex items-start gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                        <span>{w}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <label className="flex items-start gap-2 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={paymentConfirmed}
+                    onCheckedChange={(v) => setPaymentConfirmed(v === true)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    Revisei e confirmo que os dados de pagamento acima estão corretos e conferem com o documento
+                    enviado pelo fornecedor.
+                  </span>
+                </label>
+              </div>
             </div>
           )}
+
 
           <div className="space-y-1.5">
             <Label htmlFor="rr-notes">Observações</Label>
