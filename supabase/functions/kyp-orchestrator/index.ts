@@ -366,7 +366,7 @@ async function executar(
   const providerId = primeiro?.providerId ?? "";
   const adapter = KYP_ADAPTERS[providerCode];
   if (!adapter) throw new Error(`Provedor KYP não suportado: ${providerCode}`);
-  const config = await providerConfig(sb, providerCode, primeiro?.extra ?? {}, primeiro?.companyDb ?? null);
+  const config = await providerConfig(sb, providerCode, primeiro?.extra ?? {}, null);
   if (!config) throw new Error("Credenciais do provedor KYP não configuradas.");
   const session = await adapter.authenticate(config);
 
