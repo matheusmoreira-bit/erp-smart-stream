@@ -54,6 +54,7 @@ interface NfRow {
   sap_matched_po_doc_entry: string | null;
   sap_matched_po_is_draft: boolean | null;
   sap_matched_card_code: string | null;
+  valor_total: number | null;
   itens: Array<Record<string, unknown>>;
   impostos: Record<string, unknown>;
 }
