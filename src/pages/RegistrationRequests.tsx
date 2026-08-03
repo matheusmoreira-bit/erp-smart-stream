@@ -42,26 +42,10 @@ import { RegistrationAttachmentList } from "@/components/RegistrationAttachmentL
 import { RegistrationFilePicker } from "@/components/RegistrationFilePicker";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 
-interface KypResult {
-  status: "aprovado" | "pendente" | "reprovado" | "indisponivel";
-  motivo: string;
-  providerRefId?: string | null;
-  expiryDate?: string | null;
-  detalhes?: {
-    provider?: string;
-    documento?: string;
-    tipoPessoa?: string;
-    providerStatus?: string | null;
-    updatedAt?: string | null;
-    campos?: Record<string, unknown>;
-  };
-}
-
 interface SupplierFnResponse {
   ok?: boolean;
   error?: string;
   details?: unknown;
-  kyp?: KypResult;
   cardCode?: string;
   requiresAcknowledge?: boolean;
 }
@@ -92,73 +76,6 @@ function fmt(dt?: string | null) {
   return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
-const KYP_STATUS_LABELS: Record<KypResult["status"], string> = {
-  aprovado: "Aprovado",
-  pendente: "Pendente de análise",
-  reprovado: "Reprovado",
-  indisponivel: "Indisponível",
-};
-
-/** Monta o texto completo do parecer do KYP (campos + texto do provedor) para exibição/cópia. */
-function buildKypReport(k: (KypResult & { at?: string }) | null): string {
-  if (!k) return "";
-  const d = k.detalhes ?? {};
-  const linhas: string[] = [
-    `KYP: ${KYP_STATUS_LABELS[k.status]}`,
-    `Motivo: ${k.motivo}`,
-  ];
-  if (d.provider) linhas.push(`Provedor: ${d.provider}`);
-  if (d.documento) linhas.push(`Documento: ${d.documento}${d.tipoPessoa ? ` (${d.tipoPessoa})` : ""}`);
-  if (k.providerRefId) linhas.push(`Referência no provedor: ${k.providerRefId}`);
-  if (d.providerStatus) linhas.push(`Status bruto do provedor: ${d.providerStatus}`);
-  if (k.expiryDate) linhas.push(`Validade da diligência: ${k.expiryDate}`);
-  if (d.updatedAt) linhas.push(`Atualizado no provedor: ${d.updatedAt}`);
-  if (k.at) linhas.push(`Consultado em: ${new Date(k.at).toLocaleString("pt-BR")}`);
-  const campos = d.campos ?? {};
-  const entradas = Object.entries(campos);
-  if (entradas.length) {
-    linhas.push("", "Campos retornados pelo provedor:");
-    for (const [key, value] of entradas) linhas.push(`- ${key}: ${String(value)}`);
-  }
-  return linhas.join("\n");
-}
-
-async function copyText(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-    toast.success("Motivo do KYP copiado.");
-  } catch {
-    toast.error("Não foi possível copiar automaticamente. Selecione o texto e copie manualmente.");
-  }
-}
-
-function kypTone(status: KypResult["status"]) {
-  if (status === "aprovado") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
-  if (status === "reprovado") return "border-destructive/30 bg-destructive/10 text-destructive";
-  return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400";
-}
-
-/** Recupera o último resultado de KYP registrado na trilha do chamado. */
-function deriveKypFromEvents(
-  events: { message: string | null; created_at: string }[],
-): (KypResult & { at?: string }) | null {
-  for (let i = events.length - 1; i >= 0; i--) {
-    const msg = events[i]?.message?.trim();
-    if (!msg) continue;
-    const validated = msg.match(/^Valida[çc][ãa]o KYP:\s*([A-Za-zÀ-ÿ]+)\s*[—-]\s*([\s\S]+)$/i);
-    if (validated) {
-      const status = validated[1].toLowerCase() as KypResult["status"];
-      if (["aprovado", "reprovado", "pendente", "indisponivel"].includes(status)) {
-        return { status, motivo: validated[2].trim(), at: events[i].created_at };
-      }
-    }
-    const blocked = msg.match(/^Cadastro bloqueado pelo KYP:\s*([\s\S]+)$/i);
-    if (blocked) return { status: "reprovado", motivo: blocked[1].trim(), at: events[i].created_at };
-  }
-  return null;
-}
-
-
 function DetailDialog({
   request,
   isAgent,
@@ -182,17 +99,12 @@ function DetailDialog({
   const [comment, setComment] = useState("");
   const [commentFiles, setCommentFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
-  const [stage, setStage] = useState<"idle" | "kyp" | "sap">("idle");
-
-  const [kyp, setKyp] = useState<KypResult | null>(null);
+  const [stage, setStage] = useState<"idle" | "sap">("idle");
   const [createState, setCreateState] = useState<CreateState>({ phase: "idle" });
 
   if (!request) return null;
   const sla = slaInfo(request);
   const bank = request.bank_details || {};
-  const kypView: (KypResult & { at?: string }) | null = kyp ?? deriveKypFromEvents(events);
-
-
   const callSupplierFn = async (payload: Record<string, unknown>) => {
     const res = await sapFunctionFetch("registration-supplier-create", {
       method: "POST",
@@ -207,49 +119,6 @@ function DetailDialog({
       data = { error: raw?.slice(0, 500) || `Resposta inválida do servidor (HTTP ${res.status})` };
     }
     return { ok: res.ok, status: res.status, data, raw };
-  };
-
-  const runKyp = async () => {
-    setBusy(true);
-    setStage("kyp");
-    setCreateState({ phase: "running", step: "Consultando KYP (Know Your Partner)…" });
-
-    try {
-      const { ok, status, data } = await callSupplierFn({ action: "kyp" });
-      if (data.kyp) setKyp(data.kyp);
-      if (!ok) {
-        setCreateState({
-          phase: "error",
-          step: "Validação de KYP",
-          message: data.error || `Falha na validação de KYP (HTTP ${status})`,
-          httpStatus: status,
-          detail: data.details ? JSON.stringify(data.details, null, 2) : undefined,
-          at: new Date().toISOString(),
-        });
-        toast.error(data.error || "Falha na validação de KYP");
-        return;
-      }
-      const k = data.kyp;
-      setCreateState({
-        phase: "idle",
-        step: `KYP consultado: ${k ? KYP_STATUS_LABELS[k.status] : "sem retorno"}`,
-      });
-      const report = buildKypReport(k ? { ...k } : null);
-      const toastOpts = report
-        ? { description: report, duration: 15000, action: { label: "Copiar", onClick: () => void copyText(report) } }
-        : undefined;
-      if (k?.status === "aprovado") toast.success("KYP aprovado — fornecedor liberado para cadastro.", toastOpts);
-      else if (k?.status === "reprovado") toast.error(`KYP reprovado: ${k.motivo}`, toastOpts);
-      else toast.warning(k?.motivo || "KYP pendente de análise.", toastOpts);
-    } catch (e) {
-      const msg = friendlyError(e, "Falha na validação de KYP");
-      setCreateState({ phase: "error", step: "Validação de KYP", message: msg, at: new Date().toISOString() });
-      toast.error(msg);
-    } finally {
-      setBusy(false);
-      setStage("idle");
-    }
-
   };
 
   /** Mensagem clara para falhas de rede/integração. */
@@ -282,7 +151,6 @@ function DetailDialog({
         cardCode: cardCode.trim(),
         acknowledgePending,
       });
-      if (data.kyp) setKyp(data.kyp);
       if (!ok) {
         if (status === 409 && data.requiresAcknowledge) {
           setCreateState({
