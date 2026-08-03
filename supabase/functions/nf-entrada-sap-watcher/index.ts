@@ -241,9 +241,10 @@ Deno.serve(async (req) => {
                   step: "sap_invoice_detected",
                   status_from: row.status ?? null,
                   status_to: "completed",
-                  message: `NF de Entrada já existente no SAP para o PC ${poEntry}: DocEntry ${existing.docEntry}${existing.docNum != null ? ` / DocNum ${existing.docNum}` : ""}`,
+                  message: `${existing.isDraft ? "Esboço de NF" : "NF"} de Entrada já existente no SAP para o PC ${poEntry}: DocEntry ${existing.docEntry}${existing.docNum != null ? ` / DocNum ${existing.docNum}` : ""}`,
                   actor: "nf-entrada-sap-watcher",
-                  payload: { po_doc_entry: poEntry, doc_entry: existing.docEntry, doc_num: existing.docNum },
+                  payload: { po_doc_entry: poEntry, doc_entry: existing.docEntry, doc_num: existing.docNum, is_draft: existing.isDraft },
+
                 });
                 results.push({ id: row.id, status: "completed" });
                 continue;
