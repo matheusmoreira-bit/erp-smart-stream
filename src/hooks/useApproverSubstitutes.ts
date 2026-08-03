@@ -176,18 +176,23 @@ export function useSubstituteGrantsForMe() {
         supabase.rpc("substitute_grants_for_me" as never, { _substitute_identifier: id } as never),
       ),
     );
+    const currentDb = (session?.companyDB || "").toLowerCase().trim();
     const seen = new Set<string>();
     const merged: SubstituteGrantForMe[] = [];
     for (const r of results) {
       const rows = ((r.data as SubstituteGrantForMe[]) || []);
       for (const row of rows) {
         if (seen.has(row.id)) continue;
+        // Escopo por empresa: grant de outra base não vale na base ativa.
+        const scope = (row.company_db || "").toLowerCase().trim();
+        if (scope && currentDb && scope !== currentDb) continue;
         seen.add(row.id);
         merged.push(row);
       }
     }
     setGrants(merged);
-  }, [session?.userName]);
+  }, [session?.userName, session?.companyDB]);
+
 
   useEffect(() => { load(); }, [load]);
 
