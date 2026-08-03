@@ -228,7 +228,9 @@ Deno.serve(withEdgeMetrics("integration-health-alerts", async (req) => {
       let ok = false;
 
       if (cfg.notify_email) {
-        const to = (cfg.recipient_emails ?? []).filter(Boolean);
+        let to = (cfg.recipient_emails ?? []).filter(Boolean);
+        if (to.length === 0) to = await resolveAdminEmails(sb);
+
         const html = `
           <div style="font-family:Arial,sans-serif;font-size:14px;color:#111">
             <h2 style="margin:0 0 12px">${icon} Degradação detectada — ${label}</h2>
