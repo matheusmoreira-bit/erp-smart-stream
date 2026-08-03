@@ -96,6 +96,27 @@ async function loadCreds(sb: ReturnType<typeof createClient>, companyDb: string)
   return kv;
 }
 
+/**
+ * Procura no SAP uma NF de Entrada (PurchaseInvoice efetiva) que já consuma o
+ * Pedido de Compra informado. Retorna DocEntry/DocNum reais quando encontrada.
+ */
+async function findExistingPoInvoice(
+  baseUrl: string,
+  cookie: string,
+  poEntry: number,
+): Promise<{ docEntry: number; docNum: number | null } | null> {
+  const q = `${baseUrl}/PurchaseInvoices?$filter=DocumentLines/any(l:l/BaseType eq 22 and l/BaseEntry eq ${poEntry})` +
+    `&$select=DocEntry,DocNum,Cancelled&$orderby=DocEntry asc&$top=5`;
+  const r = await fetch(q, { headers: { Cookie: cookie } });
+  if (!r.ok) return null;
+  const j = await r.json().catch(() => ({}));
+  const arr = Array.isArray(j?.value) ? j.value : [];
+  const found = arr.find((inv: Record<string, unknown>) => inv.Cancelled !== "tYES");
+  if (!found) return null;
+  return { docEntry: Number(found.DocEntry), docNum: found.DocNum != null ? Number(found.DocNum) : null };
+}
+
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
