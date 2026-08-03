@@ -405,17 +405,18 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
     let resolvedApprover: string | null = nextApproverFromClient;
     let fallbackUsed = false;
     if (nextRuleId) {
-      const { data: lvls } = await admin
-        .from("approval_rule_levels")
-        .select("level_order, approver_name, approver_email")
-        .eq("rule_id", nextRuleId)
-        .order("level_order", { ascending: true });
-      const picked = pickApproverSkippingRequester(
-        (lvls || []) as any,
-        current.requester_name,
-        current.requester_email,
-        1,
-      );
+      const picked = await resolveApproverWithEscalation(admin, nextRuleId, {
+        companyDb: String(current.company_db || ""),
+        docType: String(current.doc_type || "purchase"),
+        totalAmount: Number((updates as any).total_amount ?? current.total_amount ?? 0),
+        costCenter: (updates as any).cost_center ?? current.cost_center ?? null,
+        project: (updates as any).project ?? current.project ?? null,
+        requesterName: current.requester_name,
+        requesterEmail: current.requester_email,
+        supplierName: current.supplier_name,
+        supplierCode: current.supplier_code,
+        currency: current.currency,
+      }, 1);
       resolvedLevel = picked.level_order;
       resolvedApprover = picked.approver_name || resolvedApprover;
       fallbackUsed = picked.fallback_used;
