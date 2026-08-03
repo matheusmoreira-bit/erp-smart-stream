@@ -24,6 +24,7 @@ import {
   UserCog,
   ClipboardList,
   type LucideIcon,
+  TrendingUp,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
 import { useModuleAccess } from "@/hooks/usePermissions";

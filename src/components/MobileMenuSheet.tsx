@@ -64,6 +64,7 @@ const groups: { title: string; items: Entry[] }[] = [
     items: [
       { label: "Adiantamentos", icon: Wallet, path: "/financeiro/adiantamentos", color: "text-amber-400", moduleKey: "expenses" },
       { label: "Reconciliação", icon: Wallet, path: "/financeiro/reconciliacao", color: "text-cyan-400", moduleKey: "financial_review" },
+      { label: "Previsão de Caixa", icon: Wallet, path: "/financeiro/previsao-caixa", color: "text-emerald-400", moduleKey: "financial_review" },
       { label: "NF de Entrada", icon: FileInput, path: "/financeiro/nf-entrada", color: "text-orange-400", moduleKey: "nf_entrada" },
     ],
   },
