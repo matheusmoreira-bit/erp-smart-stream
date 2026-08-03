@@ -430,6 +430,27 @@ export async function validateSapSession(req: Request) {
     }
   } catch { /* falha aberta: não derruba o app por indisponibilidade */ }
 
+  // Desligado no IdP (JumpCloud/Okta): a sessão morre mesmo que o bloqueio no
+  // SAP não tenha sido aplicado. Falha de leitura não derruba o app.
+  try {
+    const deprovAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      { auth: { persistSession: false } },
+    );
+    const { data: deprovisioned, error } = await deprovAdmin.rpc("is_erp_user_deprovisioned", {
+      _user_key: sapUser,
+      _company_db: companyDB,
+    });
+    if (!error && deprovisioned === true) {
+      sapSessionValidationCache.delete(
+        getSapSessionValidationCacheKey(companyDB, sapUser, sapSession, routeId),
+      );
+      return null;
+    }
+  } catch { /* falha aberta */ }
+
+
   const cacheKey = getSapSessionValidationCacheKey(companyDB, sapUser, sapSession, routeId);
   const cached = sapSessionValidationCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
