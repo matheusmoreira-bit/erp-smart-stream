@@ -310,11 +310,11 @@ export async function requestSupplierRegistration(payload: SupplierRequestPayloa
     .filter(Boolean)
     .join("\n");
 
-  const cc = requesterEmail && requesterEmail.toLowerCase() !== TARGET_EMAIL ? [requesterEmail] : undefined;
+  const cc = requesterEmail && !TARGET_EMAILS.includes(requesterEmail.toLowerCase()) ? [requesterEmail] : undefined;
 
   const { error } = await supabase.functions.invoke("send-smtp-email", {
     body: {
-      to: [TARGET_EMAIL],
+      to: TARGET_EMAILS,
       cc,
       replyTo: requesterEmail || undefined,
       subject,
