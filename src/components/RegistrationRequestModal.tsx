@@ -365,7 +365,13 @@ export function RegistrationRequestModal({
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Forma de pagamento *</Label>
-                  <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as RegistrationPaymentMethod)}>
+                  <Select
+                    value={paymentMethod}
+                    onValueChange={(v) => {
+                      setPaymentConfirmed(false);
+                      setPaymentMethod(v as RegistrationPaymentMethod);
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
