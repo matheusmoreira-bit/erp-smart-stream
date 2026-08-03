@@ -148,12 +148,16 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 3. Find suspended JC users that are linked
+    // 3. Desligados no IdP = suspensos OU removidos do JumpCloud
     const jcById = new Map(jcUsers.map((u) => [u._id, u]));
-    const toDisable = mappings.filter((m) => {
-      const jc = jcById.get(m.idp_user_id || "");
-      return jc?.suspended === true;
-    });
+    const toDisable = mappings
+      .map((m) => {
+        const jc = jcById.get(m.idp_user_id || "");
+        if (jc?.suspended === true) return { mapping: m, reason: "suspenso no JumpCloud" };
+        if (m.idp_user_id && !jc) return { mapping: m, reason: "removido do JumpCloud" };
+        return null;
+      })
+      .filter((x): x is { mapping: (typeof mappings)[number]; reason: string } => x !== null);
 
     if (toDisable.length === 0) {
       await logExecution(supabase, "success", { message: "No users to disable" }, 0);
@@ -167,31 +171,69 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 4. Login to SAP and disable users
-    const sapCreds = await getSapCredentials(supabase, bodyCompanyDB || undefined);
-    const sap = await loginSap(sapCreds);
+    // 4. Bloqueia no SAP (best-effort) e SEMPRE desprovisiona no ERP Flow.
+    //    Falha de SAP não pode impedir a revogação de acessos/alçadas.
+    let sap: { baseUrl: string; cookies: string } | null = null;
+    let sapError: string | null = null;
+    try {
+      const sapCreds = await getSapCredentials(supabase, bodyCompanyDB || undefined);
+      sap = await loginSap(sapCreds);
+    } catch (e) {
+      sapError = e instanceof Error ? e.message : String(e);
+      console.warn("[synapse-jc-sync] SAP indisponível, seguindo com desprovisionamento:", sapError);
+    }
 
-    const results: Array<{ userCode: string; success: boolean; error?: string }> = [];
+    const results: Array<{
+      userCode: string;
+      success: boolean;
+      reason: string;
+      revoked?: Record<string, number>;
+      error?: string;
+    }> = [];
 
-    for (const mapping of toDisable) {
+    for (const { mapping, reason } of toDisable) {
+      let locked = false;
+      let error: string | undefined;
       try {
-        const ok = await lockSapUser(sap.baseUrl, sap.cookies, mapping.sap_user_code);
-        results.push({ userCode: mapping.sap_user_code, success: ok });
-
-        // Update mapping status
-        if (ok) {
-          await supabase
-            .from("idp_user_mapping")
-            .update({ status: "disabled_by_idp" })
-            .eq("id", mapping.id);
-        }
+        if (sap) locked = await lockSapUser(sap.baseUrl, sap.cookies, mapping.sap_user_code);
+        else error = `SAP indisponível: ${sapError}`;
       } catch (e) {
-        results.push({ userCode: mapping.sap_user_code, success: false, error: (e as Error).message });
+        error = (e as Error).message;
       }
+
+      const target = {
+        mappingId: mapping.id,
+        companyDb: mapping.company_db || bodyCompanyDB || null,
+        idpProvider: "jumpcloud",
+        idpUserId: mapping.idp_user_id,
+        sapUserCode: mapping.sap_user_code,
+        email: mapping.sap_email || mapping.idp_email || null,
+        reason,
+        source: "jumpcloud_sap_sync",
+        sapLocked: locked,
+      };
+      const revoked = await deprovisionUser(supabase, target);
+      await logDeprovision(supabase, target, revoked);
+
+      results.push({
+        userCode: mapping.sap_user_code,
+        success: revoked.errors.length === 0,
+        reason,
+        revoked: {
+          grupos: revoked.groupsRevoked,
+          substituicoes: revoked.substitutionsRevoked,
+          credenciais: revoked.credentialsRevoked,
+          centros_custo: revoked.costCentersRevoked,
+          dispositivos_push: revoked.pushDevicesRevoked,
+          regras_orfas: revoked.approvalRulesOrphaned,
+        },
+        error: [error, ...revoked.errors].filter(Boolean).join(" | ") || undefined,
+      });
     }
 
     const successCount = results.filter((r) => r.success).length;
-    const msg = `${successCount}/${toDisable.length} usuários desabilitados`;
+    const msg = `${successCount}/${toDisable.length} usuários desprovisionados`;
+
 
     await logExecution(supabase, successCount === toDisable.length ? "success" : "partial", { results }, successCount);
     await supabase
