@@ -102,39 +102,9 @@ Deno.serve(async (req) => {
       /* no body */
     }
 
-    // Destinatários Facilities
-    const recipients = new Set<string>([FACILITIES_FALLBACK]);
-    const { data: groups } = await supabase
-      .from("permission_groups")
-      .select("id,name");
-    const facilitiesIds = (groups || [])
-      .filter((g) => ["facilities", "admin"].includes(String(g.name || "").trim().toLowerCase()))
-      .map((g) => g.id);
-    if (facilitiesIds.length) {
-      const { data: assignments } = await supabase
-        .from("user_group_assignments")
-        .select("sap_email")
-        .in("group_id", facilitiesIds);
-      // As atribuições guardam a chave canônica do usuário SAP; os e-mails
-      // ficam no diretório (1 usuário SAP : N e-mails).
-      const keys = (assignments || [])
-        .map((a) => String(a.sap_email || "").trim().toLowerCase())
-        .filter(Boolean);
-      for (const key of keys) {
-        if (key.includes("@")) recipients.add(key);
-      }
-      if (keys.length) {
-        const { data: mails } = await supabase
-          .from("sap_user_emails")
-          .select("email")
-          .in("user_key", keys);
-        for (const m of mails || []) {
-          const email = String(m.email || "").trim().toLowerCase();
-          if (email.includes("@")) recipients.add(email);
-        }
-      }
-    }
-    const to = Array.from(recipients);
+    // Destinatários fixos das notificações de cadastro
+    const to = ["samara.souza@anagaming.com.br", FACILITIES_FALLBACK];
+
 
     const { data: rows, error } = await supabase
       .from("registration_requests")
