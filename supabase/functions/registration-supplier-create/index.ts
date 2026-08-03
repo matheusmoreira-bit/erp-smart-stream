@@ -278,8 +278,12 @@ async function findExistingBp(
     }
   };
 
+  if (!cardCode) {
+    // sem código informado: só a busca por documento faz sentido
+  } else {
   const byCode = await get(`${baseUrl}/BusinessPartners('${encodeURIComponent(cardCode)}')?$select=CardCode`);
   if (byCode?.CardCode) return String(byCode.CardCode);
+  }
 
   const doc = (documento || "").replace(/\D/g, "");
   if (doc.length >= 11) {
