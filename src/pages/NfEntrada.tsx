@@ -501,8 +501,7 @@ export default function NfEntrada() {
                       <TableCell className="text-right tabular-nums">{formatCurrency(it.valor_total)}</TableCell>
                       <TableCell className="text-xs">{formatDate(it.data_emissao)}</TableCell>
                       <TableCell>
-                        <Badge variant={s.variant} title={s.hint}>{s.label}</Badge>
-                        <div className="text-[10px] text-muted-foreground mt-1 leading-snug max-w-[220px]">{s.hint}</div>
+                        <NfEntradaStatusCell item={it} presentation={s} />
                       </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-end">
