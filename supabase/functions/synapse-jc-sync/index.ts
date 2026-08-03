@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { deprovisionUser, logDeprovision } from "../_shared/idp-deprovision.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
