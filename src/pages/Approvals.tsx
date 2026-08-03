@@ -564,7 +564,9 @@ function ApprovalDetailModal({
   );
   // Documentos com Tipo de Rateio ≠ "Não" (folha/imposto/reembolso/viagens)
   // são rateios sistêmicos; TODOS os aprovadores veem o documento completo.
-  const specialRateio = !!(doc?.rateioType && doc.rateioType !== "padrao");
+  const specialRateio =
+    !!(doc?.rateioType && doc.rateioType !== "padrao") ||
+    isPayrollOrTaxFlow(doc?.rateioType, (doc?.documentLines || []).map((l) => l.ItemCode));
   // Máscara visual (blur) das partes de outros aprovadores — vale também para
   // admins/super, que podem alternar para o documento completo quando precisarem.
   const maskOtherSegments =
