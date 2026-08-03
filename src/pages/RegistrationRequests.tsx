@@ -49,6 +49,26 @@ interface KypResult {
   expiryDate?: string | null;
 }
 
+interface SupplierFnResponse {
+  ok?: boolean;
+  error?: string;
+  details?: unknown;
+  kyp?: KypResult;
+  cardCode?: string;
+  requiresAcknowledge?: boolean;
+}
+
+interface CreateState {
+  phase: "idle" | "running" | "success" | "error" | "warning";
+  step?: string;
+  message?: string;
+  detail?: string;
+  cardCode?: string;
+  httpStatus?: number;
+  at?: string;
+}
+
+
 
 const statusVariant: Record<RegistrationStatus, string> = {
   aberto: "bg-blue-500/10 text-blue-600 border-blue-500/20",
@@ -122,6 +142,7 @@ function DetailDialog({
   const [commentFiles, setCommentFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [kyp, setKyp] = useState<KypResult | null>(null);
+  const [createState, setCreateState] = useState<CreateState>({ phase: "idle" });
 
   if (!request) return null;
   const sla = slaInfo(request);
@@ -135,29 +156,46 @@ function DetailDialog({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ requestId: request.id, ...payload }),
     });
-    const data = await res.json().catch(() => ({}));
-    return { ok: res.ok, status: res.status, data } as {
-      ok: boolean;
-      status: number;
-      data: { error?: string; kyp?: KypResult; cardCode?: string; requiresAcknowledge?: boolean };
-    };
+    const raw = await res.text();
+    let data: SupplierFnResponse = {};
+    try {
+      data = raw ? (JSON.parse(raw) as SupplierFnResponse) : {};
+    } catch {
+      data = { error: raw?.slice(0, 500) || `Resposta inválida do servidor (HTTP ${res.status})` };
+    }
+    return { ok: res.ok, status: res.status, data, raw };
   };
 
   const runKyp = async () => {
     setBusy(true);
+    setCreateState({ phase: "running", step: "Consultando KYP (Know Your Partner)…" });
     try {
-      const { ok, data } = await callSupplierFn({ action: "kyp" });
+      const { ok, status, data } = await callSupplierFn({ action: "kyp" });
       if (data.kyp) setKyp(data.kyp);
       if (!ok) {
+        setCreateState({
+          phase: "error",
+          step: "Validação de KYP",
+          message: data.error || `Falha na validação de KYP (HTTP ${status})`,
+          httpStatus: status,
+          detail: data.details ? JSON.stringify(data.details, null, 2) : undefined,
+          at: new Date().toISOString(),
+        });
         toast.error(data.error || "Falha na validação de KYP");
         return;
       }
       const k = data.kyp;
+      setCreateState({
+        phase: "idle",
+        step: `KYP consultado: ${k ? KYP_STATUS_LABELS[k.status] : "sem retorno"}`,
+      });
       if (k?.status === "aprovado") toast.success("KYP aprovado — fornecedor liberado para cadastro.");
       else if (k?.status === "reprovado") toast.error(`KYP reprovado: ${k.motivo}`);
       else toast.warning(k?.motivo || "KYP pendente de análise.");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha na validação de KYP");
+      const msg = e instanceof Error ? e.message : "Falha na validação de KYP";
+      setCreateState({ phase: "error", step: "Validação de KYP", message: msg, at: new Date().toISOString() });
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -169,6 +207,12 @@ function DetailDialog({
       return;
     }
     setBusy(true);
+    setCreateState({
+      phase: "running",
+      step: acknowledgePending
+        ? "Criando Business Partner no SAP (exceção de KYP registrada)…"
+        : "Validando KYP e criando Business Partner no SAP…",
+    });
     try {
       const { ok, status, data } = await callSupplierFn({
         action: "create",
@@ -178,6 +222,13 @@ function DetailDialog({
       if (data.kyp) setKyp(data.kyp);
       if (!ok) {
         if (status === 409 && data.requiresAcknowledge) {
+          setCreateState({
+            phase: "warning",
+            step: "Aguardando confirmação",
+            message: data.error || "KYP não aprovado — confirmação necessária.",
+            httpStatus: status,
+            at: new Date().toISOString(),
+          });
           const proceed = window.confirm(
             `${data.error}\n\nDeseja cadastrar mesmo assim, registrando a exceção na trilha de auditoria?`,
           );
@@ -186,20 +237,51 @@ function DetailDialog({
             await createSupplier(true);
             return;
           }
+          setCreateState({
+            phase: "warning",
+            step: "Cadastro cancelado pelo operador",
+            message: "KYP não aprovado — cadastro não executado no SAP.",
+            at: new Date().toISOString(),
+          });
           toast.info("Cadastro cancelado — KYP não aprovado.");
           return;
         }
+        setCreateState({
+          phase: "error",
+          step: "Criação do Business Partner no SAP",
+          message: data.error || `Falha ao cadastrar fornecedor no SAP (HTTP ${status})`,
+          httpStatus: status,
+          detail: data.details ? JSON.stringify(data.details, null, 2) : undefined,
+          at: new Date().toISOString(),
+        });
         toast.error(data.error || "Falha ao cadastrar fornecedor no SAP");
         return;
       }
+      setCreateState({
+        phase: "success",
+        step: "Business Partner criado no SAP",
+        message: `CardCode ${data.cardCode ?? cardCode.trim()}${
+          request.company_db ? ` · base ${request.company_db}` : ""
+        }`,
+        cardCode: data.cardCode ?? cardCode.trim(),
+        at: new Date().toISOString(),
+      });
       toast.success(`Fornecedor criado no SAP com o código ${data.cardCode}.`);
       await reload();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha ao cadastrar fornecedor no SAP");
+      const msg = e instanceof Error ? e.message : "Falha ao cadastrar fornecedor no SAP";
+      setCreateState({
+        phase: "error",
+        step: "Criação do Business Partner no SAP",
+        message: msg,
+        at: new Date().toISOString(),
+      });
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
   };
+
 
 
   const act = async (status: RegistrationStatus) => {
@@ -487,9 +569,44 @@ function DetailDialog({
                       Cadastrar fornecedor no SAP
                     </Button>
                   </div>
+
+                  {createState.phase !== "idle" || createState.step ? (
+                    <div
+                      className={`rounded-md border px-3 py-2 text-sm ${
+                        createState.phase === "success"
+                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                          : createState.phase === "error"
+                            ? "border-destructive/30 bg-destructive/10 text-destructive"
+                            : createState.phase === "warning"
+                              ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                              : "border-border bg-muted/40 text-muted-foreground"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 font-medium">
+                        {createState.phase === "running" && <Loader2 className="w-4 h-4 animate-spin" />}
+                        {createState.phase === "success" && <ShieldCheck className="w-4 h-4" />}
+                        {(createState.phase === "error" || createState.phase === "warning") && (
+                          <ShieldAlert className="w-4 h-4" />
+                        )}
+                        {createState.step || "Processando…"}
+                      </div>
+                      {createState.message && <p className="text-xs mt-1 break-words">{createState.message}</p>}
+                      {createState.httpStatus && createState.phase === "error" && (
+                        <p className="text-[11px] mt-1 opacity-80">HTTP {createState.httpStatus}</p>
+                      )}
+                      {createState.detail && (
+                        <pre className="text-[11px] mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-background/60 p-2">
+                          {createState.detail}
+                        </pre>
+                      )}
+                      {createState.at && <p className="text-[11px] mt-1 opacity-80">{fmt(createState.at)}</p>}
+                    </div>
+                  ) : null}
+
                   <p className="text-xs text-muted-foreground">
                     Informe o CardCode acima. O KYP roda automaticamente antes da criação.
                   </p>
+
                 </div>
               )}
 
