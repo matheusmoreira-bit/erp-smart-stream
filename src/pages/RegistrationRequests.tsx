@@ -305,6 +305,54 @@ function DetailDialog({
                   <Textarea id="rr-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
                 </div>
               </div>
+
+              {request.request_type === "supplier" && (
+                <div className="rounded-md border border-dashed border-border p-3 space-y-2">
+                  <p className="text-sm font-medium">Cadastro do fornecedor no ERP</p>
+                  <p className="text-xs text-muted-foreground">
+                    A validação de KYP (Know Your Partner) é obrigatória antes de criar o fornecedor no SAP.
+                  </p>
+                  {kyp && (
+                    <div
+                      className={`rounded-md border px-3 py-2 text-sm ${
+                        kyp.status === "aprovado"
+                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                          : kyp.status === "reprovado"
+                            ? "border-destructive/30 bg-destructive/10 text-destructive"
+                            : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 font-medium">
+                        {kyp.status === "aprovado" ? (
+                          <ShieldCheck className="w-4 h-4" />
+                        ) : (
+                          <ShieldAlert className="w-4 h-4" />
+                        )}
+                        KYP: {kyp.status}
+                      </div>
+                      <p className="text-xs mt-1">{kyp.motivo}</p>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" disabled={busy} onClick={() => void runKyp()} className="gap-2">
+                      {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                      Validar KYP
+                    </Button>
+                    <Button
+                      disabled={busy || !cardCode.trim() || kyp?.status === "reprovado"}
+                      onClick={() => void createSupplier(false)}
+                      className="gap-2"
+                    >
+                      {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+                      Cadastrar fornecedor no SAP
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Informe o CardCode acima. O KYP roda automaticamente antes da criação.
+                  </p>
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" disabled={busy} onClick={() => act("em_andamento")}>
                   Em andamento
