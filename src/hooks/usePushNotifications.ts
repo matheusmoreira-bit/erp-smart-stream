@@ -4,13 +4,13 @@ import { sapFunctionFetch } from "@/lib/auth-fetch";
 const SW_URL = "/push-sw.js";
 const SW_SCOPE = "/push/";
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const raw = atob(base64);
-  const out = new Uint8Array(raw.length);
+  const out = new Uint8Array(new ArrayBuffer(raw.length));
   for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
-  return out;
+  return out.buffer;
 }
 
 export type PushPermission = "default" | "granted" | "denied";
