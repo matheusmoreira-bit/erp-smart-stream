@@ -1,4 +1,4 @@
-import { CreditCard, Server, Users, Box, Cloud, Building2, Layers, FileInput, type LucideIcon } from "lucide-react";
+import { CreditCard, Server, Users, Box, Cloud, Building2, Layers, FileInput, ShieldCheck, type LucideIcon } from "lucide-react";
 
 export interface SystemField {
   key: string;
@@ -24,6 +24,18 @@ const S4_COMMON_FIELDS: SystemField[] = [
   { key: "username", label: "Usuário Técnico", placeholder: "TECH_USER" },
   { key: "password", label: "Senha", type: "password", placeholder: "Senha do usuário técnico" },
   { key: "sap_client", label: "SAP Client (Mandante)", placeholder: "100" },
+  {
+    name: "becompliance",
+    label: "BeCompliance (KYP)",
+    description: "Diligência de fornecedores — Know Your Partner",
+    icon: ShieldCheck,
+    fields: [
+      { key: "base_url", label: "URL Base da API", placeholder: "https://api.becompliance.com" },
+      { key: "client_id", label: "Client ID", placeholder: "Identificador do cliente BeCompliance", description: "Usado nas rotas /ext/v1/{client_id}/..." },
+      { key: "email", label: "E-mail de acesso", placeholder: "usuario@empresa.com.br" },
+      { key: "password", label: "Senha", type: "password", placeholder: "Senha de acesso ao BeCompliance" },
+    ],
+  },
 ];
 
 export const SYSTEMS: SystemConfig[] = [

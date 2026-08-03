@@ -27,6 +27,7 @@ import { PageTitle } from "@/components/PageTitle";
 
 const TEST_ENDPOINTS: Record<string, string> = {
   mastertax: "mastertax-test",
+  becompliance: "becompliance-test",
 };
 
 function CredentialModal({
