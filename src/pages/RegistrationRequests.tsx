@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ClipboardList, Clock, Copy, Loader2, RefreshCw, Send, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ClipboardList, Clock, Loader2, RefreshCw, Send, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -133,7 +133,7 @@ function DetailDialog({
     return msg || fallback;
   };
 
-  const createSupplier = async (acknowledgePending: boolean) => {
+  const createSupplier = async () => {
     if (!cardCode.trim()) {
       toast.error("Informe o CardCode do fornecedor.");
       return;
@@ -149,7 +149,6 @@ function DetailDialog({
       const { ok, status, data } = await callSupplierFn({
         action: "create",
         cardCode: cardCode.trim(),
-        acknowledgePending,
       });
       if (!ok) {
         setCreateState({
@@ -473,7 +472,7 @@ function DetailDialog({
                     <Button
                       disabled={busy || !cardCode.trim()}
                       aria-busy={busy}
-                      onClick={() => void createSupplier(true)}
+                      onClick={() => void createSupplier()}
                       className="gap-2"
                     >
                       {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
