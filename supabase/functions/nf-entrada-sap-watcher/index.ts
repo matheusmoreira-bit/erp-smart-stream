@@ -46,8 +46,10 @@ async function linkPoInvoicesToNf(
 interface NfRow {
   id: string;
   chave_acesso: string;
+  status?: string | null;
   sap_company_db: string | null;
   sap_po_draft_id: string | null;
+
   sap_invoice_draft_id: string | null;
   sap_matched_po_doc_entry: string | null;
   sap_matched_po_is_draft: boolean | null;
@@ -96,6 +98,54 @@ async function loadCreds(sb: ReturnType<typeof createClient>, companyDb: string)
   return kv;
 }
 
+/**
+ * Procura no SAP uma NF de Entrada que já consuma o Pedido de Compra informado.
+ * Primeiro nas PurchaseInvoices efetivas; se não houver, nos esboços (Drafts).
+ */
+async function findExistingPoInvoice(
+  baseUrl: string,
+  cookie: string,
+  poEntry: number,
+): Promise<{ docEntry: number; docNum: number | null; isDraft: boolean } | null> {
+  const filter = `DocumentLines/any(l:l/BaseType eq 22 and l/BaseEntry eq ${poEntry})`;
+
+  const invUrl = `${baseUrl}/PurchaseInvoices?$filter=${filter}` +
+    `&$select=DocEntry,DocNum,Cancelled&$orderby=DocEntry asc&$top=5`;
+  const r = await fetch(invUrl, { headers: { Cookie: cookie } });
+  if (r.ok) {
+    const j = await r.json().catch(() => ({}));
+    const arr = Array.isArray(j?.value) ? j.value : [];
+    const found = arr.find((inv: Record<string, unknown>) => inv.Cancelled !== "tYES");
+    if (found) {
+      return {
+        docEntry: Number(found.DocEntry),
+        docNum: found.DocNum != null ? Number(found.DocNum) : null,
+        isDraft: false,
+      };
+    }
+  }
+
+  const draftUrl = `${baseUrl}/Drafts?$filter=DocObjectCode eq 'oPurchaseInvoices' and ${filter}` +
+    `&$select=DocEntry,DocNum,Cancelled&$orderby=DocEntry asc&$top=5`;
+  const dr = await fetch(draftUrl, { headers: { Cookie: cookie } });
+  if (dr.ok) {
+    const dj = await dr.json().catch(() => ({}));
+    const darr = Array.isArray(dj?.value) ? dj.value : [];
+    const dfound = darr.find((inv: Record<string, unknown>) => inv.Cancelled !== "tYES");
+    if (dfound) {
+      return {
+        docEntry: Number(dfound.DocEntry),
+        docNum: dfound.DocNum != null ? Number(dfound.DocNum) : null,
+        isDraft: true,
+      };
+    }
+  }
+
+  return null;
+}
+
+
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -113,6 +163,14 @@ Deno.serve(async (req) => {
     );
   }
 
+  // Execução sob demanda para um registro específico (permitida também em bases de teste).
+  let manualId: string | null = null;
+  try {
+    const body = await req.json().catch(() => ({}));
+    const raw = (body as { import_id?: unknown })?.import_id;
+    if (typeof raw === "string" && /^[0-9a-f-]{36}$/i.test(raw)) manualId = raw;
+  } catch { /* sem body */ }
+
   // Paginação: processa em páginas de 50 até esvaziar ou atingir limite de tempo (90s).
   const PAGE_SIZE = 50;
   const TIME_BUDGET_MS = 90_000;
@@ -121,12 +179,13 @@ Deno.serve(async (req) => {
   let pageOffset = 0;
 
   while (Date.now() - startedAt < TIME_BUDGET_MS) {
-    const { data: rows, error } = await sb
-      .from("nf_entrada_imports")
-      .select("*")
-      .eq("status", "awaiting_sap")
-      .order("created_at", { ascending: true })
-      .range(pageOffset, pageOffset + PAGE_SIZE - 1);
+    let q = sb.from("nf_entrada_imports").select("*");
+    q = manualId
+      ? q.eq("id", manualId)
+      : q.eq("status", "awaiting_sap")
+        .order("created_at", { ascending: true })
+        .range(pageOffset, pageOffset + PAGE_SIZE - 1);
+    const { data: rows, error } = await q;
     if (error) {
       await releaseWatcherLock(sb, "nf-entrada-sap-watcher", "error", error.message);
       return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
@@ -136,8 +195,9 @@ Deno.serve(async (req) => {
     // Agrupar por company_db para reaproveitar login (pulando bases de teste)
     const byCompany = new Map<string, NfRow[]>();
     for (const r of rows as NfRow[]) {
-      if (!r.sap_company_db || !r.sap_po_draft_id) continue;
-      if (isTestCompanyDb(r.sap_company_db)) {
+      if (!r.sap_company_db) continue;
+      if (!r.sap_po_draft_id && !r.sap_matched_po_doc_entry) continue;
+      if (!manualId && isTestCompanyDb(r.sap_company_db)) {
         results.push({ id: r.id, status: "skipped", error: "test_base" });
         continue;
       }
@@ -163,9 +223,39 @@ Deno.serve(async (req) => {
     try {
       for (const row of list) {
         try {
+          // CASO 0: já existe NF de Entrada efetiva no SAP consumindo o PC vinculado.
+          // Nesse caso não criamos nada — apenas refletimos a realidade do SAP.
+          if (row.sap_matched_po_doc_entry && !row.sap_invoice_draft_id) {
+            const poEntry = Number(row.sap_matched_po_doc_entry);
+            if (Number.isFinite(poEntry)) {
+              const existing = await findExistingPoInvoice(baseUrl, cookie, poEntry);
+              if (existing) {
+                await sb.from("nf_entrada_imports").update({
+                  sap_invoice_draft_id: String(existing.docEntry),
+                  status: "completed",
+                  last_poll_at: new Date().toISOString(),
+                  last_error: null,
+                }).eq("id", row.id);
+                await sb.from("nf_entrada_logs").insert({
+                  import_id: row.id,
+                  step: "sap_invoice_detected",
+                  status_from: row.status ?? null,
+                  status_to: "completed",
+                  message: `${existing.isDraft ? "Esboço de NF" : "NF"} de Entrada já existente no SAP para o PC ${poEntry}: DocEntry ${existing.docEntry}${existing.docNum != null ? ` / DocNum ${existing.docNum}` : ""}`,
+                  actor: "nf-entrada-sap-watcher",
+                  payload: { po_doc_entry: poEntry, doc_entry: existing.docEntry, doc_num: existing.docNum, is_draft: existing.isDraft },
+
+                });
+                results.push({ id: row.id, status: "completed" });
+                continue;
+              }
+            }
+          }
+
           // CASO 1: vinculado a um Pedido de Compra EFETIVO já existente no SAP.
           // Não precisa polling — cria o Draft da NF de Entrada referenciando o PO.
           if (row.sap_matched_po_doc_entry && row.sap_matched_po_is_draft === false) {
+
             const poEntry = Number(row.sap_matched_po_doc_entry);
             const poR = await fetch(
               `${baseUrl}/PurchaseOrders(${poEntry})?$select=DocEntry,CardCode,DocumentLines`,
@@ -212,7 +302,12 @@ Deno.serve(async (req) => {
           }
 
           // CASO 2 (padrão): polling do Draft do Pedido de Compra
+          if (!row.sap_po_draft_id) {
+            results.push({ id: row.id, status: row.status || "awaiting_sap", error: "sem draft de PC para consultar" });
+            continue;
+          }
           const dr = await fetch(
+
             `${baseUrl}/Drafts(${row.sap_po_draft_id})?$select=DocEntry,DocumentStatus,DocNum,Cancelled,CardCode`,
             { headers: { Cookie: cookie } },
           );
@@ -301,7 +396,9 @@ Deno.serve(async (req) => {
 
     // Próxima página: avança o offset pelo total recebido
     pageOffset += rows.length;
+    if (manualId) break; // execução sob demanda: apenas um registro
     if (rows.length < PAGE_SIZE) break; // última página
+
   }
 
   // Segunda passada: para NFs já `completed` que ainda não têm vínculo com
