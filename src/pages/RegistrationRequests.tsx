@@ -655,17 +655,40 @@ function DetailDialog({
                   <div className="flex flex-wrap gap-2">
                     <Button
                       disabled={busy || !cardCode.trim() || kypView?.status === "reprovado"}
+                      aria-busy={busy}
                       onClick={() => void kypThenCreate()}
                       className="gap-2"
                     >
                       {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                      Cadastrar fornecedor no SAP
+                      {stage === "kyp"
+                        ? "Consultando KYP…"
+                        : stage === "sap"
+                          ? "Cadastrando no SAP…"
+                          : "Cadastrar fornecedor no SAP"}
                     </Button>
-                    <Button variant="ghost" disabled={busy} onClick={() => void runKyp()} className="gap-2">
+                    <Button variant="ghost" disabled={busy} aria-busy={busy} onClick={() => void runKyp()} className="gap-2">
+                      {busy && stage === "kyp" && <Loader2 className="w-4 h-4 animate-spin" />}
                       Consultar KYP apenas
                     </Button>
-
                   </div>
+
+                  {busy && (
+                    <div className="space-y-1.5" aria-live="polite">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        {stage === "kyp"
+                          ? "Etapa 1 de 2 · Consultando o provedor de KYP (pode levar alguns segundos)…"
+                          : "Etapa 2 de 2 · Criando o Business Partner no SAP…"}
+                      </div>
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full bg-primary transition-all duration-500"
+                          style={{ width: stage === "kyp" ? "45%" : "85%" }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
 
                   {createState.phase !== "idle" || createState.step ? (
                     <div
