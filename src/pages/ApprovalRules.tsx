@@ -35,6 +35,7 @@ import { detectRuleConflicts } from "@/lib/approval-rule-conflicts";
 import { useAuth } from "@/hooks/useAuth";
 import { RuleSimulator, DRAFT_RULE_ID } from "@/components/RuleSimulator";
 import { ApprovalMatrixVersionsDialog } from "@/components/ApprovalMatrixVersionsDialog";
+import { CoverageGapsPanel } from "@/components/CoverageGapsPanel";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
