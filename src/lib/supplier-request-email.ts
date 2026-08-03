@@ -63,7 +63,7 @@ export interface SupplierRequestPayload {
   dueAt?: string | null;
 }
 
-const TARGET_EMAIL = "compras@anagaming.com.br";
+const TARGET_EMAILS = ["samara.souza@anagaming.com.br", "compras@anagaming.com.br"];
 
 export const PAYMENT_METHOD_LABELS: Record<RegistrationPaymentMethod, string> = {
   pix: "PIX",
@@ -310,11 +310,11 @@ export async function requestSupplierRegistration(payload: SupplierRequestPayloa
     .filter(Boolean)
     .join("\n");
 
-  const cc = requesterEmail && requesterEmail.toLowerCase() !== TARGET_EMAIL ? [requesterEmail] : undefined;
+  const cc = requesterEmail && !TARGET_EMAILS.includes(requesterEmail.toLowerCase()) ? [requesterEmail] : undefined;
 
   const { error } = await supabase.functions.invoke("send-smtp-email", {
     body: {
-      to: [TARGET_EMAIL],
+      to: TARGET_EMAILS,
       cc,
       replyTo: requesterEmail || undefined,
       subject,
@@ -326,15 +326,19 @@ export async function requestSupplierRegistration(payload: SupplierRequestPayloa
   if (error) throw error;
 
   // Fluxo paralelo: avisa o time responsável de que há uma nova ação solicitada.
-  await createNotification({
-    user_identifier: TARGET_EMAIL,
-    title: "Nova solicitação de cadastro aguardando atendimento",
-    body: `${payload.cardName || "Solicitação de cadastro"} · Solicitante: ${requesterEmail || "—"}`,
-    category: "action",
-    company_db: payload.companyDb ?? undefined,
-    link: "/solicitacoes",
-    metadata: { action_key: "registration", kind: "requested" },
-  });
+  await Promise.all(
+    TARGET_EMAILS.map((target) =>
+      createNotification({
+        user_identifier: target,
+        title: "Nova solicitação de cadastro aguardando atendimento",
+        body: `${payload.cardName || "Solicitação de cadastro"} · Solicitante: ${requesterEmail || "—"}`,
+        category: "action",
+        company_db: payload.companyDb ?? undefined,
+        link: "/solicitacoes",
+        metadata: { action_key: "registration", kind: "requested" },
+      }),
+    ),
+  );
 }
 
 
