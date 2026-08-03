@@ -98,7 +98,9 @@ export function useApproverSubstitutes() {
 }
 
 
-/** Lista officials cujas substituições ativas apontam para o usuário logado. */
+/** Lista officials cujas substituições ativas apontam para o usuário logado.
+ *  Escopo por empresa: grants com `company_db` preenchido só valem naquela base;
+ *  `company_db` nulo = substituição válida para todas as empresas. */
 export function useActiveOfficialsForMe() {
   const { session } = useSap();
   const [officials, setOfficials] = useState<
@@ -121,23 +123,27 @@ export function useActiveOfficialsForMe() {
         supabase.rpc("active_officials_for_substitute" as never, { _substitute_identifier: id } as never),
       ),
     );
+    const currentDb = (session?.companyDB || "").toLowerCase().trim();
     const seen = new Set<string>();
     const merged: Array<{ official_email: string; official_name: string | null; id: string; ends_at: string }> = [];
     for (const r of results) {
-      const rows = ((r.data as Array<{ id: string; official_email: string; official_name: string | null; ends_at: string }>) || []);
+      const rows = ((r.data as Array<{ id: string; official_email: string; official_name: string | null; ends_at: string; company_db: string | null }>) || []);
       for (const row of rows) {
         if (seen.has(row.id)) continue;
+        const scope = (row.company_db || "").toLowerCase().trim();
+        if (scope && currentDb && scope !== currentDb) continue;
         seen.add(row.id);
         merged.push({ id: row.id, official_email: row.official_email, official_name: row.official_name, ends_at: row.ends_at });
       }
     }
     setOfficials(merged);
-  }, [session?.userName]);
+  }, [session?.userName, session?.companyDB]);
 
   useEffect(() => { load(); }, [load]);
 
   return { officials, refresh: load };
 }
+
 
 /** Grants (não revogados) em que sou o substituto — inclui starts_at/ends_at,
  *  para permitir validar se a substituição estava vigente na data do documento. */
@@ -170,18 +176,23 @@ export function useSubstituteGrantsForMe() {
         supabase.rpc("substitute_grants_for_me" as never, { _substitute_identifier: id } as never),
       ),
     );
+    const currentDb = (session?.companyDB || "").toLowerCase().trim();
     const seen = new Set<string>();
     const merged: SubstituteGrantForMe[] = [];
     for (const r of results) {
       const rows = ((r.data as SubstituteGrantForMe[]) || []);
       for (const row of rows) {
         if (seen.has(row.id)) continue;
+        // Escopo por empresa: grant de outra base não vale na base ativa.
+        const scope = (row.company_db || "").toLowerCase().trim();
+        if (scope && currentDb && scope !== currentDb) continue;
         seen.add(row.id);
         merged.push(row);
       }
     }
     setGrants(merged);
-  }, [session?.userName]);
+  }, [session?.userName, session?.companyDB]);
+
 
   useEffect(() => { load(); }, [load]);
 
