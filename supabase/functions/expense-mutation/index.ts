@@ -253,7 +253,9 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
       approver_name: caller.identity,
       approver_email: caller.email || (caller.identity.includes("@") ? caller.identity : null),
       level_order: resolvedLevel,
-      remarks: fallbackUsed
+      remarks: escalatedTo
+        ? `Auto-aprovação evitada: solicitante era o aprovador — escalonado para a faixa superior (${escalatedTo}) → ${resolvedApprover}.`
+        : fallbackUsed
         ? `Solicitante coincide com o(s) aprovador(es) da regra — direcionado para ${SELF_APPROVAL_FALLBACK.name}.`
         : (resolvedLevel > 1
           ? `Nível(is) anterior(es) puladod(s): solicitante era o aprovador designado.`
