@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, FileCode2, History, RefreshCw, XCircle, Download, RotateCw, Link2, ChevronRight, Pencil, ShoppingCart, FilePlus2 } from "lucide-react";
+import { ArrowLeft, FileText, FileCode2, History, RefreshCw, XCircle, Download, RotateCw, Link2, ChevronRight, Pencil, ShoppingCart, FilePlus2, ScanSearch } from "lucide-react";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -114,7 +114,7 @@ function DetailField({ label, value, mono }: { label: string; value: string | nu
 export default function NfEntrada() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { items, loading, error, refresh, reprocess, rematchSap, cancel, pullNow, createInvoiceDraft } = useNfEntrada();
+  const { items, loading, error, refresh, reprocess, rematchSap, recheckSap, cancel, pullNow, createInvoiceDraft } = useNfEntrada();
 
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -224,6 +224,37 @@ export default function NfEntrada() {
       setBusyId(null);
     }
   }
+
+  /** Consulta o SAP agora: se a NF já existir lá, o status é atualizado para concluído. */
+  async function handleRecheckSap(id: string) {
+    setBusyId(id);
+    try {
+      const res = await recheckSap(id);
+      if (res?.skipped === "another_run_in_progress") {
+        toast({
+          title: "Verificação em andamento",
+          description: "Já existe uma checagem rodando. Tente novamente em alguns segundos.",
+        });
+        return;
+      }
+      const r = res?.results?.find((x) => x.id === id) ?? res?.results?.[0];
+      if (r?.status === "completed") {
+        toast({ title: "NF encontrada no SAP", description: "Status atualizado para concluído." });
+      } else if (r?.error) {
+        toast({ title: "Nada a atualizar", description: r.error, variant: "destructive" });
+      } else {
+        toast({
+          title: "Reconferência concluída",
+          description: "Nenhuma NF de entrada correspondente encontrada no SAP ainda.",
+        });
+      }
+    } catch (e) {
+      toast({ title: "Falha ao reconferir no SAP", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
 
   async function handleCreateInvoiceDraft(it: NfEntradaImport) {
     if (!confirm(
@@ -483,8 +514,13 @@ export default function NfEntrada() {
                                 onSelect: () => openFile(it.id, "xml"), disabled: busyId === it.id },
                               { key: "pdf", label: "Abrir DANFE (PDF)", icon: FileText,
                                 onSelect: () => openFile(it.id, "pdf"), disabled: busyId === it.id },
+                              { key: "recheck", label: "Reconferir no SAP (verificar se a NF já existe)", icon: ScanSearch,
+                                separatorBefore: true,
+                                onSelect: () => handleRecheckSap(it.id),
+                                disabled: busyId === it.id || it.status === "cancelled" },
                               { key: "history", label: "Ver histórico de integração", icon: History,
                                 onSelect: () => setDetail(it) },
+
                               { key: "create-po", label: "Criar pedido de compra a partir desta NF", icon: ShoppingCart,
                                 separatorBefore: true,
                                 hidden: hasPoLink || !!it.expense_id || it.status === "cancelled" || it.status === "completed",
@@ -606,11 +642,19 @@ export default function NfEntrada() {
                       )}
                     <Button
                       variant="outline" size="sm"
+                      disabled={busyId === detail.id}
+                      onClick={() => handleRecheckSap(detail.id)}
+                    >
+                      <ScanSearch className="w-3.5 h-3.5" /> Reconferir no SAP
+                    </Button>
+                    <Button
+                      variant="outline" size="sm"
                       disabled={busyId === detail.id || !!detail.sap_invoice_draft_id}
                       onClick={() => handleRematch(detail.id)}
                     >
                       <Link2 className="w-3.5 h-3.5" /> Refazer vínculo SAP
                     </Button>
+
                   </div>
                 </div>
 

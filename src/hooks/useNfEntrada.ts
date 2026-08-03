@@ -86,6 +86,20 @@ export function useNfEntrada() {
     return data as { matched: boolean; cardCode?: string; docEntry?: string; isDraft?: boolean; reason?: string; skipped?: string };
   }, [fetchAll]);
 
+  /** Reconfere no SAP se a NF já existe (watcher sob demanda) e atualiza o status. */
+  const recheckSap = useCallback(async (id: string) => {
+    const { data, error: err } = await supabase.functions.invoke("nf-entrada-sap-watcher", {
+      body: { import_id: id },
+    });
+    if (err) throw err;
+    await fetchAll();
+    return data as {
+      ok?: boolean;
+      skipped?: string;
+      results?: Array<{ id: string; status: string; error?: string }>;
+    };
+  }, [fetchAll]);
+
   const cancel = useCallback(async (id: string) => {
     const { error: err } = await supabase
       .from("nf_entrada_imports")
@@ -94,6 +108,7 @@ export function useNfEntrada() {
     if (err) throw err;
     await fetchAll();
   }, [fetchAll]);
+
 
   const pullNow = useCallback(async () => {
     const { error: err } = await supabase.functions.invoke("mastertax-pull", { body: {} });
@@ -117,7 +132,7 @@ export function useNfEntrada() {
     return data as { ok: boolean; draftId?: string; poEntry?: number; alreadyExists?: boolean };
   }, [fetchAll]);
 
-  return { items, loading, error, refresh: fetchAll, reprocess, rematchSap, cancel, pullNow, createInvoiceDraft };
+  return { items, loading, error, refresh: fetchAll, reprocess, rematchSap, recheckSap, cancel, pullNow, createInvoiceDraft };
 
 }
 
