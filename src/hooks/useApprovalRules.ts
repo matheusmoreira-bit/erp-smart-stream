@@ -388,7 +388,7 @@ export function useApprovalRules() {
 
   const updateRule = useCallback(
     async (id: string, input: CreateRuleInput, actor: string) => {
-      const { error: err } = await supabase
+      const { data: updated, error: err } = await supabase
         .from("approval_rules")
         .update({
           name: input.name,
@@ -396,8 +396,16 @@ export function useApprovalRules() {
           criteria: normalizeCriteria(input.criteria) as any,
           doc_type: input.doc_type || "both",
         })
-        .eq("id", id);
+        .eq("id", id)
+        .select("id");
       if (err) throw err;
+      // Sem erro e sem linhas = RLS bloqueou a escrita silenciosamente.
+      if (!updated || updated.length === 0) {
+        throw new Error(
+          "Não foi possível salvar: seu usuário não tem permissão de administrador para editar regras de aprovação.",
+        );
+      }
+
 
       // Replace levels
       const { error: delErr } = await supabase
