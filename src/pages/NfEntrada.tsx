@@ -397,11 +397,19 @@ export default function NfEntrada() {
                       onClick={toggle}
                       data-state={isOpen ? "selected" : undefined}
                     >
+                      <TableCell className="pr-0" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.includes(it.id)}
+                          onCheckedChange={() => toggleSelect(it.id)}
+                          aria-label={`Selecionar NF ${it.numero_nf || it.id}`}
+                        />
+                      </TableCell>
                       <TableCell className="pr-0">
                         <ChevronRight
                           className={`w-4 h-4 text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`}
                         />
                       </TableCell>
+
                       <TableCell className="font-mono text-xs">
                         <div className="flex items-center gap-1.5">
                           <span>{it.numero_nf || "—"}</span>
