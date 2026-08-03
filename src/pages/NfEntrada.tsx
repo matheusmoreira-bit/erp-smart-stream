@@ -514,8 +514,13 @@ export default function NfEntrada() {
                                 onSelect: () => openFile(it.id, "xml"), disabled: busyId === it.id },
                               { key: "pdf", label: "Abrir DANFE (PDF)", icon: FileText,
                                 onSelect: () => openFile(it.id, "pdf"), disabled: busyId === it.id },
+                              { key: "recheck", label: "Reconferir no SAP (verificar se a NF já existe)", icon: ScanSearch,
+                                separatorBefore: true,
+                                onSelect: () => handleRecheckSap(it.id),
+                                disabled: busyId === it.id || it.status === "cancelled" },
                               { key: "history", label: "Ver histórico de integração", icon: History,
                                 onSelect: () => setDetail(it) },
+
                               { key: "create-po", label: "Criar pedido de compra a partir desta NF", icon: ShoppingCart,
                                 separatorBefore: true,
                                 hidden: hasPoLink || !!it.expense_id || it.status === "cancelled" || it.status === "completed",
