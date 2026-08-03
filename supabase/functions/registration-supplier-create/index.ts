@@ -291,37 +291,26 @@ Deno.serve(async (req) => {
     const nome = String(r.title ?? "");
 
     /* ------------------------------- KYP ------------------------------- */
-    let kyp: KypOutcome;
-    try {
-      kyp = await runKyp(sb, documento, nome, companyDb);
-    } catch (e) {
-      kyp = {
-        available: false,
-        ok: false,
-        status: "indisponivel",
-        motivo: e instanceof Error ? e.message : "Falha ao consultar o provedor de KYP",
-      };
-    }
-
+    // Consulta de KYP roda apenas na ação explícita "kyp".
+    // O cadastro NÃO é bloqueado pelo KYP: a gestão do fornecedor pelo fluxo de KYP
+    // será tratada em um momento posterior.
     if (body.action === "kyp") {
-      await logEvent(
-        sb,
-        requestId,
-        caller.email,
-        `Validação KYP: ${kyp.status.toUpperCase()} — ${kyp.motivo}`,
-      );
+      let kyp: KypOutcome;
+      try {
+        kyp = await runKyp(sb, documento, nome, companyDb);
+      } catch (e) {
+        kyp = {
+          available: false,
+          ok: false,
+          status: "indisponivel",
+          motivo: e instanceof Error ? e.message : "Falha ao consultar o provedor de KYP",
+        };
+      }
+      await logEvent(sb, requestId, caller.email, `Validação KYP: ${kyp.status.toUpperCase()} — ${kyp.motivo}`);
       return json(200, { ok: true, kyp });
     }
 
     /* ------------------------ criação no SAP --------------------------- */
-    if (kyp.status === "reprovado") {
-      await logEvent(sb, requestId, caller.email, `Cadastro bloqueado pelo KYP: ${kyp.motivo}`);
-      return json(422, { error: `Cadastro bloqueado pelo KYP: ${kyp.motivo}`, kyp });
-    }
-    if (kyp.status !== "aprovado" && !body.acknowledgePending) {
-      return json(409, { error: `KYP não aprovado: ${kyp.motivo}`, kyp, requiresAcknowledge: true });
-    }
-
     const cardCode = String(body.cardCode ?? "").trim();
     if (!cardCode) return json(400, { error: "Informe o CardCode do fornecedor." });
     if (!companyDb) return json(400, { error: "Empresa (company_db) não identificada no chamado." });
@@ -375,7 +364,6 @@ Deno.serve(async (req) => {
         await logEvent(sb, requestId, caller.email, `Falha ao criar fornecedor no SAP: ${msg}`);
         return json(400, {
           error: `SAP recusou a criação: ${msg}`,
-          kyp,
           details: { httpStatus: res.status, sapErrorCode: code, cardCode, companyDb, raw: text.slice(0, 1000) },
         });
       }
@@ -391,12 +379,10 @@ Deno.serve(async (req) => {
         sb,
         requestId,
         caller.email,
-        `Fornecedor criado no SAP (${companyDb}) com CardCode ${created.CardCode ?? cardCode}. KYP: ${kyp.status}${
-          kyp.status !== "aprovado" ? ` — ${kyp.motivo}` : ""
-        }.`,
+        `Fornecedor criado no SAP (${companyDb}) com CardCode ${created.CardCode ?? cardCode}. KYP: não validado neste cadastro (gestão posterior pelo fluxo de KYP).`,
       );
 
-      return json(200, { ok: true, cardCode: created.CardCode ?? cardCode, kyp });
+      return json(200, { ok: true, cardCode: created.CardCode ?? cardCode });
     } finally {
       await sapLogout(baseUrl, cookie).catch(() => {});
     }
