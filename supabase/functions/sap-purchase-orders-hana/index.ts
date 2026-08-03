@@ -247,7 +247,13 @@ async function fetchServiceLayerOrders(
 }
 
 
-async function loadCreds(sb: any, companyDb: string): Promise<Record<string, string> | null> {
+type CredsResult = {
+  kv: Record<string, string>;
+  /** true quando dá para autenticar como Apiuser e consultar a view HANA. */
+  apiuserReady: boolean;
+};
+
+async function loadCreds(sb: any, companyDb: string): Promise<CredsResult> {
   const { data, error } = await sb
     .from("system_credentials")
     .select("credential_key, credential_value")
@@ -258,10 +264,11 @@ async function loadCreds(sb: any, companyDb: string): Promise<Record<string, str
   for (const r of (data || []) as Array<{ credential_key: string; credential_value: string }>) {
     kv[r.credential_key] = r.credential_value ?? "";
   }
-  if (!kv.service_layer_url || !kv.username || !kv.password) return null;
-  if (kv.use_hana_db === "false") return null;
-  if ((kv.username || "").trim().toLowerCase() !== "apiuser") return null;
-  return kv;
+  const apiuserReady =
+    !!kv.service_layer_url && !!kv.username && !!kv.password &&
+    kv.use_hana_db !== "false" &&
+    (kv.username || "").trim().toLowerCase() === "apiuser";
+  return { kv, apiuserReady };
 }
 
 Deno.serve(async (req) => {
@@ -281,11 +288,42 @@ Deno.serve(async (req) => {
     }
 
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    const creds = await loadCreds(sb, companyDb);
-    if (!creds) {
-      return new Response(JSON.stringify({
-        error: "Credenciais SAP indisponíveis ou usuário não é Apiuser para esta empresa",
-      }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const { kv: creds, apiuserReady } = await loadCreds(sb, companyDb);
+
+    // Sessão SAP do próprio usuário (enviada pelo front) — usada como
+    // fallback quando a base não tem credenciais Apiuser configuradas.
+    const userSession = {
+      sessionId: req.headers.get("x-sap-session") || "",
+      routeId: req.headers.get("x-sap-route") || "",
+    };
+
+    if (!apiuserReady) {
+      // Degrada com elegância: sem Apiuser, tenta o Service Layer com a
+      // sessão do usuário. Sem sessão/URL, devolve lista vazia (200) para
+      // não quebrar a tela de compras com um erro.
+      if (!creds.service_layer_url || !userSession.sessionId) {
+        return new Response(JSON.stringify({
+          rows: [], total: 0, offset, limit, has_more: false,
+          source: "unavailable",
+          notice: "Listagem de pedidos direto do ERP indisponível para esta empresa (sem integração Apiuser configurada).",
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const baseUrlU = buildBaseUrl(creds.service_layer_url);
+      try {
+        const slRowsU = await fetchServiceLayerOrders(baseUrlU, userSession, companyDb, limit, offset);
+        return new Response(JSON.stringify({
+          rows: slRowsU, total: slRowsU.length, offset, limit,
+          has_more: slRowsU.length === limit,
+          source: "service_layer_user",
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      } catch (e) {
+        console.log(`[sap-purchase-orders-hana] fallback sessão usuário falhou: ${(e as Error).message}`);
+        return new Response(JSON.stringify({
+          rows: [], total: 0, offset, limit, has_more: false,
+          source: "unavailable",
+          notice: "Não foi possível listar os pedidos direto do ERP agora.",
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
     }
 
     const baseUrl = buildBaseUrl(creds.service_layer_url);
@@ -293,6 +331,7 @@ Deno.serve(async (req) => {
     const HANA_SCHEMA_OVERRIDES: Record<string, string> = { open_gaming_sa: "SBO_OPENGAMING" };
     const schema = HANA_SCHEMA_OVERRIDES[companyDb] || dbName;
     const session = await sapLogin(baseUrl, creds.username, creds.password, dbName);
+
 
     // Filtros HanaAPI V2 (Campo__op=valor) — aceita via body.filters
     // ou como querystring "hf_Campo__op=valor" para uso em GET.
