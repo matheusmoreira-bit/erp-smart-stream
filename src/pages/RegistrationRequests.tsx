@@ -201,6 +201,55 @@ function DetailDialog({
     }
   };
 
+  /** UX: um único botão — consulta o KYP e, se liberado, cadastra no SAP. */
+  const kypThenCreate = async () => {
+    if (!cardCode.trim()) {
+      toast.error("Informe o CardCode do fornecedor.");
+      return;
+    }
+    setBusy(true);
+    setCreateState({ phase: "running", step: "Consultando KYP (Know Your Partner)…" });
+    let blocked = true;
+    try {
+      const { ok, status, data } = await callSupplierFn({ action: "kyp" });
+      if (data.kyp) setKyp(data.kyp);
+      if (!ok) {
+        setCreateState({
+          phase: "error",
+          step: "Validação de KYP",
+          message: data.error || `Falha na validação de KYP (HTTP ${status})`,
+          httpStatus: status,
+          detail: data.details ? JSON.stringify(data.details, null, 2) : undefined,
+          at: new Date().toISOString(),
+        });
+        toast.error(data.error || "Falha na validação de KYP");
+        return;
+      }
+      const k = data.kyp;
+      if (k?.status === "reprovado") {
+        setCreateState({
+          phase: "error",
+          step: "Fornecedor bloqueado pelo KYP",
+          message: `Cadastro não executado. Motivo do bloqueio: ${k.motivo}`,
+          at: new Date().toISOString(),
+        });
+        toast.error(`Fornecedor bloqueado pelo KYP: ${k.motivo}`);
+        return;
+      }
+      blocked = false;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Falha na validação de KYP";
+      setCreateState({ phase: "error", step: "Validação de KYP", message: msg, at: new Date().toISOString() });
+      toast.error(msg);
+      return;
+    } finally {
+      setBusy(false);
+    }
+    if (!blocked) await createSupplier(false);
+  };
+
+
+
   const createSupplier = async (acknowledgePending: boolean) => {
     if (!cardCode.trim()) {
       toast.error("Informe o CardCode do fornecedor.");
