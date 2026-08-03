@@ -33,6 +33,7 @@ export interface NfEntradaImport {
   xml_storage_path: string | null;
   pdf_storage_path: string | null;
   last_error: string | null;
+  last_poll_at: string | null;
   created_at: string;
   updated_at: string;
 }

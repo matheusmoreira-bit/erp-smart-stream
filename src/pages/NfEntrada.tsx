@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { NfEntradaBulkActions, BULK_LIMIT } from "@/components/NfEntradaBulkActions";
+import { NfEntradaStatusCell, statusOrigin, watcherState } from "@/components/NfEntradaStatusCell";
 
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -501,8 +502,7 @@ export default function NfEntrada() {
                       <TableCell className="text-right tabular-nums">{formatCurrency(it.valor_total)}</TableCell>
                       <TableCell className="text-xs">{formatDate(it.data_emissao)}</TableCell>
                       <TableCell>
-                        <Badge variant={s.variant} title={s.hint}>{s.label}</Badge>
-                        <div className="text-[10px] text-muted-foreground mt-1 leading-snug max-w-[220px]">{s.hint}</div>
+                        <NfEntradaStatusCell item={it} presentation={s} />
                       </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-end">
@@ -561,6 +561,24 @@ export default function NfEntrada() {
                             <DetailField label="Despesa" value={it.expense_id?.slice(0, 8) || null} mono />
                             <DetailField label="PO SAP" value={it.sap_po_draft_id} mono />
                             <DetailField label="NF SAP" value={it.sap_invoice_draft_id} mono />
+                            <DetailField label="Origem do status" value={statusOrigin(it).label} />
+                            <DetailField label="Base SAP" value={it.sap_company_db} mono />
+                            <DetailField
+                              label="Última varredura (last_poll_at)"
+                              value={it.last_poll_at ? new Date(it.last_poll_at).toLocaleString("pt-BR") : "nunca"}
+                            />
+                            <DetailField
+                              label="Watcher"
+                              value={
+                                watcherState(it).frozen
+                                  ? "Base congelada (teste) — só reconferência manual"
+                                  : watcherState(it).stale
+                                    ? "Varredura atrasada"
+                                    : watcherState(it).awaitsSap
+                                      ? "Ativo"
+                                      : "Não aplicável"
+                              }
+                            />
                             <div className="col-span-2 md:col-span-2">
                               <div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-1">Vínculo SAP</div>
                               {it.sap_matched_card_code || it.sap_match_reason ? (
