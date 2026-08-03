@@ -78,10 +78,84 @@ function DetailDialog({
   const [comment, setComment] = useState("");
   const [commentFiles, setCommentFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
+  const [kyp, setKyp] = useState<KypResult | null>(null);
 
   if (!request) return null;
   const sla = slaInfo(request);
   const bank = request.bank_details || {};
+
+  const callSupplierFn = async (payload: Record<string, unknown>) => {
+    const res = await sapFunctionFetch("registration-supplier-create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ requestId: request.id, ...payload }),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, data } as {
+      ok: boolean;
+      status: number;
+      data: { error?: string; kyp?: KypResult; cardCode?: string; requiresAcknowledge?: boolean };
+    };
+  };
+
+  const runKyp = async () => {
+    setBusy(true);
+    try {
+      const { ok, data } = await callSupplierFn({ action: "kyp" });
+      if (data.kyp) setKyp(data.kyp);
+      if (!ok) {
+        toast.error(data.error || "Falha na validação de KYP");
+        return;
+      }
+      const k = data.kyp;
+      if (k?.status === "aprovado") toast.success("KYP aprovado — fornecedor liberado para cadastro.");
+      else if (k?.status === "reprovado") toast.error(`KYP reprovado: ${k.motivo}`);
+      else toast.warning(k?.motivo || "KYP pendente de análise.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha na validação de KYP");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const createSupplier = async (acknowledgePending: boolean) => {
+    if (!cardCode.trim()) {
+      toast.error("Informe o CardCode do fornecedor.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const { ok, status, data } = await callSupplierFn({
+        action: "create",
+        cardCode: cardCode.trim(),
+        acknowledgePending,
+      });
+      if (data.kyp) setKyp(data.kyp);
+      if (!ok) {
+        if (status === 409 && data.requiresAcknowledge) {
+          const proceed = window.confirm(
+            `${data.error}\n\nDeseja cadastrar mesmo assim, registrando a exceção na trilha de auditoria?`,
+          );
+          if (proceed) {
+            setBusy(false);
+            await createSupplier(true);
+            return;
+          }
+          toast.info("Cadastro cancelado — KYP não aprovado.");
+          return;
+        }
+        toast.error(data.error || "Falha ao cadastrar fornecedor no SAP");
+        return;
+      }
+      toast.success(`Fornecedor criado no SAP com o código ${data.cardCode}.`);
+      await reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao cadastrar fornecedor no SAP");
+    } finally {
+      setBusy(false);
+    }
+  };
+
 
   const act = async (status: RegistrationStatus) => {
     setBusy(true);
