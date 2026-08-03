@@ -22,6 +22,7 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
 import { pickApproverSkippingRequester, SELF_APPROVAL_FALLBACK } from "../_shared/approval-skip.ts";
 import { resolveApproverWithEscalation } from "../_shared/approval-escalate.ts";
+import { MATRIX_FALLBACK_APPROVER, notifyMatrixGap } from "../_shared/matrix-fallback.ts";
 import { notifyApprovalPending } from "../_shared/approval-notify.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { enforceRateLimit } from "../_shared/rate-limit.ts";
@@ -163,6 +164,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   let resolvedLevel = 1;
   let fallbackUsed = false;
   let escalatedTo: string | null = null;
+  let matrixGap = false;
   if (status === "pendente_aprovacao" && ruleId) {
     const picked = await resolveApproverWithEscalation(admin, ruleId, {
       companyDb,
@@ -181,6 +183,12 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     resolvedLevel = picked.level_order;
     fallbackUsed = picked.fallback_used;
     escalatedTo = picked.escalated ? (picked.escalated_rule_name || picked.escalated_rule_id || "faixa superior") : null;
+  } else if (status === "pendente_aprovacao" && !ruleId) {
+    // Lacuna na matriz: nenhuma regra casou → aprovador global de contingência.
+    resolvedApprover = MATRIX_FALLBACK_APPROVER.name;
+    resolvedApproverEmail = MATRIX_FALLBACK_APPROVER.email;
+    resolvedLevel = 1;
+    matrixGap = true;
   }
 
   const insertPayload: Record<string, unknown> = {
@@ -254,7 +262,9 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
       approver_name: caller.identity,
       approver_email: caller.email || (caller.identity.includes("@") ? caller.identity : null),
       level_order: resolvedLevel,
-      remarks: escalatedTo
+      remarks: matrixGap
+        ? `Sem regra de aprovação aplicável (lacuna na matriz) — direcionado para ${MATRIX_FALLBACK_APPROVER.name}.`
+        : escalatedTo
         ? `Auto-aprovação evitada: solicitante era o aprovador — escalonado para a faixa superior (${escalatedTo}) → ${resolvedApprover}.`
         : fallbackUsed
         ? `Solicitante coincide com o(s) aprovador(es) da regra — direcionado para ${SELF_APPROVAL_FALLBACK.name}.`
@@ -263,6 +273,22 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
           : null),
     } as any);
   }
+
+  if (matrixGap) {
+    await notifyMatrixGap({
+      companyDb,
+      docType: String(input.doc_type || "purchase"),
+      expenseId,
+      costCenter: input.cost_center || items[0]?.cost_center || null,
+      project: input.project || items[0]?.project || null,
+      totalAmount,
+      currency: input.currency || "BRL",
+      requester: requesterName,
+      reason: "Nenhuma regra ativa casou com os critérios do documento",
+    });
+  }
+
+
 
   if (status === "pendente_aprovacao") {
     await notifyApprovalPending(admin, {
@@ -421,6 +447,20 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
       resolvedLevel = picked.level_order;
       resolvedApprover = picked.approver_name || resolvedApprover;
       fallbackUsed = picked.fallback_used;
+    } else {
+      resolvedApprover = MATRIX_FALLBACK_APPROVER.name;
+      resolvedLevel = 1;
+      await notifyMatrixGap({
+        companyDb: String(current.company_db || ""),
+        docType: String(current.doc_type || "purchase"),
+        expenseId,
+        costCenter: (updates as any).cost_center ?? current.cost_center ?? null,
+        project: (updates as any).project ?? current.project ?? null,
+        totalAmount: Number((updates as any).total_amount ?? current.total_amount ?? 0),
+        currency: current.currency,
+        requester: current.requester_name,
+        reason: "Reenvio sem regra de aprovação aplicável",
+      });
     }
     updates.status = "pendente_aprovacao";
     updates.current_level_order = resolvedLevel;
@@ -608,6 +648,7 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
   let resolvedLevel = current.current_level_order || 1;
   let resolvedApprover: string | null = current.current_approver || null;
   let fallbackUsed = false;
+  let matrixGapOnSubmit = false;
   if (current.approval_rule_id) {
     const picked = await resolveApproverWithEscalation(admin, current.approval_rule_id, {
       companyDb: String(current.company_db || ""),
@@ -624,6 +665,10 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
     resolvedLevel = picked.level_order;
     resolvedApprover = picked.approver_name || resolvedApprover;
     fallbackUsed = picked.fallback_used;
+  } else {
+    resolvedApprover = MATRIX_FALLBACK_APPROVER.name;
+    resolvedLevel = 1;
+    matrixGapOnSubmit = true;
   }
 
   const { error } = await admin
@@ -642,10 +687,28 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
     approver_name: caller.identity,
     approver_email: caller.email || (caller.identity && caller.identity.includes("@") ? caller.identity : null),
     level_order: resolvedLevel,
-    remarks: fallbackUsed
+    remarks: matrixGapOnSubmit
+      ? `Sem regra de aprovação aplicável (lacuna na matriz) — direcionado para ${MATRIX_FALLBACK_APPROVER.name}.`
+      : fallbackUsed
       ? `Solicitante coincide com o(s) aprovador(es) da regra — direcionado para ${SELF_APPROVAL_FALLBACK.name}.`
       : null,
   } as any);
+
+  if (matrixGapOnSubmit) {
+    await notifyMatrixGap({
+      companyDb: String(current.company_db || ""),
+      docType: String(current.doc_type || "purchase"),
+      expenseId,
+      costCenter: current.cost_center,
+      project: current.project,
+      totalAmount: Number(current.total_amount || 0),
+      currency: current.currency,
+      requester: current.requester_name,
+      reason: "Submissão sem regra de aprovação aplicável",
+    });
+  }
+
+
 
   return json(200, { ok: true, expense: current });
 }

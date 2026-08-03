@@ -11,6 +11,9 @@ import { createNotification } from "@/lib/notifications";
 import { expenseRead } from "@/lib/expense-read";
 import { pickHierarchicalFallbackRule } from "@/lib/approval-fallback";
 
+/** Aprovadora global quando a matriz não tem regra aplicável (todas as empresas). */
+const MATRIX_FALLBACK_APPROVER_NAME = "Juliana Gavineli";
+
 import {
   enqueueOutbox,
   isErpUnavailable,
@@ -740,18 +743,11 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
                   resolved = true;
                 }
               }
-            } catch { /* segue para o admin padrão */ }
+            } catch { /* segue para o fallback global */ }
 
             if (!resolved) {
-              try {
-                const { data: fallback } = await (supabase as any).rpc(
-                  "get_default_expense_approver",
-                  { _company_db: session.companyDB || null },
-                );
-                currentApprover = (typeof fallback === "string" && fallback.trim()) || "Administrador";
-              } catch {
-                currentApprover = "Administrador";
-              }
+              // Lacuna na matriz (todas as empresas): aprovadora global.
+              currentApprover = MATRIX_FALLBACK_APPROVER_NAME;
             }
           }
 
