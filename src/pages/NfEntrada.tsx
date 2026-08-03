@@ -121,6 +121,7 @@ export default function NfEntrada() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editItem, setEditItem] = useState<NfEntradaImport | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const filtered = useMemo(() => {
     return items.filter((it) => {
@@ -137,6 +138,21 @@ export default function NfEntrada() {
       return true;
     });
   }, [items, statusFilter, search]);
+
+  const selectedItems = useMemo(
+    () => filtered.filter((it) => selectedIds.includes(it.id)),
+    [filtered, selectedIds],
+  );
+  const allSelected = filtered.length > 0 && filtered.every((it) => selectedIds.includes(it.id));
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+  function toggleSelectAll() {
+    // Respeita o limite de lote ao marcar tudo de uma vez.
+    setSelectedIds(allSelected ? [] : filtered.slice(0, BULK_LIMIT).map((it) => it.id));
+  }
+
 
   useEffect(() => {
     if (!detail) return;
