@@ -256,13 +256,16 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     remarks: input.remarks || null,
   } as any);
   if (status === "pendente_aprovacao") {
+  if (status === "pendente_aprovacao") {
     await admin.from("expense_approval_log").insert({
       expense_id: expenseId,
       decision: "submitted",
       approver_name: caller.identity,
       approver_email: caller.email || (caller.identity.includes("@") ? caller.identity : null),
       level_order: resolvedLevel,
-      remarks: escalatedTo
+      remarks: matrixGap
+        ? `Sem regra de aprovação aplicável (lacuna na matriz) — direcionado para ${MATRIX_FALLBACK_APPROVER.name}.`
+        : escalatedTo
         ? `Auto-aprovação evitada: solicitante era o aprovador — escalonado para a faixa superior (${escalatedTo}) → ${resolvedApprover}.`
         : fallbackUsed
         ? `Solicitante coincide com o(s) aprovador(es) da regra — direcionado para ${SELF_APPROVAL_FALLBACK.name}.`
@@ -271,6 +274,22 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
           : null),
     } as any);
   }
+
+  if (matrixGap) {
+    await notifyMatrixGap({
+      companyDb,
+      docType: String(input.doc_type || "purchase"),
+      expenseId,
+      costCenter: input.cost_center || items[0]?.cost_center || null,
+      project: input.project || items[0]?.project || null,
+      totalAmount,
+      currency: input.currency || "BRL",
+      requester: requesterName,
+      reason: "Nenhuma regra ativa casou com os critérios do documento",
+    });
+  }
+
+
 
   if (status === "pendente_aprovacao") {
     await notifyApprovalPending(admin, {
