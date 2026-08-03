@@ -64,6 +64,40 @@ function fmt(dt?: string | null) {
   return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
+const KYP_STATUS_LABELS: Record<KypResult["status"], string> = {
+  aprovado: "Aprovado",
+  pendente: "Pendente de análise",
+  reprovado: "Reprovado",
+  indisponivel: "Indisponível",
+};
+
+function kypTone(status: KypResult["status"]) {
+  if (status === "aprovado") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
+  if (status === "reprovado") return "border-destructive/30 bg-destructive/10 text-destructive";
+  return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400";
+}
+
+/** Recupera o último resultado de KYP registrado na trilha do chamado. */
+function deriveKypFromEvents(
+  events: { message: string | null; created_at: string }[],
+): (KypResult & { at?: string }) | null {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const msg = events[i]?.message?.trim();
+    if (!msg) continue;
+    const validated = msg.match(/^Valida[çc][ãa]o KYP:\s*([A-Za-zÀ-ÿ]+)\s*[—-]\s*([\s\S]+)$/i);
+    if (validated) {
+      const status = validated[1].toLowerCase() as KypResult["status"];
+      if (["aprovado", "reprovado", "pendente", "indisponivel"].includes(status)) {
+        return { status, motivo: validated[2].trim(), at: events[i].created_at };
+      }
+    }
+    const blocked = msg.match(/^Cadastro bloqueado pelo KYP:\s*([\s\S]+)$/i);
+    if (blocked) return { status: "reprovado", motivo: blocked[1].trim(), at: events[i].created_at };
+  }
+  return null;
+}
+
+
 function DetailDialog({
   request,
   isAgent,
