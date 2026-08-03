@@ -368,7 +368,9 @@ Deno.serve(async (req) => {
 
     // Próxima página: avança o offset pelo total recebido
     pageOffset += rows.length;
+    if (manualId) break; // execução sob demanda: apenas um registro
     if (rows.length < PAGE_SIZE) break; // última página
+
   }
 
   // Segunda passada: para NFs já `completed` que ainda não têm vínculo com
