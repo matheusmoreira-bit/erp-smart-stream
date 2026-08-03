@@ -89,6 +89,7 @@ import { InternalApprovalHistory } from "@/components/InternalApprovalHistory";
 import { AttachmentViewer } from "@/components/AttachmentViewer";
 import { displayUserName } from "@/lib/user-display";
 import { isDesignatedApprover } from "@/lib/approval-authz";
+import { isPayrollOrTaxFlow } from "@/hooks/useCurrentUserCostCenter";
 
 
 function formatCurrency(value: number, currency: string = "BRL") {
