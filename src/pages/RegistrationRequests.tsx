@@ -252,6 +252,10 @@ function DetailDialog({
         }
       }
       await reload();
+      await onRefreshList?.();
+      onClose();
+
+
 
 
     } catch (e) {
