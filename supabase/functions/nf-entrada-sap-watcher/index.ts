@@ -99,24 +99,51 @@ async function loadCreds(sb: ReturnType<typeof createClient>, companyDb: string)
 }
 
 /**
- * Procura no SAP uma NF de Entrada (PurchaseInvoice efetiva) que já consuma o
- * Pedido de Compra informado. Retorna DocEntry/DocNum reais quando encontrada.
+ * Procura no SAP uma NF de Entrada que já consuma o Pedido de Compra informado.
+ * Primeiro nas PurchaseInvoices efetivas; se não houver, nos esboços (Drafts).
  */
 async function findExistingPoInvoice(
   baseUrl: string,
   cookie: string,
   poEntry: number,
-): Promise<{ docEntry: number; docNum: number | null } | null> {
-  const q = `${baseUrl}/PurchaseInvoices?$filter=DocumentLines/any(l:l/BaseType eq 22 and l/BaseEntry eq ${poEntry})` +
+): Promise<{ docEntry: number; docNum: number | null; isDraft: boolean } | null> {
+  const filter = `DocumentLines/any(l:l/BaseType eq 22 and l/BaseEntry eq ${poEntry})`;
+
+  const invUrl = `${baseUrl}/PurchaseInvoices?$filter=${filter}` +
     `&$select=DocEntry,DocNum,Cancelled&$orderby=DocEntry asc&$top=5`;
-  const r = await fetch(q, { headers: { Cookie: cookie } });
-  if (!r.ok) return null;
-  const j = await r.json().catch(() => ({}));
-  const arr = Array.isArray(j?.value) ? j.value : [];
-  const found = arr.find((inv: Record<string, unknown>) => inv.Cancelled !== "tYES");
-  if (!found) return null;
-  return { docEntry: Number(found.DocEntry), docNum: found.DocNum != null ? Number(found.DocNum) : null };
+  const r = await fetch(invUrl, { headers: { Cookie: cookie } });
+  if (r.ok) {
+    const j = await r.json().catch(() => ({}));
+    const arr = Array.isArray(j?.value) ? j.value : [];
+    const found = arr.find((inv: Record<string, unknown>) => inv.Cancelled !== "tYES");
+    if (found) {
+      return {
+        docEntry: Number(found.DocEntry),
+        docNum: found.DocNum != null ? Number(found.DocNum) : null,
+        isDraft: false,
+      };
+    }
+  }
+
+  const draftUrl = `${baseUrl}/Drafts?$filter=DocObjectCode eq 'oPurchaseInvoices' and ${filter}` +
+    `&$select=DocEntry,DocNum,Cancelled&$orderby=DocEntry asc&$top=5`;
+  const dr = await fetch(draftUrl, { headers: { Cookie: cookie } });
+  if (dr.ok) {
+    const dj = await dr.json().catch(() => ({}));
+    const darr = Array.isArray(dj?.value) ? dj.value : [];
+    const dfound = darr.find((inv: Record<string, unknown>) => inv.Cancelled !== "tYES");
+    if (dfound) {
+      return {
+        docEntry: Number(dfound.DocEntry),
+        docNum: dfound.DocNum != null ? Number(dfound.DocNum) : null,
+        isDraft: true,
+      };
+    }
+  }
+
+  return null;
 }
+
 
 
 
