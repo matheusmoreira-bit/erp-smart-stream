@@ -29,15 +29,26 @@ function service(): Sb {
   });
 }
 
+/** Mesma normalização do public.canonical_user_key: local-part sem sufixos
+ *  .ext/.adm e sem pontuação (ex.: "samara.souza@x" -> "samarasouza"). */
 function canonicalKey(email: string): string {
   const local = String(email || "").toLowerCase().trim().split("@")[0];
-  return local.replace(/\.(ext|adm)$/i, "");
+  return local.replace(/\.(ext|adm)$/i, "").replace(/[^a-z0-9]/g, "");
 }
+
 
 async function isAgent(sb: Sb, email: string): Promise<boolean> {
   const lower = String(email || "").toLowerCase().trim();
   if (!lower) return false;
   const key = canonicalKey(lower);
+
+  // Super-admin / admin do SAP (mesma regra usada nos demais módulos).
+  if (lower === "manager") return true;
+  const { data: sapAdmin } = await sb.rpc("is_sap_user_admin", {
+    _sap_username: lower.split("@")[0],
+  });
+  if (sapAdmin === true) return true;
+
   const { data: groups } = await sb.from("permission_groups").select("id,name");
   const ids = (groups || [])
     .filter((g) => ["facilities", "admin"].includes(String((g as { name?: string }).name || "").trim().toLowerCase()))
@@ -47,11 +58,14 @@ async function isAgent(sb: Sb, email: string): Promise<boolean> {
     .from("user_group_assignments")
     .select("sap_email")
     .in("group_id", ids);
-  return (assignments || []).some((a) => {
+  const ok = (assignments || []).some((a) => {
     const v = String((a as { sap_email?: string }).sap_email || "").toLowerCase().trim();
     return v === lower || v === lower.split("@")[0] || canonicalKey(v) === key;
   });
+  if (!ok) console.warn("[registration-supplier-create] acesso negado", { caller: lower, key });
+  return ok;
 }
+
 
 /** Identidade do chamador: usuário Cloud ou sessão SAP. */
 async function resolveCaller(req: Request): Promise<{ email: string; companyDb: string | null }> {
