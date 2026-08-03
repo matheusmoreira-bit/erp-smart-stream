@@ -561,6 +561,24 @@ export default function NfEntrada() {
                             <DetailField label="Despesa" value={it.expense_id?.slice(0, 8) || null} mono />
                             <DetailField label="PO SAP" value={it.sap_po_draft_id} mono />
                             <DetailField label="NF SAP" value={it.sap_invoice_draft_id} mono />
+                            <DetailField label="Origem do status" value={statusOrigin(it).label} />
+                            <DetailField label="Base SAP" value={it.sap_company_db} mono />
+                            <DetailField
+                              label="Última varredura (last_poll_at)"
+                              value={it.last_poll_at ? new Date(it.last_poll_at).toLocaleString("pt-BR") : "nunca"}
+                            />
+                            <DetailField
+                              label="Watcher"
+                              value={
+                                watcherState(it).frozen
+                                  ? "Base congelada (teste) — só reconferência manual"
+                                  : watcherState(it).stale
+                                    ? "Varredura atrasada"
+                                    : watcherState(it).awaitsSap
+                                      ? "Ativo"
+                                      : "Não aplicável"
+                              }
+                            />
                             <div className="col-span-2 md:col-span-2">
                               <div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-1">Vínculo SAP</div>
                               {it.sap_matched_card_code || it.sap_match_reason ? (
