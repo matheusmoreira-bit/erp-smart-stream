@@ -452,25 +452,24 @@ function DetailDialog({
                   <p className="text-xs text-muted-foreground">
                     A validação de KYP (Know Your Partner) é obrigatória antes de criar o fornecedor no SAP.
                   </p>
-                  {kyp && (
-                    <div
-                      className={`rounded-md border px-3 py-2 text-sm ${
-                        kyp.status === "aprovado"
-                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                          : kyp.status === "reprovado"
-                            ? "border-destructive/30 bg-destructive/10 text-destructive"
-                            : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                      }`}
-                    >
+                  {kypView ? (
+                    <div className={`rounded-md border px-3 py-2 text-sm ${kypTone(kypView.status)}`}>
                       <div className="flex items-center gap-2 font-medium">
-                        {kyp.status === "aprovado" ? (
+                        {kypView.status === "aprovado" ? (
                           <ShieldCheck className="w-4 h-4" />
                         ) : (
                           <ShieldAlert className="w-4 h-4" />
                         )}
-                        KYP: {kyp.status}
+                        KYP: {KYP_STATUS_LABELS[kypView.status]}
                       </div>
-                      <p className="text-xs mt-1">{kyp.motivo}</p>
+                      <p className="text-xs mt-1">
+                        {kypView.status === "reprovado" ? `Motivo da reprovação: ${kypView.motivo}` : kypView.motivo}
+                      </p>
+                      {kypView.at && <p className="text-[11px] mt-1 opacity-80">Validado em {fmt(kypView.at)}</p>}
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
+                      KYP ainda não validado para este fornecedor.
                     </div>
                   )}
                   <div className="flex flex-wrap gap-2">
@@ -479,7 +478,8 @@ function DetailDialog({
                       Validar KYP
                     </Button>
                     <Button
-                      disabled={busy || !cardCode.trim() || kyp?.status === "reprovado"}
+                      disabled={busy || !cardCode.trim() || kypView?.status === "reprovado"}
+
                       onClick={() => void createSupplier(false)}
                       className="gap-2"
                     >
