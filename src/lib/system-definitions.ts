@@ -223,6 +223,18 @@ export const SYSTEMS: SystemConfig[] = [
       { key: "token", label: "Token de Acesso (Bearer)", type: "password", placeholder: "Token emitido pela Master Tax" },
     ],
   },
+  {
+    name: "becompliance",
+    label: "BeCompliance (KYP)",
+    description: "Diligência de fornecedores — Know Your Partner",
+    icon: ShieldCheck,
+    fields: [
+      { key: "base_url", label: "URL Base da API", placeholder: "https://api.becompliance.com" },
+      { key: "client_id", label: "Client ID", placeholder: "Identificador do cliente BeCompliance", description: "Usado nas rotas /ext/v1/{client_id}/..." },
+      { key: "email", label: "E-mail de acesso", placeholder: "usuario@empresa.com.br" },
+      { key: "password", label: "Senha", type: "password", placeholder: "Senha de acesso ao BeCompliance" },
+    ],
+  },
 ];
 
 export const CATEGORY_LABELS: Record<string, string> = {
