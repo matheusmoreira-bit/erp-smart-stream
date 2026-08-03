@@ -24,11 +24,15 @@ const S4_COMMON_FIELDS: SystemField[] = [
   { key: "username", label: "Usuário Técnico", placeholder: "TECH_USER" },
   { key: "password", label: "Senha", type: "password", placeholder: "Senha do usuário técnico" },
   { key: "sap_client", label: "SAP Client (Mandante)", placeholder: "100" },
+];
+
+export const SYSTEMS: SystemConfig[] = [
   {
     name: "becompliance",
     label: "BeCompliance (KYP)",
     description: "Diligência de fornecedores — Know Your Partner",
     icon: ShieldCheck,
+    category: "integration",
     fields: [
       { key: "base_url", label: "URL Base da API", placeholder: "https://api.becompliance.com" },
       { key: "client_id", label: "Client ID", placeholder: "Identificador do cliente BeCompliance", description: "Usado nas rotas /ext/v1/{client_id}/..." },
@@ -36,9 +40,6 @@ const S4_COMMON_FIELDS: SystemField[] = [
       { key: "password", label: "Senha", type: "password", placeholder: "Senha de acesso ao BeCompliance" },
     ],
   },
-];
-
-export const SYSTEMS: SystemConfig[] = [
   {
     name: "sap",
     label: "SAP Business One",
