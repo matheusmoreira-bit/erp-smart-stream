@@ -21,6 +21,7 @@
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
 import { pickApproverSkippingRequester, SELF_APPROVAL_FALLBACK } from "../_shared/approval-skip.ts";
+import { resolveApproverWithEscalation } from "../_shared/approval-escalate.ts";
 import { notifyApprovalPending } from "../_shared/approval-notify.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { enforceRateLimit } from "../_shared/rate-limit.ts";
@@ -161,22 +162,25 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   let resolvedApproverEmail: string | null = null;
   let resolvedLevel = 1;
   let fallbackUsed = false;
+  let escalatedTo: string | null = null;
   if (status === "pendente_aprovacao" && ruleId) {
-    const { data: lvls } = await admin
-      .from("approval_rule_levels")
-      .select("level_order, approver_name, approver_email")
-      .eq("rule_id", ruleId)
-      .order("level_order", { ascending: true });
-    const picked = pickApproverSkippingRequester(
-      (lvls || []) as any,
+    const picked = await resolveApproverWithEscalation(admin, ruleId, {
+      companyDb,
+      docType: String(input.doc_type || "purchase"),
+      totalAmount,
+      costCenter: input.cost_center || items[0]?.cost_center || null,
+      project: input.project || items[0]?.project || null,
       requesterName,
       requesterEmail,
-      1,
-    );
+      supplierName: input.supplier_name || null,
+      supplierCode: input.supplier_code || null,
+      currency: input.currency || "BRL",
+    }, 1);
     resolvedApprover = picked.approver_name || resolvedApprover;
     resolvedApproverEmail = picked.approver_email;
     resolvedLevel = picked.level_order;
     fallbackUsed = picked.fallback_used;
+    escalatedTo = picked.escalated ? (picked.escalated_rule_name || picked.escalated_rule_id || "faixa superior") : null;
   }
 
   const insertPayload: Record<string, unknown> = {
@@ -250,7 +254,9 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
       approver_name: caller.identity,
       approver_email: caller.email || (caller.identity.includes("@") ? caller.identity : null),
       level_order: resolvedLevel,
-      remarks: fallbackUsed
+      remarks: escalatedTo
+        ? `Auto-aprovação evitada: solicitante era o aprovador — escalonado para a faixa superior (${escalatedTo}) → ${resolvedApprover}.`
+        : fallbackUsed
         ? `Solicitante coincide com o(s) aprovador(es) da regra — direcionado para ${SELF_APPROVAL_FALLBACK.name}.`
         : (resolvedLevel > 1
           ? `Nível(is) anterior(es) puladod(s): solicitante era o aprovador designado.`
@@ -400,17 +406,18 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
     let resolvedApprover: string | null = nextApproverFromClient;
     let fallbackUsed = false;
     if (nextRuleId) {
-      const { data: lvls } = await admin
-        .from("approval_rule_levels")
-        .select("level_order, approver_name, approver_email")
-        .eq("rule_id", nextRuleId)
-        .order("level_order", { ascending: true });
-      const picked = pickApproverSkippingRequester(
-        (lvls || []) as any,
-        current.requester_name,
-        current.requester_email,
-        1,
-      );
+      const picked = await resolveApproverWithEscalation(admin, nextRuleId, {
+        companyDb: String(current.company_db || ""),
+        docType: String(current.doc_type || "purchase"),
+        totalAmount: Number((updates as any).total_amount ?? current.total_amount ?? 0),
+        costCenter: (updates as any).cost_center ?? current.cost_center ?? null,
+        project: (updates as any).project ?? current.project ?? null,
+        requesterName: current.requester_name,
+        requesterEmail: current.requester_email,
+        supplierName: current.supplier_name,
+        supplierCode: current.supplier_code,
+        currency: current.currency,
+      }, 1);
       resolvedLevel = picked.level_order;
       resolvedApprover = picked.approver_name || resolvedApprover;
       fallbackUsed = picked.fallback_used;
@@ -602,17 +609,18 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
   let resolvedApprover: string | null = current.current_approver || null;
   let fallbackUsed = false;
   if (current.approval_rule_id) {
-    const { data: lvls } = await admin
-      .from("approval_rule_levels")
-      .select("level_order, approver_name, approver_email")
-      .eq("rule_id", current.approval_rule_id)
-      .order("level_order", { ascending: true });
-    const picked = pickApproverSkippingRequester(
-      (lvls || []) as any,
-      current.requester_name,
-      current.requester_email,
-      resolvedLevel,
-    );
+    const picked = await resolveApproverWithEscalation(admin, current.approval_rule_id, {
+      companyDb: String(current.company_db || ""),
+      docType: String(current.doc_type || "purchase"),
+      totalAmount: Number(current.total_amount || 0),
+      costCenter: current.cost_center,
+      project: current.project,
+      requesterName: current.requester_name,
+      requesterEmail: current.requester_email,
+      supplierName: current.supplier_name,
+      supplierCode: current.supplier_code,
+      currency: current.currency,
+    }, resolvedLevel);
     resolvedLevel = picked.level_order;
     resolvedApprover = picked.approver_name || resolvedApprover;
     fallbackUsed = picked.fallback_used;
