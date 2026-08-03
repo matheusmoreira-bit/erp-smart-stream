@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlarmClock, Download, Loader2, RefreshCw, Timer, TrendingUp, Users } from "lucide-react";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 import { SlaTrendPanel } from "@/components/SlaTrendPanel";
+import { SlaRebalancePanel } from "@/components/SlaRebalancePanel";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -189,6 +190,8 @@ export default function SlaDashboard() {
         </div>
 
         <SlaTrendPanel steps={steps} slaHours={slaHours} loadedDays={days} />
+
+        <SlaRebalancePanel steps={steps} pending={pending} slaHours={slaHours} />
 
         <Card>
 
