@@ -126,6 +126,8 @@ function DetailDialog({
   if (!request) return null;
   const sla = slaInfo(request);
   const bank = request.bank_details || {};
+  const kypView: (KypResult & { at?: string }) | null = kyp ?? deriveKypFromEvents(events);
+
 
   const callSupplierFn = async (payload: Record<string, unknown>) => {
     const res = await sapFunctionFetch("registration-supplier-create", {
