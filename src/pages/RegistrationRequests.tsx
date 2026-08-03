@@ -107,6 +107,17 @@ function DetailDialog({
   const reqType = request?.request_type;
   const reqCardCode = request?.sap_card_code ?? null;
 
+  /** Ao trocar de chamado, limpa o resultado da operação anterior. */
+  useEffect(() => {
+    setCreateState({ phase: "idle" });
+    setStage("idle");
+    setBusy(false);
+    setNote("");
+    setComment("");
+    setCommentFiles([]);
+  }, [reqId]);
+
+
   /** Código no ERP é obtido automaticamente (próximo da sequência FXXXXXX + 1). */
   const fetchNextCode = useCallback(async () => {
     if (!reqId) return;
