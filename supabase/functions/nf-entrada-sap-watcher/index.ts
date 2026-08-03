@@ -134,6 +134,14 @@ Deno.serve(async (req) => {
     );
   }
 
+  // Execução sob demanda para um registro específico (permitida também em bases de teste).
+  let manualId: string | null = null;
+  try {
+    const body = await req.json().catch(() => ({}));
+    const raw = (body as { import_id?: unknown })?.import_id;
+    if (typeof raw === "string" && /^[0-9a-f-]{36}$/i.test(raw)) manualId = raw;
+  } catch { /* sem body */ }
+
   // Paginação: processa em páginas de 50 até esvaziar ou atingir limite de tempo (90s).
   const PAGE_SIZE = 50;
   const TIME_BUDGET_MS = 90_000;
@@ -142,12 +150,13 @@ Deno.serve(async (req) => {
   let pageOffset = 0;
 
   while (Date.now() - startedAt < TIME_BUDGET_MS) {
-    const { data: rows, error } = await sb
-      .from("nf_entrada_imports")
-      .select("*")
-      .eq("status", "awaiting_sap")
-      .order("created_at", { ascending: true })
-      .range(pageOffset, pageOffset + PAGE_SIZE - 1);
+    let q = sb.from("nf_entrada_imports").select("*");
+    q = manualId
+      ? q.eq("id", manualId)
+      : q.eq("status", "awaiting_sap")
+        .order("created_at", { ascending: true })
+        .range(pageOffset, pageOffset + PAGE_SIZE - 1);
+    const { data: rows, error } = await q;
     if (error) {
       await releaseWatcherLock(sb, "nf-entrada-sap-watcher", "error", error.message);
       return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
@@ -157,8 +166,9 @@ Deno.serve(async (req) => {
     // Agrupar por company_db para reaproveitar login (pulando bases de teste)
     const byCompany = new Map<string, NfRow[]>();
     for (const r of rows as NfRow[]) {
-      if (!r.sap_company_db || !r.sap_po_draft_id) continue;
-      if (isTestCompanyDb(r.sap_company_db)) {
+      if (!r.sap_company_db) continue;
+      if (!r.sap_po_draft_id && !r.sap_matched_po_doc_entry) continue;
+      if (!manualId && isTestCompanyDb(r.sap_company_db)) {
         results.push({ id: r.id, status: "skipped", error: "test_base" });
         continue;
       }
@@ -184,9 +194,38 @@ Deno.serve(async (req) => {
     try {
       for (const row of list) {
         try {
+          // CASO 0: já existe NF de Entrada efetiva no SAP consumindo o PC vinculado.
+          // Nesse caso não criamos nada — apenas refletimos a realidade do SAP.
+          if (row.sap_matched_po_doc_entry && !row.sap_invoice_draft_id) {
+            const poEntry = Number(row.sap_matched_po_doc_entry);
+            if (Number.isFinite(poEntry)) {
+              const existing = await findExistingPoInvoice(baseUrl, cookie, poEntry);
+              if (existing) {
+                await sb.from("nf_entrada_imports").update({
+                  sap_invoice_draft_id: String(existing.docEntry),
+                  status: "completed",
+                  last_poll_at: new Date().toISOString(),
+                  last_error: null,
+                }).eq("id", row.id);
+                await sb.from("nf_entrada_logs").insert({
+                  import_id: row.id,
+                  step: "sap_invoice_detected",
+                  status_from: row.status ?? null,
+                  status_to: "completed",
+                  message: `NF de Entrada já existente no SAP para o PC ${poEntry}: DocEntry ${existing.docEntry}${existing.docNum != null ? ` / DocNum ${existing.docNum}` : ""}`,
+                  actor: "nf-entrada-sap-watcher",
+                  payload: { po_doc_entry: poEntry, doc_entry: existing.docEntry, doc_num: existing.docNum },
+                });
+                results.push({ id: row.id, status: "completed" });
+                continue;
+              }
+            }
+          }
+
           // CASO 1: vinculado a um Pedido de Compra EFETIVO já existente no SAP.
           // Não precisa polling — cria o Draft da NF de Entrada referenciando o PO.
           if (row.sap_matched_po_doc_entry && row.sap_matched_po_is_draft === false) {
+
             const poEntry = Number(row.sap_matched_po_doc_entry);
             const poR = await fetch(
               `${baseUrl}/PurchaseOrders(${poEntry})?$select=DocEntry,CardCode,DocumentLines`,
