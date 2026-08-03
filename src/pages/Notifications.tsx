@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PushNotificationsCard } from "@/components/PushNotificationsCard";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Bell, Settings, Check, CheckCheck, History, Send, AlertTriangle, SlidersHorizontal } from "lucide-react";
 import { useNotifications, useNotificationPreferences, NOTIFICATION_CATEGORIES } from "@/hooks/useNotifications";
@@ -184,6 +185,7 @@ export default function NotificationsPage() {
           </TabsContent>
 
           <TabsContent value="preferences">
+            <PushNotificationsCard />
             <div className="glass-card p-6">
               <h3 className="text-lg font-semibold text-foreground mb-1">Preferências de Notificação</h3>
               <p className="text-sm text-muted-foreground mb-6">

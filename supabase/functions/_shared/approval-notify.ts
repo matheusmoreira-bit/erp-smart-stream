@@ -8,6 +8,8 @@
 //     enviada por POST — nunca em query string com o segredo.
 // deno-lint-ignore-file no-explicit-any
 
+import { pushToRecipient } from "./web-push.ts";
+
 const DEFAULT_TTL_HOURS = 72;
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/slack/api";
 
@@ -271,6 +273,14 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
       category: "approval",
       link: "/aprovacoes?tab=pending",
       metadata: { ref_id: refId, expense_id: input.expenseId, level_order: input.levelOrder ?? null },
+    });
+
+    // Push nativo no celular (best-effort, paralelo a e-mail/Slack).
+    await pushToRecipient(admin, identifier, {
+      title,
+      body: [subtitle, ...details.filter((d) => d.value).map((d) => `${d.label}: ${d.value}`)].join(" · "),
+      url: "/aprovacoes?tab=pending",
+      tag: refId,
     });
 
     if (!email || !isEmail(email)) return;

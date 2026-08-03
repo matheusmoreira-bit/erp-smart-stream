@@ -5209,6 +5209,51 @@ export type Database = {
         }
         Relationships: []
       }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          company_db: string | null
+          created_at: string
+          email: string | null
+          endpoint: string
+          failure_count: number
+          id: string
+          last_success_at: string | null
+          p256dh: string
+          updated_at: string
+          user_agent: string | null
+          user_identifier: string
+        }
+        Insert: {
+          auth: string
+          company_db?: string | null
+          created_at?: string
+          email?: string | null
+          endpoint: string
+          failure_count?: number
+          id?: string
+          last_success_at?: string | null
+          p256dh: string
+          updated_at?: string
+          user_agent?: string | null
+          user_identifier: string
+        }
+        Update: {
+          auth?: string
+          company_db?: string | null
+          created_at?: string
+          email?: string | null
+          endpoint?: string
+          failure_count?: number
+          id?: string
+          last_success_at?: string | null
+          p256dh?: string
+          updated_at?: string
+          user_agent?: string | null
+          user_identifier?: string
+        }
+        Relationships: []
+      }
       registration_request_events: {
         Row: {
           attachments: Json
