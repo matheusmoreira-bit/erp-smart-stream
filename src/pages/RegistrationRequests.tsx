@@ -569,9 +569,44 @@ function DetailDialog({
                       Cadastrar fornecedor no SAP
                     </Button>
                   </div>
+
+                  {createState.phase !== "idle" || createState.step ? (
+                    <div
+                      className={`rounded-md border px-3 py-2 text-sm ${
+                        createState.phase === "success"
+                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                          : createState.phase === "error"
+                            ? "border-destructive/30 bg-destructive/10 text-destructive"
+                            : createState.phase === "warning"
+                              ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                              : "border-border bg-muted/40 text-muted-foreground"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 font-medium">
+                        {createState.phase === "running" && <Loader2 className="w-4 h-4 animate-spin" />}
+                        {createState.phase === "success" && <ShieldCheck className="w-4 h-4" />}
+                        {(createState.phase === "error" || createState.phase === "warning") && (
+                          <ShieldAlert className="w-4 h-4" />
+                        )}
+                        {createState.step || "Processando…"}
+                      </div>
+                      {createState.message && <p className="text-xs mt-1 break-words">{createState.message}</p>}
+                      {createState.httpStatus && createState.phase === "error" && (
+                        <p className="text-[11px] mt-1 opacity-80">HTTP {createState.httpStatus}</p>
+                      )}
+                      {createState.detail && (
+                        <pre className="text-[11px] mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-background/60 p-2">
+                          {createState.detail}
+                        </pre>
+                      )}
+                      {createState.at && <p className="text-[11px] mt-1 opacity-80">{fmt(createState.at)}</p>}
+                    </div>
+                  ) : null}
+
                   <p className="text-xs text-muted-foreground">
                     Informe o CardCode acima. O KYP roda automaticamente antes da criação.
                   </p>
+
                 </div>
               )}
 
