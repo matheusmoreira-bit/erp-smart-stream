@@ -353,10 +353,27 @@ export default function NfEntrada() {
           </div>
         )}
 
+        {selectedIds.length > 0 && (
+          <NfEntradaBulkActions
+            selected={selectedItems}
+            onClear={() => setSelectedIds([])}
+            reprocess={reprocess}
+            createInvoiceDraft={createInvoiceDraft}
+            onFinished={() => { setSelectedIds([]); refresh(); }}
+          />
+        )}
+
         <div className="rounded-md border border-border overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8">
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={toggleSelectAll}
+                    aria-label="Selecionar todas as NFs visíveis"
+                  />
+                </TableHead>
                 <TableHead className="w-8" />
                 <TableHead>NF</TableHead>
                 <TableHead>Fornecedor</TableHead>
@@ -368,13 +385,14 @@ export default function NfEntrada() {
             </TableHeader>
             <TableBody>
               {loading && (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>
               )}
               {!loading && filtered.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                   Nenhuma NF importada ainda. Configure os secrets <code>MASTERTAX_BASE_URL</code> e <code>MASTERTAX_TOKEN</code> e clique em "Buscar Master Tax agora".
                 </TableCell></TableRow>
               )}
+
               {filtered.map((it) => {
                 const s = statusPresentation(it);
                 const isOpen = expandedId === it.id;
