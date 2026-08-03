@@ -286,8 +286,34 @@ Deno.serve(async (req) => {
           // CASO 0: já existe NF de Entrada efetiva no SAP consumindo o PC vinculado.
           // Nesse caso não criamos nada — apenas refletimos a realidade do SAP.
           if (row.sap_matched_po_doc_entry && !row.sap_invoice_draft_id) {
-            const poEntry = Number(row.sap_matched_po_doc_entry);
-            if (Number.isFinite(poEntry)) {
+            let poEntry = Number(row.sap_matched_po_doc_entry);
+            let resolvedFromDraft: { docEntry: number; docNum: number | null; matchedBy: string } | null = null;
+
+            // Se o vínculo aponta para um ESBOÇO, resolve antes o PC efetivo.
+            if (Number.isFinite(poEntry) && row.sap_matched_po_is_draft === true) {
+              resolvedFromDraft = await resolveEffectivePoFromDraft(baseUrl, cookie, poEntry, {
+                cardCode: row.sap_matched_card_code ?? null,
+                total: row.valor_total ?? null,
+              });
+              if (resolvedFromDraft) {
+                await sb.from("nf_entrada_imports").update({
+                  sap_matched_po_doc_entry: String(resolvedFromDraft.docEntry),
+                  sap_matched_po_is_draft: false,
+                  sap_match_reason: `PC efetivo resolvido a partir do esboço ${poEntry} (${resolvedFromDraft.matchedBy})`,
+                  last_poll_at: new Date().toISOString(),
+                }).eq("id", row.id);
+                await sb.from("nf_entrada_logs").insert({
+                  import_id: row.id,
+                  step: "sap_po_draft_resolved",
+                  message: `Esboço ${poEntry} corresponde ao Pedido de Compra ${resolvedFromDraft.docEntry}${resolvedFromDraft.docNum != null ? ` / DocNum ${resolvedFromDraft.docNum}` : ""}`,
+                  actor: "nf-entrada-sap-watcher",
+                  payload: { draft_entry: poEntry, po_doc_entry: resolvedFromDraft.docEntry, po_doc_num: resolvedFromDraft.docNum, matched_by: resolvedFromDraft.matchedBy },
+                });
+                poEntry = resolvedFromDraft.docEntry;
+              }
+            }
+
+            if (Number.isFinite(poEntry) && (row.sap_matched_po_is_draft !== true || resolvedFromDraft)) {
               const existing = await findExistingPoInvoice(baseUrl, cookie, poEntry);
               if (existing) {
                 await sb.from("nf_entrada_imports").update({
@@ -301,13 +327,19 @@ Deno.serve(async (req) => {
                   step: "sap_invoice_detected",
                   status_from: row.status ?? null,
                   status_to: "completed",
-                  message: `${existing.isDraft ? "Esboço de NF" : "NF"} de Entrada já existente no SAP para o PC ${poEntry}: DocEntry ${existing.docEntry}${existing.docNum != null ? ` / DocNum ${existing.docNum}` : ""}`,
+                  message: `${existing.isDraft ? "Esboço de NF" : "NF"} de Entrada já existente no SAP para o PC ${poEntry}: DocEntry ${existing.docEntry}${existing.docNum != null ? ` / DocNum ${existing.docNum}` : ""}${resolvedFromDraft ? ` (PC resolvido a partir do esboço ${row.sap_matched_po_doc_entry})` : ""}`,
                   actor: "nf-entrada-sap-watcher",
-                  payload: { po_doc_entry: poEntry, doc_entry: existing.docEntry, doc_num: existing.docNum, is_draft: existing.isDraft },
-
+                  payload: {
+                    po_doc_entry: poEntry,
+                    resolved_from_draft: resolvedFromDraft ? Number(row.sap_matched_po_doc_entry) : null,
+                    doc_entry: existing.docEntry,
+                    doc_num: existing.docNum,
+                    is_draft: existing.isDraft,
+                  },
                 });
                 results.push({ id: row.id, status: "completed" });
                 continue;
+
               }
             }
           }
