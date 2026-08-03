@@ -51,7 +51,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   try {
     await requireAdminOrSapModule(req, "financial_review");
   } catch (err) {
-    return authErrorResponse(err, corsHeaders);
+    return authErrorResponse(err, corsHeaders) ?? json({ error: "Acesso negado" }, 403);
   }
 
   try {
