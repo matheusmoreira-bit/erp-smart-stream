@@ -379,9 +379,7 @@ Deno.serve(async (req) => {
         sb,
         requestId,
         caller.email,
-        `Fornecedor criado no SAP (${companyDb}) com CardCode ${created.CardCode ?? cardCode}. KYP: ${kyp.status}${
-          kyp.status !== "aprovado" ? ` — ${kyp.motivo}` : ""
-        }.`,
+        `Fornecedor criado no SAP (${companyDb}) com CardCode ${created.CardCode ?? cardCode}. KYP: não validado neste cadastro (gestão posterior pelo fluxo de KYP).`,
       );
 
       return json(200, { ok: true, cardCode: created.CardCode ?? cardCode });
