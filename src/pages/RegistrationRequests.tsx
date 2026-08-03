@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ClipboardList, Clock, Loader2, RefreshCw, Send, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ClipboardList, Clock, Copy, Loader2, RefreshCw, Send, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -234,9 +234,13 @@ function DetailDialog({
         phase: "idle",
         step: `KYP consultado: ${k ? KYP_STATUS_LABELS[k.status] : "sem retorno"}`,
       });
-      if (k?.status === "aprovado") toast.success("KYP aprovado — fornecedor liberado para cadastro.");
-      else if (k?.status === "reprovado") toast.error(`KYP reprovado: ${k.motivo}`);
-      else toast.warning(k?.motivo || "KYP pendente de análise.");
+      const report = buildKypReport(k ? { ...k } : null);
+      const toastOpts = report
+        ? { description: report, duration: 15000, action: { label: "Copiar", onClick: () => void copyText(report) } }
+        : undefined;
+      if (k?.status === "aprovado") toast.success("KYP aprovado — fornecedor liberado para cadastro.", toastOpts);
+      else if (k?.status === "reprovado") toast.error(`KYP reprovado: ${k.motivo}`, toastOpts);
+      else toast.warning(k?.motivo || "KYP pendente de análise.", toastOpts);
     } catch (e) {
       const msg = friendlyError(e, "Falha na validação de KYP");
       setCreateState({ phase: "error", step: "Validação de KYP", message: msg, at: new Date().toISOString() });
@@ -289,13 +293,19 @@ function DetailDialog({
       }
       const k = data.kyp;
       if (k?.status === "reprovado") {
+        const report = buildKypReport({ ...k, at: new Date().toISOString() });
         setCreateState({
           phase: "error",
           step: "Fornecedor bloqueado pelo KYP",
           message: `Cadastro não executado. Motivo do bloqueio: ${k.motivo}`,
+          detail: report,
           at: new Date().toISOString(),
         });
-        toast.error(`Fornecedor bloqueado pelo KYP: ${k.motivo}`);
+        toast.error(`Fornecedor bloqueado pelo KYP: ${k.motivo}`, {
+          description: report,
+          duration: 20000,
+          action: { label: "Copiar", onClick: () => void copyText(report) },
+        });
         return;
       }
       blocked = false;
@@ -687,6 +697,51 @@ function DetailDialog({
                         {kypView.status === "reprovado" ? `Motivo do bloqueio: ${kypView.motivo}` : kypView.motivo}
                       </p>
                       {kypView.at && <p className="text-[11px] mt-1 opacity-80">Validado em {fmt(kypView.at)}</p>}
+                      {(kypView.detalhes || kypView.providerRefId || kypView.expiryDate) && (
+                        <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 text-[11px] sm:grid-cols-2">
+                          {kypView.detalhes?.provider && (
+                            <div className="flex gap-1"><dt className="opacity-70">Provedor:</dt><dd>{kypView.detalhes.provider}</dd></div>
+                          )}
+                          {kypView.detalhes?.documento && (
+                            <div className="flex gap-1">
+                              <dt className="opacity-70">Documento:</dt>
+                              <dd>{kypView.detalhes.documento}{kypView.detalhes.tipoPessoa ? ` (${kypView.detalhes.tipoPessoa})` : ""}</dd>
+                            </div>
+                          )}
+                          {kypView.providerRefId && (
+                            <div className="flex gap-1"><dt className="opacity-70">Referência:</dt><dd className="break-all">{kypView.providerRefId}</dd></div>
+                          )}
+                          {kypView.detalhes?.providerStatus && (
+                            <div className="flex gap-1"><dt className="opacity-70">Status no provedor:</dt><dd>{kypView.detalhes.providerStatus}</dd></div>
+                          )}
+                          {kypView.expiryDate && (
+                            <div className="flex gap-1"><dt className="opacity-70">Validade:</dt><dd>{kypView.expiryDate}</dd></div>
+                          )}
+                          {kypView.detalhes?.updatedAt && (
+                            <div className="flex gap-1"><dt className="opacity-70">Atualizado:</dt><dd>{fmt(kypView.detalhes.updatedAt)}</dd></div>
+                          )}
+                        </dl>
+                      )}
+                      {kypView.detalhes?.campos && Object.keys(kypView.detalhes.campos).length > 0 && (
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-[11px] underline underline-offset-2">
+                            Texto completo retornado pelo provedor
+                          </summary>
+                          <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap rounded bg-background/60 p-2 text-[11px] leading-relaxed">
+{buildKypReport(kypView)}
+                          </pre>
+                        </details>
+                      )}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="mt-2 h-7 gap-1.5 text-[11px]"
+                        onClick={() => void copyText(buildKypReport(kypView))}
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        Copiar motivo completo
+                      </Button>
                     </div>
                   ) : (
                     <div className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
