@@ -642,11 +642,19 @@ export default function NfEntrada() {
                       )}
                     <Button
                       variant="outline" size="sm"
+                      disabled={busyId === detail.id}
+                      onClick={() => handleRecheckSap(detail.id)}
+                    >
+                      <ScanSearch className="w-3.5 h-3.5" /> Reconferir no SAP
+                    </Button>
+                    <Button
+                      variant="outline" size="sm"
                       disabled={busyId === detail.id || !!detail.sap_invoice_draft_id}
                       onClick={() => handleRematch(detail.id)}
                     >
                       <Link2 className="w-3.5 h-3.5" /> Refazer vínculo SAP
                     </Button>
+
                   </div>
                 </div>
 
