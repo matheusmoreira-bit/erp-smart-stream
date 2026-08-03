@@ -676,8 +676,16 @@ export function useApprovals() {
       writeApprovalsCache(session as SapSession, docs).catch((e) => console.warn("approvals cache write failed:", e));
     } catch (e) {
       console.error("Error fetching approvals:", e);
-      setError(e instanceof Error ? e.message : "Erro ao buscar aprovações");
+      const msg = e instanceof Error ? e.message : "Erro ao buscar aprovações";
+      const transient = /Failed to send a request|Failed to fetch|network|timeout/i.test(msg);
+      // Com dados em cache na tela, uma falha transitória não deve virar erro bloqueante.
+      if (hasData && transient) {
+        setError(null);
+      } else {
+        setError(transient ? "Não foi possível atualizar as aprovações agora. Tente novamente em instantes." : msg);
+      }
     } finally {
+
       setIsLoading(false);
       setIsRefreshing(false);
     }
