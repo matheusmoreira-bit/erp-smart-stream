@@ -236,3 +236,118 @@ export function slaStatsToCsv(rows: SlaGroupStat[], label: string): string {
   );
   return [head.map(esc).join(","), ...lines].join("\n");
 }
+
+// ---------------------------------------------------------------------------
+// Tendência semanal (últimos 30/90 dias)
+// ---------------------------------------------------------------------------
+
+export interface SlaWeekPoint {
+  /** Segunda-feira da semana (ISO date, yyyy-mm-dd). */
+  weekStart: string;
+  label: string;
+  count: number;
+  avgHours: number;
+  p90Hours: number;
+  withinPct: number;
+  breached: number;
+}
+
+export interface SlaTrendDelta {
+  metric: "avg" | "p90" | "within";
+  label: string;
+  current: number;
+  baseline: number;
+  diff: number;
+  diffPct: number;
+  worse: boolean;
+}
+
+export interface SlaTrend {
+  points: SlaWeekPoint[];
+  deltas: SlaTrendDelta[];
+  worsening: boolean;
+}
+
+/** Segunda-feira da semana de uma data, em ISO yyyy-mm-dd (horário local). */
+export function weekStartOf(date: string | Date): string {
+  const d = date instanceof Date ? new Date(date) : new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const dow = d.getDay(); // 0=dom
+  const delta = dow === 0 ? -6 : 1 - dow;
+  d.setDate(d.getDate() + delta);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function weekLabel(weekStart: string): string {
+  const [y, m, d] = weekStart.split("-").map(Number);
+  const start = new Date(y, m - 1, d);
+  const end = new Date(y, m - 1, d + 6);
+  const f = (x: Date) => `${String(x.getDate()).padStart(2, "0")}/${String(x.getMonth() + 1).padStart(2, "0")}`;
+  return `${f(start)}–${f(end)}`;
+}
+
+/**
+ * Agrupa as decisões por semana e compara a última semana fechada de dados
+ * com a média das semanas anteriores da janela, sinalizando piora.
+ */
+export function buildSlaTrend(
+  steps: SlaStep[],
+  slaHours: number,
+  windowDays: number,
+  now: Date = new Date(),
+): SlaTrend {
+  const cutoff = new Date(now.getTime() - windowDays * 24 * 3_600_000);
+  const buckets = new Map<string, number[]>();
+  for (const s of steps) {
+    const decided = new Date(s.decidedAt);
+    if (Number.isNaN(decided.getTime()) || decided < cutoff) continue;
+    const wk = weekStartOf(decided);
+    const arr = buckets.get(wk) || [];
+    arr.push(s.hours);
+    buckets.set(wk, arr);
+  }
+
+  const points: SlaWeekPoint[] = [...buckets.entries()]
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([weekStart, hours]) => {
+      const breached = hours.filter((h) => h > slaHours).length;
+      return {
+        weekStart,
+        label: weekLabel(weekStart),
+        count: hours.length,
+        avgHours: average(hours),
+        p90Hours: percentile(hours, 90),
+        withinPct: hours.length ? Math.round(((hours.length - breached) / hours.length) * 100) : 0,
+        breached,
+      };
+    });
+
+  const deltas: SlaTrendDelta[] = [];
+  if (points.length >= 2) {
+    const current = points[points.length - 1];
+    const prior = points.slice(0, -1);
+    const base = (pick: (p: SlaWeekPoint) => number) => average(prior.map(pick));
+
+    const mk = (
+      metric: SlaTrendDelta["metric"],
+      label: string,
+      cur: number,
+      baseline: number,
+      higherIsWorse: boolean,
+    ): SlaTrendDelta => {
+      const diff = Number((cur - baseline).toFixed(2));
+      const diffPct = baseline ? Math.round((diff / baseline) * 100) : 0;
+      const worse = higherIsWorse ? diffPct >= 15 : diffPct <= -10;
+      return { metric, label, current: cur, baseline, diff, diffPct, worse };
+    };
+
+    deltas.push(mk("avg", "Tempo médio", current.avgHours, base((p) => p.avgHours), true));
+    deltas.push(mk("p90", "P90", current.p90Hours, base((p) => p.p90Hours), true));
+    deltas.push(mk("within", "Dentro do SLA", current.withinPct, base((p) => p.withinPct), false));
+  }
+
+  return { points, deltas, worsening: deltas.some((d) => d.worse) };
+}
