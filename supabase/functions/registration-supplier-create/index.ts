@@ -29,10 +29,13 @@ function service(): Sb {
   });
 }
 
+/** Mesma normalização do public.canonical_user_key: local-part sem sufixos
+ *  .ext/.adm e sem pontuação (ex.: "samara.souza@x" -> "samarasouza"). */
 function canonicalKey(email: string): string {
   const local = String(email || "").toLowerCase().trim().split("@")[0];
-  return local.replace(/\.(ext|adm)$/i, "");
+  return local.replace(/\.(ext|adm)$/i, "").replace(/[^a-z0-9]/g, "");
 }
+
 
 async function isAgent(sb: Sb, email: string): Promise<boolean> {
   const lower = String(email || "").toLowerCase().trim();
