@@ -161,22 +161,25 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   let resolvedApproverEmail: string | null = null;
   let resolvedLevel = 1;
   let fallbackUsed = false;
+  let escalatedTo: string | null = null;
   if (status === "pendente_aprovacao" && ruleId) {
-    const { data: lvls } = await admin
-      .from("approval_rule_levels")
-      .select("level_order, approver_name, approver_email")
-      .eq("rule_id", ruleId)
-      .order("level_order", { ascending: true });
-    const picked = pickApproverSkippingRequester(
-      (lvls || []) as any,
+    const picked = await resolveApproverWithEscalation(admin, ruleId, {
+      companyDb,
+      docType: String(input.doc_type || "purchase"),
+      totalAmount,
+      costCenter: input.cost_center || items[0]?.cost_center || null,
+      project: input.project || items[0]?.project || null,
       requesterName,
       requesterEmail,
-      1,
-    );
+      supplierName: input.supplier_name || null,
+      supplierCode: input.supplier_code || null,
+      currency: input.currency || "BRL",
+    }, 1);
     resolvedApprover = picked.approver_name || resolvedApprover;
     resolvedApproverEmail = picked.approver_email;
     resolvedLevel = picked.level_order;
     fallbackUsed = picked.fallback_used;
+    escalatedTo = picked.escalated ? (picked.escalated_rule_name || picked.escalated_rule_id || "faixa superior") : null;
   }
 
   const insertPayload: Record<string, unknown> = {
