@@ -376,16 +376,17 @@ export default function NfEntrada() {
                 </TableCell></TableRow>
               )}
               {filtered.map((it) => {
-                const s = STATUS_LABELS[it.status];
+                const s = statusPresentation(it);
                 const isOpen = expandedId === it.id;
                 const toggle = () => setExpandedId(isOpen ? null : it.id);
                 const hasPoLink = !!it.sap_matched_po_doc_entry;
                 // PC efetivo (não esboço) vinculado e sem NF de entrada lançada no ERP.
                 const canCreateInvoiceDraft =
                   hasPoLink &&
-                  it.sap_matched_po_is_draft === false &&
+                  it.sap_matched_po_is_draft !== true &&
                   !it.sap_invoice_draft_id &&
-                  it.status !== "cancelled";
+                  it.status !== "cancelled" &&
+                  it.status !== "completed";
                 const rowClass = hasPoLink
                   ? "cursor-pointer bg-emerald-500/5 hover:bg-emerald-500/10 border-l-4 border-l-emerald-500"
                   : "cursor-pointer hover:bg-muted/40 border-l-4 border-l-transparent";
@@ -423,7 +424,10 @@ export default function NfEntrada() {
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{formatCurrency(it.valor_total)}</TableCell>
                       <TableCell className="text-xs">{formatDate(it.data_emissao)}</TableCell>
-                      <TableCell><Badge variant={s.variant}>{s.label}</Badge></TableCell>
+                      <TableCell>
+                        <Badge variant={s.variant} title={s.hint}>{s.label}</Badge>
+                        <div className="text-[10px] text-muted-foreground mt-1 leading-snug max-w-[220px]">{s.hint}</div>
+                      </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-end">
                           <RowActionsMenu
@@ -434,27 +438,27 @@ export default function NfEntrada() {
                                 onSelect: () => openFile(it.id, "xml"), disabled: busyId === it.id },
                               { key: "pdf", label: "Abrir DANFE (PDF)", icon: FileText,
                                 onSelect: () => openFile(it.id, "pdf"), disabled: busyId === it.id },
-                              { key: "history", label: "Ver histórico", icon: History,
+                              { key: "history", label: "Ver histórico de integração", icon: History,
                                 onSelect: () => setDetail(it) },
-                              { key: "create-po", label: "Lançar pedido de Compras", icon: ShoppingCart,
+                              { key: "create-po", label: "Criar pedido de compra a partir desta NF", icon: ShoppingCart,
                                 separatorBefore: true,
                                 hidden: hasPoLink || !!it.expense_id || it.status === "cancelled" || it.status === "completed",
                                 onSelect: () => handleCreatePurchaseOrder(it),
                                 disabled: busyId === it.id },
-                              { key: "create-invoice-draft", label: "Lançar esboço de NF de Entrada no ERP", icon: FilePlus2,
+                              { key: "create-invoice-draft", label: "Lançar esboço de NF de entrada no SAP", icon: FilePlus2,
                                 hidden: !canCreateInvoiceDraft,
                                 onSelect: () => handleCreateInvoiceDraft(it),
                                 disabled: busyId === it.id },
                               { key: "rematch",
-                                label: hasPoLink ? "Refazer vínculo com PC" : "Vincular ao Pedido de Compra",
+                                label: hasPoLink ? "Trocar o pedido de compra vinculado" : "Procurar pedido de compra para vincular",
                                 icon: Link2,
                                 onSelect: () => handleRematch(it.id),
                                 disabled: busyId === it.id || !!it.sap_invoice_draft_id || it.status === "cancelled" || it.status === "completed" },
-                              { key: "reprocess", label: "Reprocessar integração", icon: RotateCw,
+                              { key: "reprocess", label: "Tentar integração novamente (reenviar ao SAP)", icon: RotateCw,
                                 onSelect: () => handleReprocess(it.id), disabled: busyId === it.id },
-                              { key: "edit", label: "Editar dados", icon: Pencil,
+                              { key: "edit", label: "Corrigir dados da NF (nº, série, CNPJ, valor)", icon: Pencil,
                                 onSelect: () => setEditItem(it) },
-                              { key: "cancel", label: "Cancelar fluxo", icon: XCircle,
+                              { key: "cancel", label: "Cancelar fluxo desta NF", icon: XCircle,
                                 separatorBefore: true, destructive: true,
                                 onSelect: () => handleCancel(it.id),
                                 disabled: busyId === it.id || it.status === "cancelled" || it.status === "completed" },
@@ -544,7 +548,7 @@ export default function NfEntrada() {
                   <span className="font-semibold">Vínculo SAP</span>
                   <div className="flex items-center gap-2">
                     {detail.sap_matched_po_doc_entry &&
-                      detail.sap_matched_po_is_draft === false &&
+                      detail.sap_matched_po_is_draft !== true &&
                       !detail.sap_invoice_draft_id &&
                       detail.status !== "cancelled" && (
                         <Button
@@ -552,7 +556,7 @@ export default function NfEntrada() {
                           disabled={busyId === detail.id}
                           onClick={() => handleCreateInvoiceDraft(detail)}
                         >
-                          <FilePlus2 className="w-3.5 h-3.5" /> Lançar esboço de NF de Entrada
+                          <FilePlus2 className="w-3.5 h-3.5" /> Lançar esboço de NF de entrada no SAP
                         </Button>
                       )}
                     <Button
