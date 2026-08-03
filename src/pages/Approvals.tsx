@@ -307,8 +307,6 @@ function ApprovalCard({
                 className="text-foreground font-medium"
                 title={`Aprovador original: ${onBehalfOf.name} — você atua como substituto`}
               >
-                <span className="line-through text-muted-foreground/80 font-normal">{onBehalfOf.name}</span>
-                <span className="mx-1 text-primary" aria-hidden="true">→</span>
                 {substituteName}
               </span>
             ) : doc.delegatedFrom ? (
