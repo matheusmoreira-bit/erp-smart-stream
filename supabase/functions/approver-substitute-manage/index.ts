@@ -185,6 +185,10 @@ Deno.serve(async (req) => {
 
     if (!isAdminCaller && !matchesIdentity(officialEmail, identities)) {
       return json(403, {
+        error: "Você só pode definir substituto para a sua própria alçada.",
+      });
+    }
+
     // Escopo opcional por centro de custo (prefixos). Normaliza e valida
     // formato simples de CC (dígitos e pontos), evitando entrada arbitrária.
     const ccPrefixes = Array.isArray(body.cost_center_prefixes)
@@ -212,10 +216,6 @@ Deno.serve(async (req) => {
     };
 
 
-      company_db: body.company_db || null,
-      granted_by_id: null as string | null,
-      granted_by_email: actorLabel,
-    };
 
     const { data: created, error: insErr } = await admin
       .from("approver_substitutes")
