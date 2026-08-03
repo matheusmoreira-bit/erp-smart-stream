@@ -2391,14 +2391,16 @@ export default function ApprovalsPage() {
 
     if (!search) return true;
     const q = search.toLowerCase();
+    const has = (v: unknown) => String(v ?? "").toLowerCase().includes(q);
     return (
-      String(a.docNum).includes(q) ||
-      a.cardName.toLowerCase().includes(q) ||
-      a.requester.toLowerCase().includes(q) ||
-      a.currentApprover.toLowerCase().includes(q) ||
-      a.docTypeName.toLowerCase().includes(q) ||
-      (a.documentLines || []).some((l) => (l.Project || "").toLowerCase().includes(q))
+      has(a.docNum) ||
+      has(a.cardName) ||
+      has(a.requester) ||
+      has(a.currentApprover) ||
+      has(a.docTypeName) ||
+      (a.documentLines || []).some((l) => has(l?.Project))
     );
+
   });
 
   // Opções disponíveis para os filtros — derivadas apenas dos documentos
