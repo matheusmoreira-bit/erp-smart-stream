@@ -22,17 +22,73 @@ import { EditNfEntradaDialog } from "@/components/EditNfEntradaDialog";
 import { copyDocLink, readDocParam, setDocParam } from "@/lib/doc-deep-link";
 import { setPendingPurchaseFiles } from "@/lib/pending-purchase-files";
 
-const STATUS_LABELS: Record<NfEntradaStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  pending_expense: { label: "Pendente despesa", variant: "outline" },
-  awaiting_erpflow_approval: { label: "Aguardando aprovação ERP Flow", variant: "secondary" },
-  erpflow_rejected: { label: "Reprovado ERP Flow", variant: "destructive" },
-  awaiting_sap: { label: "Aguardando aprovação SAP", variant: "secondary" },
-  sap_rejected: { label: "Reprovado SAP", variant: "destructive" },
-  awaiting_invoice: { label: "Aguardando NF entrada", variant: "secondary" },
-  completed: { label: "Concluído", variant: "default" },
-  integration_error: { label: "Erro integração", variant: "destructive" },
-  cancelled: { label: "Cancelado", variant: "outline" },
+type StatusVariant = "default" | "secondary" | "destructive" | "outline";
+
+/**
+ * Os rótulos descrevem a ETAPA do documento no fluxo Master Tax → ERP Flow → SAP.
+ * Antes falavam em "aprovação", o que não corresponde ao que a etapa representa.
+ */
+const STATUS_LABELS: Record<NfEntradaStatus, { label: string; variant: StatusVariant; hint: string }> = {
+  pending_expense: {
+    label: "Sem pedido vinculado",
+    variant: "outline",
+    hint: "NF capturada no Master Tax, ainda sem pedido de compra correspondente no ERP Flow.",
+  },
+  awaiting_erpflow_approval: {
+    label: "Pedido em andamento no ERP Flow",
+    variant: "secondary",
+    hint: "Existe pedido de compra no ERP Flow, mas ele ainda não foi concluído/integrado ao SAP.",
+  },
+  erpflow_rejected: {
+    label: "Pedido recusado no ERP Flow",
+    variant: "destructive",
+    hint: "O pedido de compra vinculado foi recusado no ERP Flow.",
+  },
+  awaiting_sap: {
+    label: "Aguardando NF de entrada no SAP",
+    variant: "secondary",
+    hint: "Pedido de compra já existe no SAP; falta lançar a NF de entrada (esboço) contra esse pedido.",
+  },
+  sap_rejected: {
+    label: "Recusada pelo SAP",
+    variant: "destructive",
+    hint: "O SAP recusou o documento; verifique o histórico para o motivo.",
+  },
+  awaiting_invoice: {
+    label: "Aguardando NF de entrada no SAP",
+    variant: "secondary",
+    hint: "Falta lançar a NF de entrada no SAP para encerrar o fluxo.",
+  },
+  completed: {
+    label: "NF lançada no SAP",
+    variant: "default",
+    hint: "Fluxo concluído: NF de entrada registrada no SAP.",
+  },
+  integration_error: {
+    label: "Erro de integração",
+    variant: "destructive",
+    hint: "A integração falhou. Use “Tentar integração novamente” após corrigir os dados.",
+  },
+  cancelled: {
+    label: "Fluxo cancelado",
+    variant: "outline",
+    hint: "O fluxo desta NF foi cancelado manualmente.",
+  },
 };
+
+/** Rótulo efetivo da linha: reflete o esboço já lançado, quando houver. */
+function statusPresentation(it: NfEntradaImport): { label: string; variant: StatusVariant; hint: string } {
+  const base = STATUS_LABELS[it.status];
+  if (it.sap_invoice_draft_id && it.status !== "completed" && it.status !== "cancelled") {
+    return {
+      label: "Esboço de NF no SAP",
+      variant: "secondary",
+      hint: `Esboço ${it.sap_invoice_draft_id} criado no SAP, aguardando conferência/efetivação pelo fiscal.`,
+    };
+  }
+  return base;
+}
+
 
 function formatCurrency(v: number | null) {
   if (v == null) return "—";
@@ -320,16 +376,17 @@ export default function NfEntrada() {
                 </TableCell></TableRow>
               )}
               {filtered.map((it) => {
-                const s = STATUS_LABELS[it.status];
+                const s = statusPresentation(it);
                 const isOpen = expandedId === it.id;
                 const toggle = () => setExpandedId(isOpen ? null : it.id);
                 const hasPoLink = !!it.sap_matched_po_doc_entry;
                 // PC efetivo (não esboço) vinculado e sem NF de entrada lançada no ERP.
                 const canCreateInvoiceDraft =
                   hasPoLink &&
-                  it.sap_matched_po_is_draft === false &&
+                  it.sap_matched_po_is_draft !== true &&
                   !it.sap_invoice_draft_id &&
-                  it.status !== "cancelled";
+                  it.status !== "cancelled" &&
+                  it.status !== "completed";
                 const rowClass = hasPoLink
                   ? "cursor-pointer bg-emerald-500/5 hover:bg-emerald-500/10 border-l-4 border-l-emerald-500"
                   : "cursor-pointer hover:bg-muted/40 border-l-4 border-l-transparent";
@@ -367,7 +424,10 @@ export default function NfEntrada() {
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{formatCurrency(it.valor_total)}</TableCell>
                       <TableCell className="text-xs">{formatDate(it.data_emissao)}</TableCell>
-                      <TableCell><Badge variant={s.variant}>{s.label}</Badge></TableCell>
+                      <TableCell>
+                        <Badge variant={s.variant} title={s.hint}>{s.label}</Badge>
+                        <div className="text-[10px] text-muted-foreground mt-1 leading-snug max-w-[220px]">{s.hint}</div>
+                      </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-end">
                           <RowActionsMenu
@@ -378,27 +438,27 @@ export default function NfEntrada() {
                                 onSelect: () => openFile(it.id, "xml"), disabled: busyId === it.id },
                               { key: "pdf", label: "Abrir DANFE (PDF)", icon: FileText,
                                 onSelect: () => openFile(it.id, "pdf"), disabled: busyId === it.id },
-                              { key: "history", label: "Ver histórico", icon: History,
+                              { key: "history", label: "Ver histórico de integração", icon: History,
                                 onSelect: () => setDetail(it) },
-                              { key: "create-po", label: "Lançar pedido de Compras", icon: ShoppingCart,
+                              { key: "create-po", label: "Criar pedido de compra a partir desta NF", icon: ShoppingCart,
                                 separatorBefore: true,
                                 hidden: hasPoLink || !!it.expense_id || it.status === "cancelled" || it.status === "completed",
                                 onSelect: () => handleCreatePurchaseOrder(it),
                                 disabled: busyId === it.id },
-                              { key: "create-invoice-draft", label: "Lançar esboço de NF de Entrada no ERP", icon: FilePlus2,
+                              { key: "create-invoice-draft", label: "Lançar esboço de NF de entrada no SAP", icon: FilePlus2,
                                 hidden: !canCreateInvoiceDraft,
                                 onSelect: () => handleCreateInvoiceDraft(it),
                                 disabled: busyId === it.id },
                               { key: "rematch",
-                                label: hasPoLink ? "Refazer vínculo com PC" : "Vincular ao Pedido de Compra",
+                                label: hasPoLink ? "Trocar o pedido de compra vinculado" : "Procurar pedido de compra para vincular",
                                 icon: Link2,
                                 onSelect: () => handleRematch(it.id),
                                 disabled: busyId === it.id || !!it.sap_invoice_draft_id || it.status === "cancelled" || it.status === "completed" },
-                              { key: "reprocess", label: "Reprocessar integração", icon: RotateCw,
+                              { key: "reprocess", label: "Tentar integração novamente (reenviar ao SAP)", icon: RotateCw,
                                 onSelect: () => handleReprocess(it.id), disabled: busyId === it.id },
-                              { key: "edit", label: "Editar dados", icon: Pencil,
+                              { key: "edit", label: "Corrigir dados da NF (nº, série, CNPJ, valor)", icon: Pencil,
                                 onSelect: () => setEditItem(it) },
-                              { key: "cancel", label: "Cancelar fluxo", icon: XCircle,
+                              { key: "cancel", label: "Cancelar fluxo desta NF", icon: XCircle,
                                 separatorBefore: true, destructive: true,
                                 onSelect: () => handleCancel(it.id),
                                 disabled: busyId === it.id || it.status === "cancelled" || it.status === "completed" },
@@ -488,7 +548,7 @@ export default function NfEntrada() {
                   <span className="font-semibold">Vínculo SAP</span>
                   <div className="flex items-center gap-2">
                     {detail.sap_matched_po_doc_entry &&
-                      detail.sap_matched_po_is_draft === false &&
+                      detail.sap_matched_po_is_draft !== true &&
                       !detail.sap_invoice_draft_id &&
                       detail.status !== "cancelled" && (
                         <Button
@@ -496,7 +556,7 @@ export default function NfEntrada() {
                           disabled={busyId === detail.id}
                           onClick={() => handleCreateInvoiceDraft(detail)}
                         >
-                          <FilePlus2 className="w-3.5 h-3.5" /> Lançar esboço de NF de Entrada
+                          <FilePlus2 className="w-3.5 h-3.5" /> Lançar esboço de NF de entrada no SAP
                         </Button>
                       )}
                     <Button
