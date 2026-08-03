@@ -64,6 +64,40 @@ function fmt(dt?: string | null) {
   return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
+const KYP_STATUS_LABELS: Record<KypResult["status"], string> = {
+  aprovado: "Aprovado",
+  pendente: "Pendente de análise",
+  reprovado: "Reprovado",
+  indisponivel: "Indisponível",
+};
+
+function kypTone(status: KypResult["status"]) {
+  if (status === "aprovado") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
+  if (status === "reprovado") return "border-destructive/30 bg-destructive/10 text-destructive";
+  return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400";
+}
+
+/** Recupera o último resultado de KYP registrado na trilha do chamado. */
+function deriveKypFromEvents(
+  events: { message: string | null; created_at: string }[],
+): (KypResult & { at?: string }) | null {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const msg = events[i]?.message?.trim();
+    if (!msg) continue;
+    const validated = msg.match(/^Valida[çc][ãa]o KYP:\s*([A-Za-zÀ-ÿ]+)\s*[—-]\s*([\s\S]+)$/i);
+    if (validated) {
+      const status = validated[1].toLowerCase() as KypResult["status"];
+      if (["aprovado", "reprovado", "pendente", "indisponivel"].includes(status)) {
+        return { status, motivo: validated[2].trim(), at: events[i].created_at };
+      }
+    }
+    const blocked = msg.match(/^Cadastro bloqueado pelo KYP:\s*([\s\S]+)$/i);
+    if (blocked) return { status: "reprovado", motivo: blocked[1].trim(), at: events[i].created_at };
+  }
+  return null;
+}
+
+
 function DetailDialog({
   request,
   isAgent,
@@ -92,6 +126,8 @@ function DetailDialog({
   if (!request) return null;
   const sla = slaInfo(request);
   const bank = request.bank_details || {};
+  const kypView: (KypResult & { at?: string }) | null = kyp ?? deriveKypFromEvents(events);
+
 
   const callSupplierFn = async (payload: Record<string, unknown>) => {
     const res = await sapFunctionFetch("registration-supplier-create", {
@@ -219,7 +255,28 @@ function DetailDialog({
               SLA 48h úteis · {fmt(request.due_at)} ({sla.label})
             </Badge>
             {request.company_db && <Badge variant="outline">{request.company_db}</Badge>}
+            {request.request_type === "supplier" && (
+              <Badge variant="outline" className={kypView ? kypTone(kypView.status) : ""}>
+                {kypView?.status === "aprovado" ? (
+                  <ShieldCheck className="w-3 h-3 mr-1" />
+                ) : (
+                  <ShieldAlert className="w-3 h-3 mr-1" />
+                )}
+                KYP: {kypView ? KYP_STATUS_LABELS[kypView.status] : "Não validado"}
+              </Badge>
+            )}
           </div>
+
+          {request.request_type === "supplier" && kypView && kypView.status !== "aprovado" && (
+            <div className={`rounded-md border px-3 py-2 text-sm ${kypTone(kypView.status)}`}>
+              <p className="font-medium">
+                {kypView.status === "reprovado" ? "Motivo da reprovação no KYP" : "Pendência no KYP"}
+              </p>
+              <p className="text-xs mt-1">{kypView.motivo}</p>
+              {kypView.at && <p className="text-[11px] mt-1 opacity-80">Validado em {fmt(kypView.at)}</p>}
+            </div>
+          )}
+
 
           <div className="grid gap-3 sm:grid-cols-2 text-sm">
             {request.federal_tax_id && (
@@ -395,25 +452,24 @@ function DetailDialog({
                   <p className="text-xs text-muted-foreground">
                     A validação de KYP (Know Your Partner) é obrigatória antes de criar o fornecedor no SAP.
                   </p>
-                  {kyp && (
-                    <div
-                      className={`rounded-md border px-3 py-2 text-sm ${
-                        kyp.status === "aprovado"
-                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                          : kyp.status === "reprovado"
-                            ? "border-destructive/30 bg-destructive/10 text-destructive"
-                            : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                      }`}
-                    >
+                  {kypView ? (
+                    <div className={`rounded-md border px-3 py-2 text-sm ${kypTone(kypView.status)}`}>
                       <div className="flex items-center gap-2 font-medium">
-                        {kyp.status === "aprovado" ? (
+                        {kypView.status === "aprovado" ? (
                           <ShieldCheck className="w-4 h-4" />
                         ) : (
                           <ShieldAlert className="w-4 h-4" />
                         )}
-                        KYP: {kyp.status}
+                        KYP: {KYP_STATUS_LABELS[kypView.status]}
                       </div>
-                      <p className="text-xs mt-1">{kyp.motivo}</p>
+                      <p className="text-xs mt-1">
+                        {kypView.status === "reprovado" ? `Motivo da reprovação: ${kypView.motivo}` : kypView.motivo}
+                      </p>
+                      {kypView.at && <p className="text-[11px] mt-1 opacity-80">Validado em {fmt(kypView.at)}</p>}
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
+                      KYP ainda não validado para este fornecedor.
                     </div>
                   )}
                   <div className="flex flex-wrap gap-2">
@@ -422,7 +478,8 @@ function DetailDialog({
                       Validar KYP
                     </Button>
                     <Button
-                      disabled={busy || !cardCode.trim() || kyp?.status === "reprovado"}
+                      disabled={busy || !cardCode.trim() || kypView?.status === "reprovado"}
+
                       onClick={() => void createSupplier(false)}
                       className="gap-2"
                     >
