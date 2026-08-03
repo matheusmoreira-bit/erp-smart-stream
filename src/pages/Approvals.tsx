@@ -2211,30 +2211,64 @@ export default function ApprovalsPage() {
   // Se o usuário tem substituição ativa, os documentos dos aprovadores oficiais também aparecem.
   const effectiveShowAll = canToggleShowAll && showAll;
   const sessionUser = (session.userName || "").toLowerCase().trim();
-  const officialIdentifiers = useMemo(
-    () => activeOfficials.flatMap((o) => {
-      const e = (o.official_email || "").toLowerCase();
-      const prefix = e.split("@")[0];
-      const name = (o.official_name || "").toLowerCase();
-      return [e, prefix, name].filter(Boolean);
-    }),
-    [activeOfficials],
+  /**
+   * Escopo por centro de custo da substituição: quando o grant define
+   * `cost_center_prefixes` (ex.: ["1.8"]), a substituição só vale para
+   * documentos cujos CCs pertençam àquela diretoria. Sem prefixos = todos.
+   */
+  const ccScopeAllows = useCallback(
+    (prefixes: string[] | null | undefined, ccs: string[]): boolean => {
+      const list = (prefixes || []).map((p) => (p || "").trim()).filter(Boolean);
+      if (list.length === 0) return true;
+      if (ccs.length === 0) return false;
+      return ccs.some((raw) => {
+        const c = (raw || "").trim();
+        if (!c) return false;
+        return list.some((p) => c === p || c.startsWith(`${p}.`));
+      });
+    },
+    [],
   );
-  const codeEq = (code?: string) => {
+  const identifiersOf = useCallback(
+    (officials: typeof activeOfficials) =>
+      officials.flatMap((o) => {
+        const e = (o.official_email || "").toLowerCase();
+        const prefix = e.split("@")[0];
+        const name = (o.official_name || "").toLowerCase();
+        return [e, prefix, name].filter(Boolean);
+      }),
+    [],
+  );
+  /** Officials cuja substituição vale para ESTE documento (respeita o escopo de CC). */
+  const officialsForDoc = useCallback(
+    (d: ApprovalDoc | null | undefined) => {
+      if (!d) return [] as typeof activeOfficials;
+      const ccs = docCostCenters(d);
+      return activeOfficials.filter((o) => ccScopeAllows(o.cost_center_prefixes, ccs));
+    },
+    [activeOfficials, ccScopeAllows],
+  );
+  const identifiersForDoc = useCallback(
+    (d: ApprovalDoc | null | undefined) => identifiersOf(officialsForDoc(d)),
+    [identifiersOf, officialsForDoc],
+  );
+  const codeEq = (code?: string, doc?: ApprovalDoc) => {
     if (!code) return false;
     const c = code.toLowerCase().trim();
     if (c === sessionUser) return true;
-    return officialIdentifiers.includes(c);
+    return identifiersForDoc(doc).includes(c);
   };
-  const matchesSubstitutedOfficial = (approver: string) => {
-    if (!approver || officialIdentifiers.length === 0) return false;
+  const matchesSubstitutedOfficial = (approver: string, doc?: ApprovalDoc) => {
+    const ids = identifiersForDoc(doc);
+    if (!approver || ids.length === 0) return false;
     const a = approver.toLowerCase().trim();
-    return officialIdentifiers.some((id) => id === a || a.includes(id) || id.includes(a));
+    return ids.some((id) => id === a || a.includes(id) || id.includes(a));
   };
   // Retorna o aprovador oficial substituído por este documento — ou null se o
   // usuário é o aprovador/solicitante direto (não está atuando como substituto).
   const getSubstitutedOfficial = useCallback((d: ApprovalDoc): { name: string; email: string } | null => {
-    if (activeOfficials.length === 0) return null;
+    const scopedOfficials = officialsForDoc(d);
+    if (scopedOfficials.length === 0) return null;
     // Match direto (não é substituição)
     const directCode = (code?: string) => !!code && code.toLowerCase().trim() === sessionUser;
     if (
@@ -2245,7 +2279,7 @@ export default function ApprovalsPage() {
     ) return null;
     const approver = (d.currentApprover || "").toLowerCase().trim();
     const email = (d.approverEmail || "").toLowerCase().trim();
-    for (const o of activeOfficials) {
+    for (const o of scopedOfficials) {
       const e = (o.official_email || "").toLowerCase();
       const prefix = e.split("@")[0];
       const name = (o.official_name || "").toLowerCase();
@@ -2262,7 +2296,7 @@ export default function ApprovalsPage() {
       }
     }
     return null;
-  }, [activeOfficials, sessionUser, session.userName]);
+  }, [officialsForDoc, sessionUser, session.userName]);
 
   /**
    * Recomputa se o usuário logado pode aprovar/rejeitar o documento dado —
@@ -2277,7 +2311,7 @@ export default function ApprovalsPage() {
     (doc: ApprovalDoc | null | undefined, grantsSnapshot: typeof substituteGrants): boolean => {
       if (!doc) return false;
       const isRequester =
-        codeEq(doc.requesterCode) ||
+        codeEq(doc.requesterCode, doc) ||
         approverMatches(doc.requester, session.userName);
       // Bloqueio de auto-aprovação — super-usuário pode ignorar (uso admin/teste).
       if (isRequester && !isSuperUser) return false;
@@ -2297,7 +2331,7 @@ export default function ApprovalsPage() {
       // independente da docDate cair fora do grant, pois a aprovação acontece agora.
       const approverEmailNow = (doc.approverEmail || "").toLowerCase().trim();
       const approverNameNow = (doc.currentApprover || "").toLowerCase().trim();
-      const isActiveSubstitute = officialIdentifiers.some((id) => {
+      const isActiveSubstitute = identifiersForDoc(doc).some((id) => {
         if (!id) return false;
         if (approverEmailNow && (approverEmailNow === id || approverEmailNow.startsWith(`${id}@`))) return true;
         if (approverNameNow && (approverNameNow === id || approverNameNow.includes(id) || id.includes(approverNameNow))) return true;
@@ -2307,6 +2341,7 @@ export default function ApprovalsPage() {
 
 
 
+      const docCcs = docCostCenters(doc);
       const docRefTs = (() => {
         const d = doc.docDate;
         const t = d ? new Date(d).getTime() : NaN;
@@ -2315,6 +2350,7 @@ export default function ApprovalsPage() {
       const approverEmailLower = (doc.approverEmail || "").toLowerCase().trim();
       const approverNameLower = (doc.currentApprover || "").toLowerCase().trim();
       return grantsSnapshot.some((g) => {
+        if (!ccScopeAllows(g.cost_center_prefixes, docCcs)) return false;
         const startsTs = new Date(g.starts_at).getTime();
         const endsTs = new Date(g.ends_at).getTime();
         if (!(startsTs <= docRefTs && docRefTs < endsTs)) return false;
@@ -2333,18 +2369,18 @@ export default function ApprovalsPage() {
       });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [session.userName, sessionUser, officialIdentifiers, isSuperUser],
+    [session.userName, sessionUser, identifiersForDoc, ccScopeAllows, isSuperUser],
   );
   const userApprovals = effectiveShowAll
     ? allApprovals
     : allApprovals.filter(
         (a) =>
-          codeEq(a.approverCode) ||
-          codeEq(a.requesterCode) ||
+          codeEq(a.approverCode, a) ||
+          codeEq(a.requesterCode, a) ||
           approverMatches(a.currentApprover, session.userName) ||
           approverMatches(a.requester, session.userName) ||
-          matchesSubstitutedOfficial(a.currentApprover) ||
-          (a.approverEmail && officialIdentifiers.includes(a.approverEmail.toLowerCase())) ||
+          matchesSubstitutedOfficial(a.currentApprover, a) ||
+          (a.approverEmail && identifiersForDoc(a).includes(a.approverEmail.toLowerCase())) ||
           // Aprovador original ainda vê o documento que delegou (mesmo sem "Ver todas").
           (a.delegatedFrom && approverMatches(a.delegatedFrom, session.userName)) ||
           // Diretoria do usuário administrativo (CC 1.6.% para quem é 1.6.1.2).

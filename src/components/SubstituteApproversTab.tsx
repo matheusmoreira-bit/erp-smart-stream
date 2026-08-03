@@ -96,6 +96,8 @@ export default function SubstituteApproversTab({ isAdmin = false }: { isAdmin?: 
     return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   });
   const [reason, setReason] = useState("");
+  /** Escopo opcional por diretoria/CC (ex.: "1.8" ou "1.8, 1.6.1"). Vazio = todos. */
+  const [ccScope, setCcScope] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const eligible = useMemo(
@@ -150,6 +152,7 @@ export default function SubstituteApproversTab({ isAdmin = false }: { isAdmin?: 
     }
     setSubstituteEmail(""); setSubstituteName("");
     setReason("");
+    setCcScope("");
     setShowForm(true);
   };
 
@@ -162,6 +165,15 @@ export default function SubstituteApproversTab({ isAdmin = false }: { isAdmin?: 
     const s = new Date(startsAt).toISOString();
     const e = new Date(endsAt).toISOString();
     if (new Date(e) <= new Date(s)) { toast.error("Fim deve ser posterior ao início"); return; }
+    const ccPrefixes = ccScope
+      .split(/[,;\s]+/)
+      .map((v) => v.trim().replace(/%+$/, "").replace(/\.+$/, ""))
+      .filter(Boolean);
+    const invalid = ccPrefixes.filter((v) => !/^[0-9]+(\.[0-9]+)*$/.test(v));
+    if (invalid.length > 0) {
+      toast.error(`Centro de custo inválido: ${invalid.join(", ")}`);
+      return;
+    }
     setSubmitting(true);
     try {
       await create({
@@ -172,6 +184,7 @@ export default function SubstituteApproversTab({ isAdmin = false }: { isAdmin?: 
         starts_at: s,
         ends_at: e,
         reason: reason || null,
+        cost_center_prefixes: ccPrefixes.length ? ccPrefixes : null,
       });
       toast.success("Substituição criada");
       setShowForm(false);
@@ -257,6 +270,7 @@ export default function SubstituteApproversTab({ isAdmin = false }: { isAdmin?: 
                 <TableHead>Status</TableHead>
                 <TableHead>Aprovador oficial</TableHead>
                 <TableHead>Substituto</TableHead>
+                <TableHead>Escopo (CC)</TableHead>
                 <TableHead>Período (BRT)</TableHead>
                 <TableHead>Concedida por</TableHead>
                 <TableHead>Motivo</TableHead>
@@ -274,6 +288,17 @@ export default function SubstituteApproversTab({ isAdmin = false }: { isAdmin?: 
                   <TableCell className="text-sm">
                     <div className="font-medium">{r.substitute_name || r.substitute_email}</div>
                     <div className="text-xs text-muted-foreground font-mono">{r.substitute_email}</div>
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {r.cost_center_prefixes && r.cost_center_prefixes.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {r.cost_center_prefixes.map((p) => (
+                          <Badge key={p} variant="outline" className="font-mono text-[10px]">{p}.%</Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">Todos</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-xs">
                     <div>{fmtDate(r.starts_at)}</div>
@@ -384,6 +409,19 @@ export default function SubstituteApproversTab({ isAdmin = false }: { isAdmin?: 
             <div className="space-y-1.5">
               <Label className="text-xs">Fim (BRT)</Label>
               <Input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
+            </div>
+
+            <div className="space-y-1.5 md:col-span-2">
+              <Label className="text-xs">Restringir a centros de custo (opcional)</Label>
+              <Input
+                value={ccScope}
+                onChange={(e) => setCcScope(e.target.value)}
+                placeholder="Ex.: 1.8 (vale para 1.8 e todos os 1.8.x). Vazio = todas as alçadas do oficial."
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Separe por vírgula para mais de uma diretoria. O substituto verá apenas documentos
+                cujos centros de custo estejam nesses ramos.
+              </p>
             </div>
 
             <div className="space-y-1.5 md:col-span-2">

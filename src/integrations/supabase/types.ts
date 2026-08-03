@@ -693,6 +693,7 @@ export type Database = {
       approver_substitutes: {
         Row: {
           company_db: string | null
+          cost_center_prefixes: string[] | null
           created_at: string
           ends_at: string
           granted_by_email: string
@@ -712,6 +713,7 @@ export type Database = {
         }
         Insert: {
           company_db?: string | null
+          cost_center_prefixes?: string[] | null
           created_at?: string
           ends_at: string
           granted_by_email: string
@@ -731,6 +733,7 @@ export type Database = {
         }
         Update: {
           company_db?: string | null
+          cost_center_prefixes?: string[] | null
           created_at?: string
           ends_at?: string
           granted_by_email?: string
@@ -7079,6 +7082,7 @@ export type Database = {
         Args: { _substitute_identifier: string }
         Returns: {
           company_db: string
+          cost_center_prefixes: string[]
           ends_at: string
           id: string
           official_email: string
@@ -7501,6 +7505,7 @@ export type Database = {
         Args: { _substitute_identifier: string }
         Returns: {
           company_db: string
+          cost_center_prefixes: string[]
           ends_at: string
           id: string
           official_email: string

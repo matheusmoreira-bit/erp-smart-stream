@@ -71,7 +71,10 @@ Deno.serve(async (req) => {
     ends_at?: string;
     reason?: string | null;
     company_db?: string | null;
+    /** Prefixos de centro de custo que limitam a substituição (ex.: ["1.8"]). */
+    cost_center_prefixes?: string[] | null;
   } = {};
+
   try {
     body = await req.json();
   } catch {
@@ -186,6 +189,18 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Escopo opcional por centro de custo (prefixos). Normaliza e valida
+    // formato simples de CC (dígitos e pontos), evitando entrada arbitrária.
+    const ccPrefixes = Array.isArray(body.cost_center_prefixes)
+      ? Array.from(
+          new Set(
+            body.cost_center_prefixes
+              .map((p) => String(p || "").trim().replace(/%+$/, "").replace(/\.+$/, ""))
+              .filter((p) => /^[0-9]+(\.[0-9]+)*$/.test(p)),
+          ),
+        )
+      : [];
+
     const insertRow = {
       official_email: officialEmail,
       official_name: body.official_name || null,
@@ -195,9 +210,12 @@ Deno.serve(async (req) => {
       ends_at: new Date(e).toISOString(),
       reason: body.reason || null,
       company_db: body.company_db || null,
+      cost_center_prefixes: ccPrefixes.length ? ccPrefixes : null,
       granted_by_id: null as string | null,
       granted_by_email: actorLabel,
     };
+
+
 
     const { data: created, error: insErr } = await admin
       .from("approver_substitutes")
