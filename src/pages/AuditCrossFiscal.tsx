@@ -11,6 +11,7 @@ import { useAuditCrossFiscal, type CenarioCruzamento, type CruzamentoRow, type S
 import { KanbanColumn } from "@/components/audit-cross/KanbanColumn";
 import { CruzamentoCard } from "@/components/audit-cross/CruzamentoCard";
 import { CruzamentoDetailDrawer } from "@/components/audit-cross/CruzamentoDetailDrawer";
+import { AutoReconcileSettings } from "@/components/audit-cross/AutoReconcileSettings";
 
 const CENARIO_LABEL: Record<CenarioCruzamento, string> = {
   pago_sem_nota: "Pago sem nota",
