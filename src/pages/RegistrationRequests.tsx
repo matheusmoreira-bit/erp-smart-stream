@@ -82,6 +82,7 @@ function DetailDialog({
   onClose,
   onUpdateStatus,
   onComment,
+  onRefreshList,
 }: {
   request: RegistrationRequest | null;
   isAgent: boolean;
@@ -92,6 +93,7 @@ function DetailDialog({
     extra?: { sapCardCode?: string | null; resolutionNote?: string | null },
   ) => Promise<void>;
   onComment: (id: string, message: string, files?: File[]) => Promise<void>;
+  onRefreshList?: () => Promise<void> | void;
 }) {
   const { events, reload } = useRegistrationRequestEvents(request?.id ?? null);
   const [cardCode, setCardCode] = useState("");
@@ -250,6 +252,10 @@ function DetailDialog({
         }
       }
       await reload();
+      await onRefreshList?.();
+      onClose();
+
+
 
 
     } catch (e) {
@@ -292,6 +298,7 @@ function DetailDialog({
       });
       toast.success("Chamado finalizado e solicitante notificado.");
       await reload();
+      await onRefreshList?.();
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao finalizar o chamado");
@@ -834,6 +841,7 @@ export default function RegistrationRequests() {
         onClose={() => setSelected(null)}
         onUpdateStatus={updateStatus}
         onComment={addComment}
+        onRefreshList={reload}
       />
     </div>
   );
