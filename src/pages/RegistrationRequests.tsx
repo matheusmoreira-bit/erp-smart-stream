@@ -49,6 +49,26 @@ interface KypResult {
   expiryDate?: string | null;
 }
 
+interface SupplierFnResponse {
+  ok?: boolean;
+  error?: string;
+  details?: unknown;
+  kyp?: KypResult;
+  cardCode?: string;
+  requiresAcknowledge?: boolean;
+}
+
+interface CreateState {
+  phase: "idle" | "running" | "success" | "error" | "warning";
+  step?: string;
+  message?: string;
+  detail?: string;
+  cardCode?: string;
+  httpStatus?: number;
+  at?: string;
+}
+
+
 
 const statusVariant: Record<RegistrationStatus, string> = {
   aberto: "bg-blue-500/10 text-blue-600 border-blue-500/20",
