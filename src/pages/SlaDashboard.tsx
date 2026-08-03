@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlarmClock, Download, Loader2, RefreshCw, Timer, TrendingUp, Users } from "lucide-react";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
+import { SlaTrendPanel } from "@/components/SlaTrendPanel";
+
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
