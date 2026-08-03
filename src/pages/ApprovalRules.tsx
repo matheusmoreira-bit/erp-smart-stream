@@ -1564,8 +1564,9 @@ export default function ApprovalRulesPage() {
         r.criteria?.some(
           (c) =>
             fieldLabel(c.field).toLowerCase().includes(q) ||
-            (c.value || "").toLowerCase().includes(q) ||
-            (c.value2 || "").toLowerCase().includes(q),
+            String(c.value ?? "").toLowerCase().includes(q) ||
+            String(c.value2 ?? "").toLowerCase().includes(q),
+
         )
       )
         return true;
