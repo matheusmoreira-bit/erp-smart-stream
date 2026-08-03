@@ -1573,8 +1573,9 @@ export default function ApprovalRulesPage() {
       if (
         r.levels?.some(
           (l) =>
-            (l.approver_name || "").toLowerCase().includes(q) ||
-            (l.approver_email || "").toLowerCase().includes(q),
+            String(l.approver_name ?? "").toLowerCase().includes(q) ||
+            String(l.approver_email ?? "").toLowerCase().includes(q),
+
         )
       )
         return true;
