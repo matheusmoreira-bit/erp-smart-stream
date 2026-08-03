@@ -841,6 +841,7 @@ export default function RegistrationRequests() {
         onClose={() => setSelected(null)}
         onUpdateStatus={updateStatus}
         onComment={addComment}
+        onRefreshList={reload}
       />
     </div>
   );
