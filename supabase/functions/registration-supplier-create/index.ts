@@ -16,7 +16,7 @@ import { classificarDocumento, decidirAcao, type KYPProviderConfig } from "../_s
 type Sb = ReturnType<typeof createClient>;
 
 interface Body {
-  action?: "kyp" | "create";
+  action?: "kyp" | "create" | "next-code";
   requestId?: string;
   cardCode?: string;
   groupCode?: number | null;
@@ -243,6 +243,24 @@ async function runKyp(sb: Sb, documento: string, nome: string, companyDb: string
   };
 }
 
+/** Gera o próximo código sequencial de fornecedor no padrão FXXXXXX (prefixo + 6 dígitos). */
+async function nextSupplierCode(baseUrl: string, cookie: string, prefix = "F", width = 6): Promise<string> {
+  const filtro = encodeURIComponent(`startswith(CardCode,'${prefix}') and CardType eq 'cSupplier'`);
+  const url = `${baseUrl}/BusinessPartners?$select=CardCode&$filter=${filtro}&$orderby=CardCode desc&$top=200`;
+  let maior = 0;
+  try {
+    const res = await fetch(url, { headers: { Cookie: cookie } });
+    if (res.ok) {
+      const parsed = JSON.parse(await res.text()) as { value?: { CardCode?: string }[] };
+      for (const row of parsed.value ?? []) {
+        const m = new RegExp(`^${prefix}(\\d+)$`).exec(String(row.CardCode ?? "").trim());
+        if (m) maior = Math.max(maior, Number(m[1]));
+      }
+    }
+  } catch { /* sem base para sequência: começa do zero */ }
+  return `${prefix}${String(maior + 1).padStart(width, "0")}`;
+}
+
 /** Idempotência: procura um Business Partner já existente por CardCode ou por CNPJ/CPF. */
 async function findExistingBp(
   baseUrl: string,
@@ -260,8 +278,12 @@ async function findExistingBp(
     }
   };
 
+  if (!cardCode) {
+    // sem código informado: só a busca por documento faz sentido
+  } else {
   const byCode = await get(`${baseUrl}/BusinessPartners('${encodeURIComponent(cardCode)}')?$select=CardCode`);
   if (byCode?.CardCode) return String(byCode.CardCode);
+  }
 
   const doc = (documento || "").replace(/\D/g, "");
   if (doc.length >= 11) {
@@ -340,6 +362,21 @@ Deno.serve(async (req) => {
       return json(200, { ok: true, kyp });
     }
 
+    /* --------------------- próximo código no ERP ----------------------- */
+    if (body.action === "next-code") {
+      if (!companyDb) return json(400, { error: "Empresa (company_db) não identificada no chamado." });
+      const credsNc = await loadSapCreds(sb, companyDb);
+      if (!credsNc) return json(400, { error: `Credenciais SAP não configuradas para ${companyDb}.` });
+      const baseNc = buildSapBaseUrl(credsNc.service_layer_url);
+      const cookieNc = await sapCookieLogin(baseNc, credsNc.company_db || companyDb, credsNc.username, credsNc.password);
+      try {
+        const suggested = await nextSupplierCode(baseNc, cookieNc);
+        return json(200, { ok: true, cardCode: suggested, companyDb });
+      } finally {
+        await sapLogout(baseNc, cookieNc).catch(() => {});
+      }
+    }
+
     /* ------------------------ criação no SAP --------------------------- */
     // Idempotência 1: o chamado já tem um código gravado — nada a criar.
     const jaRegistrado = String(r.sap_card_code ?? "").trim();
@@ -352,8 +389,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const cardCode = String(body.cardCode ?? "").trim();
-    if (!cardCode) return json(400, { error: "Informe o CardCode do fornecedor." });
+    const cardCodeInformado = String(body.cardCode ?? "").trim();
     if (!companyDb) return json(400, { error: "Empresa (company_db) não identificada no chamado." });
 
     const creds = await loadSapCreds(sb, companyDb);
@@ -361,9 +397,28 @@ Deno.serve(async (req) => {
     const baseUrl = buildSapBaseUrl(creds.service_layer_url);
     const cookie = await sapCookieLogin(baseUrl, creds.company_db || companyDb, creds.username, creds.password);
 
+    // Código no ERP obtido automaticamente quando não informado (FXXXXXX + 1).
+    let cardCode = cardCodeInformado;
+    try {
+      if (!cardCode) cardCode = await nextSupplierCode(baseUrl, cookie);
+    } catch {
+      await sapLogout(baseUrl, cookie).catch(() => {});
+      return json(400, { error: "Não foi possível obter o próximo código de fornecedor no ERP." });
+    }
+
     try {
       // Idempotência 2: o Business Partner já existe no SAP (mesmo CardCode ou mesmo CNPJ/CPF).
-      const existente = await findExistingBp(baseUrl, cookie, cardCode, documento);
+      // Se o código foi gerado automaticamente e já existe, avança a sequência.
+      if (!cardCodeInformado) {
+        for (let i = 0; i < 20; i++) {
+          const ocupado = await findExistingBp(baseUrl, cookie, cardCode, "");
+          if (!ocupado) break;
+          const m = /^([A-Za-z]+)(\d+)$/.exec(cardCode);
+          cardCode = m ? `${m[1]}${String(Number(m[2]) + 1).padStart(m[2].length, "0")}` : cardCode;
+        }
+      }
+
+      const existente = await findExistingBp(baseUrl, cookie, cardCodeInformado ? cardCode : "", documento);
       if (existente) {
         await sb.from("registration_requests").update({ sap_card_code: existente }).eq("id", requestId);
         await logEvent(

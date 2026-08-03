@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ClipboardList, Clock, Loader2, RefreshCw, Send, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -101,8 +101,43 @@ function DetailDialog({
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState<"idle" | "sap">("idle");
   const [createState, setCreateState] = useState<CreateState>({ phase: "idle" });
+  const [loadingCode, setLoadingCode] = useState(false);
+
+  const reqId = request?.id ?? null;
+  const reqType = request?.request_type;
+  const reqCardCode = request?.sap_card_code ?? null;
+
+  /** Código no ERP é obtido automaticamente (próximo da sequência FXXXXXX + 1). */
+  const fetchNextCode = useCallback(async () => {
+    if (!reqId) return;
+    setLoadingCode(true);
+    try {
+      const res = await sapFunctionFetch("registration-supplier-create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId: reqId, action: "next-code" }),
+      });
+      const data = (await res.json().catch(() => ({}))) as SupplierFnResponse;
+      if (res.ok && data.cardCode) setCardCode(data.cardCode);
+    } catch {
+      /* mantém o campo editável para preenchimento manual */
+    } finally {
+      setLoadingCode(false);
+    }
+  }, [reqId]);
+
+  useEffect(() => {
+    if (!reqId) return;
+    if (reqCardCode) {
+      setCardCode(reqCardCode);
+      return;
+    }
+    if (reqType !== "supplier") return;
+    void fetchNextCode();
+  }, [reqId, reqType, reqCardCode, fetchNextCode]);
 
   if (!request) return null;
+
   const sla = slaInfo(request);
   const bank = request.bank_details || {};
   const callSupplierFn = async (payload: Record<string, unknown>) => {
@@ -135,10 +170,6 @@ function DetailDialog({
 
   const createSupplier = async () => {
     if (busy) return; // idempotência na UI: evita duplo clique disparar dois cadastros
-    if (!cardCode.trim()) {
-      toast.error("Informe o CardCode do fornecedor.");
-      return;
-    }
     if (request.sap_card_code) {
       toast.info(`Este chamado já possui o fornecedor ${request.sap_card_code} cadastrado.`);
       return;
@@ -463,7 +494,28 @@ function DetailDialog({
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="rr-cardcode">Código no ERP (CardCode / ItemCode)</Label>
-                  <Input id="rr-cardcode" value={cardCode} onChange={(e) => setCardCode(e.target.value)} />
+                  <div className="flex gap-2">
+                    <Input
+                      id="rr-cardcode"
+                      value={cardCode}
+                      placeholder={loadingCode ? "Obtendo próximo código…" : "Gerado automaticamente"}
+                      onChange={(e) => setCardCode(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      title="Obter próximo código no ERP"
+                      aria-label="Obter próximo código no ERP"
+                      disabled={busy || loadingCode || !!request.sap_card_code}
+                      onClick={() => void fetchNextCode()}
+                    >
+                      {loadingCode ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Sequência automática do ERP (ex.: F000123 → F000124). Você pode editar se precisar.
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="rr-note">Observação para o solicitante</Label>
@@ -481,7 +533,7 @@ function DetailDialog({
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <Button
-                      disabled={busy || !cardCode.trim()}
+                      disabled={busy || loadingCode}
                       aria-busy={busy}
                       onClick={() => void createSupplier()}
                       className="gap-2"
