@@ -326,15 +326,19 @@ export async function requestSupplierRegistration(payload: SupplierRequestPayloa
   if (error) throw error;
 
   // Fluxo paralelo: avisa o time responsável de que há uma nova ação solicitada.
-  await createNotification({
-    user_identifier: TARGET_EMAIL,
-    title: "Nova solicitação de cadastro aguardando atendimento",
-    body: `${payload.cardName || "Solicitação de cadastro"} · Solicitante: ${requesterEmail || "—"}`,
-    category: "action",
-    company_db: payload.companyDb ?? undefined,
-    link: "/solicitacoes",
-    metadata: { action_key: "registration", kind: "requested" },
-  });
+  await Promise.all(
+    TARGET_EMAILS.map((target) =>
+      createNotification({
+        user_identifier: target,
+        title: "Nova solicitação de cadastro aguardando atendimento",
+        body: `${payload.cardName || "Solicitação de cadastro"} · Solicitante: ${requesterEmail || "—"}`,
+        category: "action",
+        company_db: payload.companyDb ?? undefined,
+        link: "/solicitacoes",
+        metadata: { action_key: "registration", kind: "requested" },
+      }),
+    ),
+  );
 }
 
 
