@@ -101,8 +101,43 @@ function DetailDialog({
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState<"idle" | "sap">("idle");
   const [createState, setCreateState] = useState<CreateState>({ phase: "idle" });
+  const [loadingCode, setLoadingCode] = useState(false);
+
+  const reqId = request?.id ?? null;
+  const reqType = request?.request_type;
+  const reqCardCode = request?.sap_card_code ?? null;
+
+  /** Código no ERP é obtido automaticamente (próximo da sequência FXXXXXX + 1). */
+  const fetchNextCode = useCallback(async () => {
+    if (!reqId) return;
+    setLoadingCode(true);
+    try {
+      const res = await sapFunctionFetch("registration-supplier-create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId: reqId, action: "next-code" }),
+      });
+      const data = (await res.json().catch(() => ({}))) as SupplierFnResponse;
+      if (res.ok && data.cardCode) setCardCode(data.cardCode);
+    } catch {
+      /* mantém o campo editável para preenchimento manual */
+    } finally {
+      setLoadingCode(false);
+    }
+  }, [reqId]);
+
+  useEffect(() => {
+    if (!reqId) return;
+    if (reqCardCode) {
+      setCardCode(reqCardCode);
+      return;
+    }
+    if (reqType !== "supplier") return;
+    void fetchNextCode();
+  }, [reqId, reqType, reqCardCode, fetchNextCode]);
 
   if (!request) return null;
+
   const sla = slaInfo(request);
   const bank = request.bank_details || {};
   const callSupplierFn = async (payload: Record<string, unknown>) => {
