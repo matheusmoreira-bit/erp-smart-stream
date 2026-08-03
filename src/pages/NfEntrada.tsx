@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { NfEntradaBulkActions, BULK_LIMIT } from "@/components/NfEntradaBulkActions";
+import { NfEntradaStatusCell, statusOrigin, watcherState } from "@/components/NfEntradaStatusCell";
 
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
