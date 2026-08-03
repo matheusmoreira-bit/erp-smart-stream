@@ -266,8 +266,24 @@ function DetailDialog({
         cardCode: data.cardCode ?? cardCode.trim(),
         at: new Date().toISOString(),
       });
-      toast.success(`Fornecedor criado no SAP com o código ${data.cardCode}.`);
+      const created = data.cardCode ?? cardCode.trim();
+      toast.success(`Fornecedor criado no SAP com o código ${created}.`);
+      // Conclui o chamado e notifica o solicitante (e-mail + in-app) com o código do cadastro.
+      try {
+        await onUpdateStatus(request, "concluido", {
+          sapCardCode: created,
+          resolutionNote: note.trim() || `Fornecedor cadastrado no ERP com o código ${created}.`,
+        });
+        toast.success("Solicitante notificado com o código do cadastro.");
+      } catch (notifyErr) {
+        toast.warning(
+          notifyErr instanceof Error
+            ? `Cadastro criado, mas falhou ao notificar: ${notifyErr.message}`
+            : "Cadastro criado, mas falhou ao notificar o solicitante.",
+        );
+      }
       await reload();
+
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Falha ao cadastrar fornecedor no SAP";
       setCreateState({
