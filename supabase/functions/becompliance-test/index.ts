@@ -65,7 +65,11 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const caller = await requireAdminOrSapAdmin(req);
+    // Chamadas internas com a service role key (diagnóstico da plataforma)
+    // dispensam a checagem de admin — a chave nunca chega ao navegador.
+    const bearer = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+    const isServiceCall = !!bearer && bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const caller = isServiceCall ? {} : await requireAdminOrSapAdmin(req);
     const callerCompanyDb =
       typeof (caller as { companyDB?: unknown }).companyDB === "string"
         ? (caller as { companyDB: string }).companyDB
