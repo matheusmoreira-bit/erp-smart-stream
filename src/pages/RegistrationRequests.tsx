@@ -203,6 +203,18 @@ function DetailDialog({
     }
   };
 
+  /** Mensagem clara para falhas de rede/integração. */
+  const friendlyError = (e: unknown, fallback: string) => {
+    const msg = e instanceof Error ? e.message : "";
+    if (/Failed to fetch|Failed to send a request|NetworkError|network/i.test(msg)) {
+      return "Não foi possível falar com o serviço de integração (rede indisponível ou serviço fora do ar). Tente novamente em instantes.";
+    }
+    if (/timeout|abort/i.test(msg)) {
+      return "A consulta demorou mais que o esperado e foi interrompida. Tente novamente.";
+    }
+    return msg || fallback;
+  };
+
   /** UX: um único botão — consulta o KYP e, se liberado, cadastra no SAP. */
   const kypThenCreate = async () => {
     if (!cardCode.trim()) {
@@ -210,7 +222,8 @@ function DetailDialog({
       return;
     }
     setBusy(true);
-    setCreateState({ phase: "running", step: "Consultando KYP (Know Your Partner)…" });
+    setStage("kyp");
+    setCreateState({ phase: "running", step: "Etapa 1 de 2 · Consultando KYP (Know Your Partner)…" });
     let blocked = true;
     try {
       const { ok, status, data } = await callSupplierFn({ action: "kyp" });
@@ -218,8 +231,10 @@ function DetailDialog({
       if (!ok) {
         setCreateState({
           phase: "error",
-          step: "Validação de KYP",
-          message: data.error || `Falha na validação de KYP (HTTP ${status})`,
+          step: "Etapa 1 de 2 · Validação de KYP",
+          message:
+            data.error ||
+            `Falha na consulta ao provedor de KYP (HTTP ${status}). Verifique as credenciais do BeCompliance e tente novamente.`,
           httpStatus: status,
           detail: data.details ? JSON.stringify(data.details, null, 2) : undefined,
           at: new Date().toISOString(),
@@ -240,15 +255,22 @@ function DetailDialog({
       }
       blocked = false;
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Falha na validação de KYP";
-      setCreateState({ phase: "error", step: "Validação de KYP", message: msg, at: new Date().toISOString() });
+      const msg = friendlyError(e, "Falha na validação de KYP");
+      setCreateState({
+        phase: "error",
+        step: "Etapa 1 de 2 · Validação de KYP",
+        message: msg,
+        at: new Date().toISOString(),
+      });
       toast.error(msg);
       return;
     } finally {
       setBusy(false);
+      if (blocked) setStage("idle");
     }
     if (!blocked) await createSupplier(false);
   };
+
 
 
 
