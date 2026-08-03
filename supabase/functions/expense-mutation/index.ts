@@ -182,6 +182,12 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     resolvedLevel = picked.level_order;
     fallbackUsed = picked.fallback_used;
     escalatedTo = picked.escalated ? (picked.escalated_rule_name || picked.escalated_rule_id || "faixa superior") : null;
+  } else if (status === "pendente_aprovacao" && !ruleId) {
+    // Lacuna na matriz: nenhuma regra casou → aprovador global de contingência.
+    resolvedApprover = MATRIX_FALLBACK_APPROVER.name;
+    resolvedApproverEmail = MATRIX_FALLBACK_APPROVER.email;
+    resolvedLevel = 1;
+    matrixGap = true;
   }
 
   const insertPayload: Record<string, unknown> = {
