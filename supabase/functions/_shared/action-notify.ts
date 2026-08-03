@@ -10,6 +10,8 @@
 //     interfere nem substitui nenhuma notificação atual.
 // deno-lint-ignore-file no-explicit-any
 
+import { pushToRecipient } from "./web-push.ts";
+
 export interface ActionNotifyDetail {
   label: string;
   value: string | number | null | undefined;
@@ -123,6 +125,14 @@ async function dispatch(admin: any, input: ActionNotifyInput, kind: "requested" 
       category: input.category || CATEGORY,
       link: input.link || null,
       metadata: { ref_id: refId, action_key: input.actionKey, kind },
+    });
+
+    // Push nativo (best-effort, paralelo aos demais canais).
+    await pushToRecipient(admin, recipient, {
+      title: input.title,
+      body: bodyParts.join(" · ") || null,
+      url: input.link || "/notificacoes",
+      tag: refId,
     });
 
     if (input.email === false || !isEmail(recipient)) return;
