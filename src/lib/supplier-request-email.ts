@@ -63,7 +63,7 @@ export interface SupplierRequestPayload {
   dueAt?: string | null;
 }
 
-const TARGET_EMAIL = "compras@anagaming.com.br";
+const TARGET_EMAILS = ["samara.souza@anagaming.com.br", "compras@anagaming.com.br"];
 
 export const PAYMENT_METHOD_LABELS: Record<RegistrationPaymentMethod, string> = {
   pix: "PIX",
