@@ -255,7 +255,28 @@ function DetailDialog({
               SLA 48h úteis · {fmt(request.due_at)} ({sla.label})
             </Badge>
             {request.company_db && <Badge variant="outline">{request.company_db}</Badge>}
+            {request.request_type === "supplier" && (
+              <Badge variant="outline" className={kypView ? kypTone(kypView.status) : ""}>
+                {kypView?.status === "aprovado" ? (
+                  <ShieldCheck className="w-3 h-3 mr-1" />
+                ) : (
+                  <ShieldAlert className="w-3 h-3 mr-1" />
+                )}
+                KYP: {kypView ? KYP_STATUS_LABELS[kypView.status] : "Não validado"}
+              </Badge>
+            )}
           </div>
+
+          {request.request_type === "supplier" && kypView && kypView.status !== "aprovado" && (
+            <div className={`rounded-md border px-3 py-2 text-sm ${kypTone(kypView.status)}`}>
+              <p className="font-medium">
+                {kypView.status === "reprovado" ? "Motivo da reprovação no KYP" : "Pendência no KYP"}
+              </p>
+              <p className="text-xs mt-1">{kypView.motivo}</p>
+              {kypView.at && <p className="text-[11px] mt-1 opacity-80">Validado em {fmt(kypView.at)}</p>}
+            </div>
+          )}
+
 
           <div className="grid gap-3 sm:grid-cols-2 text-sm">
             {request.federal_tax_id && (
