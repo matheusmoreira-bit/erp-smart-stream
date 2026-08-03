@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlarmClock, Download, Loader2, RefreshCw, Timer, TrendingUp, Users } from "lucide-react";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
+import { SlaTrendPanel } from "@/components/SlaTrendPanel";
+
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -186,7 +188,10 @@ export default function SlaDashboard() {
           })}
         </div>
 
+        <SlaTrendPanel steps={steps} slaHours={slaHours} loadedDays={days} />
+
         <Card>
+
           <CardHeader className="pb-2 flex flex-row items-center justify-between gap-3">
             <CardTitle className="text-base">Gargalos por {dimLabel.toLowerCase()}</CardTitle>
             <Tabs value={dimension} onValueChange={(v) => setDimension(v as Dimension)}>
