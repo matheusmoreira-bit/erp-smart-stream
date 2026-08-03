@@ -45,7 +45,7 @@ function dayOnly(v: string | null): string | null {
   return String(v).slice(0, 10);
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -158,7 +158,7 @@ Deno.serve(async (req) => {
       } catch (e) {
         arNote = `Contas a receber indisponível: ${e instanceof Error ? e.message : String(e)}`;
       } finally {
-        if (session) await sapLogoutSession(baseUrl, session).catch(() => {});
+        if (session) { try { await sapLogoutSession(baseUrl, session); } catch { /* ignore */ } }
       }
     }
 
