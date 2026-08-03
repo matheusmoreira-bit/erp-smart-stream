@@ -5,6 +5,9 @@ import { RowActionsMenu } from "@/components/RowActionsMenu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { NfEntradaBulkActions, BULK_LIMIT } from "@/components/NfEntradaBulkActions";
+
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -121,6 +124,7 @@ export default function NfEntrada() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editItem, setEditItem] = useState<NfEntradaImport | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const filtered = useMemo(() => {
     return items.filter((it) => {
@@ -137,6 +141,21 @@ export default function NfEntrada() {
       return true;
     });
   }, [items, statusFilter, search]);
+
+  const selectedItems = useMemo(
+    () => filtered.filter((it) => selectedIds.includes(it.id)),
+    [filtered, selectedIds],
+  );
+  const allSelected = filtered.length > 0 && filtered.every((it) => selectedIds.includes(it.id));
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+  function toggleSelectAll() {
+    // Respeita o limite de lote ao marcar tudo de uma vez.
+    setSelectedIds(allSelected ? [] : filtered.slice(0, BULK_LIMIT).map((it) => it.id));
+  }
+
 
   useEffect(() => {
     if (!detail) return;
@@ -353,10 +372,27 @@ export default function NfEntrada() {
           </div>
         )}
 
+        {selectedIds.length > 0 && (
+          <NfEntradaBulkActions
+            selected={selectedItems}
+            onClear={() => setSelectedIds([])}
+            reprocess={reprocess}
+            createInvoiceDraft={createInvoiceDraft}
+            onFinished={() => { setSelectedIds([]); refresh(); }}
+          />
+        )}
+
         <div className="rounded-md border border-border overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8">
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={toggleSelectAll}
+                    aria-label="Selecionar todas as NFs visíveis"
+                  />
+                </TableHead>
                 <TableHead className="w-8" />
                 <TableHead>NF</TableHead>
                 <TableHead>Fornecedor</TableHead>
@@ -368,13 +404,14 @@ export default function NfEntrada() {
             </TableHeader>
             <TableBody>
               {loading && (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>
               )}
               {!loading && filtered.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                   Nenhuma NF importada ainda. Configure os secrets <code>MASTERTAX_BASE_URL</code> e <code>MASTERTAX_TOKEN</code> e clique em "Buscar Master Tax agora".
                 </TableCell></TableRow>
               )}
+
               {filtered.map((it) => {
                 const s = statusPresentation(it);
                 const isOpen = expandedId === it.id;
@@ -397,11 +434,19 @@ export default function NfEntrada() {
                       onClick={toggle}
                       data-state={isOpen ? "selected" : undefined}
                     >
+                      <TableCell className="pr-0" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.includes(it.id)}
+                          onCheckedChange={() => toggleSelect(it.id)}
+                          aria-label={`Selecionar NF ${it.numero_nf || it.id}`}
+                        />
+                      </TableCell>
                       <TableCell className="pr-0">
                         <ChevronRight
                           className={`w-4 h-4 text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`}
                         />
                       </TableCell>
+
                       <TableCell className="font-mono text-xs">
                         <div className="flex items-center gap-1.5">
                           <span>{it.numero_nf || "—"}</span>
