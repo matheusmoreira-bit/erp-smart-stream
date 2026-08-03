@@ -243,6 +243,36 @@ async function runKyp(sb: Sb, documento: string, nome: string, companyDb: string
   };
 }
 
+/** Idempotência: procura um Business Partner já existente por CardCode ou por CNPJ/CPF. */
+async function findExistingBp(
+  baseUrl: string,
+  cookie: string,
+  cardCode: string,
+  documento: string,
+): Promise<string | null> {
+  const get = async (url: string) => {
+    try {
+      const res = await fetch(url, { headers: { Cookie: cookie } });
+      if (!res.ok) return null;
+      return JSON.parse(await res.text()) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  };
+
+  const byCode = await get(`${baseUrl}/BusinessPartners('${encodeURIComponent(cardCode)}')?$select=CardCode`);
+  if (byCode?.CardCode) return String(byCode.CardCode);
+
+  const doc = (documento || "").replace(/\D/g, "");
+  if (doc.length >= 11) {
+    const filtro = encodeURIComponent(`FederalTaxID eq '${doc}' and CardType eq 'cSupplier'`);
+    const byDoc = await get(`${baseUrl}/BusinessPartners?$select=CardCode&$filter=${filtro}&$top=1`);
+    const rows = (byDoc?.value ?? []) as { CardCode?: string }[];
+    if (rows[0]?.CardCode) return String(rows[0].CardCode);
+  }
+  return null;
+}
+
 async function logEvent(sb: Sb, requestId: string, author: string, message: string) {
   await sb.from("registration_request_events").insert({
     request_id: requestId,
@@ -311,6 +341,17 @@ Deno.serve(async (req) => {
     }
 
     /* ------------------------ criação no SAP --------------------------- */
+    // Idempotência 1: o chamado já tem um código gravado — nada a criar.
+    const jaRegistrado = String(r.sap_card_code ?? "").trim();
+    if (jaRegistrado) {
+      return json(200, {
+        ok: true,
+        cardCode: jaRegistrado,
+        alreadyRegistered: true,
+        message: `Fornecedor já cadastrado neste chamado com o código ${jaRegistrado}.`,
+      });
+    }
+
     const cardCode = String(body.cardCode ?? "").trim();
     if (!cardCode) return json(400, { error: "Informe o CardCode do fornecedor." });
     if (!companyDb) return json(400, { error: "Empresa (company_db) não identificada no chamado." });
@@ -321,6 +362,24 @@ Deno.serve(async (req) => {
     const cookie = await sapCookieLogin(baseUrl, creds.company_db || companyDb, creds.username, creds.password);
 
     try {
+      // Idempotência 2: o Business Partner já existe no SAP (mesmo CardCode ou mesmo CNPJ/CPF).
+      const existente = await findExistingBp(baseUrl, cookie, cardCode, documento);
+      if (existente) {
+        await sb.from("registration_requests").update({ sap_card_code: existente }).eq("id", requestId);
+        await logEvent(
+          sb,
+          requestId,
+          caller.email,
+          `Cadastro não duplicado: fornecedor já existente no SAP (${companyDb}) com CardCode ${existente}.`,
+        );
+        return json(200, {
+          ok: true,
+          cardCode: existente,
+          alreadyRegistered: true,
+          message: `Fornecedor já existia no ERP com o código ${existente}. Nenhum cadastro duplicado foi criado.`,
+        });
+      }
+
       const bank = (r.bank_details ?? {}) as Record<string, string | undefined>;
       const bankSummary = [
         bank.pixKey ? `PIX (${bank.pixKeyType || "chave"}): ${bank.pixKey}` : null,
@@ -361,6 +420,20 @@ Deno.serve(async (req) => {
           msg = parsed?.error?.message?.value ?? text;
           code = parsed?.error?.code;
         } catch { /* texto cru */ }
+        // SAP recusou por duplicidade: reaproveita o BP existente em vez de falhar.
+        if (/already exist|já existe|duplicate/i.test(String(msg)) || code === -2035) {
+          const dup = await findExistingBp(baseUrl, cookie, cardCode, documento);
+          if (dup) {
+            await sb.from("registration_requests").update({ sap_card_code: dup }).eq("id", requestId);
+            await logEvent(sb, requestId, caller.email, `Cadastro não duplicado: fornecedor já existente no SAP com CardCode ${dup}.`);
+            return json(200, {
+              ok: true,
+              cardCode: dup,
+              alreadyRegistered: true,
+              message: `Fornecedor já existia no ERP com o código ${dup}. Nenhum cadastro duplicado foi criado.`,
+            });
+          }
+        }
         await logEvent(sb, requestId, caller.email, `Falha ao criar fornecedor no SAP: ${msg}`);
         return json(400, {
           error: `SAP recusou a criação: ${msg}`,
