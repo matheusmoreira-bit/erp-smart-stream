@@ -71,7 +71,10 @@ Deno.serve(async (req) => {
     ends_at?: string;
     reason?: string | null;
     company_db?: string | null;
+    /** Prefixos de centro de custo que limitam a substituição (ex.: ["1.8"]). */
+    cost_center_prefixes?: string[] | null;
   } = {};
+
   try {
     body = await req.json();
   } catch {
