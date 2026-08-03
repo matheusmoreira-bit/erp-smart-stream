@@ -11,6 +11,7 @@ import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { buildSapBaseUrl, loadSapCreds, sapCookieLogin, sapLogout } from "../_shared/sap-cache.ts";
 import { KYP_ADAPTERS } from "../_shared/kyp/becompliance.ts";
 import { resolveBeComplianceConfig } from "../_shared/kyp/config.ts";
+import { notifyActionCompleted } from "../_shared/action-notify.ts";
 import { classificarDocumento, decidirAcao, type KYPProviderConfig } from "../_shared/kyp/types.ts";
 
 type Sb = ReturnType<typeof createClient>;
@@ -261,6 +262,76 @@ async function nextSupplierCode(baseUrl: string, cookie: string, prefix = "F", w
   return `${prefix}${String(maior + 1).padStart(width, "0")}`;
 }
 
+
+/** Fecha o chamado (service role) e notifica o solicitante — nunca falha o cadastro. */
+async function closeAndNotify(
+  sb: Sb,
+  r: Record<string, unknown>,
+  requestId: string,
+  cardCode: string,
+  actor: string,
+  reused: boolean,
+): Promise<{ closed: boolean; notified: boolean }> {
+  const nota = reused
+    ? `Fornecedor já existente no ERP com o código ${cardCode}.`
+    : `Fornecedor cadastrado no ERP com o código ${cardCode}.`;
+  let closed = false;
+  try {
+    const { error } = await sb
+      .from("registration_requests")
+      .update({
+        status: "concluido",
+        sap_card_code: cardCode,
+        resolution_note: (r.resolution_note as string | null) || nota,
+        resolved_at: new Date().toISOString(),
+        resolved_by: actor,
+        assignee_email: (r.assignee_email as string | null) || actor,
+      })
+      .eq("id", requestId);
+    closed = !error;
+    if (error) console.warn("[registration-supplier-create] falha ao fechar chamado:", error.message);
+  } catch (e) {
+    console.warn("[registration-supplier-create] erro ao fechar chamado:", e);
+  }
+
+  if (closed) {
+    await sb.from("registration_request_events").insert({
+      request_id: requestId,
+      event_type: "status",
+      from_status: (r.status as string | null) ?? null,
+      to_status: "concluido",
+      message: nota,
+      author_email: actor,
+    }).then(() => {}, () => {});
+  }
+
+  let notified = false;
+  const requester = String(r.requester_email ?? "").trim();
+  if (requester) {
+    try {
+      await notifyActionCompleted(sb, {
+        actionKey: "registration",
+        refId: `registration-${requestId}-concluido`,
+        recipient: requester,
+        companyDb: (r.company_db as string | null) ?? null,
+        title: `Cadastro de fornecedor concluído — ${String(r.title ?? "")}`,
+        summary: nota,
+        details: [
+          { label: "Chamado", value: requestId.slice(0, 8).toUpperCase() },
+          { label: "Código no ERP", value: cardCode },
+          { label: "Base", value: (r.company_db as string | null) ?? null },
+          { label: "Atendido por", value: actor },
+        ],
+        link: "/solicitacoes",
+      });
+      notified = true;
+    } catch (e) {
+      console.warn("[registration-supplier-create] falha ao notificar solicitante:", e);
+    }
+  }
+  return { closed, notified };
+}
+
 /** Resolve o código de moeda válido na base (ex.: BRL pode ser "R$" no SAP). Retorna null se não existir. */
 async function resolveCurrency(baseUrl: string, cookie: string, wanted: string): Promise<string | null> {
   const alvo = String(wanted || "").trim();
@@ -458,10 +529,12 @@ Deno.serve(async (req) => {
           caller.email,
           `Cadastro não duplicado: fornecedor já existente no SAP (${companyDb}) com CardCode ${existente}.`,
         );
+        const fin = await closeAndNotify(sb, r, requestId, existente, caller.email, true);
         return json(200, {
           ok: true,
           cardCode: existente,
           alreadyRegistered: true,
+          ...fin,
           message: `Fornecedor já existia no ERP com o código ${existente}. Nenhum cadastro duplicado foi criado.`,
         });
       }
@@ -521,10 +594,12 @@ Deno.serve(async (req) => {
           if (dup) {
             await sb.from("registration_requests").update({ sap_card_code: dup }).eq("id", requestId);
             await logEvent(sb, requestId, caller.email, `Cadastro não duplicado: fornecedor já existente no SAP com CardCode ${dup}.`);
+            const finDup = await closeAndNotify(sb, r, requestId, dup, caller.email, true);
             return json(200, {
               ok: true,
               cardCode: dup,
               alreadyRegistered: true,
+              ...finDup,
               message: `Fornecedor já existia no ERP com o código ${dup}. Nenhum cadastro duplicado foi criado.`,
             });
           }
@@ -550,7 +625,9 @@ Deno.serve(async (req) => {
         `Fornecedor criado no SAP (${companyDb}) com CardCode ${created.CardCode ?? cardCode}. KYP: não validado neste cadastro (gestão posterior pelo fluxo de KYP).`,
       );
 
-      return json(200, { ok: true, cardCode: created.CardCode ?? cardCode });
+      const finalCode = created.CardCode ?? cardCode;
+      const fin = await closeAndNotify(sb, r, requestId, finalCode, caller.email, false);
+      return json(200, { ok: true, cardCode: finalCode, ...fin });
     } finally {
       await sapLogout(baseUrl, cookie).catch(() => {});
     }
