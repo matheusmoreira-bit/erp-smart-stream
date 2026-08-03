@@ -302,7 +302,16 @@ function ApprovalCard({
           <User className="w-3.5 h-3.5 text-primary/70" />
           <span>
             Aprovador:{" "}
-            {doc.delegatedFrom ? (
+            {onBehalfOf && substituteName ? (
+              <span
+                className="text-foreground font-medium"
+                title={`Aprovador original: ${onBehalfOf.name} — você atua como substituto`}
+              >
+                <span className="line-through text-muted-foreground/80 font-normal">{onBehalfOf.name}</span>
+                <span className="mx-1 text-primary" aria-hidden="true">→</span>
+                {substituteName}
+              </span>
+            ) : doc.delegatedFrom ? (
               <span className="text-foreground font-medium">
                 <span className="line-through text-muted-foreground/80 font-normal">{doc.delegatedFrom}</span>
                 <span className="mx-1 text-primary" aria-hidden="true">→</span>
@@ -313,6 +322,7 @@ function ApprovalCard({
             )}
           </span>
         </div>
+
         {onBehalfOf && (
           <div
             className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-md px-2 py-1"
