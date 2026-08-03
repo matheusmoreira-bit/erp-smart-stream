@@ -215,21 +215,31 @@ function DetailDialog({
           : `Fornecedor criado no SAP com o código ${created}.`,
       );
 
-      // Conclui o chamado e notifica o solicitante (e-mail + in-app) com o código do cadastro.
-      try {
-        await onUpdateStatus(request, "concluido", {
-          sapCardCode: created,
-          resolutionNote: note.trim() || `Fornecedor cadastrado no ERP com o código ${created}.`,
-        });
-        toast.success("Solicitante notificado com o código do cadastro.");
-      } catch (notifyErr) {
-        toast.warning(
-          notifyErr instanceof Error
-            ? `Cadastro criado, mas falhou ao notificar: ${notifyErr.message}`
-            : "Cadastro criado, mas falhou ao notificar o solicitante.",
+      // O servidor já fecha o chamado e notifica o solicitante; aqui só cobrimos a exceção.
+      const server = data as { closed?: boolean; notified?: boolean };
+      if (server.closed) {
+        toast.success(
+          server.notified
+            ? "Chamado finalizado e solicitante notificado com o código do cadastro."
+            : "Chamado finalizado. O aviso ao solicitante será reenviado automaticamente.",
         );
+      } else {
+        try {
+          await onUpdateStatus(request, "concluido", {
+            sapCardCode: created,
+            resolutionNote: note.trim() || `Fornecedor cadastrado no ERP com o código ${created}.`,
+          });
+          toast.success("Chamado finalizado e solicitante notificado.");
+        } catch (notifyErr) {
+          toast.warning(
+            notifyErr instanceof Error
+              ? `Cadastro criado, mas falhou ao finalizar o chamado: ${notifyErr.message}`
+              : "Cadastro criado, mas falhou ao finalizar o chamado.",
+          );
+        }
       }
       await reload();
+
 
     } catch (e) {
       const msg = friendlyError(e, "Falha ao cadastrar fornecedor no SAP");
