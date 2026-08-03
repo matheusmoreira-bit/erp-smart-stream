@@ -47,6 +47,14 @@ interface KypResult {
   motivo: string;
   providerRefId?: string | null;
   expiryDate?: string | null;
+  detalhes?: {
+    provider?: string;
+    documento?: string;
+    tipoPessoa?: string;
+    providerStatus?: string | null;
+    updatedAt?: string | null;
+    campos?: Record<string, unknown>;
+  };
 }
 
 interface SupplierFnResponse {
@@ -90,6 +98,39 @@ const KYP_STATUS_LABELS: Record<KypResult["status"], string> = {
   reprovado: "Reprovado",
   indisponivel: "Indisponível",
 };
+
+/** Monta o texto completo do parecer do KYP (campos + texto do provedor) para exibição/cópia. */
+function buildKypReport(k: (KypResult & { at?: string }) | null): string {
+  if (!k) return "";
+  const d = k.detalhes ?? {};
+  const linhas: string[] = [
+    `KYP: ${KYP_STATUS_LABELS[k.status]}`,
+    `Motivo: ${k.motivo}`,
+  ];
+  if (d.provider) linhas.push(`Provedor: ${d.provider}`);
+  if (d.documento) linhas.push(`Documento: ${d.documento}${d.tipoPessoa ? ` (${d.tipoPessoa})` : ""}`);
+  if (k.providerRefId) linhas.push(`Referência no provedor: ${k.providerRefId}`);
+  if (d.providerStatus) linhas.push(`Status bruto do provedor: ${d.providerStatus}`);
+  if (k.expiryDate) linhas.push(`Validade da diligência: ${k.expiryDate}`);
+  if (d.updatedAt) linhas.push(`Atualizado no provedor: ${d.updatedAt}`);
+  if (k.at) linhas.push(`Consultado em: ${new Date(k.at).toLocaleString("pt-BR")}`);
+  const campos = d.campos ?? {};
+  const entradas = Object.entries(campos);
+  if (entradas.length) {
+    linhas.push("", "Campos retornados pelo provedor:");
+    for (const [key, value] of entradas) linhas.push(`- ${key}: ${String(value)}`);
+  }
+  return linhas.join("\n");
+}
+
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast.success("Motivo do KYP copiado.");
+  } catch {
+    toast.error("Não foi possível copiar automaticamente. Selecione o texto e copie manualmente.");
+  }
+}
 
 function kypTone(status: KypResult["status"]) {
   if (status === "aprovado") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
