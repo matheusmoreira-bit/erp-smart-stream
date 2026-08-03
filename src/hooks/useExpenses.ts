@@ -11,6 +11,9 @@ import { createNotification } from "@/lib/notifications";
 import { expenseRead } from "@/lib/expense-read";
 import { pickHierarchicalFallbackRule } from "@/lib/approval-fallback";
 
+/** Aprovadora global quando a matriz não tem regra aplicável (todas as empresas). */
+const MATRIX_FALLBACK_APPROVER_NAME = "Juliana Gavineli";
+
 import {
   enqueueOutbox,
   isErpUnavailable,
