@@ -122,6 +122,7 @@ function DetailDialog({
   const [commentFiles, setCommentFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [kyp, setKyp] = useState<KypResult | null>(null);
+  const [createState, setCreateState] = useState<CreateState>({ phase: "idle" });
 
   if (!request) return null;
   const sla = slaInfo(request);
@@ -135,29 +136,46 @@ function DetailDialog({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ requestId: request.id, ...payload }),
     });
-    const data = await res.json().catch(() => ({}));
-    return { ok: res.ok, status: res.status, data } as {
-      ok: boolean;
-      status: number;
-      data: { error?: string; kyp?: KypResult; cardCode?: string; requiresAcknowledge?: boolean };
-    };
+    const raw = await res.text();
+    let data: SupplierFnResponse = {};
+    try {
+      data = raw ? (JSON.parse(raw) as SupplierFnResponse) : {};
+    } catch {
+      data = { error: raw?.slice(0, 500) || `Resposta inválida do servidor (HTTP ${res.status})` };
+    }
+    return { ok: res.ok, status: res.status, data, raw };
   };
 
   const runKyp = async () => {
     setBusy(true);
+    setCreateState({ phase: "running", step: "Consultando KYP (Know Your Partner)…" });
     try {
-      const { ok, data } = await callSupplierFn({ action: "kyp" });
+      const { ok, status, data } = await callSupplierFn({ action: "kyp" });
       if (data.kyp) setKyp(data.kyp);
       if (!ok) {
+        setCreateState({
+          phase: "error",
+          step: "Validação de KYP",
+          message: data.error || `Falha na validação de KYP (HTTP ${status})`,
+          httpStatus: status,
+          detail: data.details ? JSON.stringify(data.details, null, 2) : undefined,
+          at: new Date().toISOString(),
+        });
         toast.error(data.error || "Falha na validação de KYP");
         return;
       }
       const k = data.kyp;
+      setCreateState({
+        phase: "idle",
+        step: `KYP consultado: ${k ? KYP_STATUS_LABELS[k.status] : "sem retorno"}`,
+      });
       if (k?.status === "aprovado") toast.success("KYP aprovado — fornecedor liberado para cadastro.");
       else if (k?.status === "reprovado") toast.error(`KYP reprovado: ${k.motivo}`);
       else toast.warning(k?.motivo || "KYP pendente de análise.");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha na validação de KYP");
+      const msg = e instanceof Error ? e.message : "Falha na validação de KYP";
+      setCreateState({ phase: "error", step: "Validação de KYP", message: msg, at: new Date().toISOString() });
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -169,6 +187,12 @@ function DetailDialog({
       return;
     }
     setBusy(true);
+    setCreateState({
+      phase: "running",
+      step: acknowledgePending
+        ? "Criando Business Partner no SAP (exceção de KYP registrada)…"
+        : "Validando KYP e criando Business Partner no SAP…",
+    });
     try {
       const { ok, status, data } = await callSupplierFn({
         action: "create",
@@ -178,6 +202,13 @@ function DetailDialog({
       if (data.kyp) setKyp(data.kyp);
       if (!ok) {
         if (status === 409 && data.requiresAcknowledge) {
+          setCreateState({
+            phase: "warning",
+            step: "Aguardando confirmação",
+            message: data.error || "KYP não aprovado — confirmação necessária.",
+            httpStatus: status,
+            at: new Date().toISOString(),
+          });
           const proceed = window.confirm(
             `${data.error}\n\nDeseja cadastrar mesmo assim, registrando a exceção na trilha de auditoria?`,
           );
@@ -186,20 +217,51 @@ function DetailDialog({
             await createSupplier(true);
             return;
           }
+          setCreateState({
+            phase: "warning",
+            step: "Cadastro cancelado pelo operador",
+            message: "KYP não aprovado — cadastro não executado no SAP.",
+            at: new Date().toISOString(),
+          });
           toast.info("Cadastro cancelado — KYP não aprovado.");
           return;
         }
+        setCreateState({
+          phase: "error",
+          step: "Criação do Business Partner no SAP",
+          message: data.error || `Falha ao cadastrar fornecedor no SAP (HTTP ${status})`,
+          httpStatus: status,
+          detail: data.details ? JSON.stringify(data.details, null, 2) : undefined,
+          at: new Date().toISOString(),
+        });
         toast.error(data.error || "Falha ao cadastrar fornecedor no SAP");
         return;
       }
+      setCreateState({
+        phase: "success",
+        step: "Business Partner criado no SAP",
+        message: `CardCode ${data.cardCode ?? cardCode.trim()}${
+          request.company_db ? ` · base ${request.company_db}` : ""
+        }`,
+        cardCode: data.cardCode ?? cardCode.trim(),
+        at: new Date().toISOString(),
+      });
       toast.success(`Fornecedor criado no SAP com o código ${data.cardCode}.`);
       await reload();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha ao cadastrar fornecedor no SAP");
+      const msg = e instanceof Error ? e.message : "Falha ao cadastrar fornecedor no SAP";
+      setCreateState({
+        phase: "error",
+        step: "Criação do Business Partner no SAP",
+        message: msg,
+        at: new Date().toISOString(),
+      });
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
   };
+
 
 
   const act = async (status: RegistrationStatus) => {
