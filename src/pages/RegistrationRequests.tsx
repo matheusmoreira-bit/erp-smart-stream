@@ -280,12 +280,14 @@ function DetailDialog({
       return;
     }
     setBusy(true);
+    setStage("sap");
     setCreateState({
       phase: "running",
       step: acknowledgePending
-        ? "Criando Business Partner no SAP (exceção de KYP registrada)…"
-        : "Validando KYP e criando Business Partner no SAP…",
+        ? "Etapa 2 de 2 · Criando Business Partner no SAP (exceção de KYP registrada)…"
+        : "Etapa 2 de 2 · Criando Business Partner no SAP…",
     });
+
     try {
       const { ok, status, data } = await callSupplierFn({
         action: "create",
