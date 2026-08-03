@@ -41,6 +41,19 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === "deprovisionLog") {
+      const limit = Math.min(Math.max(Number(body.limit) || 50, 1), 200);
+      const { data, error } = await adminClient
+        .from("idp_deprovision_log")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return new Response(JSON.stringify({ events: data || [] }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (action === "upsertMany") {
       const rows = body.rows as Array<Record<string, unknown>>;
       if (!Array.isArray(rows) || rows.length === 0) {

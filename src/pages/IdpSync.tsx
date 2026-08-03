@@ -21,6 +21,7 @@ import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { toast } from "sonner";
 import { PageTitle } from "@/components/PageTitle";
 import { IdpBindingFlagCard } from "@/components/IdpBindingFlagCard";
+import { IdpDeprovisionLogCard } from "@/components/IdpDeprovisionLogCard";
 
 
 function jcToOption(jc: JumpCloudUser): SapSearchOption {
@@ -332,6 +333,7 @@ export default function IdpSyncPage() {
         )}
 
         <IdpBindingFlagCard />
+        <IdpDeprovisionLogCard />
 
 
 

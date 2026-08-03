@@ -3240,6 +3240,72 @@ export type Database = {
         }
         Relationships: []
       }
+      idp_deprovision_log: {
+        Row: {
+          approval_rules_orphaned: number
+          company_db: string | null
+          cost_centers_revoked: number
+          created_at: string
+          credentials_revoked: number
+          details: Json
+          email: string | null
+          errors: Json
+          groups_revoked: number
+          id: string
+          idp_provider: string | null
+          idp_user_id: string | null
+          push_devices_revoked: number
+          reason: string
+          sap_locked: boolean
+          sap_user_code: string | null
+          source: string
+          substitutions_revoked: number
+          user_key: string | null
+        }
+        Insert: {
+          approval_rules_orphaned?: number
+          company_db?: string | null
+          cost_centers_revoked?: number
+          created_at?: string
+          credentials_revoked?: number
+          details?: Json
+          email?: string | null
+          errors?: Json
+          groups_revoked?: number
+          id?: string
+          idp_provider?: string | null
+          idp_user_id?: string | null
+          push_devices_revoked?: number
+          reason: string
+          sap_locked?: boolean
+          sap_user_code?: string | null
+          source?: string
+          substitutions_revoked?: number
+          user_key?: string | null
+        }
+        Update: {
+          approval_rules_orphaned?: number
+          company_db?: string | null
+          cost_centers_revoked?: number
+          created_at?: string
+          credentials_revoked?: number
+          details?: Json
+          email?: string | null
+          errors?: Json
+          groups_revoked?: number
+          id?: string
+          idp_provider?: string | null
+          idp_user_id?: string | null
+          push_devices_revoked?: number
+          reason?: string
+          sap_locked?: boolean
+          sap_user_code?: string | null
+          source?: string
+          substitutions_revoked?: number
+          user_key?: string | null
+        }
+        Relationships: []
+      }
       idp_user_mapping: {
         Row: {
           attributes_synced_at: string | null
@@ -3248,6 +3314,8 @@ export type Database = {
           cost_center_label: string | null
           created_at: string
           department: string | null
+          deprovision_reason: string | null
+          deprovisioned_at: string | null
           employee_id: string | null
           employee_type: string | null
           id: string
@@ -3271,6 +3339,8 @@ export type Database = {
           cost_center_label?: string | null
           created_at?: string
           department?: string | null
+          deprovision_reason?: string | null
+          deprovisioned_at?: string | null
           employee_id?: string | null
           employee_type?: string | null
           id?: string
@@ -3294,6 +3364,8 @@ export type Database = {
           cost_center_label?: string | null
           created_at?: string
           department?: string | null
+          deprovision_reason?: string | null
+          deprovisioned_at?: string | null
           employee_id?: string | null
           employee_type?: string | null
           id?: string
@@ -7307,6 +7379,10 @@ export type Database = {
         Returns: boolean
       }
       is_erp_session_revoked: { Args: { _sid_hash: string }; Returns: boolean }
+      is_erp_user_deprovisioned: {
+        Args: { _company_db?: string; _user_key: string }
+        Returns: boolean
+      }
       is_idp_linked: { Args: { _email: string }; Returns: boolean }
       is_registration_agent: { Args: never; Returns: boolean }
       is_sap_code_idp_linked: {
