@@ -100,6 +100,31 @@ interface KypOutcome {
   motivo: string;
   providerRefId?: string | null;
   expiryDate?: string | null;
+  /** Detalhes completos do provedor, para exibição/cópia na UI. */
+  detalhes?: {
+    provider?: string;
+    documento?: string;
+    tipoPessoa?: string;
+    providerStatus?: string | null;
+    updatedAt?: string | null;
+    campos?: Record<string, unknown>;
+  };
+}
+
+/** Reduz o payload bruto do provedor a campos legíveis (sem dados sensíveis de sessão). */
+function camposDoProvedor(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (/token|password|secret|authorization/i.test(k)) continue;
+    if (v === null || v === undefined || v === "") continue;
+    if (typeof v === "object") {
+      out[k] = JSON.stringify(v).slice(0, 500);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
 }
 
 /** Consulta (e cria, se faltar) a diligência do documento no provedor de KYP. */
@@ -126,6 +151,7 @@ async function runKyp(sb: Sb, documento: string, nome: string, companyDb: string
       ok: false,
       status: "indisponivel",
       motivo: "Provedor de KYP não configurado nesta instalação.",
+      detalhes: { provider: providerCode, documento: doc.documento, tipoPessoa: doc.tipoPessoa },
     };
   }
 
@@ -149,6 +175,14 @@ async function runKyp(sb: Sb, documento: string, nome: string, companyDb: string
       motivo: decisao.motivo,
       providerRefId: criada.providerRefId,
       expiryDate: criada.expiryDate,
+      detalhes: {
+        provider: providerCode,
+        documento: doc.documento,
+        tipoPessoa: doc.tipoPessoa,
+        providerStatus: criada.status ?? null,
+        updatedAt: criada.updatedAt ?? null,
+        campos: camposDoProvedor(criada.raw),
+      },
     };
   }
 
@@ -160,6 +194,14 @@ async function runKyp(sb: Sb, documento: string, nome: string, companyDb: string
       motivo: decisao.motivo,
       providerRefId: atual?.providerRefId ?? null,
       expiryDate: atual?.expiryDate ?? null,
+      detalhes: {
+        provider: providerCode,
+        documento: doc.documento,
+        tipoPessoa: doc.tipoPessoa,
+        providerStatus: atual?.status ?? null,
+        updatedAt: atual?.updatedAt ?? null,
+        campos: camposDoProvedor(atual?.raw),
+      },
     };
   }
 
@@ -172,6 +214,14 @@ async function runKyp(sb: Sb, documento: string, nome: string, companyDb: string
       motivo: `Diligência em análise no provedor (${providerStatus}).`,
       providerRefId: atual?.providerRefId ?? null,
       expiryDate: atual?.expiryDate ?? null,
+      detalhes: {
+        provider: providerCode,
+        documento: doc.documento,
+        tipoPessoa: doc.tipoPessoa,
+        providerStatus: atual?.status ?? null,
+        updatedAt: atual?.updatedAt ?? null,
+        campos: camposDoProvedor(atual?.raw),
+      },
     };
   }
 
@@ -182,6 +232,14 @@ async function runKyp(sb: Sb, documento: string, nome: string, companyDb: string
     motivo: decisao.motivo,
     providerRefId: atual?.providerRefId ?? null,
     expiryDate: atual?.expiryDate ?? null,
+    detalhes: {
+      provider: providerCode,
+      documento: doc.documento,
+      tipoPessoa: doc.tipoPessoa,
+      providerStatus: atual?.status ?? null,
+      updatedAt: atual?.updatedAt ?? null,
+      campos: camposDoProvedor(atual?.raw),
+    },
   };
 }
 
