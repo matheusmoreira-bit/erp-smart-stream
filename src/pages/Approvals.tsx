@@ -1016,10 +1016,16 @@ function ApprovalDetailModal({
                     </span>
                   )}
 
+                  {specialRateio && (
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-sky-600 dark:text-sky-400 bg-sky-500/10 border border-sky-500/30 rounded px-1.5 py-0.5">
+                      Folha/impostos — visão completa
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  As linhas deste documento caem em regras de aprovação diferentes. Cada aprovador
-                  vê apenas as linhas e o valor da sua alçada.
+                  {specialRateio
+                    ? "Rateio sistêmico de folha/impostos: todos os aprovadores visualizam todas as linhas do documento."
+                    : "As linhas deste documento caem em regras de aprovação diferentes. Cada aprovador vê apenas as linhas e o valor da sua alçada."}
                 </p>
                 <div className="space-y-1.5">
                   {segments.map((seg) => {
