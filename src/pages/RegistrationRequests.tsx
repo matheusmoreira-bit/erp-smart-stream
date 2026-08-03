@@ -82,6 +82,7 @@ function DetailDialog({
   onClose,
   onUpdateStatus,
   onComment,
+  onRefreshList,
 }: {
   request: RegistrationRequest | null;
   isAgent: boolean;
@@ -92,6 +93,7 @@ function DetailDialog({
     extra?: { sapCardCode?: string | null; resolutionNote?: string | null },
   ) => Promise<void>;
   onComment: (id: string, message: string, files?: File[]) => Promise<void>;
+  onRefreshList?: () => Promise<void> | void;
 }) {
   const { events, reload } = useRegistrationRequestEvents(request?.id ?? null);
   const [cardCode, setCardCode] = useState("");
