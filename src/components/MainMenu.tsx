@@ -202,6 +202,15 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-cyan-500/20 to-cyan-500/5",
     moduleKey: "financial_review",
   },
+  cashflow_forecast: {
+    title: "Previsão de Caixa",
+    description: "Contas a pagar e a receber por vencimento, com quebra por centro de custo/projeto e comparação com o realizado.",
+    icon: TrendingUp,
+    path: "/financeiro/previsao-caixa",
+    color: "text-emerald-400",
+    bgGlow: "from-emerald-500/20 to-emerald-500/5",
+    moduleKey: "financial_review",
+  },
   advance_payments: {
     title: "Adiantamentos",
     description: "Crie pedidos de adiantamento a fornecedor com aprovação e integração automática no SAP.",
@@ -264,7 +273,7 @@ const moduleGroups: { title: string; keys: string[] }[] = (
     },
     {
       title: "Financeiro & Fiscal",
-      keys: ["advance_payments", "financial_review", "nf_entrada"],
+      keys: ["advance_payments", "financial_review", "cashflow_forecast", "nf_entrada"],
     },
     {
       title: "Análise",
