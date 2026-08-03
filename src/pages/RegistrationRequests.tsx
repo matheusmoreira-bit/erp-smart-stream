@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ClipboardList, Clock, Copy, Loader2, RefreshCw, Send, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ClipboardList, Clock, Loader2, RefreshCw, Send, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -42,26 +42,10 @@ import { RegistrationAttachmentList } from "@/components/RegistrationAttachmentL
 import { RegistrationFilePicker } from "@/components/RegistrationFilePicker";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 
-interface KypResult {
-  status: "aprovado" | "pendente" | "reprovado" | "indisponivel";
-  motivo: string;
-  providerRefId?: string | null;
-  expiryDate?: string | null;
-  detalhes?: {
-    provider?: string;
-    documento?: string;
-    tipoPessoa?: string;
-    providerStatus?: string | null;
-    updatedAt?: string | null;
-    campos?: Record<string, unknown>;
-  };
-}
-
 interface SupplierFnResponse {
   ok?: boolean;
   error?: string;
   details?: unknown;
-  kyp?: KypResult;
   cardCode?: string;
   requiresAcknowledge?: boolean;
 }
@@ -92,73 +76,6 @@ function fmt(dt?: string | null) {
   return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
-const KYP_STATUS_LABELS: Record<KypResult["status"], string> = {
-  aprovado: "Aprovado",
-  pendente: "Pendente de análise",
-  reprovado: "Reprovado",
-  indisponivel: "Indisponível",
-};
-
-/** Monta o texto completo do parecer do KYP (campos + texto do provedor) para exibição/cópia. */
-function buildKypReport(k: (KypResult & { at?: string }) | null): string {
-  if (!k) return "";
-  const d = k.detalhes ?? {};
-  const linhas: string[] = [
-    `KYP: ${KYP_STATUS_LABELS[k.status]}`,
-    `Motivo: ${k.motivo}`,
-  ];
-  if (d.provider) linhas.push(`Provedor: ${d.provider}`);
-  if (d.documento) linhas.push(`Documento: ${d.documento}${d.tipoPessoa ? ` (${d.tipoPessoa})` : ""}`);
-  if (k.providerRefId) linhas.push(`Referência no provedor: ${k.providerRefId}`);
-  if (d.providerStatus) linhas.push(`Status bruto do provedor: ${d.providerStatus}`);
-  if (k.expiryDate) linhas.push(`Validade da diligência: ${k.expiryDate}`);
-  if (d.updatedAt) linhas.push(`Atualizado no provedor: ${d.updatedAt}`);
-  if (k.at) linhas.push(`Consultado em: ${new Date(k.at).toLocaleString("pt-BR")}`);
-  const campos = d.campos ?? {};
-  const entradas = Object.entries(campos);
-  if (entradas.length) {
-    linhas.push("", "Campos retornados pelo provedor:");
-    for (const [key, value] of entradas) linhas.push(`- ${key}: ${String(value)}`);
-  }
-  return linhas.join("\n");
-}
-
-async function copyText(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-    toast.success("Motivo do KYP copiado.");
-  } catch {
-    toast.error("Não foi possível copiar automaticamente. Selecione o texto e copie manualmente.");
-  }
-}
-
-function kypTone(status: KypResult["status"]) {
-  if (status === "aprovado") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
-  if (status === "reprovado") return "border-destructive/30 bg-destructive/10 text-destructive";
-  return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400";
-}
-
-/** Recupera o último resultado de KYP registrado na trilha do chamado. */
-function deriveKypFromEvents(
-  events: { message: string | null; created_at: string }[],
-): (KypResult & { at?: string }) | null {
-  for (let i = events.length - 1; i >= 0; i--) {
-    const msg = events[i]?.message?.trim();
-    if (!msg) continue;
-    const validated = msg.match(/^Valida[çc][ãa]o KYP:\s*([A-Za-zÀ-ÿ]+)\s*[—-]\s*([\s\S]+)$/i);
-    if (validated) {
-      const status = validated[1].toLowerCase() as KypResult["status"];
-      if (["aprovado", "reprovado", "pendente", "indisponivel"].includes(status)) {
-        return { status, motivo: validated[2].trim(), at: events[i].created_at };
-      }
-    }
-    const blocked = msg.match(/^Cadastro bloqueado pelo KYP:\s*([\s\S]+)$/i);
-    if (blocked) return { status: "reprovado", motivo: blocked[1].trim(), at: events[i].created_at };
-  }
-  return null;
-}
-
-
 function DetailDialog({
   request,
   isAgent,
@@ -182,17 +99,12 @@ function DetailDialog({
   const [comment, setComment] = useState("");
   const [commentFiles, setCommentFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
-  const [stage, setStage] = useState<"idle" | "kyp" | "sap">("idle");
-
-  const [kyp, setKyp] = useState<KypResult | null>(null);
+  const [stage, setStage] = useState<"idle" | "sap">("idle");
   const [createState, setCreateState] = useState<CreateState>({ phase: "idle" });
 
   if (!request) return null;
   const sla = slaInfo(request);
   const bank = request.bank_details || {};
-  const kypView: (KypResult & { at?: string }) | null = kyp ?? deriveKypFromEvents(events);
-
-
   const callSupplierFn = async (payload: Record<string, unknown>) => {
     const res = await sapFunctionFetch("registration-supplier-create", {
       method: "POST",
@@ -209,49 +121,6 @@ function DetailDialog({
     return { ok: res.ok, status: res.status, data, raw };
   };
 
-  const runKyp = async () => {
-    setBusy(true);
-    setStage("kyp");
-    setCreateState({ phase: "running", step: "Consultando KYP (Know Your Partner)…" });
-
-    try {
-      const { ok, status, data } = await callSupplierFn({ action: "kyp" });
-      if (data.kyp) setKyp(data.kyp);
-      if (!ok) {
-        setCreateState({
-          phase: "error",
-          step: "Validação de KYP",
-          message: data.error || `Falha na validação de KYP (HTTP ${status})`,
-          httpStatus: status,
-          detail: data.details ? JSON.stringify(data.details, null, 2) : undefined,
-          at: new Date().toISOString(),
-        });
-        toast.error(data.error || "Falha na validação de KYP");
-        return;
-      }
-      const k = data.kyp;
-      setCreateState({
-        phase: "idle",
-        step: `KYP consultado: ${k ? KYP_STATUS_LABELS[k.status] : "sem retorno"}`,
-      });
-      const report = buildKypReport(k ? { ...k } : null);
-      const toastOpts = report
-        ? { description: report, duration: 15000, action: { label: "Copiar", onClick: () => void copyText(report) } }
-        : undefined;
-      if (k?.status === "aprovado") toast.success("KYP aprovado — fornecedor liberado para cadastro.", toastOpts);
-      else if (k?.status === "reprovado") toast.error(`KYP reprovado: ${k.motivo}`, toastOpts);
-      else toast.warning(k?.motivo || "KYP pendente de análise.", toastOpts);
-    } catch (e) {
-      const msg = friendlyError(e, "Falha na validação de KYP");
-      setCreateState({ phase: "error", step: "Validação de KYP", message: msg, at: new Date().toISOString() });
-      toast.error(msg);
-    } finally {
-      setBusy(false);
-      setStage("idle");
-    }
-
-  };
-
   /** Mensagem clara para falhas de rede/integração. */
   const friendlyError = (e: unknown, fallback: string) => {
     const msg = e instanceof Error ? e.message : "";
@@ -264,7 +133,7 @@ function DetailDialog({
     return msg || fallback;
   };
 
-  const createSupplier = async (acknowledgePending: boolean) => {
+  const createSupplier = async () => {
     if (!cardCode.trim()) {
       toast.error("Informe o CardCode do fornecedor.");
       return;
@@ -280,35 +149,8 @@ function DetailDialog({
       const { ok, status, data } = await callSupplierFn({
         action: "create",
         cardCode: cardCode.trim(),
-        acknowledgePending,
       });
-      if (data.kyp) setKyp(data.kyp);
       if (!ok) {
-        if (status === 409 && data.requiresAcknowledge) {
-          setCreateState({
-            phase: "warning",
-            step: "Aguardando confirmação",
-            message: data.error || "KYP não aprovado — confirmação necessária.",
-            httpStatus: status,
-            at: new Date().toISOString(),
-          });
-          const proceed = window.confirm(
-            `${data.error}\n\nDeseja cadastrar mesmo assim, registrando a exceção na trilha de auditoria?`,
-          );
-          if (proceed) {
-            setBusy(false);
-            await createSupplier(true);
-            return;
-          }
-          setCreateState({
-            phase: "warning",
-            step: "Cadastro cancelado pelo operador",
-            message: "KYP não aprovado — cadastro não executado no SAP.",
-            at: new Date().toISOString(),
-          });
-          toast.info("Cadastro cancelado — KYP não aprovado.");
-          return;
-        }
         setCreateState({
           phase: "error",
           step: "Criação do Business Partner no SAP",
@@ -365,6 +207,36 @@ function DetailDialog({
 
 
 
+  /** Fornecedor já existe no ERP: registra o código, finaliza o chamado e notifica o solicitante. */
+  const finishWithExistingCode = async () => {
+    const code = cardCode.trim();
+    if (!code) {
+      toast.error("Informe o código do fornecedor no ERP.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await onUpdateStatus(request, "concluido", {
+        sapCardCode: code,
+        resolutionNote: note.trim() || `Fornecedor já cadastrado no ERP com o código ${code}.`,
+      });
+      setCreateState({
+        phase: "success",
+        step: "Chamado finalizado com código existente",
+        message: `Código ${code}${request.company_db ? ` · base ${request.company_db}` : ""}`,
+        cardCode: code,
+        at: new Date().toISOString(),
+      });
+      toast.success("Chamado finalizado e solicitante notificado.");
+      await reload();
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao finalizar o chamado");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const act = async (status: RegistrationStatus) => {
     setBusy(true);
     try {
@@ -418,28 +290,7 @@ function DetailDialog({
               SLA 48h úteis · {fmt(request.due_at)} ({sla.label})
             </Badge>
             {request.company_db && <Badge variant="outline">{request.company_db}</Badge>}
-            {request.request_type === "supplier" && (
-              <Badge variant="outline" className={kypView ? kypTone(kypView.status) : ""}>
-                {kypView?.status === "aprovado" ? (
-                  <ShieldCheck className="w-3 h-3 mr-1" />
-                ) : (
-                  <ShieldAlert className="w-3 h-3 mr-1" />
-                )}
-                KYP: {kypView ? KYP_STATUS_LABELS[kypView.status] : "Não validado"}
-              </Badge>
-            )}
           </div>
-
-          {request.request_type === "supplier" && kypView && kypView.status !== "aprovado" && (
-            <div className={`rounded-md border px-3 py-2 text-sm ${kypTone(kypView.status)}`}>
-              <p className="font-medium">
-                {kypView.status === "reprovado" ? "Motivo da reprovação no KYP" : "Pendência no KYP"}
-              </p>
-              <p className="text-xs mt-1">{kypView.motivo}</p>
-              {kypView.at && <p className="text-[11px] mt-1 opacity-80">Validado em {fmt(kypView.at)}</p>}
-            </div>
-          )}
-
 
           <div className="grid gap-3 sm:grid-cols-2 text-sm">
             {request.federal_tax_id && (
@@ -613,88 +464,29 @@ function DetailDialog({
                 <div className="rounded-md border border-dashed border-border p-3 space-y-2">
                   <p className="text-sm font-medium">Cadastro do fornecedor no ERP</p>
                   <p className="text-xs text-muted-foreground">
-                    O cadastro é executado direto no SAP, sem bloqueio por KYP nem validação de CNPJ. A gestão do
-                    fornecedor pelo fluxo de KYP será tratada em um momento posterior — a consulta abaixo é apenas
-                    informativa.
+                    Fluxo do chamado: cadastrar o fornecedor no ERP ou informar um código já existente. Em ambos os
+                    casos o chamado é finalizado e o solicitante é notificado. O KYP é tratado em fluxo próprio,
+                    separado desta solicitação.
                   </p>
-                  {kypView ? (
-                    <div className={`rounded-md border px-3 py-2 text-sm ${kypTone(kypView.status)}`}>
-                      <div className="flex items-center gap-2 font-medium">
-                        {kypView.status === "aprovado" ? (
-                          <ShieldCheck className="w-4 h-4" />
-                        ) : (
-                          <ShieldAlert className="w-4 h-4" />
-                        )}
-                        KYP: {KYP_STATUS_LABELS[kypView.status]}
-                      </div>
-                      <p className="text-xs mt-1">
-                        {kypView.status === "reprovado" ? `Motivo do bloqueio: ${kypView.motivo}` : kypView.motivo}
-                      </p>
-                      {kypView.at && <p className="text-[11px] mt-1 opacity-80">Validado em {fmt(kypView.at)}</p>}
-                      {(kypView.detalhes || kypView.providerRefId || kypView.expiryDate) && (
-                        <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 text-[11px] sm:grid-cols-2">
-                          {kypView.detalhes?.provider && (
-                            <div className="flex gap-1"><dt className="opacity-70">Provedor:</dt><dd>{kypView.detalhes.provider}</dd></div>
-                          )}
-                          {kypView.detalhes?.documento && (
-                            <div className="flex gap-1">
-                              <dt className="opacity-70">Documento:</dt>
-                              <dd>{kypView.detalhes.documento}{kypView.detalhes.tipoPessoa ? ` (${kypView.detalhes.tipoPessoa})` : ""}</dd>
-                            </div>
-                          )}
-                          {kypView.providerRefId && (
-                            <div className="flex gap-1"><dt className="opacity-70">Referência:</dt><dd className="break-all">{kypView.providerRefId}</dd></div>
-                          )}
-                          {kypView.detalhes?.providerStatus && (
-                            <div className="flex gap-1"><dt className="opacity-70">Status no provedor:</dt><dd>{kypView.detalhes.providerStatus}</dd></div>
-                          )}
-                          {kypView.expiryDate && (
-                            <div className="flex gap-1"><dt className="opacity-70">Validade:</dt><dd>{kypView.expiryDate}</dd></div>
-                          )}
-                          {kypView.detalhes?.updatedAt && (
-                            <div className="flex gap-1"><dt className="opacity-70">Atualizado:</dt><dd>{fmt(kypView.detalhes.updatedAt)}</dd></div>
-                          )}
-                        </dl>
-                      )}
-                      {kypView.detalhes?.campos && Object.keys(kypView.detalhes.campos).length > 0 && (
-                        <details className="mt-2">
-                          <summary className="cursor-pointer text-[11px] underline underline-offset-2">
-                            Texto completo retornado pelo provedor
-                          </summary>
-                          <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap rounded bg-background/60 p-2 text-[11px] leading-relaxed">
-{buildKypReport(kypView)}
-                          </pre>
-                        </details>
-                      )}
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="mt-2 h-7 gap-1.5 text-[11px]"
-                        onClick={() => void copyText(buildKypReport(kypView))}
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                        Copiar motivo completo
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
-                      O KYP será consultado no momento do cadastro.
-                    </div>
-                  )}
                   <div className="flex flex-wrap gap-2">
                     <Button
                       disabled={busy || !cardCode.trim()}
                       aria-busy={busy}
-                      onClick={() => void createSupplier(true)}
+                      onClick={() => void createSupplier()}
                       className="gap-2"
                     >
                       {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
                       {stage === "sap" ? "Cadastrando no SAP…" : "Cadastrar fornecedor no SAP"}
                     </Button>
-                    <Button variant="ghost" disabled={busy} aria-busy={busy} onClick={() => void runKyp()} className="gap-2">
-                      {busy && stage === "kyp" && <Loader2 className="w-4 h-4 animate-spin" />}
-                      Consultar KYP apenas
+                    <Button
+                      variant="outline"
+                      disabled={busy || !cardCode.trim()}
+                      aria-busy={busy}
+                      onClick={() => void finishWithExistingCode()}
+                      className="gap-2"
+                    >
+                      {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+                      Informar código existente e finalizar
                     </Button>
                   </div>
 
@@ -702,14 +494,12 @@ function DetailDialog({
                     <div className="space-y-1.5" aria-live="polite">
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        {stage === "kyp"
-                          ? "Consultando o provedor de KYP (pode levar alguns segundos)…"
-                          : "Criando o Business Partner no SAP…"}
+                        Criando o Business Partner no SAP…
                       </div>
                       <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                         <div
                           className="h-full bg-primary transition-all duration-500"
-                          style={{ width: stage === "kyp" ? "45%" : "85%" }}
+                          style={{ width: "85%" }}
                         />
                       </div>
                     </div>
@@ -750,7 +540,7 @@ function DetailDialog({
                   ) : null}
 
                   <p className="text-xs text-muted-foreground">
-                    Informe o CardCode acima. O KYP roda automaticamente antes da criação.
+                    Informe o CardCode acima antes de cadastrar ou de finalizar com código existente.
                   </p>
 
                 </div>
