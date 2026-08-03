@@ -170,7 +170,9 @@ function DetailDialog({
 
   const runKyp = async () => {
     setBusy(true);
+    setStage("kyp");
     setCreateState({ phase: "running", step: "Consultando KYP (Know Your Partner)…" });
+
     try {
       const { ok, status, data } = await callSupplierFn({ action: "kyp" });
       if (data.kyp) setKyp(data.kyp);
