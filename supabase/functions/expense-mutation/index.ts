@@ -164,6 +164,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   let resolvedLevel = 1;
   let fallbackUsed = false;
   let escalatedTo: string | null = null;
+  let matrixGap = false;
   if (status === "pendente_aprovacao" && ruleId) {
     const picked = await resolveApproverWithEscalation(admin, ruleId, {
       companyDb,
