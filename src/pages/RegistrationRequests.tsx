@@ -183,6 +183,12 @@ function DetailDialog({
                 </p>
               </div>
             )}
+            {bank.other && (
+              <div>
+                <p className="text-xs text-muted-foreground">Detalhe do pagamento</p>
+                <p className="font-medium break-words">{bank.other}</p>
+              </div>
+            )}
             {bank.holderName && (
               <div>
                 <p className="text-xs text-muted-foreground">Titular</p>
@@ -191,6 +197,17 @@ function DetailDialog({
                 </p>
               </div>
             )}
+            {request.request_type === "supplier" &&
+              !bank.pixKey &&
+              !bank.bank &&
+              !bank.account &&
+              !bank.other && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Dados de pagamento</p>
+                  <p className="font-medium text-muted-foreground">Não informados pelo solicitante</p>
+                </div>
+              )}
+
             {request.sap_card_code && (
               <div>
                 <p className="text-xs text-muted-foreground">Código no ERP</p>
