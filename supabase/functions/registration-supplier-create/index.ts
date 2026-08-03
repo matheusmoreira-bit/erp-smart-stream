@@ -10,6 +10,7 @@ import { AuthError, requireUser, validateSapSession } from "../_shared/auth.ts";
 import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { buildSapBaseUrl, loadSapCreds, sapCookieLogin, sapLogout } from "../_shared/sap-cache.ts";
 import { KYP_ADAPTERS } from "../_shared/kyp/becompliance.ts";
+import { resolveBeComplianceConfig } from "../_shared/kyp/config.ts";
 import { classificarDocumento, decidirAcao, type KYPProviderConfig } from "../_shared/kyp/types.ts";
 
 type Sb = ReturnType<typeof createClient>;
@@ -82,15 +83,14 @@ async function resolveCaller(req: Request): Promise<{ email: string; companyDb: 
   throw new AuthError("Não autenticado", 401);
 }
 
-function providerConfig(code: string, extra: Record<string, unknown>): KYPProviderConfig | null {
+async function providerConfig(
+  sb: Sb,
+  code: string,
+  extra: Record<string, unknown>,
+  companyDb?: string | null,
+): Promise<KYPProviderConfig | null> {
   if (code !== "BECOMPLIANCE") return null;
-  const clientId = String(extra.client_id ?? "") || Deno.env.get("BECOMPLIANCE_CLIENT_ID") || "";
-  const baseUrl = String(extra.base_url ?? "") || Deno.env.get("BECOMPLIANCE_BASE_URL") ||
-    "https://api.becompliance.com";
-  const email = Deno.env.get("BECOMPLIANCE_EMAIL") || "";
-  const password = Deno.env.get("BECOMPLIANCE_PASSWORD") || "";
-  if (!clientId || !email || !password) return null;
-  return { clientId, baseUrl, email, password, extra };
+  return await resolveBeComplianceConfig(sb as any, companyDb ?? null, extra);
 }
 
 interface KypOutcome {
@@ -117,7 +117,9 @@ async function runKyp(sb: Sb, documento: string, nome: string, companyDb: string
   const prov = (cfg?.kyp_providers ?? null) as { code?: string; ativo?: boolean } | null;
   const providerCode = String(prov?.code ?? "BECOMPLIANCE");
   const adapter = KYP_ADAPTERS[providerCode];
-  const config = adapter ? providerConfig(providerCode, (cfg?.config ?? {}) as Record<string, unknown>) : null;
+  const config = adapter
+    ? await providerConfig(sb, providerCode, (cfg?.config ?? {}) as Record<string, unknown>, companyDb)
+    : null;
   if (!adapter || !config) {
     return {
       available: false,

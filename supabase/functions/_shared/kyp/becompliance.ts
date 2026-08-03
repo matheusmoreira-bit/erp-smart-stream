@@ -14,6 +14,20 @@ import {
   type TipoPessoa,
 } from "./types.ts";
 
+
+/**
+ * Normaliza a URL base: aceita tanto "https://api.becompliance.com" quanto
+ * "https://api.becompliance.com/ext/v1/" (como cadastrado nos secrets) e
+ * devolve sempre a raiz, evitando duplicar /ext/v1 nas rotas.
+ */
+export function beBaseRoot(raw: string): string {
+  return (raw || "https://api.becompliance.com")
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/\/ext\/v1$/i, "")
+    .replace(/\/ext$/i, "");
+}
+
 async function request(
   url: string,
   init: RequestInit,
@@ -46,10 +60,22 @@ function asArray(payload: unknown): Record<string, unknown>[] {
   return [];
 }
 
+/** Mapeia o process_status/status do BeCompliance para approved|rejected|pending. */
+function mapStatus(row: Record<string, unknown>): string {
+  const raw = String(row.process_status ?? row.status ?? row.result ?? row.situation ?? "pending")
+    .toLowerCase();
+  if (["approved", "aprovado", "finished_approved", "concluded_approved"].includes(raw)) return "approved";
+  if (["rejected", "reproved", "reprovado", "disapproved", "denied", "blocked"].includes(raw)) return "rejected";
+  if (["closed", "finished", "concluded", "done"].includes(raw)) return "approved";
+  return "pending";
+}
+
 function normalize(row: Record<string, unknown> | null): KYPDiligenciaResult | null {
   if (!row) return null;
-  const providerRefId = String(row.id ?? row.uuid ?? row.np_id ?? row.analysis_id ?? "");
-  const status = String(row.status ?? row.result ?? row.situation ?? "pending").toLowerCase();
+  const providerRefId = String(
+    row.id ?? row.uuid ?? row.np_id ?? row.analysis_id ?? row.code ?? "",
+  );
+  const status = mapStatus(row);
   const expiry = (row.expiry_date ?? row.expiration_date ?? row.valid_until ?? null) as string | null;
   const updated = (row.updated_at ?? row.created_at ?? null) as string | null;
   return { providerRefId, status, expiryDate: expiry, updatedAt: updated, raw: row };
@@ -59,7 +85,7 @@ export const BeComplianceAdapter: KYPProviderAdapter = {
   code: "BECOMPLIANCE",
 
   async authenticate(config: KYPProviderConfig): Promise<KYPSession> {
-    const url = `${config.baseUrl.replace(/\/+$/, "")}/ext/v1/${config.clientId}/auth/login`;
+    const url = `${beBaseRoot(config.baseUrl)}/ext/v1/${config.clientId}/auth/login`;
     const { status, body } = await request(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -83,23 +109,34 @@ export const BeComplianceAdapter: KYPProviderAdapter = {
     tipoPessoa: TipoPessoa,
   ): Promise<KYPDiligenciaResult | null> {
     const { baseUrl, clientId } = session.config;
-    const base = baseUrl.replace(/\/+$/, "");
+    const base = beBaseRoot(baseUrl);
     const headers = {
       Accept: "application/json",
       Authorization: `Bearer ${session.token}`,
     };
 
-    const url = tipoPessoa === "PF"
-      ? `${base}/${clientId}/due_diligence?document_number=${encodeURIComponent(formatCPF(documento))}` +
-        `&archived=false&np_type=external&module=compliance`
-      : `${base}/ext/v1/${clientId}/third-party-analysis?cnpj=${encodeURIComponent(onlyDigits(documento))}`;
+    // A API expõe a mesma rota para PF e PJ. O filtro por CNPJ funciona no
+    // servidor; para CPF a API ignora o parâmetro, então filtramos localmente
+    // pelos dígitos do documento presentes na linha.
+    const digits = onlyDigits(documento);
+    const query = tipoPessoa === "PJ"
+      ? `?cnpj=${encodeURIComponent(digits)}`
+      : `?document_number=${encodeURIComponent(formatCPF(documento))}`;
+    const url = `${base}/ext/v1/${clientId}/third-party-analysis${query}`;
 
     const { status, body } = await request(url, { method: "GET", headers });
     if (status === 404) return null;
     if (status < 200 || status >= 300) {
       throw new Error(`BeCompliance consulta ${tipoPessoa} falhou (HTTP ${status})`);
     }
-    const rows = asArray(body);
+    let rows = asArray(body);
+    rows = rows.filter((r) => {
+      const campos = [r.cnpj, r.cpf, r.document_number, r.document, r.documento]
+        .map((v) => onlyDigits(v));
+      // Sem nenhum documento na linha não dá para afirmar que é o mesmo parceiro.
+      if (!campos.some(Boolean)) return false;
+      return campos.includes(digits);
+    });
     if (!rows.length) return null;
     return normalize(maisRecente(rows));
   },
@@ -109,7 +146,7 @@ export const BeComplianceAdapter: KYPProviderAdapter = {
     fornecedor: KYPFornecedorInput,
   ): Promise<KYPDiligenciaResult> {
     const { baseUrl, clientId, email } = session.config;
-    const base = baseUrl.replace(/\/+$/, "");
+    const base = beBaseRoot(baseUrl);
     const headers = {
       Accept: "application/json",
       "Content-Type": "application/json",
@@ -117,36 +154,15 @@ export const BeComplianceAdapter: KYPProviderAdapter = {
     };
     const empresas = fornecedor.empresas.filter(Boolean);
 
-    if (fornecedor.tipoPessoa === "PF") {
-      const { status, body } = await request(`${base}/ext/${clientId}/np`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          cpf: formatCPF(fornecedor.documento),
-          type: "OUTROS",
-          np_type: "external",
-          notes: `${empresas.join(", ")} - Diligência de avaliação de fornecedor`,
-        }),
-      });
-      if (status < 200 || status >= 300) {
-        throw new Error(`BeCompliance criação PF falhou (HTTP ${status})`);
-      }
-      const created = normalize(asArray(body)[0] ?? (body as Record<string, unknown>));
-      return created ?? {
-        providerRefId: "",
-        status: "pending",
-        expiryDate: null,
-        updatedAt: new Date().toISOString(),
-        raw: body,
-      };
-    }
+    const isPF = fornecedor.tipoPessoa === "PF";
+    const docDigits = onlyDigits(fornecedor.documento);
 
     const { status, body } = await request(`${base}/ext/v1/${clientId}/third-party-analysis`, {
       method: "POST",
       headers,
       body: JSON.stringify({
         alternative_names: [fornecedor.nome].filter(Boolean),
-        cnpj: onlyDigits(fornecedor.documento),
+        ...(isPF ? { cpf: formatCPF(docDigits) } : { cnpj: docDigits }),
         name: fornecedor.nome,
         tags: empresas,
         solicitation_areas: ["Compras"],
@@ -157,7 +173,7 @@ export const BeComplianceAdapter: KYPProviderAdapter = {
       }),
     });
     if (status < 200 || status >= 300) {
-      throw new Error(`BeCompliance criação PJ falhou (HTTP ${status})`);
+      throw new Error(`BeCompliance criação ${isPF ? "PF" : "PJ"} falhou (HTTP ${status})`);
     }
     const created = normalize(asArray(body)[0] ?? (body as Record<string, unknown>));
     return created ?? {

@@ -8,6 +8,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { releaseWatcherLock, tryWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { KYP_ADAPTERS } from "../_shared/kyp/becompliance.ts";
+import { resolveBeComplianceConfig } from "../_shared/kyp/config.ts";
 import {
   decidirAcao,
   type KYPDiligenciaResult,
@@ -46,16 +47,15 @@ function service(): Sb {
   });
 }
 
-/** Config do provedor: secrets globais do backend + overrides não sensíveis por empresa. */
-function providerConfig(code: string, extra: Record<string, unknown>): KYPProviderConfig | null {
+/** Config do provedor: credenciais da tela de Credenciais + secrets do backend. */
+async function providerConfig(
+  sb: Sb,
+  code: string,
+  extra: Record<string, unknown>,
+  companyDb?: string | null,
+): Promise<KYPProviderConfig | null> {
   if (code !== "BECOMPLIANCE") return null;
-  const clientId = String(extra.client_id ?? "") || Deno.env.get("BECOMPLIANCE_CLIENT_ID") || "";
-  const baseUrl = String(extra.base_url ?? "") || Deno.env.get("BECOMPLIANCE_BASE_URL") ||
-    "https://api.becompliance.com";
-  const email = Deno.env.get("BECOMPLIANCE_EMAIL") || "";
-  const password = Deno.env.get("BECOMPLIANCE_PASSWORD") || "";
-  if (!clientId || !email || !password) return null;
-  return { clientId, baseUrl, email, password, extra };
+  return await resolveBeComplianceConfig(sb as any, companyDb ?? null, extra);
 }
 
 interface CompanyRow {
@@ -366,7 +366,7 @@ async function executar(
   const providerId = primeiro?.providerId ?? "";
   const adapter = KYP_ADAPTERS[providerCode];
   if (!adapter) throw new Error(`Provedor KYP não suportado: ${providerCode}`);
-  const config = providerConfig(providerCode, primeiro?.extra ?? {});
+  const config = await providerConfig(sb, providerCode, primeiro?.extra ?? {}, null);
   if (!config) throw new Error("Credenciais do provedor KYP não configuradas.");
   const session = await adapter.authenticate(config);
 
