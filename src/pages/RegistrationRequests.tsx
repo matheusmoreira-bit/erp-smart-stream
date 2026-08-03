@@ -141,6 +141,8 @@ function DetailDialog({
   const [comment, setComment] = useState("");
   const [commentFiles, setCommentFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState<"idle" | "kyp" | "sap">("idle");
+
   const [kyp, setKyp] = useState<KypResult | null>(null);
   const [createState, setCreateState] = useState<CreateState>({ phase: "idle" });
 
@@ -168,7 +170,9 @@ function DetailDialog({
 
   const runKyp = async () => {
     setBusy(true);
+    setStage("kyp");
     setCreateState({ phase: "running", step: "Consultando KYP (Know Your Partner)…" });
+
     try {
       const { ok, status, data } = await callSupplierFn({ action: "kyp" });
       if (data.kyp) setKyp(data.kyp);
@@ -193,12 +197,26 @@ function DetailDialog({
       else if (k?.status === "reprovado") toast.error(`KYP reprovado: ${k.motivo}`);
       else toast.warning(k?.motivo || "KYP pendente de análise.");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Falha na validação de KYP";
+      const msg = friendlyError(e, "Falha na validação de KYP");
       setCreateState({ phase: "error", step: "Validação de KYP", message: msg, at: new Date().toISOString() });
       toast.error(msg);
     } finally {
       setBusy(false);
+      setStage("idle");
     }
+
+  };
+
+  /** Mensagem clara para falhas de rede/integração. */
+  const friendlyError = (e: unknown, fallback: string) => {
+    const msg = e instanceof Error ? e.message : "";
+    if (/Failed to fetch|Failed to send a request|NetworkError|network/i.test(msg)) {
+      return "Não foi possível falar com o serviço de integração (rede indisponível ou serviço fora do ar). Tente novamente em instantes.";
+    }
+    if (/timeout|abort/i.test(msg)) {
+      return "A consulta demorou mais que o esperado e foi interrompida. Tente novamente.";
+    }
+    return msg || fallback;
   };
 
   /** UX: um único botão — consulta o KYP e, se liberado, cadastra no SAP. */
@@ -208,7 +226,8 @@ function DetailDialog({
       return;
     }
     setBusy(true);
-    setCreateState({ phase: "running", step: "Consultando KYP (Know Your Partner)…" });
+    setStage("kyp");
+    setCreateState({ phase: "running", step: "Etapa 1 de 2 · Consultando KYP (Know Your Partner)…" });
     let blocked = true;
     try {
       const { ok, status, data } = await callSupplierFn({ action: "kyp" });
@@ -216,8 +235,10 @@ function DetailDialog({
       if (!ok) {
         setCreateState({
           phase: "error",
-          step: "Validação de KYP",
-          message: data.error || `Falha na validação de KYP (HTTP ${status})`,
+          step: "Etapa 1 de 2 · Validação de KYP",
+          message:
+            data.error ||
+            `Falha na consulta ao provedor de KYP (HTTP ${status}). Verifique as credenciais do BeCompliance e tente novamente.`,
           httpStatus: status,
           detail: data.details ? JSON.stringify(data.details, null, 2) : undefined,
           at: new Date().toISOString(),
@@ -238,15 +259,22 @@ function DetailDialog({
       }
       blocked = false;
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Falha na validação de KYP";
-      setCreateState({ phase: "error", step: "Validação de KYP", message: msg, at: new Date().toISOString() });
+      const msg = friendlyError(e, "Falha na validação de KYP");
+      setCreateState({
+        phase: "error",
+        step: "Etapa 1 de 2 · Validação de KYP",
+        message: msg,
+        at: new Date().toISOString(),
+      });
       toast.error(msg);
       return;
     } finally {
       setBusy(false);
+      if (blocked) setStage("idle");
     }
     if (!blocked) await createSupplier(false);
   };
+
 
 
 
@@ -256,12 +284,14 @@ function DetailDialog({
       return;
     }
     setBusy(true);
+    setStage("sap");
     setCreateState({
       phase: "running",
       step: acknowledgePending
-        ? "Criando Business Partner no SAP (exceção de KYP registrada)…"
-        : "Validando KYP e criando Business Partner no SAP…",
+        ? "Etapa 2 de 2 · Criando Business Partner no SAP (exceção de KYP registrada)…"
+        : "Etapa 2 de 2 · Criando Business Partner no SAP…",
     });
+
     try {
       const { ok, status, data } = await callSupplierFn({
         action: "create",
@@ -334,17 +364,19 @@ function DetailDialog({
       await reload();
 
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Falha ao cadastrar fornecedor no SAP";
+      const msg = friendlyError(e, "Falha ao cadastrar fornecedor no SAP");
       setCreateState({
         phase: "error",
-        step: "Criação do Business Partner no SAP",
+        step: "Etapa 2 de 2 · Criação do Business Partner no SAP",
         message: msg,
         at: new Date().toISOString(),
       });
       toast.error(msg);
     } finally {
       setBusy(false);
+      setStage("idle");
     }
+
   };
 
 
@@ -623,17 +655,40 @@ function DetailDialog({
                   <div className="flex flex-wrap gap-2">
                     <Button
                       disabled={busy || !cardCode.trim() || kypView?.status === "reprovado"}
+                      aria-busy={busy}
                       onClick={() => void kypThenCreate()}
                       className="gap-2"
                     >
                       {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                      Cadastrar fornecedor no SAP
+                      {stage === "kyp"
+                        ? "Consultando KYP…"
+                        : stage === "sap"
+                          ? "Cadastrando no SAP…"
+                          : "Cadastrar fornecedor no SAP"}
                     </Button>
-                    <Button variant="ghost" disabled={busy} onClick={() => void runKyp()} className="gap-2">
+                    <Button variant="ghost" disabled={busy} aria-busy={busy} onClick={() => void runKyp()} className="gap-2">
+                      {busy && stage === "kyp" && <Loader2 className="w-4 h-4 animate-spin" />}
                       Consultar KYP apenas
                     </Button>
-
                   </div>
+
+                  {busy && (
+                    <div className="space-y-1.5" aria-live="polite">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        {stage === "kyp"
+                          ? "Etapa 1 de 2 · Consultando o provedor de KYP (pode levar alguns segundos)…"
+                          : "Etapa 2 de 2 · Criando o Business Partner no SAP…"}
+                      </div>
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full bg-primary transition-all duration-500"
+                          style={{ width: stage === "kyp" ? "45%" : "85%" }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
 
                   {createState.phase !== "idle" || createState.step ? (
                     <div
