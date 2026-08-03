@@ -447,6 +447,20 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
       resolvedLevel = picked.level_order;
       resolvedApprover = picked.approver_name || resolvedApprover;
       fallbackUsed = picked.fallback_used;
+    } else {
+      resolvedApprover = MATRIX_FALLBACK_APPROVER.name;
+      resolvedLevel = 1;
+      await notifyMatrixGap({
+        companyDb: String(current.company_db || ""),
+        docType: String(current.doc_type || "purchase"),
+        expenseId,
+        costCenter: (updates as any).cost_center ?? current.cost_center ?? null,
+        project: (updates as any).project ?? current.project ?? null,
+        totalAmount: Number((updates as any).total_amount ?? current.total_amount ?? 0),
+        currency: current.currency,
+        requester: current.requester_name,
+        reason: "Reenvio sem regra de aprovação aplicável",
+      });
     }
     updates.status = "pendente_aprovacao";
     updates.current_level_order = resolvedLevel;
