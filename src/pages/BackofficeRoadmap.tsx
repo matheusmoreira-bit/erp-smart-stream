@@ -47,7 +47,33 @@ interface RoadmapItem {
 
 /** Changelog: uma lista única, em ordem cronológica (mais recente primeiro). */
 const CHANGELOG: RoadmapItem[] = [
+  // ---- Fase 7 — Continuidade e caixa (ago/2026)
+  {
+    date: "2026-08-03",
+    title: "Previsão de caixa por vencimento",
+    kind: "modulo",
+    track: "Dados e analytics",
+    description:
+      "Consolidação de contas a pagar e a receber por vencimento, com agrupamento por mês, semana, centro de custo ou projeto, KPIs de previsto × realizado, vencidos em aberto e exportação em CSV.",
+  },
+  {
+    date: "2026-08-02",
+    title: "Desprovisionamento automático via IdP",
+    kind: "seguranca",
+    track: "Governança e segurança",
+    description:
+      "Usuário suspenso ou removido no JumpCloud/Okta tem, na mesma sincronização, bloqueio no ERP, revogação de grupos, centros de custo/alçada, substituições vigentes, credenciais provisionadas, licença e dispositivos com push, além de sinalização de regras órfãs e registro em auditoria.",
+  },
+  {
+    date: "2026-08-01",
+    title: "Push nativo nas aprovações (Web Push)",
+    kind: "funcao",
+    track: "Experiência e inteligência",
+    description:
+      "Notificação push no celular pelo PWA quando surge uma aprovação pendente ou uma solicitação do usuário é concluída, com gestão de dispositivos e opt-in na central de notificações.",
+  },
   // ---- Fase 6 — Experiência e inteligência (jul/2026)
+
   {
     date: "2026-07-30",
     title: "Escalonamento automático por SLA",
