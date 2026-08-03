@@ -3350,6 +3350,7 @@ export default function ApprovalsPage() {
                   onOpen={() => setSelectedDoc(doc)}
                   approverCCs={getCostCentersForEmail(doc.approverEmail)}
                   formatCostCenter={formatCostCenter}
+                  substituteName={displayUserName(session.userName)}
                   onBehalfOf={getSubstitutedOfficial(doc)}
                   onRelationsMap={(() => {
                     const internalId = (doc as any).__internalId as string | undefined;
