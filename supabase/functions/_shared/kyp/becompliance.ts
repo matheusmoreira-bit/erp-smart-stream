@@ -154,36 +154,15 @@ export const BeComplianceAdapter: KYPProviderAdapter = {
     };
     const empresas = fornecedor.empresas.filter(Boolean);
 
-    if (fornecedor.tipoPessoa === "PF") {
-      const { status, body } = await request(`${base}/ext/${clientId}/np`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          cpf: formatCPF(fornecedor.documento),
-          type: "OUTROS",
-          np_type: "external",
-          notes: `${empresas.join(", ")} - Diligência de avaliação de fornecedor`,
-        }),
-      });
-      if (status < 200 || status >= 300) {
-        throw new Error(`BeCompliance criação PF falhou (HTTP ${status})`);
-      }
-      const created = normalize(asArray(body)[0] ?? (body as Record<string, unknown>));
-      return created ?? {
-        providerRefId: "",
-        status: "pending",
-        expiryDate: null,
-        updatedAt: new Date().toISOString(),
-        raw: body,
-      };
-    }
+    const isPF = fornecedor.tipoPessoa === "PF";
+    const docDigits = onlyDigits(fornecedor.documento);
 
     const { status, body } = await request(`${base}/ext/v1/${clientId}/third-party-analysis`, {
       method: "POST",
       headers,
       body: JSON.stringify({
         alternative_names: [fornecedor.nome].filter(Boolean),
-        cnpj: onlyDigits(fornecedor.documento),
+        ...(isPF ? { cpf: formatCPF(docDigits) } : { cnpj: docDigits }),
         name: fornecedor.nome,
         tags: empresas,
         solicitation_areas: ["Compras"],
@@ -194,7 +173,7 @@ export const BeComplianceAdapter: KYPProviderAdapter = {
       }),
     });
     if (status < 200 || status >= 300) {
-      throw new Error(`BeCompliance criação PJ falhou (HTTP ${status})`);
+      throw new Error(`BeCompliance criação ${isPF ? "PF" : "PJ"} falhou (HTTP ${status})`);
     }
     const created = normalize(asArray(body)[0] ?? (body as Record<string, unknown>));
     return created ?? {

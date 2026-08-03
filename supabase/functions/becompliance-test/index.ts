@@ -7,6 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { corsHeaders as baseCors } from "npm:@supabase/supabase-js@2/cors";
 import { AuthError, requireAdminOrSapAdmin, authErrorResponse } from "../_shared/auth.ts";
 import { loadBeComplianceCredentials, missingBeComplianceFields } from "../_shared/kyp/config.ts";
+import { beBaseRoot } from "../_shared/kyp/becompliance.ts";
 
 const corsHeaders = {
   ...baseCors,
@@ -96,8 +97,7 @@ Deno.serve(async (req) => {
     }
 
     const clientId = (kv.client_id || Deno.env.get("BECOMPLIANCE_CLIENT_ID") || "").trim();
-    const base = (kv.base_url || Deno.env.get("BECOMPLIANCE_BASE_URL") || DEFAULT_BASE_URL)
-      .trim().replace(/\/+$/, "");
+    const base = beBaseRoot(kv.base_url || Deno.env.get("BECOMPLIANCE_BASE_URL") || DEFAULT_BASE_URL);
     const email = (kv.email || Deno.env.get("BECOMPLIANCE_EMAIL") || "").trim();
     const password = kv.password || Deno.env.get("BECOMPLIANCE_PASSWORD") || "";
 
@@ -146,8 +146,7 @@ Deno.serve(async (req) => {
       const digits = onlyDigits(documento);
       const isPF = digits.length <= 11;
       const consultaUrl = isPF
-        ? `${base}/${clientId}/due_diligence?document_number=${encodeURIComponent(formatCPF(digits))}` +
-          `&archived=false&np_type=external&module=compliance`
+        ? `${base}/ext/v1/${clientId}/third-party-analysis?document_number=${encodeURIComponent(formatCPF(digits))}`
         : `${base}/ext/v1/${clientId}/third-party-analysis?cnpj=${encodeURIComponent(digits)}`;
       consulta = await call(consultaUrl, {
         method: "GET",
