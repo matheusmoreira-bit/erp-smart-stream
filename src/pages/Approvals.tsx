@@ -180,6 +180,7 @@ function ApprovalCard({
   formatCostCenter,
   onRelationsMap,
   onBehalfOf,
+  substituteName,
 }: {
   doc: ApprovalDoc;
   onOpen: () => void;
@@ -187,6 +188,7 @@ function ApprovalCard({
   formatCostCenter: (code?: string | null) => string;
   onRelationsMap?: () => void;
   onBehalfOf?: { name: string; email: string } | null;
+  substituteName?: string | null;
 }) {
   const overdue = isOverdue(doc.dueDate);
   const { show: showRateio, info } = shouldShowRateio(doc);
