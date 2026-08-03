@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ClipboardList, Clock, Loader2, RefreshCw, Send, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -170,10 +170,6 @@ function DetailDialog({
 
   const createSupplier = async () => {
     if (busy) return; // idempotência na UI: evita duplo clique disparar dois cadastros
-    if (!cardCode.trim()) {
-      toast.error("Informe o CardCode do fornecedor.");
-      return;
-    }
     if (request.sap_card_code) {
       toast.info(`Este chamado já possui o fornecedor ${request.sap_card_code} cadastrado.`);
       return;
@@ -498,7 +494,28 @@ function DetailDialog({
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="rr-cardcode">Código no ERP (CardCode / ItemCode)</Label>
-                  <Input id="rr-cardcode" value={cardCode} onChange={(e) => setCardCode(e.target.value)} />
+                  <div className="flex gap-2">
+                    <Input
+                      id="rr-cardcode"
+                      value={cardCode}
+                      placeholder={loadingCode ? "Obtendo próximo código…" : "Gerado automaticamente"}
+                      onChange={(e) => setCardCode(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      title="Obter próximo código no ERP"
+                      aria-label="Obter próximo código no ERP"
+                      disabled={busy || loadingCode || !!request.sap_card_code}
+                      onClick={() => void fetchNextCode()}
+                    >
+                      {loadingCode ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Sequência automática do ERP (ex.: F000123 → F000124). Você pode editar se precisar.
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="rr-note">Observação para o solicitante</Label>
@@ -516,7 +533,7 @@ function DetailDialog({
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <Button
-                      disabled={busy || !cardCode.trim()}
+                      disabled={busy || loadingCode}
                       aria-busy={busy}
                       onClick={() => void createSupplier()}
                       className="gap-2"
