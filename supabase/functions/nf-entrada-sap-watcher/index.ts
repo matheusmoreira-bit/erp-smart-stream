@@ -274,7 +274,12 @@ Deno.serve(async (req) => {
           }
 
           // CASO 2 (padrão): polling do Draft do Pedido de Compra
+          if (!row.sap_po_draft_id) {
+            results.push({ id: row.id, status: row.status || "awaiting_sap", error: "sem draft de PC para consultar" });
+            continue;
+          }
           const dr = await fetch(
+
             `${baseUrl}/Drafts(${row.sap_po_draft_id})?$select=DocEntry,DocumentStatus,DocNum,Cancelled,CardCode`,
             { headers: { Cookie: cookie } },
           );
