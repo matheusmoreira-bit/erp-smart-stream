@@ -306,12 +306,20 @@ Deno.serve(async (req) => {
       const text = await res.text();
       if (!res.ok) {
         let msg = text;
+        let code: string | number | undefined;
         try {
-          msg = JSON.parse(text)?.error?.message?.value ?? text;
+          const parsed = JSON.parse(text);
+          msg = parsed?.error?.message?.value ?? text;
+          code = parsed?.error?.code;
         } catch { /* texto cru */ }
         await logEvent(sb, requestId, caller.email, `Falha ao criar fornecedor no SAP: ${msg}`);
-        return json(400, { error: `SAP recusou a criação: ${msg}`, kyp });
+        return json(400, {
+          error: `SAP recusou a criação: ${msg}`,
+          kyp,
+          details: { httpStatus: res.status, sapErrorCode: code, cardCode, companyDb, raw: text.slice(0, 1000) },
+        });
       }
+
       const created = JSON.parse(text) as { CardCode?: string; CardName?: string };
 
       await sb
