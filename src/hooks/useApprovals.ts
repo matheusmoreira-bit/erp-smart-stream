@@ -582,13 +582,27 @@ export function useApprovals() {
     // Fonte padrão: edge function `sap-approvals-hana`, que consulta a
     // VW_APROVACOES_DETALHADAS via HanaAPI V2 usando a sessão SAP do usuário.
     const hanaSchema = HANA_SCHEMA_OVERRIDES[companyDb] || companyDb;
-    const { data, error } = await supabase.functions.invoke("sap-approvals-hana", {
-      body: {
-        company_db: companyDb,
-        session_id: session.sessionId || "",
-        schema: hanaSchema,
-      },
-    });
+    // Falhas de transporte ("Failed to send a request to the Edge Function") são
+    // transitórias (cold start / rede) — tenta novamente com backoff curto.
+    const invokeWithRetry = async () => {
+      let last: { data: unknown; error: { message?: string } | null } = { data: null, error: null };
+      for (let attempt = 0; attempt < 3; attempt++) {
+        last = await supabase.functions.invoke("sap-approvals-hana", {
+          body: {
+            company_db: companyDb,
+            session_id: session.sessionId || "",
+            schema: hanaSchema,
+          },
+        });
+        const msg = last.error?.message || "";
+        const transient = /Failed to send a request|Failed to fetch|network|timeout/i.test(msg);
+        if (!last.error || !transient || attempt === 2) return last;
+        await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+      }
+      return last;
+    };
+    const { data, error } = await invokeWithRetry();
+
     const errPayload = (data && typeof data === "object" ? data : null) as
       | { error?: string; code?: string }
       | null;
