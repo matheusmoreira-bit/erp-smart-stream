@@ -749,6 +749,7 @@ export default function Admin() {
                     { label: "Auditoria de baixas PagCorp", icon: FileCheck2, to: "/backoffice/baixas-pagcorp" },
                     { label: "Revisão de acessos", icon: ShieldCheck, to: "/backoffice/revisao-acessos" },
                     { label: "Escalonamento por SLA", icon: AlarmClock, to: "/backoffice/sla-escalonamento" },
+                    { label: "Dashboard de SLA", icon: TrendingUp, to: "/backoffice/sla-dashboard" },
                     { label: "Roadmap", icon: Rocket, to: "/backoffice/roadmap" },
                   ].map((it) => {
                     const Icon = it.icon;
