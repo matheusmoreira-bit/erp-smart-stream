@@ -134,8 +134,13 @@ function DetailDialog({
   };
 
   const createSupplier = async () => {
+    if (busy) return; // idempotência na UI: evita duplo clique disparar dois cadastros
     if (!cardCode.trim()) {
       toast.error("Informe o CardCode do fornecedor.");
+      return;
+    }
+    if (request.sap_card_code) {
+      toast.info(`Este chamado já possui o fornecedor ${request.sap_card_code} cadastrado.`);
       return;
     }
     setBusy(true);
@@ -162,17 +167,23 @@ function DetailDialog({
         toast.error(data.error || "Falha ao cadastrar fornecedor no SAP");
         return;
       }
+      const already = Boolean((data as { alreadyRegistered?: boolean }).alreadyRegistered);
       setCreateState({
         phase: "success",
-        step: "Business Partner criado no SAP",
+        step: already ? "Fornecedor já existente no ERP" : "Business Partner criado no SAP",
         message: `CardCode ${data.cardCode ?? cardCode.trim()}${
           request.company_db ? ` · base ${request.company_db}` : ""
-        }`,
+        }${already ? " · nenhum cadastro duplicado foi criado" : ""}`,
         cardCode: data.cardCode ?? cardCode.trim(),
         at: new Date().toISOString(),
       });
       const created = data.cardCode ?? cardCode.trim();
-      toast.success(`Fornecedor criado no SAP com o código ${created}.`);
+      toast.success(
+        already
+          ? `Fornecedor já existia no ERP com o código ${created}. Nada foi duplicado.`
+          : `Fornecedor criado no SAP com o código ${created}.`,
+      );
+
       // Conclui o chamado e notifica o solicitante (e-mail + in-app) com o código do cadastro.
       try {
         await onUpdateStatus(request, "concluido", {
