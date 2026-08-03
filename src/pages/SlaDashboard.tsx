@@ -186,7 +186,10 @@ export default function SlaDashboard() {
           })}
         </div>
 
+        <SlaTrendPanel steps={steps} slaHours={slaHours} loadedDays={days} />
+
         <Card>
+
           <CardHeader className="pb-2 flex flex-row items-center justify-between gap-3">
             <CardTitle className="text-base">Gargalos por {dimLabel.toLowerCase()}</CardTitle>
             <Tabs value={dimension} onValueChange={(v) => setDimension(v as Dimension)}>
