@@ -256,7 +256,6 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     remarks: input.remarks || null,
   } as any);
   if (status === "pendente_aprovacao") {
-  if (status === "pendente_aprovacao") {
     await admin.from("expense_approval_log").insert({
       expense_id: expenseId,
       decision: "submitted",
