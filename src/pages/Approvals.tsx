@@ -89,6 +89,7 @@ import { InternalApprovalHistory } from "@/components/InternalApprovalHistory";
 import { AttachmentViewer } from "@/components/AttachmentViewer";
 import { displayUserName } from "@/lib/user-display";
 import { isDesignatedApprover } from "@/lib/approval-authz";
+import { isPayrollOrTaxFlow } from "@/hooks/useCurrentUserCostCenter";
 
 
 function formatCurrency(value: number, currency: string = "BRL") {
@@ -564,7 +565,9 @@ function ApprovalDetailModal({
   );
   // Documentos com Tipo de Rateio ≠ "Não" (folha/imposto/reembolso/viagens)
   // são rateios sistêmicos; TODOS os aprovadores veem o documento completo.
-  const specialRateio = !!(doc?.rateioType && doc.rateioType !== "padrao");
+  const specialRateio =
+    !!(doc?.rateioType && doc.rateioType !== "padrao") ||
+    isPayrollOrTaxFlow(doc?.rateioType, (doc?.documentLines || []).map((l) => l.ItemCode));
   // Máscara visual (blur) das partes de outros aprovadores — vale também para
   // admins/super, que podem alternar para o documento completo quando precisarem.
   const maskOtherSegments =
@@ -1013,10 +1016,16 @@ function ApprovalDetailModal({
                     </span>
                   )}
 
+                  {specialRateio && (
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-sky-600 dark:text-sky-400 bg-sky-500/10 border border-sky-500/30 rounded px-1.5 py-0.5">
+                      Folha/impostos — visão completa
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  As linhas deste documento caem em regras de aprovação diferentes. Cada aprovador
-                  vê apenas as linhas e o valor da sua alçada.
+                  {specialRateio
+                    ? "Rateio sistêmico de folha/impostos: todos os aprovadores visualizam todas as linhas do documento."
+                    : "As linhas deste documento caem em regras de aprovação diferentes. Cada aprovador vê apenas as linhas e o valor da sua alçada."}
                 </p>
                 <div className="space-y-1.5">
                   {segments.map((seg) => {

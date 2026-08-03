@@ -74,6 +74,27 @@ export function isItemAllowedForCostCenter(
 }
 
 /**
+ * Fluxos de folha/impostos: rateios sistêmicos em que TODOS os aprovadores
+ * precisam enxergar o documento completo (todas as linhas), sem máscara de
+ * segmento. Reconhecidos por:
+ *  - `rateioType` = "folha" / "imposto" (documentos criados no ERP Flow); ou
+ *  - todas as linhas com item FOL%/IMP% (documentos nativos do SAP, que não
+ *    carregam o tipo de rateio).
+ */
+export function isPayrollOrTaxFlow(
+  rateioType: string | null | undefined,
+  itemCodes: (string | null | undefined)[] = [],
+): boolean {
+  const t = String(rateioType || "").toLowerCase().trim();
+  if (t === "folha" || t === "imposto" || t === "impostos") return true;
+  const codes = itemCodes
+    .map((c) => String(c || "").trim().toUpperCase())
+    .filter(Boolean);
+  if (!codes.length) return false;
+  return codes.every((c) => c.startsWith("FOL") || c.startsWith("IMP"));
+}
+
+/**
  * Mesma regra dos itens IMP%/FOL%, aplicada ao **tipo de rateio**:
  * - "imposto" → apenas CC 1.2.2.%
  * - "folha"   → apenas Pessoas e Cultura (1.5.1.3)
