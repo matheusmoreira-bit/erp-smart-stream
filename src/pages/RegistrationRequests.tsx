@@ -141,6 +141,8 @@ function DetailDialog({
   const [comment, setComment] = useState("");
   const [commentFiles, setCommentFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState<"idle" | "kyp" | "sap">("idle");
+
   const [kyp, setKyp] = useState<KypResult | null>(null);
   const [createState, setCreateState] = useState<CreateState>({ phase: "idle" });
 
