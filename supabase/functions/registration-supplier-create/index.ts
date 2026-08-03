@@ -261,6 +261,37 @@ async function nextSupplierCode(baseUrl: string, cookie: string, prefix = "F", w
   return `${prefix}${String(maior + 1).padStart(width, "0")}`;
 }
 
+/** Resolve o código de moeda válido na base (ex.: BRL pode ser "R$" no SAP). Retorna null se não existir. */
+async function resolveCurrency(baseUrl: string, cookie: string, wanted: string): Promise<string | null> {
+  const alvo = String(wanted || "").trim();
+  if (!alvo) return null;
+  try {
+    const res = await fetch(`${baseUrl}/Currencies?$select=Code,Name,InternationalDescription&$top=200`, {
+      headers: { Cookie: cookie },
+    });
+    if (!res.ok) return null;
+    const rows = (JSON.parse(await res.text()).value ?? []) as {
+      Code?: string;
+      Name?: string;
+      InternationalDescription?: string;
+    }[];
+    const up = alvo.toUpperCase();
+    const exato = rows.find((c) => String(c.Code ?? "").toUpperCase() === up);
+    if (exato?.Code) return String(exato.Code);
+    const porDescricao = rows.find(
+      (c) => String(c.InternationalDescription ?? "").toUpperCase() === up || String(c.Name ?? "").toUpperCase() === up,
+    );
+    if (porDescricao?.Code) return String(porDescricao.Code);
+    if (up === "BRL") {
+      const real = rows.find((c) => ["R$", "BRL", "REA", "RS"].includes(String(c.Code ?? "").toUpperCase()));
+      if (real?.Code) return String(real.Code);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 /** Idempotência: procura um Business Partner já existente por CardCode ou por CNPJ/CPF. */
 async function findExistingBp(
   baseUrl: string,
@@ -454,19 +485,28 @@ Deno.serve(async (req) => {
         EmailAddress: (r.contact_email as string | null) || undefined,
         Phone1: (r.phone1 as string | null) || undefined,
         Phone2: (r.phone2 as string | null) || undefined,
-        Currency: body.currency || (r.currency as string | null) || undefined,
+        Currency: await resolveCurrency(baseUrl, cookie, String(body.currency || (r.currency as string | null) || "")) ?? undefined,
         Notes: [bankSummary, r.notes as string | null].filter(Boolean).join(" | ").slice(0, 100) || undefined,
         FreeText: bankSummary || undefined,
       };
       if (typeof body.groupCode === "number") payload.GroupCode = body.groupCode;
       for (const k of Object.keys(payload)) if (payload[k] === undefined) delete payload[k];
 
-      const res = await fetch(`${baseUrl}/BusinessPartners`, {
-        method: "POST",
-        headers: { Cookie: cookie, "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const text = await res.text();
+      const postBp = async (data: Record<string, unknown>) => {
+        const r2 = await fetch(`${baseUrl}/BusinessPartners`, {
+          method: "POST",
+          headers: { Cookie: cookie, "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        return { r2, t2: await r2.text() };
+      };
+
+      let { r2: res, t2: text } = await postBp(payload);
+      // Moeda inexistente na base: repete sem o campo Currency (assume a moeda padrão do SAP).
+      if (!res.ok && /Currency/i.test(text) && payload.Currency !== undefined) {
+        delete payload.Currency;
+        ({ r2: res, t2: text } = await postBp(payload));
+      }
       if (!res.ok) {
         let msg = text;
         let code: string | number | undefined;
