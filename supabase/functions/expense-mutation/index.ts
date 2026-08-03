@@ -664,6 +664,10 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
     resolvedLevel = picked.level_order;
     resolvedApprover = picked.approver_name || resolvedApprover;
     fallbackUsed = picked.fallback_used;
+  } else {
+    resolvedApprover = MATRIX_FALLBACK_APPROVER.name;
+    resolvedLevel = 1;
+    matrixGapOnSubmit = true;
   }
 
   const { error } = await admin
