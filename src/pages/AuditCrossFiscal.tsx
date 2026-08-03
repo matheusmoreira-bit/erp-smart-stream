@@ -236,11 +236,13 @@ export default function AuditCrossFiscal() {
               {s === "all" ? "Todos" : STATUS_LABEL[s]}
             </Button>
           ))}
+          <AutoReconcileSettings empresaId={empresaId} onSaved={refresh} />
           <Button variant="outline" size="sm" onClick={handleExport} disabled={filtered.length === 0} className="h-7">
             <Download className="w-3 h-3 mr-1" /> CSV
           </Button>
         </div>
       </div>
+
 
       {/* Kanban */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
