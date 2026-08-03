@@ -195,12 +195,14 @@ function DetailDialog({
       else if (k?.status === "reprovado") toast.error(`KYP reprovado: ${k.motivo}`);
       else toast.warning(k?.motivo || "KYP pendente de análise.");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Falha na validação de KYP";
+      const msg = friendlyError(e, "Falha na validação de KYP");
       setCreateState({ phase: "error", step: "Validação de KYP", message: msg, at: new Date().toISOString() });
       toast.error(msg);
     } finally {
       setBusy(false);
+      setStage("idle");
     }
+
   };
 
   /** Mensagem clara para falhas de rede/integração. */
