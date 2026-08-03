@@ -648,6 +648,7 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
   let resolvedLevel = current.current_level_order || 1;
   let resolvedApprover: string | null = current.current_approver || null;
   let fallbackUsed = false;
+  let matrixGapOnSubmit = false;
   if (current.approval_rule_id) {
     const picked = await resolveApproverWithEscalation(admin, current.approval_rule_id, {
       companyDb: String(current.company_db || ""),
