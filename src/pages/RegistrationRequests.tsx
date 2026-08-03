@@ -298,6 +298,7 @@ function DetailDialog({
       });
       toast.success("Chamado finalizado e solicitante notificado.");
       await reload();
+      await onRefreshList?.();
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao finalizar o chamado");
