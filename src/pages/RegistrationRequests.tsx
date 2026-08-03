@@ -360,17 +360,19 @@ function DetailDialog({
       await reload();
 
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Falha ao cadastrar fornecedor no SAP";
+      const msg = friendlyError(e, "Falha ao cadastrar fornecedor no SAP");
       setCreateState({
         phase: "error",
-        step: "Criação do Business Partner no SAP",
+        step: "Etapa 2 de 2 · Criação do Business Partner no SAP",
         message: msg,
         at: new Date().toISOString(),
       });
       toast.error(msg);
     } finally {
       setBusy(false);
+      setStage("idle");
     }
+
   };
 
 
