@@ -201,6 +201,55 @@ function DetailDialog({
     }
   };
 
+  /** UX: um único botão — consulta o KYP e, se liberado, cadastra no SAP. */
+  const kypThenCreate = async () => {
+    if (!cardCode.trim()) {
+      toast.error("Informe o CardCode do fornecedor.");
+      return;
+    }
+    setBusy(true);
+    setCreateState({ phase: "running", step: "Consultando KYP (Know Your Partner)…" });
+    let blocked = true;
+    try {
+      const { ok, status, data } = await callSupplierFn({ action: "kyp" });
+      if (data.kyp) setKyp(data.kyp);
+      if (!ok) {
+        setCreateState({
+          phase: "error",
+          step: "Validação de KYP",
+          message: data.error || `Falha na validação de KYP (HTTP ${status})`,
+          httpStatus: status,
+          detail: data.details ? JSON.stringify(data.details, null, 2) : undefined,
+          at: new Date().toISOString(),
+        });
+        toast.error(data.error || "Falha na validação de KYP");
+        return;
+      }
+      const k = data.kyp;
+      if (k?.status === "reprovado") {
+        setCreateState({
+          phase: "error",
+          step: "Fornecedor bloqueado pelo KYP",
+          message: `Cadastro não executado. Motivo do bloqueio: ${k.motivo}`,
+          at: new Date().toISOString(),
+        });
+        toast.error(`Fornecedor bloqueado pelo KYP: ${k.motivo}`);
+        return;
+      }
+      blocked = false;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Falha na validação de KYP";
+      setCreateState({ phase: "error", step: "Validação de KYP", message: msg, at: new Date().toISOString() });
+      toast.error(msg);
+      return;
+    } finally {
+      setBusy(false);
+    }
+    if (!blocked) await createSupplier(false);
+  };
+
+
+
   const createSupplier = async (acknowledgePending: boolean) => {
     if (!cardCode.trim()) {
       toast.error("Informe o CardCode do fornecedor.");
@@ -548,7 +597,8 @@ function DetailDialog({
                 <div className="rounded-md border border-dashed border-border p-3 space-y-2">
                   <p className="text-sm font-medium">Cadastro do fornecedor no ERP</p>
                   <p className="text-xs text-muted-foreground">
-                    A validação de KYP (Know Your Partner) é obrigatória antes de criar o fornecedor no SAP.
+                    O botão de cadastro consulta o KYP (Know Your Partner) automaticamente. Se o fornecedor estiver
+                    bloqueado, o cadastro não é executado e o motivo é exibido aqui.
                   </p>
                   {kypView ? (
                     <div className={`rounded-md border px-3 py-2 text-sm ${kypTone(kypView.status)}`}>
@@ -561,29 +611,28 @@ function DetailDialog({
                         KYP: {KYP_STATUS_LABELS[kypView.status]}
                       </div>
                       <p className="text-xs mt-1">
-                        {kypView.status === "reprovado" ? `Motivo da reprovação: ${kypView.motivo}` : kypView.motivo}
+                        {kypView.status === "reprovado" ? `Motivo do bloqueio: ${kypView.motivo}` : kypView.motivo}
                       </p>
                       {kypView.at && <p className="text-[11px] mt-1 opacity-80">Validado em {fmt(kypView.at)}</p>}
                     </div>
                   ) : (
                     <div className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
-                      KYP ainda não validado para este fornecedor.
+                      O KYP será consultado no momento do cadastro.
                     </div>
                   )}
                   <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" disabled={busy} onClick={() => void runKyp()} className="gap-2">
-                      {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                      Validar KYP
-                    </Button>
                     <Button
                       disabled={busy || !cardCode.trim() || kypView?.status === "reprovado"}
-
-                      onClick={() => void createSupplier(false)}
+                      onClick={() => void kypThenCreate()}
                       className="gap-2"
                     >
-                      {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+                      {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
                       Cadastrar fornecedor no SAP
                     </Button>
+                    <Button variant="ghost" disabled={busy} onClick={() => void runKyp()} className="gap-2">
+                      Consultar KYP apenas
+                    </Button>
+
                   </div>
 
                   {createState.phase !== "idle" || createState.step ? (
