@@ -14,8 +14,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Send } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertTriangle, ClipboardCheck, Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
+
 import {
   PAYMENT_METHOD_LABELS,
   REGISTRATION_MODE_LABELS,
@@ -80,6 +82,7 @@ export function RegistrationRequestModal({
   const [files, setFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
   const [duplicate, setDuplicate] = useState<DuplicateRequest | null>(null);
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -92,11 +95,66 @@ export function RegistrationRequestModal({
     setMode((defaults?.registrationMode as RegistrationMode) || "erpflow");
     setBank(defaults?.bankDetails || {});
     setFiles([]);
+    setPaymentConfirmed(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const setBankField = (key: keyof RegistrationBankDetails, value: string) =>
+  const setBankField = (key: keyof RegistrationBankDetails, value: string) => {
+    setPaymentConfirmed(false);
     setBank((prev) => ({ ...prev, [key]: value }));
+  };
+
+  /** Resumo legível dos dados de pagamento para revisão antes do envio. */
+  const paymentSummary: { label: string; value: string }[] = (() => {
+    const rows: { label: string; value: string }[] = [
+      { label: "Forma de pagamento", value: PAYMENT_METHOD_LABELS[paymentMethod] || paymentMethod },
+    ];
+    if (paymentMethod === "pix") {
+      rows.push({ label: "Tipo de chave PIX", value: (bank.pixKeyType || "").trim() });
+      rows.push({ label: "Chave PIX", value: (bank.pixKey || "").trim() });
+    } else if (paymentMethod === "ted" || paymentMethod === "doc") {
+      rows.push({ label: "Banco", value: (bank.bank || "").trim() });
+      rows.push({ label: "Agência", value: (bank.agency || "").trim() });
+      rows.push({ label: "Conta", value: (bank.account || "").trim() });
+      rows.push({ label: "Tipo de conta", value: (bank.accountType || "").trim() });
+    } else {
+      rows.push({
+        label: paymentMethod === "boleto" ? "Informações do boleto" : "Descrição",
+        value: (bank.other || "").trim(),
+      });
+    }
+    rows.push({ label: "Titular da conta", value: (bank.holderName || "").trim() });
+    rows.push({ label: "CNPJ/CPF do titular", value: (bank.holderTaxId || "").trim() });
+    return rows;
+  })();
+
+  const onlyDigits = (v?: string) => (v || "").replace(/\D/g, "");
+
+  /** Avisos não bloqueantes para conferência visual dos dados. */
+  const paymentWarnings: string[] = (() => {
+    const w: string[] = [];
+    if (paymentMethod === "pix") {
+      const key = (bank.pixKey || "").trim();
+      const type = (bank.pixKeyType || "").toLowerCase();
+      if (!bank.pixKeyType) w.push("Tipo da chave PIX não informado.");
+      if (type === "cnpj" && onlyDigits(key).length !== 14) w.push("Chave PIX do tipo CNPJ deve ter 14 dígitos.");
+      if (type === "cpf" && onlyDigits(key).length !== 11) w.push("Chave PIX do tipo CPF deve ter 11 dígitos.");
+      if (type === "e-mail" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(key)) w.push("Chave PIX do tipo e-mail parece inválida.");
+      if (type === "telefone" && onlyDigits(key).length < 10) w.push("Chave PIX do tipo telefone parece incompleta.");
+    }
+    if (paymentMethod === "ted" || paymentMethod === "doc") {
+      if (!bank.accountType) w.push("Tipo de conta não informado.");
+      if (bank.agency && onlyDigits(bank.agency).length < 3) w.push("Agência parece incompleta.");
+      if (bank.account && onlyDigits(bank.account).length < 4) w.push("Conta parece incompleta.");
+    }
+    const holderTax = onlyDigits(bank.holderTaxId);
+    if (holderTax && holderTax.length !== 11 && holderTax.length !== 14)
+      w.push("CNPJ/CPF do titular deve ter 11 (CPF) ou 14 (CNPJ) dígitos.");
+    if (holderTax && onlyDigits(taxId) && holderTax !== onlyDigits(taxId))
+      w.push("O CNPJ/CPF do titular é diferente do documento do fornecedor — confirme se o pagamento é para terceiro.");
+    if (!bank.holderName?.trim()) w.push("Titular da conta não informado.");
+    return w;
+  })();
 
   const validate = (): string | null => {
     if (!name.trim()) return isItem ? "Informe a descrição do item." : "Informe a razão social / nome do fornecedor.";
@@ -106,9 +164,11 @@ export function RegistrationRequestModal({
       if ((paymentMethod === "ted" || paymentMethod === "doc") && (!bank.bank?.trim() || !bank.agency?.trim() || !bank.account?.trim()))
         return "Informe banco, agência e conta.";
       if (paymentMethod === "outro" && !bank.other?.trim()) return "Descreva a forma de pagamento.";
+      if (!paymentConfirmed) return "Revise e confirme os dados de pagamento antes de enviar.";
     }
     return null;
   };
+
 
   /** Vincula o solicitante a um chamado já aberto do mesmo fornecedor/item. */
   const linkToExisting = async (dup: DuplicateRequest) => {
@@ -305,7 +365,13 @@ export function RegistrationRequestModal({
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Forma de pagamento *</Label>
-                  <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as RegistrationPaymentMethod)}>
+                  <Select
+                    value={paymentMethod}
+                    onValueChange={(v) => {
+                      setPaymentConfirmed(false);
+                      setPaymentMethod(v as RegistrationPaymentMethod);
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -417,8 +483,47 @@ export function RegistrationRequestModal({
                   />
                 </div>
               </div>
+
+              <div className="rounded-md border border-dashed border-border bg-muted/30 p-3 space-y-3">
+                <div className="flex items-center gap-2">
+                  <ClipboardCheck className="w-4 h-4 text-muted-foreground" />
+                  <p className="text-sm font-medium">Revisão dos dados de pagamento</p>
+                </div>
+                <dl className="grid gap-2 sm:grid-cols-2 text-sm">
+                  {paymentSummary.map((row) => (
+                    <div key={row.label}>
+                      <dt className="text-xs text-muted-foreground">{row.label}</dt>
+                      <dd className={`font-medium break-all ${row.value ? "" : "text-muted-foreground italic"}`}>
+                        {row.value || "não informado"}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                {paymentWarnings.length > 0 && (
+                  <ul className="space-y-1 text-xs text-amber-700 dark:text-amber-400">
+                    {paymentWarnings.map((w) => (
+                      <li key={w} className="flex items-start gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                        <span>{w}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <label className="flex items-start gap-2 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={paymentConfirmed}
+                    onCheckedChange={(v) => setPaymentConfirmed(v === true)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    Revisei e confirmo que os dados de pagamento acima estão corretos e conferem com o documento
+                    enviado pelo fornecedor.
+                  </span>
+                </label>
+              </div>
             </div>
           )}
+
 
           <div className="space-y-1.5">
             <Label htmlFor="rr-notes">Observações</Label>
