@@ -573,6 +573,13 @@ const BACKLOG: { group: string; items: BacklogItem[] }[] = [
         description:
           "Validar schema das views (VW_FORNECEDORES, VW_ACOMPANHAMENTO_PEDIDOS) a cada execução e alertar mudanças antes de quebrar telas.",
       },
+      {
+        title: "Painel único de reprocessamento",
+        impact: "médio",
+        effort: "médio",
+        description:
+          "Reunir em uma tela as filas de retentativa, circuit breakers abertos e documentos travados por empresa, com ação de reprocessar em lote e histórico do que foi feito.",
+      },
     ],
   },
   {
@@ -585,25 +592,25 @@ const BACKLOG: { group: string; items: BacklogItem[] }[] = [
         description: "Tempo médio por aprovador, gargalos por CC/projeto e ranking de atrasos.",
       },
       {
-        title: "Escalonamento automático por SLA",
-        impact: "alto",
-        effort: "médio",
-        description:
-          "Documento parado além do prazo sobe automaticamente para o superior ou para o substituto vigente, com registro em auditoria.",
-      },
-      {
-        title: "Versionamento e rollback da matriz de alçadas",
-        impact: "médio",
-        effort: "médio",
-        description:
-          "Guardar cada publicação da matriz, comparar versões e permitir voltar a um estado anterior.",
-      },
-      {
         title: "Aprovação em lote com filtros salvos",
         impact: "médio",
         effort: "baixo",
         description:
           "Selecionar vários documentos do mesmo CC/projeto e aprovar de uma vez, respeitando o mascaramento de rateios.",
+      },
+      {
+        title: "Publicação agendada da matriz",
+        impact: "médio",
+        effort: "médio",
+        description:
+          "Programar a entrada em vigor de uma versão da matriz de alçadas (ex.: virada de mês ou reestruturação), com aviso prévio aos aprovadores impactados.",
+      },
+      {
+        title: "Alerta de alçada sem cobertura",
+        impact: "alto",
+        effort: "baixo",
+        description:
+          "Varredura periódica que aponta centros de custo, projetos ou faixas de valor sem regra ativa antes que um documento caia no aprovador padrão de contingência.",
       },
     ],
   },
@@ -624,11 +631,11 @@ const BACKLOG: { group: string; items: BacklogItem[] }[] = [
         description: "Envio recorrente de relatórios (compras, vendas, fiscal) por e-mail em CSV/XLSX.",
       },
       {
-        title: "Previsão de caixa por vencimento",
-        impact: "médio",
-        effort: "médio",
+        title: "Orçado × realizado por CC/projeto",
+        impact: "alto",
+        effort: "alto",
         description:
-          "Consolidar contas a pagar e a receber com projeções por CC/projeto e comparação com o realizado.",
+          "Carregar o orçamento anual por centro de custo/projeto e comparar com o comprometido (pedidos) e o realizado, com alerta de estouro no momento do lançamento.",
       },
       {
         title: "Copiloto com relatórios salvos",
@@ -649,31 +656,24 @@ const BACKLOG: { group: string; items: BacklogItem[] }[] = [
         description: "Substituir o login local por identidade corporativa, com MFA obrigatório.",
       },
       {
-        title: "Desprovisionamento automático via IdP",
-        impact: "alto",
-        effort: "médio",
-        description:
-          "Desligamento no JumpCloud/Okta revoga acessos, alçadas e substituições vigentes na mesma sincronização.",
-      },
-      {
         title: "Retenção e mascaramento de dados sensíveis",
         impact: "médio",
         effort: "médio",
         description:
           "Política de expurgo de anexos e mascaramento de dados bancários/PII fora do grupo responsável.",
       },
+      {
+        title: "Detecção de duplicidade e fraude em pagamentos",
+        impact: "alto",
+        effort: "médio",
+        description:
+          "Bloquear ou sinalizar documentos com mesmo fornecedor/valor/nº de nota, alterações de dados bancários recentes e pagamentos fora do padrão histórico do CC.",
+      },
     ],
   },
   {
     group: "Experiência do usuário",
     items: [
-      {
-        title: "Push nativo nas aprovações (Web Push/FCM)",
-        impact: "médio",
-        effort: "médio",
-        description:
-          "Complemento do PWA: notificação push no celular ao surgir uma aprovação pendente (requer credenciais de mensageria).",
-      },
       {
         title: "Busca global (documentos, fornecedores, pessoas)",
         impact: "médio",
@@ -682,15 +682,23 @@ const BACKLOG: { group: string; items: BacklogItem[] }[] = [
           "Campo único com atalho de teclado, retornando documentos, fornecedores e usuários respeitando as capabilities do grupo.",
       },
       {
-        title: "Captura de nota por foto/OCR",
-        impact: "médio",
-        effort: "alto",
+        title: "Modo offline do PWA para aprovações",
+        impact: "baixo",
+        effort: "médio",
         description:
-          "Tirar foto do documento e pré-preencher fornecedor, valor e vencimento antes do lançamento.",
+          "Consultar a fila e registrar decisões sem conexão, sincronizando quando o celular voltar à rede.",
+      },
+      {
+        title: "Onboarding guiado por grupo",
+        impact: "médio",
+        effort: "baixo",
+        description:
+          "Tour inicial e checklist de primeiros passos específicos do perfil (solicitante, aprovador, fiscal, backoffice), reduzindo dúvidas recorrentes de suporte.",
       },
     ],
   },
 ];
+
 
 
 const IMPACT_CLASS: Record<BacklogItem["impact"], string> = {
