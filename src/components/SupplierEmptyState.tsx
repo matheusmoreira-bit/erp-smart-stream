@@ -184,6 +184,26 @@ export function SupplierEmptyState({
         <RefreshCw className="h-3 w-3" />
         Atualizar lista do ERP
       </button>
+
+      {isAdmin && (
+        <button
+          type="button"
+          disabled={purging}
+          onPointerDownCapture={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!purging) void purgeAllCompanies();
+          }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          className="flex items-center justify-center gap-1.5 rounded-md border border-border/60 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-60"
+        >
+          {purging ? <Loader2 className="h-3 w-3 animate-spin" /> : <DatabaseZap className="h-3 w-3" />}
+          {purging ? "Atualizando cache…" : "Atualizar cache de todas as empresas (admin)"}
+        </button>
+      )}
     </div>
   );
 }
