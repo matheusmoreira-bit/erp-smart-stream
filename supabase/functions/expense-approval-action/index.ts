@@ -28,6 +28,7 @@ import { notifySalesMilestone } from "../_shared/sales-notify.ts";
 import { notifyApprovalPending } from "../_shared/approval-notify.ts";
 import { notifyActionCompleted } from "../_shared/action-notify.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { resolveCallerAliases, normalizeIdentity } from "../_shared/user-aliases.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
