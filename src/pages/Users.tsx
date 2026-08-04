@@ -21,6 +21,8 @@ import { ProvisionSapAccessDialog } from "@/components/ProvisionSapAccessDialog"
 import UserGroupDialog from "@/components/UserGroupDialog";
 import { useUserGroupAdmin } from "@/hooks/useUserGroupAdmin";
 import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
+import { useManagementSegments, MANAGEMENT_SEGMENT_LABEL, type ManagementSegment } from "@/hooks/useManagementSegments";
+
 
 
 type ConfirmAction = {
@@ -63,6 +65,8 @@ export default function UsersPage() {
   const [groupUser, setGroupUser] = useState<SapUser | null>(null);
   const { isPrivileged } = useMyPermissionGroups();
   const { groups: permissionGroups, groupOf, setGroup } = useUserGroupAdmin();
+  const { segmentOf, setSegment } = useManagementSegments();
+
 
 
   // Multi-company password reset state
