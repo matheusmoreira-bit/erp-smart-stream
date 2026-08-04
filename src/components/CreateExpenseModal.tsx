@@ -259,18 +259,23 @@ export function CreateExpenseModal({
     mapRow: projectMapRow,
   });
 
-  // Vendas: lista de "Utilização" (NotaFiscalUsages) da empresa ativa no SAP.
+  // Vendas: lista de "Utilização" (NotaFiscalUsage) da empresa ativa no SAP.
+  // No Service Layer BR a entidade é `NotaFiscalUsage` com os campos
+  // ID (código numérico), Usage (nome curto) e Description.
   const usageMapRow = useCallback(
-    (row: any) => ({ code: String(row.Code ?? row.AbsEntry ?? ""), name: row.Name || "" }),
+    (row: any) => ({
+      code: String(row.ID ?? row.Code ?? row.AbsEntry ?? ""),
+      name: row.Description || row.Usage || row.Name || "",
+    }),
     [],
   );
   const { options: usageOptions, isLoading: usagesLoading } = useSapCachedList({
-    cacheKey: "nota_fiscal_usages_v1",
-    endpoint: "NotaFiscalUsages",
-    params: { $select: "Code,Name" },
+    cacheKey: "nota_fiscal_usages_v2",
+    endpoint: "NotaFiscalUsage",
     mapRow: usageMapRow,
     enabled: isSales,
   });
+
 
 
   // Vendas: cada cliente libera apenas as marcas vinculadas (até 3) ou o
