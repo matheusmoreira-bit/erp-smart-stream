@@ -131,46 +131,85 @@ Deno.serve(async (req) => {
     const all: any[] = [];
     let resolvedEndpoint: string | null = null;
     let lastError: string | null = null;
+
+    // Busca uma coleção; retorna false quando o recurso não existe (para tentar
+    // o próximo candidato). Se o $select não for aceito, refaz sem parâmetros.
+    const fetchCandidate = async (
+      candidate: string,
+      useParams: boolean,
+    ): Promise<boolean> => {
+      all.length = 0;
+      let skip = 0;
+      while (true) {
+        const qs = buildQS(useParams ? params : {}, { $top: pageSize, $skip: skip });
+        const url = `${baseUrl}/${candidate}${qs}`;
+        const r = await sapFetch(url, {
+          method: "GET",
+          headers: {
+            Cookie: cookieHeader,
+            "B1S-PageSize": String(pageSize),
+            Prefer: `odata.maxpagesize=${pageSize}`,
+            "Content-Type": "application/json",
+          },
+          timeoutMs: 30_000,
+        });
+        if (!r.ok) {
+          const text = await r.text().catch(() => "");
+          lastError = `SAP ${candidate} falhou [${r.status}]: ${text.slice(0, 300)}`;
+          const unknownPath = (r.status === 400 || r.status === 404) &&
+            /Unrecognized resource path|not found|invalid/i.test(text);
+          if (unknownPath || skip === 0) return false;
+          throw new Error(lastError);
+        }
+        const json = await r.json();
+        const rows: any[] = Array.isArray(json?.value) ? json.value : [];
+        all.push(...rows);
+        if (rows.length < pageSize) break;
+        skip += rows.length;
+        if (skip > 50_000) break; // safety
+      }
+      return true;
+    };
+
+    // Lista os entity sets expostos pelo Service Layer (documento de serviço).
+    const discoverEntitySets = async (match: RegExp): Promise<string[]> => {
+      try {
+        const r = await sapFetch(`${baseUrl}/`, {
+          method: "GET",
+          headers: { Cookie: cookieHeader, "Content-Type": "application/json" },
+          timeoutMs: 30_000,
+        });
+        if (!r.ok) return [];
+        const json = await r.json();
+        const sets: string[] = (Array.isArray(json?.value) ? json.value : [])
+          .map((v: any) => String(v?.name ?? v?.url ?? ""))
+          .filter((n: string) => n && match.test(n));
+        return sets;
+      } catch {
+        return [];
+      }
+    };
+
     try {
       for (const candidate of candidates) {
-        all.length = 0;
-        let skip = 0;
-        let ok = true;
-        // Paginação: SL retorna @odata.nextLink com $skip; fazemos manualmente.
-        while (true) {
-          const qs = buildQS(params, { $top: pageSize, $skip: skip });
-          const url = `${baseUrl}/${candidate}${qs}`;
-          const r = await sapFetch(url, {
-            method: "GET",
-            headers: {
-              Cookie: cookieHeader,
-              "B1S-PageSize": String(pageSize),
-              Prefer: `odata.maxpagesize=${pageSize}`,
-              "Content-Type": "application/json",
-            },
-            timeoutMs: 30_000,
-          });
-          if (!r.ok) {
-            const text = await r.text().catch(() => "");
-            lastError = `SAP ${candidate} falhou [${r.status}]: ${text.slice(0, 300)}`;
-            const unknownPath = (r.status === 400 || r.status === 404) &&
-              /Unrecognized resource path|not found|invalid/i.test(text);
-            if (unknownPath || skip === 0) {
-              ok = false; // tenta próximo candidato
-              break;
-            }
-            throw new Error(lastError);
+        if (await fetchCandidate(candidate, true)) { resolvedEndpoint = candidate; break; }
+        if (await fetchCandidate(candidate, false)) { resolvedEndpoint = candidate; break; }
+      }
+
+      // Nenhum nome conhecido existe nesta base: descobre pelo documento de
+      // serviço (nomes de localização variam entre versões do SAP B1).
+      if (!resolvedEndpoint) {
+        const keyword = typeof body?.discover_match === "string" && body.discover_match
+          ? String(body.discover_match)
+          : endpoint.replace(/s$/, "");
+        const safe = keyword.replace(/[^A-Za-z0-9]/g, "");
+        if (safe.length >= 3) {
+          const discovered = await discoverEntitySets(new RegExp(safe.slice(0, 12), "i"));
+          for (const candidate of discovered) {
+            if (candidates.includes(candidate)) continue;
+            if (await fetchCandidate(candidate, true)) { resolvedEndpoint = candidate; break; }
+            if (await fetchCandidate(candidate, false)) { resolvedEndpoint = candidate; break; }
           }
-          const json = await r.json();
-          const rows: any[] = Array.isArray(json?.value) ? json.value : [];
-          all.push(...rows);
-          if (rows.length < pageSize) break;
-          skip += rows.length;
-          if (skip > 50_000) break; // safety
-        }
-        if (ok) {
-          resolvedEndpoint = candidate;
-          break;
         }
       }
     } finally {
@@ -189,6 +228,7 @@ Deno.serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
 
     return new Response(
       JSON.stringify({ rows: all, total: all.length, source: "apiuser", endpoint: resolvedEndpoint }),
