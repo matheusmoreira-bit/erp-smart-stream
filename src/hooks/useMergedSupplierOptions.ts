@@ -337,7 +337,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     // se quiser encadear ação. Aqui, só invalida caches para recarregar.
     if (companyDb) await invalidateSapCache([cacheKey, hanaCacheKey], companyDb);
     await fetchLocal();
-  }, [cacheKey, companyDb, fetchLocal]);
+  }, [cacheKey, hanaCacheKey, companyDb, fetchLocal]);
 
   const activeCount = useMemo(
     () => merged.filter((o) => !o.frozen).length,
@@ -348,6 +348,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     options: merged,
     isLoading: sapLoading || (!hanaLoaded && !!companyDb),
     reload: () => {
+      if (companyDb) void invalidateSapCache([hanaCacheKey], companyDb);
       setHanaReloadTick((t) => t + 1);
       reloadSap();
       void fetchLocal();
