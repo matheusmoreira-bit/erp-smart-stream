@@ -64,6 +64,27 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
   const [hanaOptions, setHanaOptions] = useState<EnrichedSupplierOption[] | null>(null);
   const [hanaReloadTick, setHanaReloadTick] = useState(0);
 
+  // Cache persistente da view HANA em public.sap_cache — evita esperar a
+  // chamada à edge function (2–10s) toda vez que o formulário abre.
+  // Estratégia stale-while-revalidate: pinta o cache na hora e revalida em
+  // background, atualizando a lista quando a resposta chegar.
+  const hanaCacheKey = isSales ? "customers_hana_v1" : "suppliers_hana_v1";
+  const HANA_TTL_MS = 30 * 60 * 1000;
+
+  const mapHanaRows = (rows: any[]): EnrichedSupplierOption[] =>
+    rows.map((r) => ({
+      code: r.code,
+      name: r.name,
+      extra: r.extra,
+      currency: r.currency || "BRL",
+      frozen: !!r.frozen,
+      syncStatus: "synced",
+      details: {
+        fantasyName: r.details?.fantasyName,
+        taxId: r.details?.taxId,
+      },
+    }));
+
   useEffect(() => {
     let cancelled = false;
     if (!companyDb || isSales) {
@@ -74,6 +95,32 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     }
     setHanaLoaded(false);
     (async () => {
+      let servedFromCache = false;
+      // 1) Cache local (rápido) — só é ignorado em reload explícito.
+      if (hanaReloadTick === 0) {
+        try {
+          const { data: cached } = await (supabase as any)
+            .from("sap_cache")
+            .select("data, expires_at")
+            .eq("cache_key", hanaCacheKey)
+            .eq("company_db", companyDb)
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const rows = cached?.data as any[] | undefined;
+          if (!cancelled && Array.isArray(rows) && rows.length > 0) {
+            setHanaOptions(mapHanaRows(rows));
+            setHanaLoaded(true);
+            servedFromCache = true;
+            // Cache ainda válido → não revalida agora.
+            if (cached?.expires_at && new Date(cached.expires_at) > new Date()) return;
+          }
+        } catch {
+          /* cache é best-effort */
+        }
+      }
+
+      // 2) Revalida na origem (bloqueante só quando não houve cache).
       try {
         const { data, error } = await supabase.functions.invoke("sap-suppliers-hana", {
           body: { company_db: companyDb, is_sales: isSales },
@@ -81,31 +128,33 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
         if (cancelled) return;
         if (error) throw error;
         if (data?.error === "hana_unavailable" || !Array.isArray(data?.rows)) {
-          setHanaOptions(null);
+          if (!servedFromCache) setHanaOptions(null);
         } else {
-          const mapped: EnrichedSupplierOption[] = (data.rows as any[]).map((r) => ({
-            code: r.code,
-            name: r.name,
-            extra: r.extra,
-            currency: r.currency || "BRL",
-            frozen: !!r.frozen,
-            syncStatus: "synced",
-            details: {
-              fantasyName: r.details?.fantasyName,
-              taxId: r.details?.taxId,
-            },
-          }));
-          setHanaOptions(mapped);
+          setHanaOptions(mapHanaRows(data.rows as any[]));
+          if ((data.rows as any[]).length > 0) {
+            void (supabase as any)
+              .from("sap_cache")
+              .upsert(
+                {
+                  cache_key: hanaCacheKey,
+                  company_db: companyDb,
+                  data: data.rows,
+                  expires_at: new Date(Date.now() + HANA_TTL_MS).toISOString(),
+                },
+                { onConflict: "cache_key,company_db" },
+              );
+          }
         }
       } catch (e) {
         console.warn("[useMergedSupplierOptions] HANA suppliers indisponível, usando Service Layer.", e);
-        if (!cancelled) setHanaOptions(null);
+        if (!cancelled && !servedFromCache) setHanaOptions(null);
       } finally {
         if (!cancelled) setHanaLoaded(true);
       }
     })();
     return () => { cancelled = true; };
-  }, [companyDb, isSales, hanaReloadTick]);
+  }, [companyDb, isSales, hanaReloadTick, hanaCacheKey]);
+
 
 
   const {
