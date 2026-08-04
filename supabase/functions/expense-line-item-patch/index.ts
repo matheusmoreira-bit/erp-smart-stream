@@ -35,12 +35,17 @@ Deno.serve(async (req) => {
     if (!token) return json({ error: "UNAUTHORIZED" }, 401);
 
     if (token !== serviceKey) {
-      const { data: userData } = await supabase.auth.getUser(token);
-      const uid = userData?.user?.id;
-      if (!uid) return json({ error: "UNAUTHORIZED" }, 401);
-      const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: uid, _role: "admin" });
-      if (!isAdmin) return json({ error: "Apenas administradores podem alterar linhas já integradas." }, 403);
+      // Autorização real: só service role ou admin consegue ler system_credentials (RLS).
+      const asCaller = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+      const { error: authzErr } = await asCaller
+        .from("system_credentials")
+        .select("id")
+        .limit(1);
+      if (authzErr) return json({ error: "Apenas administradores podem alterar linhas já integradas." }, 403);
     }
+
 
     const body = await req.json().catch(() => ({}));
     const expenseId = String(body.expense_id || "").trim();
