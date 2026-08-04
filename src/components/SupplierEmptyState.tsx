@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { UserPlus, RefreshCw, Building2, Loader2 } from "lucide-react";
+import { UserPlus, RefreshCw, Building2, Loader2, DatabaseZap } from "lucide-react";
 import type { CrossCompanyMatch } from "@/hooks/useMergedSupplierOptions";
 import { onlyDigits } from "@/lib/supplier-search";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 interface Props {
   query: string;
@@ -35,10 +38,38 @@ export function SupplierEmptyState({
   const [matches, setMatches] = useState<CrossCompanyMatch[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const { isAdmin } = useAuth();
+  const [purging, setPurging] = useState(false);
+
+  const purgeAllCompanies = async () => {
+    setPurging(true);
+    try {
+      const { error } = await supabase
+        .from("sap_cache")
+        .delete()
+        .or("cache_key.like.suppliers%,cache_key.like.customers%");
+      if (error) throw error;
+      toast({
+        title: "Cache atualizado",
+        description: "Cache de fornecedores/clientes limpo em todas as empresas.",
+      });
+      onRefresh();
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        title: "Falha ao atualizar cache",
+        description: e instanceof Error ? e.message : "Erro desconhecido",
+      });
+    } finally {
+      setPurging(false);
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
     const q = query.trim();
     if (q.length < 3) {
+
       setMatches([]);
       return;
     }
@@ -153,6 +184,26 @@ export function SupplierEmptyState({
         <RefreshCw className="h-3 w-3" />
         Atualizar lista do ERP
       </button>
+
+      {isAdmin && (
+        <button
+          type="button"
+          disabled={purging}
+          onPointerDownCapture={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!purging) void purgeAllCompanies();
+          }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          className="flex items-center justify-center gap-1.5 rounded-md border border-border/60 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-60"
+        >
+          {purging ? <Loader2 className="h-3 w-3 animate-spin" /> : <DatabaseZap className="h-3 w-3" />}
+          {purging ? "Atualizando cache…" : "Atualizar cache de todas as empresas (admin)"}
+        </button>
+      )}
     </div>
   );
 }
