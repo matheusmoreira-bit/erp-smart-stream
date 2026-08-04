@@ -324,7 +324,29 @@ export default function UsersPage() {
                           <Phone className="w-3 h-3" />
                           {phones[user.UserCode]?.phone || <span className="italic">Sem telefone</span>}
                         </p>
+                        <div className="text-sm text-muted-foreground flex items-center gap-1">
+                          <Building2 className="w-3 h-3" />
+                          Gestão:{" "}
+                          <select
+                            aria-label={`Gestão de ${user.UserName || user.UserCode}`}
+                            className="bg-transparent border border-border rounded px-1 py-0.5 text-xs font-medium text-foreground/80"
+                            value={segment}
+                            onChange={async (e) => {
+                              const next = e.target.value as ManagementSegment;
+                              try {
+                                await setSegment(user.UserCode || user.eMail, next);
+                                toast.success(`Usuário movido para ${MANAGEMENT_SEGMENT_LABEL[next]}`);
+                              } catch (err) {
+                                toast.error(err instanceof Error ? err.message : "Falha ao salvar gestão");
+                              }
+                            }}
+                          >
+                            <option value="gestao_1">Gestão 1</option>
+                            <option value="gestao_2">Gestão 2</option>
+                          </select>
+                        </div>
                         <p className="text-sm text-muted-foreground truncate flex items-center gap-1">
+
                           <UsersRound className="w-3 h-3" />
                           Grupo:{" "}
                           <span className="font-medium text-foreground/80">
