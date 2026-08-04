@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { UserPlus, RefreshCw, Building2, Loader2 } from "lucide-react";
+import { UserPlus, RefreshCw, Building2, Loader2, DatabaseZap } from "lucide-react";
 import type { CrossCompanyMatch } from "@/hooks/useMergedSupplierOptions";
 import { onlyDigits } from "@/lib/supplier-search";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 interface Props {
   query: string;
