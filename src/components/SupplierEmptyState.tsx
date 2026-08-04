@@ -38,10 +38,38 @@ export function SupplierEmptyState({
   const [matches, setMatches] = useState<CrossCompanyMatch[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const { isAdmin } = useAuth();
+  const [purging, setPurging] = useState(false);
+
+  const purgeAllCompanies = async () => {
+    setPurging(true);
+    try {
+      const { error } = await supabase
+        .from("sap_cache")
+        .delete()
+        .or("cache_key.like.suppliers%,cache_key.like.customers%");
+      if (error) throw error;
+      toast({
+        title: "Cache atualizado",
+        description: "Cache de fornecedores/clientes limpo em todas as empresas.",
+      });
+      onRefresh();
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        title: "Falha ao atualizar cache",
+        description: e instanceof Error ? e.message : "Erro desconhecido",
+      });
+    } finally {
+      setPurging(false);
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
     const q = query.trim();
     if (q.length < 3) {
+
       setMatches([]);
       return;
     }
