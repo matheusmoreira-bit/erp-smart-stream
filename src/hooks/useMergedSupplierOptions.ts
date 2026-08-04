@@ -234,7 +234,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [companyDb, cacheKey, fetchLocal]);
+  }, [companyDb, cacheKey, hanaCacheKey, fetchLocal]);
 
   // 4) Merge: SAP como source of truth quando `synced`; sobrepõe com locais
   //    não-sincronizados (novos, com erro, ou pendentes).
