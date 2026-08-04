@@ -295,6 +295,8 @@ export default function UsersPage() {
                 const isActing = actionLoading === user.InternalKey;
                 const initials = getInitials(user.UserName || user.UserCode || "?");
                 const userGroup = groupOf(user.UserCode, user.eMail);
+                const segment = segmentOf(user.UserCode, user.eMail);
+
 
 
                 return (
