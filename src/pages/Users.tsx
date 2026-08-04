@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Lock, Unlock, KeyRound, Loader2, Search, Clock, BarChart3, Users, Phone, DollarSign, TrendingUp, ShieldCheck, UsersRound } from "lucide-react";
+import { ArrowLeft, RefreshCw, Lock, Unlock, KeyRound, Loader2, Search, Clock, BarChart3, Users, Phone, DollarSign, TrendingUp, ShieldCheck, UsersRound, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,8 @@ import { ProvisionSapAccessDialog } from "@/components/ProvisionSapAccessDialog"
 import UserGroupDialog from "@/components/UserGroupDialog";
 import { useUserGroupAdmin } from "@/hooks/useUserGroupAdmin";
 import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
+import { useManagementSegments, MANAGEMENT_SEGMENT_LABEL, type ManagementSegment } from "@/hooks/useManagementSegments";
+
 
 
 type ConfirmAction = {
@@ -63,6 +65,8 @@ export default function UsersPage() {
   const [groupUser, setGroupUser] = useState<SapUser | null>(null);
   const { isPrivileged } = useMyPermissionGroups();
   const { groups: permissionGroups, groupOf, setGroup } = useUserGroupAdmin();
+  const { segmentOf, setSegment } = useManagementSegments();
+
 
 
   // Multi-company password reset state
@@ -295,6 +299,8 @@ export default function UsersPage() {
                 const isActing = actionLoading === user.InternalKey;
                 const initials = getInitials(user.UserName || user.UserCode || "?");
                 const userGroup = groupOf(user.UserCode, user.eMail);
+                const segment = segmentOf(user.UserCode, user.eMail);
+
 
 
                 return (
@@ -318,7 +324,29 @@ export default function UsersPage() {
                           <Phone className="w-3 h-3" />
                           {phones[user.UserCode]?.phone || <span className="italic">Sem telefone</span>}
                         </p>
+                        <div className="text-sm text-muted-foreground flex items-center gap-1">
+                          <Building2 className="w-3 h-3" />
+                          Gestão:{" "}
+                          <select
+                            aria-label={`Gestão de ${user.UserName || user.UserCode}`}
+                            className="bg-transparent border border-border rounded px-1 py-0.5 text-xs font-medium text-foreground/80"
+                            value={segment}
+                            onChange={async (e) => {
+                              const next = e.target.value as ManagementSegment;
+                              try {
+                                await setSegment(user.UserCode || user.eMail, next);
+                                toast.success(`Usuário movido para ${MANAGEMENT_SEGMENT_LABEL[next]}`);
+                              } catch (err) {
+                                toast.error(err instanceof Error ? err.message : "Falha ao salvar gestão");
+                              }
+                            }}
+                          >
+                            <option value="gestao_1">Gestão 1</option>
+                            <option value="gestao_2">Gestão 2</option>
+                          </select>
+                        </div>
                         <p className="text-sm text-muted-foreground truncate flex items-center gap-1">
+
                           <UsersRound className="w-3 h-3" />
                           Grupo:{" "}
                           <span className="font-medium text-foreground/80">

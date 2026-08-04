@@ -6144,6 +6144,7 @@ export type Database = {
           created_at: string
           display_name: string | null
           is_active: boolean
+          management_segment: string
           sap_user_code: string | null
           updated_at: string
           user_key: string
@@ -6152,6 +6153,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           is_active?: boolean
+          management_segment?: string
           sap_user_code?: string | null
           updated_at?: string
           user_key: string
@@ -6160,6 +6162,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           is_active?: boolean
+          management_segment?: string
           sap_user_code?: string | null
           updated_at?: string
           user_key?: string

@@ -24,3 +24,4 @@
 - [Variação cambial nas baixas PagCorp](mem://features/pagcorp-baixa-variacao-cambial.md) — Diferença até 3% (máx. R$ 250) em moeda estrangeira é variação cambial e nunca é cancelada.
 - [Baixa PagCorp USD/PTAX](mem://features/pagcorp-baixa-usd-ptax-data.md) — USD usa conta própria, PTAX BCB da data da compra e pagamento lançado nessa mesma data; modo reset_cancelled no repair.
 - [Baixas PagCorp manuais](mem://features/pagcorp-baixa-manual.md) — Baixa automática de cartão desativada; watcher notifica blenda.pinheiro.ext e a baixa é lançada em /cartoes/baixas com contas "PagCorp".
+- [Segmentação Gestão 1/2](mem://features/management-segments.md) — Campo opcional de gestão por usuário em sap_user_directory.management_segment, default Gestão 1.
