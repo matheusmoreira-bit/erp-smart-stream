@@ -227,7 +227,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
         { event: "*", schema: "public", table: "suppliers", filter: `company_db=eq.${companyDb}` },
         () => {
           void fetchLocal();
-          void invalidateSapCache([cacheKey], companyDb);
+          void invalidateSapCache([cacheKey, hanaCacheKey], companyDb);
         },
       )
       .subscribe();
@@ -335,7 +335,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
   const retrySync = useCallback(async (_localId: string) => {
     // Não bloqueia o hook — chamador usa `resendSupplierToSap` de useSuppliers
     // se quiser encadear ação. Aqui, só invalida caches para recarregar.
-    if (companyDb) await invalidateSapCache([cacheKey], companyDb);
+    if (companyDb) await invalidateSapCache([cacheKey, hanaCacheKey], companyDb);
     await fetchLocal();
   }, [cacheKey, companyDb, fetchLocal]);
 
