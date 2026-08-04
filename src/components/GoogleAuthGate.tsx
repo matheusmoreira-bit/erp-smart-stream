@@ -15,6 +15,8 @@ const ALLOWED_DOMAINS = [
   "institutoconectacactus.org.br",
   "opengaming.com.br",
   "banana.games",
+  "lotusblanca.net",
+
 ];
 
 function isAllowedEmail(email: string | null | undefined): boolean {
