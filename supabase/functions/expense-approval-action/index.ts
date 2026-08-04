@@ -28,6 +28,7 @@ import { notifySalesMilestone } from "../_shared/sales-notify.ts";
 import { notifyApprovalPending } from "../_shared/approval-notify.ts";
 import { notifyActionCompleted } from "../_shared/action-notify.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { resolveCallerAliases, normalizeIdentity } from "../_shared/user-aliases.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -581,17 +582,41 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
 
   // Casa contra QUALQUER linha do nível atual (paralelo). Se houver override
   // (delegação), o nome/email do override toma precedência.
-  const isMatch = !!callerIdentity && (
-    overrideApprover
-      ? isDesignatedApprover(
-          callerIdentity,
-          overrideIsEmail ? null : overrideApprover,
-          overrideIsEmail ? overrideApprover : null,
-        )
-      : currentLevelRows.some((row) =>
-          isDesignatedApprover(callerIdentity, row.approver_name, row.approver_email),
-        )
+  const designatedTargets: Array<{ name: string | null; email: string | null }> = overrideApprover
+    ? [{
+        name: overrideIsEmail ? null : overrideApprover,
+        email: overrideIsEmail ? overrideApprover : null,
+      }]
+    : currentLevelRows.map((row) => ({ name: row.approver_name, email: row.approver_email }));
+
+  let isMatch = !!callerIdentity && designatedTargets.some((t) =>
+    isDesignatedApprover(callerIdentity as string, t.name, t.email),
   );
+
+  // Fallback por ALIASES: o e-mail de login pode não ter relação textual com
+  // o nome do aprovador (ex.: k@banana.games ↔ "Kainnan Pitano"). Resolvemos
+  // todas as identidades conhecidas do caller (idp_user_mapping,
+  // sap_user_emails, credenciais SAP, collaborator_profiles) e comparamos com
+  // a forma canônica do nome/e-mail designado.
+  if (!isMatch && (callerEmail || callerIdentity)) {
+    try {
+      const aliases = await resolveCallerAliases(admin, {
+        email: callerEmail || undefined,
+        userName: sapValidated?.userName || (callerIdentity && !callerIdentity.includes("@") ? callerIdentity : undefined),
+      });
+      const aliasHit = designatedTargets.some((t) => {
+        const cands = [normalizeIdentity(t.email), normalizeIdentity(t.name)].filter(Boolean);
+        return cands.some((c) => aliases.has(c));
+      });
+      if (aliasHit) {
+        isMatch = true;
+        stageLog("authorize", "info", { requestId, expenseId, reason: "matched_by_alias" });
+      }
+    } catch (e) {
+      stageLog("authorize", "warn", { requestId, phase: "alias_resolution", error: (e as Error).message });
+    }
+  }
+
 
   // Lazy SAP superuser check — só faz a chamada cara ao SAP quando o
   // caller NÃO é o aprovador designado e ainda não sabemos que é admin.
