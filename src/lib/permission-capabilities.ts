@@ -85,6 +85,13 @@ export const CAPABILITY_CATALOG: CapabilityDef[] = [
     hint: 'Abre as telas com o filtro "Ver todos" marcado (depende das opções acima).',
     category: "data_scope",
   },
+  {
+    key: "projects_scope_by_segment",
+    label: "Restringir projetos pelo segmento de gestão",
+    hint: "Gestão 1 enxerga ANA GAMING e 7K; Gestão 2 enxerga VERA e CASSINO (bases ANA Gaming).",
+    category: "data_scope",
+  },
+
 
   // ── Aprovações ────────────────────────────────────────────
   {

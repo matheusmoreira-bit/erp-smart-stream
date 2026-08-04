@@ -57,6 +57,9 @@ import { toast } from "sonner";
 import { type ExpenseItem, type CreateExpenseInput, type RateioType, RATEIO_TYPE_LABELS } from "@/hooks/useExpenses";
 import { SupplierFormModal, type SupplierFormPrefill } from "@/components/SupplierFormModal";
 import { useMyCapabilities } from "@/hooks/useMyCapabilities";
+import { useMyManagementSegment } from "@/hooks/useMyManagementSegment";
+import { filterProjectsBySegment } from "@/lib/management-segment-projects";
+
 
 import { RegistrationRequestModal } from "@/components/RegistrationRequestModal";
 import { UserPlus, RefreshCw, Building2 } from "lucide-react";
@@ -281,14 +284,29 @@ export function CreateExpenseModal({
   // Vendas: cada cliente libera apenas as marcas vinculadas (até 3) ou o
   // projeto homônimo ao cliente. Sem mapeamento, mantém a lista integral.
   const { brandsForCustomer } = useCustomerBrandMap();
+  const { segment: myManagementSegment } = useMyManagementSegment();
   const projectOptions = useMemo(() => {
-    if (!isSales) return rawProjectOptions;
-    return filterProjectsForCustomer(
-      rawProjectOptions,
-      supplier ? { code: supplier.code, name: supplier.name } : null,
-      brandsForCustomer(supplier?.code),
-    );
-  }, [isSales, rawProjectOptions, supplier, brandsForCustomer]);
+    const base = isSales
+      ? filterProjectsForCustomer(
+          rawProjectOptions,
+          supplier ? { code: supplier.code, name: supplier.name } : null,
+          brandsForCustomer(supplier?.code),
+        )
+      : rawProjectOptions;
+    // Recorte por segmento de gestão (capacidade do grupo; admins não são travados).
+    if (isPrivilegedUser || !hasCapability("projects_scope_by_segment")) return base;
+    return filterProjectsBySegment(base, myManagementSegment, sapSession?.companyDB ?? null);
+  }, [
+    isSales,
+    rawProjectOptions,
+    supplier,
+    brandsForCustomer,
+    isPrivilegedUser,
+    hasCapability,
+    myManagementSegment,
+    sapSession?.companyDB,
+  ]);
+
 
   // ---- Alerta de casamento Centro de Custo × Projeto (auditável) ----
   const ccAlertEnabled = !isSales && projectOptions.length > 1;
