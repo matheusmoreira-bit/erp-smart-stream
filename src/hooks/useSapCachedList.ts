@@ -158,10 +158,10 @@ export function useSapCachedList({
           { body: { company_db: companyDB, endpoint, params: paramsRef.current } },
         );
         if (svcErr) throw svcErr;
-        if (svcData && Array.isArray(svcData.rows)) {
-          rows = svcData.rows as any[];
-        } else if (svcData?.code === "no_apiuser") {
+        if (svcData?.code === "no_apiuser" || svcData?.code === "sap_unavailable") {
           rows = null; // fall through to user-session SL below
+        } else if (svcData && Array.isArray(svcData.rows)) {
+          rows = svcData.rows as any[];
         }
       } catch (e) {
         console.warn(`[useSapCachedList/${cacheKey}] sap-list-service falhou, usando SL do usuário:`, e);
