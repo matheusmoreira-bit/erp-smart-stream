@@ -167,6 +167,154 @@ const ERROR_PATTERNS: { re: RegExp; cause: Omit<BlockCause, "detail"> }[] = [
   },
 ];
 
+/** Playbook por categoria: causa provável no dia a dia + passos objetivos de correção. */
+const ERROR_PLAYBOOK: Record<
+  string,
+  { probable: string; owner: string; actions: string[] }
+> = {
+  "Sessão do ERP": {
+    probable: "A sessão do Service Layer expirou (validade de 30 min) ou foi encerrada em outro dispositivo.",
+    owner: "Você mesmo (usuário do ERP Flow)",
+    actions: [
+      "Saia e faça login novamente no ERP dentro do ERP Flow.",
+      "Repita a operação com “Reintegrar” logo após o login.",
+      "Se repetir em poucos minutos, verifique se a mesma conta está logada em outra máquina.",
+    ],
+  },
+  "Cadastro do cliente": {
+    probable: "O CardCode do cliente não existe, está inativo ou está bloqueado para vendas no SAP.",
+    owner: "Time de cadastro / Facilities",
+    actions: [
+      "Confirme o código do cliente no SAP (Parceiro de Negócios → Cliente).",
+      "Reative o parceiro ou abra solicitação de cadastro se ele não existir.",
+      "Após o cadastro, reintegre o pedido.",
+    ],
+  },
+  "Mapeamento de item": {
+    probable: "Um item do pedido não tem correspondente no cadastro de itens do SAP (OITM) ou o mapeamento está desatualizado.",
+    owner: "Time de cadastro / Facilities",
+    actions: [
+      "Identifique o item citado na mensagem do ERP.",
+      "Cadastre o item no SAP ou corrija o mapeamento de itens da empresa.",
+      "Reintegre o pedido depois do ajuste.",
+    ],
+  },
+  "Filial (BPL)": {
+    probable: "A filial (BPLId) do documento não está habilitada para o cliente, para a série ou para o usuário.",
+    owner: "Financeiro / Fiscal",
+    actions: [
+      "Confira a filial do pedido — por padrão as vendas usam a filial 1.",
+      "Valide se o cliente e a série de numeração aceitam essa filial no SAP.",
+      "Ajuste a filial no pedido e reintegre.",
+    ],
+  },
+  Projeto: {
+    probable: "O código de projeto informado não existe no SAP ou está bloqueado/encerrado.",
+    owner: "Controladoria",
+    actions: [
+      "Verifique o projeto no SAP (OPRJ) e se ele está ativo.",
+      "Troque o projeto do pedido para um código válido, se necessário.",
+      "Reintegre após a correção.",
+    ],
+  },
+  "Centro de custo": {
+    probable: "O centro de custo não existe na dimensão configurada ou está inativo.",
+    owner: "Controladoria",
+    actions: [
+      "Confirme o CC na dimensão usada por esta empresa.",
+      "Reative o CC ou selecione outro válido no pedido.",
+      "Reintegre o pedido.",
+    ],
+  },
+  "Parametrização fiscal": {
+    probable: "Falta parametrização fiscal do item/cliente (utilização, NCM, CFOP ou grupo de imposto).",
+    owner: "Fiscal",
+    actions: [
+      "Confirme se a utilização (Usage) está preenchida no pedido.",
+      "Peça ao fiscal a revisão de NCM/CFOP e determinação de imposto do item.",
+      "Reintegre depois da parametrização.",
+    ],
+  },
+  "Período contábil": {
+    probable: "A data do documento cai em um período contábil já fechado no SAP.",
+    owner: "Contabilidade",
+    actions: [
+      "Ajuste a data do documento para um período aberto, se for permitido.",
+      "Ou solicite à contabilidade a reabertura do período.",
+      "Reintegre em seguida.",
+    ],
+  },
+  "Indisponibilidade do ERP": {
+    probable: "Falha temporária de rede/serviço: o SAP não respondeu ou o circuit breaker da empresa está aberto.",
+    owner: "TI / Integração",
+    actions: [
+      "Aguarde alguns minutos — o sistema também tenta novamente sozinho.",
+      "Confirme se outras rotinas da mesma empresa estão respondendo.",
+      "Use “Reintegrar” quando a base voltar a responder.",
+    ],
+  },
+  "Falta de dados no documento": {
+    probable: "O documento foi criado sem campos obrigatórios exigidos pela integração.",
+    owner: "Solicitante do pedido",
+    actions: [
+      "Edite o pedido e preencha os campos apontados acima.",
+      "Salve e reintegre.",
+    ],
+  },
+  "Processamento em andamento": {
+    probable: "Uma execução anterior travou e manteve o bloqueio de processamento ativo.",
+    owner: "Você mesmo (usuário do ERP Flow)",
+    actions: [
+      "Aguarde alguns minutos.",
+      "Se o bloqueio persistir, use “Reintegrar” para forçar uma nova execução.",
+    ],
+  },
+  "Na fila de retentativa": {
+    probable: "A última tentativa falhou e o pedido entrou no backoff automático.",
+    owner: "Automático",
+    actions: [
+      "Aguarde o horário da próxima tentativa exibido abaixo.",
+      "Ou force agora com “Reintegrar”.",
+    ],
+  },
+  "Nunca enviado ao ERP": {
+    probable: "O pedido nunca chegou a ser enviado — geralmente falta o disparo manual ou o documento ainda não foi aprovado.",
+    owner: "Solicitante do pedido",
+    actions: [
+      "Confirme se o pedido está aprovado.",
+      "Clique em “Reintegrar” para enviá-lo ao ERP.",
+    ],
+  },
+  "Sem retorno do ERP": {
+    probable: "A chamada foi feita, mas não retornou DocEntry nem mensagem — possível queda no meio do processo.",
+    owner: "TI / Integração",
+    actions: [
+      "Verifique no SAP se o pedido já foi criado (evita duplicidade).",
+      "Se não existir no SAP, reintegre.",
+      "Se persistir, acione a TI com o horário da última tentativa.",
+    ],
+  },
+  "Erro de integração": {
+    probable: "O ERP recusou o documento por uma regra específica não catalogada.",
+    owner: "TI / Integração",
+    actions: [
+      "Leia a mensagem original do ERP abaixo — ela indica o campo ou a regra recusada.",
+      "Corrija o dado apontado no pedido ou no cadastro.",
+      "Reintegre e, se persistir, encaminhe a mensagem à TI.",
+    ],
+  },
+};
+
+/** Extrai códigos de erro do SAP (ex.: -5002, 400) da mensagem bruta. */
+function extractErpCodes(message: string): string[] {
+  const codes = new Set<string>();
+  for (const m of message.matchAll(/(-?\d{3,5})/g)) {
+    const n = Number(m[1]);
+    if (n <= -1000 || (n >= 400 && n <= 599)) codes.add(m[1]);
+  }
+  return [...codes];
+}
+
 /** Determina a causa exata do bloqueio da integração de um pedido de venda. */
 function diagnoseBlock(order: SalesOrderRow): BlockCause {
   if (order.sap_doc_entry) {
