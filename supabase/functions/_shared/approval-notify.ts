@@ -89,7 +89,73 @@ export interface ApprovalNotifyInput {
   currency?: string | null;
   docType?: string | null;
   details?: ApprovalNotifyDetail[];
+  /** Explica POR QUE este destinatário é o aprovador atual (trilha de auditoria). */
+  resolution?: ApproverResolution | null;
 }
+
+/** Origem/justificativa da resolução do aprovador atual. */
+export interface ApproverResolution {
+  /** matrix_rule | next_level | manual_reassign | sla_escalation | substitute | self_approval_escalation | default_fallback */
+  source: string;
+  reason?: string | null;
+  ruleId?: string | null;
+  ruleName?: string | null;
+  matrixVersion?: string | null;
+  costCenter?: string | null;
+  project?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+/**
+ * Registra na trilha de auditoria quem recebeu a notificação de um documento
+ * e por qual regra/matriz essa pessoa foi resolvida como aprovador atual.
+ * Best-effort: nunca interrompe o envio.
+ */
+export async function logNotificationAudit(admin: any, entry: {
+  expenseId?: string | null;
+  companyDb?: string | null;
+  docType?: string | null;
+  channel: string;
+  recipient: string;
+  recipientName?: string | null;
+  recipientRole?: string;
+  levelOrder?: number | null;
+  eventKey?: string;
+  status?: string;
+  amount?: number | null;
+  currency?: string | null;
+  resolution?: ApproverResolution | null;
+  metadata?: Record<string, unknown> | null;
+}): Promise<void> {
+  try {
+    const r = entry.resolution || null;
+    await admin.from("notification_audit_log").insert({
+      expense_id: entry.expenseId || null,
+      company_db: entry.companyDb || null,
+      doc_type: entry.docType || null,
+      channel: entry.channel,
+      recipient: String(entry.recipient || "").trim().toLowerCase(),
+      recipient_name: entry.recipientName || null,
+      recipient_role: entry.recipientRole || "approver",
+      level_order: entry.levelOrder ?? null,
+      event_key: entry.eventKey || "approval_pending",
+      status: entry.status || "sent",
+      amount: entry.amount ?? null,
+      currency: entry.currency || null,
+      resolution_source: r?.source || null,
+      resolution_reason: r?.reason || null,
+      rule_id: r?.ruleId || null,
+      rule_name: r?.ruleName || null,
+      matrix_version: r?.matrixVersion || null,
+      cost_center: r?.costCenter || null,
+      project: r?.project || null,
+      metadata: { ...(entry.metadata || {}), ...(r?.metadata || {}) },
+    });
+  } catch (e) {
+    console.warn("[approval-notify] audit log falhou:", e instanceof Error ? e.message : String(e));
+  }
+}
+
 
 function buildEmailHtml(title: string, subtitle: string, details: ApprovalNotifyDetail[], approveUrl: string | null, appUrl: string) {
   const rows = details
@@ -273,6 +339,21 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
       { label: "Solicitante", value: input.requesterName },
     ];
 
+    // Base comum da trilha de auditoria
+    const auditBase = {
+      expenseId: input.expenseId,
+      companyDb: input.companyDb,
+      docType: input.docType ?? null,
+      recipient: email || identifier,
+      recipientName: input.approverName ?? null,
+      recipientRole: "approver",
+      levelOrder: input.levelOrder ?? null,
+      eventKey: "approval_pending",
+      amount: input.totalAmount ?? null,
+      currency: input.currency ?? null,
+      resolution: input.resolution ?? null,
+    };
+
     // In-app (dedupe por documento + nível)
     const refId = `${input.expenseId}:${input.levelOrder ?? 0}`;
     const docLink = `/aprovacoes?doc=${encodeURIComponent(`internal:${input.expenseId}`)}`;
@@ -282,7 +363,10 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
       .eq("category", "approval")
       .contains("metadata", { ref_id: refId })
       .limit(1);
-    if (existing && existing.length > 0) return;
+    if (existing && existing.length > 0) {
+      await logNotificationAudit(admin, { ...auditBase, channel: "in_app", status: "skipped_duplicate" });
+      return;
+    }
 
     await admin.from("notifications").insert({
       user_identifier: identifier,
@@ -293,6 +377,7 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
       link: docLink,
       metadata: { ref_id: refId, expense_id: input.expenseId, level_order: input.levelOrder ?? null },
     });
+    await logNotificationAudit(admin, { ...auditBase, channel: "in_app" });
 
     // Push nativo no celular (best-effort, paralelo a e-mail/Slack).
     await pushToRecipient(admin, identifier, {
@@ -301,8 +386,12 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
       url: docLink,
       tag: refId,
     });
+    await logNotificationAudit(admin, { ...auditBase, channel: "push" });
 
-    if (!email || !isEmail(email)) return;
+    if (!email || !isEmail(email)) {
+      await logNotificationAudit(admin, { ...auditBase, channel: "email", status: "skipped_no_email" });
+      return;
+    }
 
     const appUrl = appPublicUrl();
     const token = await issueApprovalToken(admin, {
@@ -315,8 +404,11 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
     const approveUrl = token ? `${appUrl}/aprovar/${token}` : null;
 
     await sendEmail([email], `[ERP Flow] ${title}`, buildEmailHtml(title, subtitle, details, approveUrl, `${appUrl}${docLink}`));
+    await logNotificationAudit(admin, { ...auditBase, channel: "email" });
 
     await sendSlackApproval({ email, title, subtitle, details, approveUrl, appUrl: `${appUrl}${docLink}` });
+    if (slackEnabled()) await logNotificationAudit(admin, { ...auditBase, channel: "slack" });
+
   } catch (e) {
     console.warn("[approval-notify] erro inesperado:", e instanceof Error ? e.message : String(e));
   }

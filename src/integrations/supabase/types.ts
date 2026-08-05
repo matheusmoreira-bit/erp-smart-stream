@@ -4328,6 +4328,81 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_audit_log: {
+        Row: {
+          amount: number | null
+          channel: string
+          company_db: string | null
+          cost_center: string | null
+          created_at: string
+          currency: string | null
+          doc_type: string | null
+          event_key: string
+          expense_id: string | null
+          id: string
+          level_order: number | null
+          matrix_version: string | null
+          metadata: Json
+          project: string | null
+          recipient: string
+          recipient_name: string | null
+          recipient_role: string
+          resolution_reason: string | null
+          resolution_source: string | null
+          rule_id: string | null
+          rule_name: string | null
+          status: string
+        }
+        Insert: {
+          amount?: number | null
+          channel: string
+          company_db?: string | null
+          cost_center?: string | null
+          created_at?: string
+          currency?: string | null
+          doc_type?: string | null
+          event_key?: string
+          expense_id?: string | null
+          id?: string
+          level_order?: number | null
+          matrix_version?: string | null
+          metadata?: Json
+          project?: string | null
+          recipient: string
+          recipient_name?: string | null
+          recipient_role?: string
+          resolution_reason?: string | null
+          resolution_source?: string | null
+          rule_id?: string | null
+          rule_name?: string | null
+          status?: string
+        }
+        Update: {
+          amount?: number | null
+          channel?: string
+          company_db?: string | null
+          cost_center?: string | null
+          created_at?: string
+          currency?: string | null
+          doc_type?: string | null
+          event_key?: string
+          expense_id?: string | null
+          id?: string
+          level_order?: number | null
+          matrix_version?: string | null
+          metadata?: Json
+          project?: string | null
+          recipient?: string
+          recipient_name?: string | null
+          recipient_role?: string
+          resolution_reason?: string | null
+          resolution_source?: string | null
+          rule_id?: string | null
+          rule_name?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       notification_governance: {
         Row: {
           block_self_approval: boolean

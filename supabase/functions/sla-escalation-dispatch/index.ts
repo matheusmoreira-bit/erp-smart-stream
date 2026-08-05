@@ -291,7 +291,22 @@ Deno.serve(async (req) => {
           totalAmount: doc.total_amount,
           currency: doc.currency,
           docType: doc.doc_type,
+          resolution: {
+            source: target.kind === "substitute" ? "substitute" : "sla_escalation",
+            reason: `SLA de ${hours}h úteis excedido — documento escalado de ${currentApprover || "—"} para ${target.name}`,
+            ruleId: (doc as any).approval_rule_id || null,
+            costCenter: (doc as any).cost_center || null,
+            project: (doc as any).project || null,
+            metadata: {
+              target_kind: target.kind,
+              level_from: doc.current_level_order,
+              level_to: target.levelTo,
+              substitution_id: target.substitutionId,
+              escalation_index: escCount + 1,
+            },
+          },
         });
+
       }
 
       escalated += 1;
