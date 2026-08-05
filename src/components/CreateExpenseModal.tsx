@@ -172,7 +172,16 @@ export function CreateExpenseModal({
    *  destacada visualmente como "provavelmente precisa de revisão". */
   lowAiConfidenceThreshold?: number;
 }) {
+  // Vendas: itens de receita liberados no formulário de pedido de venda.
+  const SALES_ALLOWED_ITEMS = ["SV0003", "SV0006"];
+  // Vendas: utilizações (NotaFiscalUsage) liberadas.
+  const SALES_ALLOWED_USAGES = [
+    "01-Rec Cactus Plat",
+    "02-Rec Cactus Comiss",
+    "03-Rec Cactus Distr",
+  ];
   const isSales = mode === "sales";
+
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
   // Capacidade do GRUPO: cadastrar direto no ERP ou apenas solicitar cadastro.
   const { has: hasCapability, isPrivileged: isPrivilegedUser } = useMyCapabilities();
@@ -278,6 +287,18 @@ export function CreateExpenseModal({
     mapRow: usageMapRow,
     enabled: isSales,
   });
+
+  // Mantém apenas as utilizações de receita permitidas (comparação tolerante
+  // a acentos, caixa e espaços). Se nenhuma casar, mostra a lista integral.
+  const filteredUsageOptions = useMemo(() => {
+    const norm = (s: string) =>
+      s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+    const allowed = SALES_ALLOWED_USAGES.map(norm);
+    const filtered = usageOptions.filter((o) => allowed.some((a) => norm(o.name) === a || norm(o.name).startsWith(a)));
+    return filtered.length > 0 ? filtered : usageOptions;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usageOptions]);
+
 
 
 
@@ -404,7 +425,8 @@ export function CreateExpenseModal({
     hasCapability("items_restricted_all") ||
     canSeeAllCostCenters;
   const filteredItemOptions = useMemo(() => {
-    if (isSales) return itemOptions;
+    // Vendas: apenas os itens de receita liberados (SV0003 e SV0006).
+    if (isSales) return itemOptions.filter((o) => SALES_ALLOWED_ITEMS.includes(o.code));
     return itemOptions.filter((o) => isItemAllowedForCostCenter(o.code, userCostCenter, bypassCcItemRules));
   }, [itemOptions, userCostCenter, isSales, bypassCcItemRules]);
 
@@ -3046,7 +3068,7 @@ export function CreateExpenseModal({
             <div className="space-y-1.5">
               <CachedSearchCombobox
                 label="Utilização *"
-                options={usageOptions}
+                options={filteredUsageOptions}
                 isLoading={usagesLoading}
                 value={salesUsage}
                 onChange={setSalesUsage}
