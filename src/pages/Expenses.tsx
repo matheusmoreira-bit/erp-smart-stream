@@ -79,6 +79,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { savePostLoginPath } from "@/lib/post-login-redirect";
 import { useNavigate } from "react-router-dom";
 import { ExpenseEventHistory } from "@/components/ExpenseEventHistory";
 import { SapPoDetails } from "@/components/SapPoDetails";
@@ -1203,7 +1204,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
 
   useEffect(() => {
-    if (!session) navigate("/");
+    if (!session) { savePostLoginPath(); navigate("/"); }
   }, [session, navigate]);
 
   // NOTE: no early return here — hooks below must always run. When session is
