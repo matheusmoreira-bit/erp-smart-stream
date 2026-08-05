@@ -35,6 +35,26 @@ Deno.serve(async (req) => {
       const lj = await lr.json().catch(() => ({}));
       return new Response(JSON.stringify(lj), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+    if (companyDb && body?.patch && docEntries.length === 1) {
+      const sb1 = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      const { data: d1 } = await sb1.from("system_credentials").select("credential_key, credential_value")
+        .eq("system_name", "sap").eq("company_db", companyDb);
+      const c1: Record<string, string> = {};
+      for (const r of (d1 || []) as Array<{ credential_key: string; credential_value: string }>) c1[r.credential_key] = r.credential_value ?? "";
+      const bu1 = buildBaseUrl(c1.service_layer_url || "");
+      const lg1 = await fetch(`${bu1}/Login`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ UserName: c1.username, Password: c1.password, CompanyDB: c1.company_db || companyDb }) });
+      if (!lg1.ok) throw new Error(`login ${lg1.status}`);
+      const ck1 = lg1.headers.get("set-cookie") || "";
+      const pr = await fetch(`${bu1}/Invoices(${docEntries[0]})`, {
+        method: "PATCH", headers: { Cookie: ck1, "Content-Type": "application/json" },
+        body: JSON.stringify(body.patch),
+      });
+      const pt = await pr.text().catch(() => "");
+      return new Response(JSON.stringify({ status: pr.status, body: pt.slice(0, 600) }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     if (!companyDb || docEntries.length === 0) {
       return new Response(JSON.stringify({ error: "company_db e doc_entries obrigatórios" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
