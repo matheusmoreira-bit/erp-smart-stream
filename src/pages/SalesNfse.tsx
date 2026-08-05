@@ -30,6 +30,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { expenseRead } from "@/lib/expense-read";
+import { logAuditAction } from "@/hooks/useAuditLog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -323,6 +334,7 @@ export default function SalesNfse() {
   const [xmlLoadingFor, setXmlLoadingFor] = useState<string | null>(null);
   const [retryingFor, setRetryingFor] = useState<string | null>(null);
   const [detailOrder, setDetailOrder] = useState<SalesOrderRow | null>(null);
+  const [retryTarget, setRetryTarget] = useState<SalesOrderRow | null>(null);
   const uploadTargetRef = useRef<{ order: SalesOrderRow; inv: NfseRow | null } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -495,6 +507,12 @@ export default function SalesNfse() {
     async (order: SalesOrderRow) => {
       if (order.source !== "erp_flow" || order.sap_doc_entry) return;
       setRetryingFor(order.id);
+      const auditBase = {
+        entity_type: "sales_order",
+        entity_id: order.id,
+        actor_email: session?.userName || undefined,
+        company_db: companyDb || undefined,
+      };
       try {
         const res = await sapFunctionFetch("expense-to-sap", {
           method: "POST",
@@ -505,15 +523,35 @@ export default function SalesNfse() {
         if (!res.ok || (data && data.success === false)) {
           throw new Error(data?.error || `Falha na integração (HTTP ${res.status})`);
         }
+        await logAuditAction({
+          ...auditBase,
+          action: "sales_order_retry_integration",
+          details: {
+            result: "success",
+            document_number: order.document_number,
+            attempts_before: order.sap_sync_attempts ?? null,
+          },
+        });
         toast.success("Integração solicitada — pedido enviado ao ERP");
         await load();
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Falha ao solicitar integração");
+        const message = e instanceof Error ? e.message : "Falha ao solicitar integração";
+        await logAuditAction({
+          ...auditBase,
+          action: "sales_order_retry_integration",
+          details: {
+            result: "error",
+            error: message,
+            document_number: order.document_number,
+            attempts_before: order.sap_sync_attempts ?? null,
+          },
+        });
+        toast.error(message);
       } finally {
         setRetryingFor(null);
       }
     },
-    [load],
+    [load, session?.userName, companyDb],
   );
 
 
