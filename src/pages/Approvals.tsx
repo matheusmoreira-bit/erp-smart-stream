@@ -36,6 +36,7 @@ import { FilterMultiSelect } from "@/components/FilterMultiSelect";
 import { useExpenses, type Expense } from "@/hooks/useExpenses";
 import { useMyRequests, type MyRequestDoc, type ApprovalHistoryEntry } from "@/hooks/useMyRequests";
 import { useLazyList } from "@/hooks/useLazyList";
+import { savePostLoginPath } from "@/lib/post-login-redirect";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History, UserCog, ChevronsUpDown, Check, Network, FileDown, Link2, Undo2, Briefcase } from "lucide-react";
@@ -2211,7 +2212,7 @@ export default function ApprovalsPage() {
 
   // Redirect to login if no session (after all hooks)
   useEffect(() => {
-    if (!session) navigate("/");
+    if (!session) { savePostLoginPath(); navigate("/"); }
   }, [session, navigate]);
   if (!session) return null;
 

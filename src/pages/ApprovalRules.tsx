@@ -60,6 +60,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { savePostLoginPath } from "@/lib/post-login-redirect";
 import { useNavigate } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
@@ -1585,7 +1586,7 @@ export default function ApprovalRulesPage() {
   }, [standardRules, customRules, activeTab, search, docTypeFilter, statusFilter]);
 
   useEffect(() => {
-    if (!session) navigate("/");
+    if (!session) { savePostLoginPath(); navigate("/"); }
   }, [session, navigate]);
 
   if (!session) {

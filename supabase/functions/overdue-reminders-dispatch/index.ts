@@ -235,8 +235,13 @@ Deno.serve(async (req) => {
     // pode exibi-las para administradores, mas isso não autoriza WhatsApp real.
     const { data: companyRows, error: companyErr } = await sb
       .from("companies")
-      .select("company_db, is_test");
+      .select("company_db, is_test, display_name");
     if (companyErr) throw companyErr;
+    const companyNames: Record<string, string> = {};
+    for (const c of ((companyRows as CompanyRow[] | null) || [])) {
+      const named = c as CompanyRow & { display_name?: string | null };
+      if (named.display_name) companyNames[c.company_db] = named.display_name;
+    }
     const testCompanies = new Set(
       ((companyRows as CompanyRow[] | null) || [])
         .filter((company) => company.is_test)
@@ -326,6 +331,7 @@ Deno.serve(async (req) => {
       );
 
       const baseVars: Record<string, string> = {
+        company: companyNames[exp.company_db] || exp.company_db,
         supplier: exp.supplier_name || "—",
         currency: exp.currency || "BRL",
         amount: formatCurrency(Number(exp.total_amount || 0), exp.currency || "BRL"),

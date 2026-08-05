@@ -18,12 +18,15 @@ export default function ApprovalsHub() {
   const active =
     tabs.find((t) => t.key === tabParam)?.key || tabs[0]?.key || "pending";
 
-  // Normalize URL if invalid tab passed
+  // Normalize URL if invalid tab passed (preservando o deep-link `?doc=`)
   useEffect(() => {
     if (tabParam && tabParam !== active) {
-      setParams({ tab: active }, { replace: true });
+      const next = new URLSearchParams(params);
+      next.set("tab", active);
+      setParams(next, { replace: true });
     }
-  }, [tabParam, active, setParams]);
+  }, [tabParam, active, params, setParams]);
+
 
   return active === "history" ? <ApprovalHistory /> : <Approvals />;
 }
