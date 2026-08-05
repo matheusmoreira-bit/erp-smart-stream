@@ -94,7 +94,7 @@ export function NotificationChannelSettings({ companies, canEdit }: Props) {
       if (existing) {
         const { error } = await supabase
           .from("notification_channel_settings")
-          .update({ [field]: value })
+          .update({ [field]: value } as never)
           .eq("id", existing.id);
         if (error) throw error;
         setRows((prev) => prev.map((r) => (r.id === existing.id ? { ...r, [field]: value } : r)));
@@ -112,11 +112,12 @@ export function NotificationChannelSettings({ companies, canEdit }: Props) {
         };
         const { data, error } = await supabase
           .from("notification_channel_settings")
-          .insert(payload)
+          .insert(payload as never)
           .select()
           .single();
         if (error) throw error;
         setRows((prev) => [...prev, data as Row]);
+
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao salvar");
