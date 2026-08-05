@@ -473,8 +473,10 @@ export default function SalesNfse() {
   const [sapInvoices, setSapInvoices] = useState<{
     available: boolean;
     byOrder: Map<number, { docEntry: number; docNum: number | null }>;
+    byMatch: Map<string, { docEntry: number; docNum: number | null }>;
     entries: Set<number>;
-  }>({ available: false, byOrder: new Map(), entries: new Set() });
+  }>({ available: false, byOrder: new Map(), byMatch: new Map(), entries: new Set() });
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [erpWarning, setErpWarning] = useState<string | null>(null);
