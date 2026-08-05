@@ -843,11 +843,15 @@ export default function SalesNfse() {
                         {o.sap_doc_num ? `#${o.sap_doc_num}` : "—"}
                         {!o.sap_doc_entry && (
                           <div className="mt-1 flex flex-wrap items-center gap-1">
-                            <span className="text-[11px] text-muted-foreground">
+                            <span
+                              className="text-[11px] text-muted-foreground"
+                              title={o.source === "erp_flow" ? diagnoseBlock(o).detail : undefined}
+                            >
                               {o.source === "erp_flow"
-                                ? SYNC_STATE_LABEL[o.sap_sync_state || ""]?.label || "não integrado"
+                                ? diagnoseBlock(o).category
                                 : "não integrado"}
                             </span>
+
                             {o.source === "erp_flow" && (
                               <>
                                 <Button
