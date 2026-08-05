@@ -97,11 +97,7 @@ function fieldLabel(field: string): string {
 }
 
 function normalizeSearch(value: unknown): string {
-  return String(value ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
+  return baseNormalizeText(value);
 }
 
 function criterionSummary(c: RuleCriterion): string {

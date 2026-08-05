@@ -69,12 +69,7 @@ export function hasValidBrazilianTaxId(s?: string | null): boolean {
 }
 
 export function normalizeName(s?: string | null): string {
-  return (s || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+  return normalizeWords(s);
 }
 
 /** Upsert a decision (link / import / ignore) so future scans skip it. */

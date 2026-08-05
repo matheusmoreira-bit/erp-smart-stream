@@ -15,18 +15,8 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { displayUserName } from "@/lib/user-display";
 
-const SUFFIX_RE = /[._\-\s]?(ext|externo|terceiro|adm|admin)$/;
-
-export function canonicalUserKey(value: unknown): string {
-  const raw = String(value ?? "").trim().toLowerCase();
-  if (!raw) return "";
-  const local = raw.includes("@") ? raw.slice(0, raw.indexOf("@")) : raw;
-  return local
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(SUFFIX_RE, "")
-    .replace(/[^a-z0-9]/g, "");
-}
+export { canonicalUserKey } from "@/lib/text-normalize";
+import { canonicalUserKey, normalizeText } from "@/lib/text-normalize";
 
 /** Duas identidades (e-mail, UserCode, nome de login) são a mesma pessoa? */
 export function sameUser(a: unknown, b: unknown): boolean {
