@@ -910,7 +910,7 @@ export default function SalesNfse() {
                                   className="h-6 gap-1 px-1.5 text-[11px]"
                                   disabled={retryingFor === o.id}
                                   title="Solicitar novamente a integração deste pedido no ERP"
-                                  onClick={() => void retryIntegration(o)}
+                                  onClick={() => setRetryTarget(o)}
                                 >
                                   {retryingFor === o.id ? (
                                     <Loader2 className="w-3 h-3 animate-spin" />
@@ -1243,7 +1243,7 @@ export default function SalesNfse() {
                 onClick={() => {
                   const target = detailOrder;
                   setDetailOrder(null);
-                  void retryIntegration(target);
+                  setRetryTarget(target);
                 }}
               >
                 {retryingFor === detailOrder.id ? (
