@@ -79,6 +79,13 @@ interface SalesOrderRow {
   source: "erp_flow" | "erp";
   /** true quando o pedido já está fechado/faturado no ERP */
   erp_closed?: boolean;
+  /** diagnóstico da integração com o ERP (somente pedidos do ERP Flow) */
+  sap_sync_state?: string | null;
+  sap_integration_error?: string | null;
+  sap_integration_last_attempt_at?: string | null;
+  sap_integration_locked_at?: string | null;
+  sap_sync_attempts?: number | null;
+  sap_sync_next_retry_at?: string | null;
 }
 
 interface SapOrder {
