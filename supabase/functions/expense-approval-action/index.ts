@@ -484,12 +484,24 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
   if (sapSessionHeader && sapUserHeader && sapCompanyHeader) {
     sapValidated = await validateSapSession(req);
     if (!sapValidated) {
-      stageLog("auth_sap", "warn", { requestId, reason: "invalid_or_expired_session", sapUser: sapUserHeader });
-      return await respond(401, {
-        error: "Sessão SAP inválida ou expirada. Faça login novamente.",
-        stage: "auth_sap",
-      });
+      // Sessão SAP expirada NÃO deve bloquear a aprovação quando já existe
+      // outra identidade válida (JWT do Cloud / ator interno). A aprovação é
+      // uma operação do ERP Flow — o SAP só é necessário na integração.
+      if (callerIdentity || callerEmail || isCloudAdmin) {
+        stageLog("auth_sap", "warn", {
+          requestId, reason: "expired_session_ignored_cloud_identity", sapUser: sapUserHeader,
+        });
+      } else {
+        stageLog("auth_sap", "warn", { requestId, reason: "invalid_or_expired_session", sapUser: sapUserHeader });
+        return await respond(401, {
+          error: "Sessão SAP inválida ou expirada. Faça login novamente.",
+          stage: "auth_sap",
+        });
+      }
     }
+  }
+  if (sapValidated) {
+
     if (!callerIdentity) callerIdentity = sapValidated.userName;
     try {
       const { data: mappedAdmin } = await admin.rpc("is_sap_user_admin", {
