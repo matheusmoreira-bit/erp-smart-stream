@@ -41,6 +41,11 @@ interface Expense {
   created_at: string;
 }
 
+interface CompanyRow {
+  company_db: string;
+  is_test: boolean;
+}
+
 function normalizePhone(p?: string | null): string {
   if (!p) return "";
   const digits = p.replace(/\D+/g, "");
@@ -106,6 +111,25 @@ const slug = (s: string) =>
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+
+function identityParts(value?: string | null): Set<string> {
+  const normalized = slug(value || "");
+  if (!normalized) return new Set();
+  const prefix = normalized.split("@")[0];
+  const compact = (v: string) => v.replace(/[^a-z0-9]/g, "");
+  return new Set([normalized, prefix, compact(normalized), compact(prefix)].filter(Boolean));
+}
+
+function sameIdentity(left?: string | null, right?: string | null): boolean {
+  const a = identityParts(left);
+  const b = identityParts(right);
+  return Array.from(a).some((value) => b.has(value));
+}
+
+function requesterIsCurrentApprover(expense: Expense): boolean {
+  return sameIdentity(expense.current_approver, expense.requester_name) ||
+    sameIdentity(expense.current_approver, expense.requester_email);
+}
 
 // Resolve identificadores adicionais (código SAP) a partir de nome de exibição
 // ou e-mail — o campo `current_approver` costuma guardar "Felipe Escudeiro".
@@ -207,6 +231,18 @@ Deno.serve(async (req) => {
     const perCompany: Record<string, Settings> = {};
     for (const s of settings) if (s.company_db) perCompany[s.company_db] = s;
 
+    // Notificações externas nunca devem sair de bases de teste. A interface
+    // pode exibi-las para administradores, mas isso não autoriza WhatsApp real.
+    const { data: companyRows, error: companyErr } = await sb
+      .from("companies")
+      .select("company_db, is_test");
+    if (companyErr) throw companyErr;
+    const testCompanies = new Set(
+      ((companyRows as CompanyRow[] | null) || [])
+        .filter((company) => company.is_test)
+        .map((company) => company.company_db),
+    );
+
     // Se global está desabilitado E não há override por empresa, sai.
     if (!globalSettings?.enabled && Object.values(perCompany).every((s) => !s.enabled)) {
       return new Response(JSON.stringify({ ok: true, skipped: "all_disabled" }), {
@@ -232,6 +268,29 @@ Deno.serve(async (req) => {
     for (const exp of expenses) {
       const s = perCompany[exp.company_db] || globalSettings;
       if (!s || !s.enabled) { skipped++; continue; }
+
+      if (testCompanies.has(exp.company_db)) {
+        details.push({ id: exp.id, skip: "test_company" });
+        skipped++;
+        continue;
+      }
+
+      // Defesa adicional: mesmo que um documento legado ou uma delegação
+      // incorreta coloque o solicitante como aprovador, não envie a ele uma
+      // cobrança para aprovar a própria solicitação.
+      if (requesterIsCurrentApprover(exp)) {
+        await sb.from("overdue_reminder_log").insert({
+          expense_id: exp.id,
+          company_db: exp.company_db,
+          recipient_role: "approver",
+          recipient_name: exp.current_approver,
+          status: "skipped_self_approval",
+          response: "solicitante e aprovador atual representam a mesma identidade",
+        });
+        details.push({ id: exp.id, skip: "self_approval" });
+        skipped++;
+        continue;
+      }
 
       // Janela de horário
       if (!isWithinWindow(s)) {
