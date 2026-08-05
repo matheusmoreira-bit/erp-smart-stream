@@ -505,7 +505,17 @@ export default function NotificationGovernancePage() {
                 </div>
               </ScrollArea>
             </section>
+
+            <section className="glass-card p-5">
+              <h2 className="text-base font-semibold">Trilha de auditoria de notificações</h2>
+              <p className="text-xs text-muted-foreground mt-1 mb-3">
+                Por documento: quem recebeu o aviso, em qual canal e por qual regra/matriz foi resolvido
+                como aprovador atual.
+              </p>
+              <NotificationAuditTrail limit={50} />
+            </section>
           </>
+
         )}
       </main>
     </div>
