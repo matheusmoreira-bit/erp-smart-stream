@@ -288,16 +288,26 @@ export function CreateExpenseModal({
     enabled: isSales,
   });
 
-  // Mantém apenas as utilizações de receita permitidas (comparação tolerante
-  // a acentos, caixa e espaços). Se nenhuma casar, mostra a lista integral.
+  // Mantém apenas as utilizações de receita permitidas. A comparação ignora
+  // acentos, caixa, espaços e o prefixo numérico ("01-", "1 - ", etc.), pois
+  // dependendo da base o número vem no código e não no nome.
   const filteredUsageOptions = useMemo(() => {
     const norm = (s: string) =>
-      s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+      (s || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/^\s*\d+\s*[-–.]?\s*/, "")
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
     const allowed = SALES_ALLOWED_USAGES.map(norm);
-    const filtered = usageOptions.filter((o) => allowed.some((a) => norm(o.name) === a || norm(o.name).startsWith(a)));
-    return filtered.length > 0 ? filtered : usageOptions;
+    return usageOptions.filter((o) => {
+      const candidates = [norm(o.name), norm(`${o.code} ${o.name}`)];
+      return allowed.some((a) => candidates.some((c) => c === a || c.startsWith(a) || a.startsWith(c)));
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usageOptions]);
+
 
 
 
