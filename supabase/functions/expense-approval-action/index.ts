@@ -925,7 +925,18 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
       totalAmount: Number((exp as any).total_amount || 0),
       currency: (exp as any).currency,
       docType: String((exp as any).doc_type || "purchase"),
+      resolution: {
+        source: picked.fallback_used ? "self_approval_escalation" : "next_level",
+        reason: picked.fallback_used
+          ? "Solicitante era o aprovador deste nível — redirecionado para o aprovador de contingência"
+          : `Próximo nível da cadeia de alçada (nível ${nextLevelOrder}) após aprovação anterior`,
+        ruleId: (exp as any).approval_rule_id || null,
+        costCenter: (exp as any).cost_center || null,
+        project: (exp as any).project || null,
+        metadata: { jumped, fallback_used: picked.fallback_used },
+      },
     });
+
 
 
 
