@@ -180,7 +180,7 @@ export default function SalesNfse() {
 
       const [{ data: exp, error: e1 }, { data: inv, error: e2 }, erpRes] = await Promise.all([
         expenseRead("expenses").viewAll()
-          .select("id, supplier_code, supplier_name, total_amount, currency, status, doc_date, requester_name, sap_doc_entry, sap_doc_num, project, nfse_split_mode")
+          .select("id, supplier_code, supplier_name, total_amount, currency, status, doc_date, requester_name, sap_doc_entry, sap_doc_num, project, nfse_split_mode, sap_sync_state, sap_integration_error, sap_integration_last_attempt_at, sap_integration_locked_at, sap_sync_attempts, sap_sync_next_retry_at")
           .eq("company_db", companyDb)
           .eq("doc_type", "sales")
           .in("status", APPROVED_STATUSES)
