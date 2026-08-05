@@ -175,8 +175,9 @@ Deno.serve(async (req) => {
     const sendOpts: Record<string, unknown> = {
       from: `Sistema Ana Gaming <${SMTP_USER}>`,
       to: recipients,
-      subject,
-      content: text || subject,
+      subject: sanitizeSubject(subject),
+      content: text || (html ? htmlToText(html) : sanitizeSubject(subject)),
+
       html: html || undefined,
     };
     if (cc) sendOpts.cc = Array.isArray(cc) ? cc : [cc];
