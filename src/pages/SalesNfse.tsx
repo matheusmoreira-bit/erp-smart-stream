@@ -567,7 +567,7 @@ export default function SalesNfse() {
               session,
               "Invoices",
               {
-                $select: "DocEntry,DocNum,DocDate,Cancelled,DocumentStatus,DocumentLines",
+                $select: "DocEntry,DocNum,DocDate,CardCode,DocTotal,Cancelled,DocumentStatus,DocumentLines",
                 $filter: `DocDate ge '${cutoffIso}' and Cancelled ne 'tYES'`,
                 $orderby: "DocDate desc",
               },
