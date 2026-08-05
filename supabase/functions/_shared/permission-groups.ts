@@ -24,6 +24,12 @@ function personTokens(value: unknown): string[] {
   return tokenizePerson(value);
 }
 
+/** Remove sufixos de conta externa/serviço de uma chave já colapsada. */
+function stripSuffix(value: string): string {
+  return String(value ?? "").replace(/(ext|externo|terceiro|adm|admin)$/, "");
+}
+
+
 /**
  * Comparação de PESSOAS tolerante ao formato: `expenses.current_approver`
  * ora guarda o UserCode SAP (`andresa.carvalho`), ora o e-mail, ora o nome
