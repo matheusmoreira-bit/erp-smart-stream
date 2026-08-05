@@ -610,33 +610,45 @@ export default function SalesNfse() {
           erp_closed: o.DocumentStatus === "bost_Close",
         }));
 
-      // Índice das notas ativas no ERP por pedido de origem (BaseType 17 = Order).
+      // Índice das notas ativas no ERP por pedido de origem (BaseType 17 = Order)
+      // e, como fallback, por cliente + valor (notas lançadas sem vínculo de base).
       const erpInvoiceRows = ((erpInvRes as { data?: { value?: unknown[] } } | null)?.data?.value ||
         null) as
         | Array<{
             DocEntry: number;
             DocNum: number | null;
+            CardCode?: string | null;
+            DocTotal?: number | null;
             Cancelled?: string;
             DocumentLines?: Array<{ BaseEntry?: number | null; BaseType?: number | null }>;
           }>
         | null;
       if (erpInvoiceRows) {
         const byOrder = new Map<number, { docEntry: number; docNum: number | null }>();
+        const byMatch = new Map<string, { docEntry: number; docNum: number | null }>();
         const entries = new Set<number>();
         for (const nf of erpInvoiceRows) {
           if (!nf || nf.Cancelled === "tYES") continue;
           entries.add(Number(nf.DocEntry));
+          const ref = { docEntry: Number(nf.DocEntry), docNum: nf.DocNum ?? null };
+          const card = (nf.CardCode || "").trim().toUpperCase();
+          const total = Number(nf.DocTotal || 0);
+          if (card && total > 0) {
+            const key = `${card}|${total.toFixed(2)}`;
+            if (!byMatch.has(key)) byMatch.set(key, ref);
+          }
           for (const line of nf.DocumentLines || []) {
             const base = Number(line?.BaseEntry);
             if (!Number.isFinite(base) || base <= 0) continue;
             if (line?.BaseType != null && Number(line.BaseType) !== 17) continue;
-            if (!byOrder.has(base)) byOrder.set(base, { docEntry: Number(nf.DocEntry), docNum: nf.DocNum ?? null });
+            if (!byOrder.has(base)) byOrder.set(base, ref);
           }
         }
-        setSapInvoices({ available: true, byOrder, entries });
+        setSapInvoices({ available: true, byOrder, byMatch, entries });
       } else {
-        setSapInvoices({ available: false, byOrder: new Map(), entries: new Set() });
+        setSapInvoices({ available: false, byOrder: new Map(), byMatch: new Map(), entries: new Set() });
       }
+
 
       setOrders([...flowRows, ...erpRows]);
       setInvoices((inv || []) as NfseRow[]);
