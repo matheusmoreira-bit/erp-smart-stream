@@ -339,6 +339,21 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
       { label: "Solicitante", value: input.requesterName },
     ];
 
+    // Base comum da trilha de auditoria
+    const auditBase = {
+      expenseId: input.expenseId,
+      companyDb: input.companyDb,
+      docType: input.docType ?? null,
+      recipient: email || identifier,
+      recipientName: input.approverName ?? null,
+      recipientRole: "approver",
+      levelOrder: input.levelOrder ?? null,
+      eventKey: "approval_pending",
+      amount: input.totalAmount ?? null,
+      currency: input.currency ?? null,
+      resolution: input.resolution ?? null,
+    };
+
     // In-app (dedupe por documento + nível)
     const refId = `${input.expenseId}:${input.levelOrder ?? 0}`;
     const docLink = `/aprovacoes?doc=${encodeURIComponent(`internal:${input.expenseId}`)}`;
@@ -348,7 +363,10 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
       .eq("category", "approval")
       .contains("metadata", { ref_id: refId })
       .limit(1);
-    if (existing && existing.length > 0) return;
+    if (existing && existing.length > 0) {
+      await logNotificationAudit(admin, { ...auditBase, channel: "in_app", status: "skipped_duplicate" });
+      return;
+    }
 
     await admin.from("notifications").insert({
       user_identifier: identifier,
@@ -359,6 +377,7 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
       link: docLink,
       metadata: { ref_id: refId, expense_id: input.expenseId, level_order: input.levelOrder ?? null },
     });
+    await logNotificationAudit(admin, { ...auditBase, channel: "in_app" });
 
     // Push nativo no celular (best-effort, paralelo a e-mail/Slack).
     await pushToRecipient(admin, identifier, {
@@ -367,8 +386,12 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
       url: docLink,
       tag: refId,
     });
+    await logNotificationAudit(admin, { ...auditBase, channel: "push" });
 
-    if (!email || !isEmail(email)) return;
+    if (!email || !isEmail(email)) {
+      await logNotificationAudit(admin, { ...auditBase, channel: "email", status: "skipped_no_email" });
+      return;
+    }
 
     const appUrl = appPublicUrl();
     const token = await issueApprovalToken(admin, {
@@ -381,8 +404,11 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
     const approveUrl = token ? `${appUrl}/aprovar/${token}` : null;
 
     await sendEmail([email], `[ERP Flow] ${title}`, buildEmailHtml(title, subtitle, details, approveUrl, `${appUrl}${docLink}`));
+    await logNotificationAudit(admin, { ...auditBase, channel: "email" });
 
     await sendSlackApproval({ email, title, subtitle, details, approveUrl, appUrl: `${appUrl}${docLink}` });
+    if (slackEnabled()) await logNotificationAudit(admin, { ...auditBase, channel: "slack" });
+
   } catch (e) {
     console.warn("[approval-notify] erro inesperado:", e instanceof Error ? e.message : String(e));
   }
