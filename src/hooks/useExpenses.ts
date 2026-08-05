@@ -700,11 +700,19 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
             if (match) break;
           }
 
+          if (match && !match.firstApprover?.name && !match.firstApprover?.email) {
+            // Regra de bloqueio: centro de custo sem alçada definida na matriz.
+            throw new Error(
+              `Centro de custo bloqueado para lançamento (regra "${match.rule.name}"). Não há aprovador definido na matriz de alçadas — procure o time Financeiro para liberar.`,
+            );
+          }
+
           if (match) {
             status = "pendente_aprovacao";
             currentApprover = match.firstApprover?.name || null;
             matchedRuleId = match.rule.id;
           } else {
+
             // Sem regra exata para o CC. Antes de mandar para um admin qualquer,
             // procuramos a alçada do RAMO do centro de custo (1.80.1.x → 1.80.x):
             // é o aprovador natural daquele grupo de CCs.
