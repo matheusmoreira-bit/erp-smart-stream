@@ -3068,7 +3068,7 @@ export function CreateExpenseModal({
             <div className="space-y-1.5">
               <CachedSearchCombobox
                 label="Utilização *"
-                options={usageOptions}
+                options={filteredUsageOptions}
                 isLoading={usagesLoading}
                 value={salesUsage}
                 onChange={setSalesUsage}
