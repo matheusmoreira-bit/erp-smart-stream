@@ -1,4 +1,5 @@
 // Shared helpers to prevent a requester from being their own approver.
+import { emailLocalPart, normalizeText, tokenizePerson } from "./text-normalize.ts";
 //
 // Rule (project-wide, all companies):
 //  - When picking the CURRENT approval level, if the level's designated
