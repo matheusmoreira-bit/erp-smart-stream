@@ -329,6 +329,7 @@ Deno.serve(async (req) => {
         total_amount: Number(invoice.DocTotal ?? expense.total_amount ?? 0),
         currency: invoice.DocCurrency || expense.currency || "BRL",
         status: "issued",
+        last_error: autoSend.ok ? null : `Envio automático não concluído — enviar manualmente no ERP (${autoSend.detail ?? ""})`.slice(0, 1000),
         created_by_email: (auth as { email?: string })?.email ?? null,
       })
       .select("id")
