@@ -1185,7 +1185,8 @@ export default function SalesNfse() {
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
 
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDetailOrder(null)}>
