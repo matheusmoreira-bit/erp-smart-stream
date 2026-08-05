@@ -53,6 +53,43 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+/**
+ * Gmail/denomailer quebra o encoded-word RFC 2047 quando o assunto tem acentos
+ * e ultrapassa 75 chars: o header vaza para o corpo e o e-mail chega como MIME cru.
+ * Mantemos o assunto em ASCII puro (sem acentos) e curto — assim nenhum
+ * encoded-word é gerado e o cabeçalho nunca é dobrado incorretamente.
+ */
+function sanitizeSubject(raw: unknown): string {
+  const s = String(raw ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\u2010-\u2015\u2212]/g, "-")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2026]/g, "...")
+    .replace(/[^\x20-\x7E]/g, "")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return (s.length > 120 ? `${s.slice(0, 117)}...` : s) || "Notificacao ERP Flow";
+}
+
+function htmlToText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|tr|h1|h2|h3)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+
 async function downloadAttachment(att: AttachmentInput): Promise<
   { filename: string; contentType: string; encoding: "base64"; content: string } | null
 > {
