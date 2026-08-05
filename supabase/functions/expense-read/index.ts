@@ -199,7 +199,16 @@ Deno.serve(async (req) => {
   try {
     const admin = service();
     const caller = await identifyCaller(req, admin);
-    if (!caller.identity) return json(401, { error: "Não autenticado" }, cors);
+    if (!caller.identity) {
+      console.warn("[expense-read] sem identidade", {
+        hasAuthorization: !!req.headers.get("authorization"),
+        hasSapSession: !!req.headers.get("x-sap-session"),
+        companyDb: req.headers.get("x-company-db"),
+        sapUser: req.headers.get("x-sap-user"),
+      });
+      return json(401, { error: "Não autenticado. Faça login novamente para carregar os documentos." }, cors);
+    }
+
 
     const body = await req.json().catch(() => ({}));
     const table = String(body?.table ?? "");
