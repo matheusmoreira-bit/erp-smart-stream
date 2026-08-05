@@ -19,6 +19,7 @@ export function isPendingApproval(status?: string | null): boolean {
 
 import {
   emailLocalPart,
+  identityMatches,
   normalizeText,
   tokenizePerson,
 } from "@/lib/text-normalize";
@@ -56,6 +57,8 @@ export function isDesignatedApprover(
   if (ae) {
     if (c === ae) return true;
     if (emailPrefix(c) === emailPrefix(ae) && emailPrefix(ae).length > 0) return true;
+    // Contas externas/serviço (.ext, -externo, .adm) são a MESMA pessoa.
+    if (identityMatches(c, ae)) return true;
   }
 
   const nameTokens = tokenize(approverName || "");
