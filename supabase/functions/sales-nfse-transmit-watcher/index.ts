@@ -171,6 +171,11 @@ Deno.serve(async (req) => {
             continue;
           }
 
+          if (body?.debug) {
+            item.udfs = Object.fromEntries(
+              Object.entries(doc || {}).filter(([k]) => k.startsWith("U_")),
+            );
+          }
           const current = doc?.U_XmlServiceStatus == null ? "" : String(doc.U_XmlServiceStatus).trim();
           item.xml_service_status = current || null;
 
