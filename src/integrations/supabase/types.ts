@@ -4403,6 +4403,48 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_channel_settings: {
+        Row: {
+          company_db: string | null
+          created_at: string
+          email_enabled: boolean
+          event_key: string
+          id: string
+          in_app_enabled: boolean
+          push_enabled: boolean
+          slack_enabled: boolean
+          updated_at: string
+          updated_by: string | null
+          whatsapp_enabled: boolean
+        }
+        Insert: {
+          company_db?: string | null
+          created_at?: string
+          email_enabled?: boolean
+          event_key?: string
+          id?: string
+          in_app_enabled?: boolean
+          push_enabled?: boolean
+          slack_enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+          whatsapp_enabled?: boolean
+        }
+        Update: {
+          company_db?: string | null
+          created_at?: string
+          email_enabled?: boolean
+          event_key?: string
+          id?: string
+          in_app_enabled?: boolean
+          push_enabled?: boolean
+          slack_enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+          whatsapp_enabled?: boolean
+        }
+        Relationships: []
+      }
       notification_governance: {
         Row: {
           block_self_approval: boolean
