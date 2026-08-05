@@ -300,6 +300,33 @@ export default function SalesNfse() {
     [pdfPathFor],
   );
 
+  // Reenvia o pedido de venda ao ERP quando a integração falhou/expirou.
+  const retryIntegration = useCallback(
+    async (order: SalesOrderRow) => {
+      if (order.source !== "erp_flow" || order.sap_doc_entry) return;
+      setRetryingFor(order.id);
+      try {
+        const res = await sapFunctionFetch("expense-to-sap", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ expense_id: order.id }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || (data && data.success === false)) {
+          throw new Error(data?.error || `Falha na integração (HTTP ${res.status})`);
+        }
+        toast.success("Integração solicitada — pedido enviado ao ERP");
+        await load();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Falha ao solicitar integração");
+      } finally {
+        setRetryingFor(null);
+      }
+    },
+    [load],
+  );
+
+
   const XML_REASONS: Record<string, string> = {
     hana_indisponivel: "Esta empresa não tem HanaAPI habilitada.",
     entidade_fiscal_nao_encontrada: "Entidade fiscal (TaxOne) não encontrada para esta base.",
