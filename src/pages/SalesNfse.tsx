@@ -30,6 +30,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { expenseRead } from "@/lib/expense-read";
+import { logAuditAction } from "@/hooks/useAuditLog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -155,6 +166,154 @@ const ERROR_PATTERNS: { re: RegExp; cause: Omit<BlockCause, "detail"> }[] = [
     },
   },
 ];
+
+/** Playbook por categoria: causa provável no dia a dia + passos objetivos de correção. */
+const ERROR_PLAYBOOK: Record<
+  string,
+  { probable: string; owner: string; actions: string[] }
+> = {
+  "Sessão do ERP": {
+    probable: "A sessão do Service Layer expirou (validade de 30 min) ou foi encerrada em outro dispositivo.",
+    owner: "Você mesmo (usuário do ERP Flow)",
+    actions: [
+      "Saia e faça login novamente no ERP dentro do ERP Flow.",
+      "Repita a operação com “Reintegrar” logo após o login.",
+      "Se repetir em poucos minutos, verifique se a mesma conta está logada em outra máquina.",
+    ],
+  },
+  "Cadastro do cliente": {
+    probable: "O CardCode do cliente não existe, está inativo ou está bloqueado para vendas no SAP.",
+    owner: "Time de cadastro / Facilities",
+    actions: [
+      "Confirme o código do cliente no SAP (Parceiro de Negócios → Cliente).",
+      "Reative o parceiro ou abra solicitação de cadastro se ele não existir.",
+      "Após o cadastro, reintegre o pedido.",
+    ],
+  },
+  "Mapeamento de item": {
+    probable: "Um item do pedido não tem correspondente no cadastro de itens do SAP (OITM) ou o mapeamento está desatualizado.",
+    owner: "Time de cadastro / Facilities",
+    actions: [
+      "Identifique o item citado na mensagem do ERP.",
+      "Cadastre o item no SAP ou corrija o mapeamento de itens da empresa.",
+      "Reintegre o pedido depois do ajuste.",
+    ],
+  },
+  "Filial (BPL)": {
+    probable: "A filial (BPLId) do documento não está habilitada para o cliente, para a série ou para o usuário.",
+    owner: "Financeiro / Fiscal",
+    actions: [
+      "Confira a filial do pedido — por padrão as vendas usam a filial 1.",
+      "Valide se o cliente e a série de numeração aceitam essa filial no SAP.",
+      "Ajuste a filial no pedido e reintegre.",
+    ],
+  },
+  Projeto: {
+    probable: "O código de projeto informado não existe no SAP ou está bloqueado/encerrado.",
+    owner: "Controladoria",
+    actions: [
+      "Verifique o projeto no SAP (OPRJ) e se ele está ativo.",
+      "Troque o projeto do pedido para um código válido, se necessário.",
+      "Reintegre após a correção.",
+    ],
+  },
+  "Centro de custo": {
+    probable: "O centro de custo não existe na dimensão configurada ou está inativo.",
+    owner: "Controladoria",
+    actions: [
+      "Confirme o CC na dimensão usada por esta empresa.",
+      "Reative o CC ou selecione outro válido no pedido.",
+      "Reintegre o pedido.",
+    ],
+  },
+  "Parametrização fiscal": {
+    probable: "Falta parametrização fiscal do item/cliente (utilização, NCM, CFOP ou grupo de imposto).",
+    owner: "Fiscal",
+    actions: [
+      "Confirme se a utilização (Usage) está preenchida no pedido.",
+      "Peça ao fiscal a revisão de NCM/CFOP e determinação de imposto do item.",
+      "Reintegre depois da parametrização.",
+    ],
+  },
+  "Período contábil": {
+    probable: "A data do documento cai em um período contábil já fechado no SAP.",
+    owner: "Contabilidade",
+    actions: [
+      "Ajuste a data do documento para um período aberto, se for permitido.",
+      "Ou solicite à contabilidade a reabertura do período.",
+      "Reintegre em seguida.",
+    ],
+  },
+  "Indisponibilidade do ERP": {
+    probable: "Falha temporária de rede/serviço: o SAP não respondeu ou o circuit breaker da empresa está aberto.",
+    owner: "TI / Integração",
+    actions: [
+      "Aguarde alguns minutos — o sistema também tenta novamente sozinho.",
+      "Confirme se outras rotinas da mesma empresa estão respondendo.",
+      "Use “Reintegrar” quando a base voltar a responder.",
+    ],
+  },
+  "Falta de dados no documento": {
+    probable: "O documento foi criado sem campos obrigatórios exigidos pela integração.",
+    owner: "Solicitante do pedido",
+    actions: [
+      "Edite o pedido e preencha os campos apontados acima.",
+      "Salve e reintegre.",
+    ],
+  },
+  "Processamento em andamento": {
+    probable: "Uma execução anterior travou e manteve o bloqueio de processamento ativo.",
+    owner: "Você mesmo (usuário do ERP Flow)",
+    actions: [
+      "Aguarde alguns minutos.",
+      "Se o bloqueio persistir, use “Reintegrar” para forçar uma nova execução.",
+    ],
+  },
+  "Na fila de retentativa": {
+    probable: "A última tentativa falhou e o pedido entrou no backoff automático.",
+    owner: "Automático",
+    actions: [
+      "Aguarde o horário da próxima tentativa exibido abaixo.",
+      "Ou force agora com “Reintegrar”.",
+    ],
+  },
+  "Nunca enviado ao ERP": {
+    probable: "O pedido nunca chegou a ser enviado — geralmente falta o disparo manual ou o documento ainda não foi aprovado.",
+    owner: "Solicitante do pedido",
+    actions: [
+      "Confirme se o pedido está aprovado.",
+      "Clique em “Reintegrar” para enviá-lo ao ERP.",
+    ],
+  },
+  "Sem retorno do ERP": {
+    probable: "A chamada foi feita, mas não retornou DocEntry nem mensagem — possível queda no meio do processo.",
+    owner: "TI / Integração",
+    actions: [
+      "Verifique no SAP se o pedido já foi criado (evita duplicidade).",
+      "Se não existir no SAP, reintegre.",
+      "Se persistir, acione a TI com o horário da última tentativa.",
+    ],
+  },
+  "Erro de integração": {
+    probable: "O ERP recusou o documento por uma regra específica não catalogada.",
+    owner: "TI / Integração",
+    actions: [
+      "Leia a mensagem original do ERP abaixo — ela indica o campo ou a regra recusada.",
+      "Corrija o dado apontado no pedido ou no cadastro.",
+      "Reintegre e, se persistir, encaminhe a mensagem à TI.",
+    ],
+  },
+};
+
+/** Extrai códigos de erro do SAP (ex.: -5002, 400) da mensagem bruta. */
+function extractErpCodes(message: string): string[] {
+  const codes = new Set<string>();
+  for (const m of message.matchAll(/(-?\d{3,5})/g)) {
+    const n = Number(m[1]);
+    if (n <= -1000 || (n >= 400 && n <= 599)) codes.add(m[1]);
+  }
+  return [...codes];
+}
 
 /** Determina a causa exata do bloqueio da integração de um pedido de venda. */
 function diagnoseBlock(order: SalesOrderRow): BlockCause {
@@ -323,6 +482,7 @@ export default function SalesNfse() {
   const [xmlLoadingFor, setXmlLoadingFor] = useState<string | null>(null);
   const [retryingFor, setRetryingFor] = useState<string | null>(null);
   const [detailOrder, setDetailOrder] = useState<SalesOrderRow | null>(null);
+  const [retryTarget, setRetryTarget] = useState<SalesOrderRow | null>(null);
   const uploadTargetRef = useRef<{ order: SalesOrderRow; inv: NfseRow | null } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -495,6 +655,12 @@ export default function SalesNfse() {
     async (order: SalesOrderRow) => {
       if (order.source !== "erp_flow" || order.sap_doc_entry) return;
       setRetryingFor(order.id);
+      const auditBase = {
+        entity_type: "sales_order",
+        entity_id: order.id,
+        actor_email: session?.userName || undefined,
+        company_db: companyDb || undefined,
+      };
       try {
         const res = await sapFunctionFetch("expense-to-sap", {
           method: "POST",
@@ -505,15 +671,37 @@ export default function SalesNfse() {
         if (!res.ok || (data && data.success === false)) {
           throw new Error(data?.error || `Falha na integração (HTTP ${res.status})`);
         }
+        await logAuditAction({
+          ...auditBase,
+          action: "sales_order_retry_integration",
+          details: {
+            result: "success",
+            supplier_name: order.supplier_name,
+            sap_doc_num: order.sap_doc_num,
+            attempts_before: order.sap_sync_attempts ?? null,
+          },
+        });
         toast.success("Integração solicitada — pedido enviado ao ERP");
         await load();
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Falha ao solicitar integração");
+        const message = e instanceof Error ? e.message : "Falha ao solicitar integração";
+        await logAuditAction({
+          ...auditBase,
+          action: "sales_order_retry_integration",
+          details: {
+            result: "error",
+            error: message,
+            supplier_name: order.supplier_name,
+            sap_doc_num: order.sap_doc_num,
+            attempts_before: order.sap_sync_attempts ?? null,
+          },
+        });
+        toast.error(message);
       } finally {
         setRetryingFor(null);
       }
     },
-    [load],
+    [load, session?.userName, companyDb],
   );
 
 
@@ -870,7 +1058,7 @@ export default function SalesNfse() {
                                   className="h-6 gap-1 px-1.5 text-[11px]"
                                   disabled={retryingFor === o.id}
                                   title="Solicitar novamente a integração deste pedido no ERP"
-                                  onClick={() => void retryIntegration(o)}
+                                  onClick={() => setRetryTarget(o)}
                                 >
                                   {retryingFor === o.id ? (
                                     <Loader2 className="w-3 h-3 animate-spin" />
@@ -1133,6 +1321,8 @@ export default function SalesNfse() {
 
           {detailOrder && (() => {
             const cause = diagnoseBlock(detailOrder);
+            const playbook = ERROR_PLAYBOOK[cause.category];
+            const codes = extractErpCodes(detailOrder.sap_integration_error || "");
             const tone =
               cause.severity === "error"
                 ? "border-destructive/40 bg-destructive/5"
@@ -1152,6 +1342,36 @@ export default function SalesNfse() {
                   {cause.fix}
                 </p>
               </div>
+
+              {playbook && !detailOrder.sap_doc_entry && (
+                <div className="rounded-md border border-border/60 p-3">
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Causa provável e ação recomendada
+                  </div>
+                  <p className="mt-1 text-xs">{playbook.probable}</p>
+                  <p className="mt-2 text-xs">
+                    <span className="font-medium">Responsável indicado: </span>
+                    {playbook.owner}
+                  </p>
+                  <ol className="mt-2 list-decimal space-y-1 pl-4 text-xs">
+                    {playbook.actions.map((a) => (
+                      <li key={a}>{a}</li>
+                    ))}
+                  </ol>
+                  {codes.length > 0 && (
+                    <div className="mt-2 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                      <span>Códigos retornados pelo ERP:</span>
+                      {codes.map((c) => (
+                        <Badge key={c} variant="outline" className="font-mono text-[10px]">
+                          {c}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+
 
               <div className="rounded-md border border-border/60 p-3">
                 <div className="font-medium">
@@ -1203,7 +1423,7 @@ export default function SalesNfse() {
                 onClick={() => {
                   const target = detailOrder;
                   setDetailOrder(null);
-                  void retryIntegration(target);
+                  setRetryTarget(target);
                 }}
               >
                 {retryingFor === detailOrder.id ? (
@@ -1217,6 +1437,55 @@ export default function SalesNfse() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Confirmação antes de reintegrar (evita cliques acidentais) */}
+      <AlertDialog open={!!retryTarget} onOpenChange={(open) => !open && setRetryTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reintegrar pedido no ERP?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  O pedido será reenviado ao ERP agora. Confirme os dados antes de prosseguir — a ação
+                  fica registrada na auditoria.
+                </p>
+                {retryTarget && (
+                  <ul className="rounded-md border p-2 text-xs">
+                    <li>
+                      <span className="text-muted-foreground">Cliente: </span>
+                      {retryTarget.supplier_name}
+                    </li>
+                    <li>
+                      <span className="text-muted-foreground">Valor: </span>
+                      {formatCurrency(retryTarget.total_amount, retryTarget.currency)}
+                    </li>
+                    <li>
+                      <span className="text-muted-foreground">Data: </span>
+                      {formatDate(retryTarget.doc_date)}
+                    </li>
+                    <li>
+                      <span className="text-muted-foreground">Tentativas anteriores: </span>
+                      {retryTarget.sap_sync_attempts ?? 0}
+                    </li>
+                  </ul>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const target = retryTarget;
+                setRetryTarget(null);
+                if (target) void retryIntegration(target);
+              }}
+            >
+              Confirmar reintegração
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
 
   );
