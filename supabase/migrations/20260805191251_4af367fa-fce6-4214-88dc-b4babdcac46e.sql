@@ -1,0 +1,1 @@
+UPDATE public.sales_order_invoices SET status = 'cancelled', last_error = 'NF 229 cancelada no ERP' WHERE id = 'e21da29c-5d68-4e4e-9f76-0bec16cc88f8';
