@@ -15,7 +15,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireUser, validateSapSession, AuthError } from "../_shared/auth.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
-import { emailLocalPart, normalizeText, tokenizePerson } from "../_shared/text-normalize.ts";
+import { emailLocalPart, identityMatches, normalizeText, tokenizePerson } from "../_shared/text-normalize.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -46,6 +46,7 @@ function isDesignatedApprover(
   if (ae) {
     if (c === ae) return true;
     if (emailPrefix(c) === emailPrefix(ae) && emailPrefix(ae).length > 0) return true;
+    if (identityMatches(c, ae)) return true;
   }
   const nameTokens = tokenize(approverName || "");
   const callerTokens = tokenize(caller);
