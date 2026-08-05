@@ -608,6 +608,34 @@ export default function SalesNfse() {
           erp_closed: o.DocumentStatus === "bost_Close",
         }));
 
+      // Índice das notas ativas no ERP por pedido de origem (BaseType 17 = Order).
+      const erpInvoiceRows = ((erpInvRes as { data?: { value?: unknown[] } } | null)?.data?.value ||
+        null) as
+        | Array<{
+            DocEntry: number;
+            DocNum: number | null;
+            Cancelled?: string;
+            DocumentLines?: Array<{ BaseEntry?: number | null; BaseType?: number | null }>;
+          }>
+        | null;
+      if (erpInvoiceRows) {
+        const byOrder = new Map<number, { docEntry: number; docNum: number | null }>();
+        const entries = new Set<number>();
+        for (const nf of erpInvoiceRows) {
+          if (!nf || nf.Cancelled === "tYES") continue;
+          entries.add(Number(nf.DocEntry));
+          for (const line of nf.DocumentLines || []) {
+            const base = Number(line?.BaseEntry);
+            if (!Number.isFinite(base) || base <= 0) continue;
+            if (line?.BaseType != null && Number(line.BaseType) !== 17) continue;
+            if (!byOrder.has(base)) byOrder.set(base, { docEntry: Number(nf.DocEntry), docNum: nf.DocNum ?? null });
+          }
+        }
+        setSapInvoices({ available: true, byOrder, entries });
+      } else {
+        setSapInvoices({ available: false, byOrder: new Map(), entries: new Set() });
+      }
+
       setOrders([...flowRows, ...erpRows]);
       setInvoices((inv || []) as NfseRow[]);
       await loadPdfIndex();
