@@ -27,6 +27,8 @@ import { notifyApprovalPending } from "../_shared/approval-notify.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { enforceRateLimit } from "../_shared/rate-limit.ts";
 import { findMatchingRule, pickHierarchicalFallbackRule, type RuleRow } from "../_shared/rule-match.ts";
+import { applyCcRedirect, loadCcRedirects } from "../_shared/cc-redirect.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -213,8 +215,33 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   const dueDate = input.due_date ? String(input.due_date).trim() : "";
   if (!dueDate) return json(400, { error: "Data de vencimento é obrigatória" });
 
+  // Centros de custo desativados são redirecionados para a alçada ativa
+  // equivalente (CC + projeto) antes de resolver o aprovador.
+  const ccRedirects = await loadCcRedirects(admin, companyDb);
+  const redirectNotes: string[] = [];
+  if (ccRedirects.size > 0) {
+    const head = applyCcRedirect(ccRedirects, input.cost_center, input.project);
+    if (head.redirected) {
+      input.cost_center = head.costCenter;
+      input.project = head.project;
+      redirectNotes.push(`${head.from} → ${head.costCenter}${head.project ? ` / ${head.project}` : ""}`);
+    }
+    for (const it of items) {
+      const line = applyCcRedirect(ccRedirects, it?.cost_center, it?.project);
+      if (line.redirected) {
+        it.cost_center = line.costCenter;
+        it.project = line.project;
+        redirectNotes.push(`${line.from} → ${line.costCenter}${line.project ? ` / ${line.project}` : ""}`);
+      }
+    }
+  }
+  const ccRedirected = redirectNotes.length > 0;
+
   // If pendente_aprovacao and approval_rule_id provided, verify rule exists & is active.
-  const ruleId = input.approval_rule_id ? String(input.approval_rule_id) : null;
+  // Quando houve redirecionamento de CC, a regra enviada pelo cliente foi calculada
+  // com o CC antigo — reavaliamos a matriz com o CC/projeto corrigidos.
+  let ruleId = input.approval_rule_id ? String(input.approval_rule_id) : null;
+
   if (ruleId) {
     const { data: rule, error } = await admin
       .from("approval_rules")
@@ -227,6 +254,25 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     const rc = (rule as any).company_db;
     if (rc && rc !== companyDb) return json(400, { error: "Regra pertence a outra empresa" });
   }
+
+  if (ccRedirected) {
+    const rematched = await rematchRuleFromMatrix(admin, {
+      companyDb,
+      docType: String(input.doc_type || "purchase"),
+      totalAmount,
+      costCenter: String(input.cost_center || items[0]?.cost_center || "").trim(),
+      project: String(input.project || items[0]?.project || "").trim(),
+      currency: input.currency || "BRL",
+      requesterName,
+      supplierName: input.supplier_name || null,
+      supplierCode: input.supplier_code || null,
+      expenseId: "",
+      items,
+    });
+    if (rematched) ruleId = rematched;
+  }
+
+
 
   // Self-approval guard: when the requester matches the level's approver,
   // skip forward to the next level. If every level matches, fall back to
@@ -325,7 +371,12 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     decision: "created",
     approver_name: caller.identity,
     approver_email: caller.email || (caller.identity.includes("@") ? caller.identity : null),
-    remarks: input.remarks || null,
+    remarks: ccRedirected
+      ? [input.remarks || null, `CC desativado redirecionado: ${redirectNotes.join("; ")}`]
+          .filter(Boolean)
+          .join(" | ")
+      : (input.remarks || null),
+
   } as any);
   if (status === "pendente_aprovacao") {
     await admin.from("expense_approval_log").insert({
@@ -445,10 +496,27 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
 
   const items: any[] | undefined = Array.isArray(input.items) ? input.items : undefined;
   if (items && items.length > 0) {
+    // Redireciona CCs desativados também na edição (cabeçalho + linhas).
+    const ccRedirects = await loadCcRedirects(admin, String(current.company_db || ""));
+    if (ccRedirects.size > 0) {
+      const head = applyCcRedirect(ccRedirects, current.cost_center, current.project);
+      if (head.redirected) {
+        updates.cost_center = head.costCenter;
+        updates.project = head.project;
+      }
+      for (const it of items) {
+        const line = applyCcRedirect(ccRedirects, it?.cost_center, it?.project);
+        if (line.redirected) {
+          it.cost_center = line.costCenter;
+          it.project = line.project;
+        }
+      }
+    }
     const totalAmount = items.reduce((s, it) => s + Number(it.line_total || 0), 0);
     updates.total_amount = totalAmount;
   }
   if (editableForFix) updates.sap_integration_error = null;
+
 
   // ── Anexos: valida antes de qualquer escrita ────────────────────────────
   const removeIds: string[] = Array.isArray(input.remove_attachment_ids)
