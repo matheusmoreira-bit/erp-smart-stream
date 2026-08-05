@@ -92,6 +92,9 @@ interface SalesOrderRow {
   sap_doc_num: number | null;
   project: string | null;
   nfse_split_mode: string | null;
+  sales_usage?: string | null;
+  cost_center?: string | null;
+  branch_id?: number | string | null;
   /** erp_flow = pedido criado nesta aplicação · erp = pedido criado direto no SAP */
   source: "erp_flow" | "erp";
   /** true quando o pedido já está fechado/faturado no ERP */
