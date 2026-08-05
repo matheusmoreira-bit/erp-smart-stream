@@ -9,6 +9,8 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { pushToRecipient } from "./web-push.ts";
+import { getChannelSettings } from "./notification-channels.ts";
+
 
 const DEFAULT_TTL_HOURS = 72;
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/slack/api";
