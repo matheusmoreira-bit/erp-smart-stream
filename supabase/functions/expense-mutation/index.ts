@@ -369,7 +369,12 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     decision: "created",
     approver_name: caller.identity,
     approver_email: caller.email || (caller.identity.includes("@") ? caller.identity : null),
-    remarks: input.remarks || null,
+    remarks: ccRedirected
+      ? [input.remarks || null, `CC desativado redirecionado: ${redirectNotes.join("; ")}`]
+          .filter(Boolean)
+          .join(" | ")
+      : (input.remarks || null),
+
   } as any);
   if (status === "pendente_aprovacao") {
     await admin.from("expense_approval_log").insert({
