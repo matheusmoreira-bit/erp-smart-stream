@@ -473,8 +473,10 @@ export default function SalesNfse() {
   const [sapInvoices, setSapInvoices] = useState<{
     available: boolean;
     byOrder: Map<number, { docEntry: number; docNum: number | null }>;
+    byMatch: Map<string, { docEntry: number; docNum: number | null }>;
     entries: Set<number>;
-  }>({ available: false, byOrder: new Map(), entries: new Set() });
+  }>({ available: false, byOrder: new Map(), byMatch: new Map(), entries: new Set() });
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [erpWarning, setErpWarning] = useState<string | null>(null);
@@ -565,7 +567,7 @@ export default function SalesNfse() {
               session,
               "Invoices",
               {
-                $select: "DocEntry,DocNum,DocDate,Cancelled,DocumentStatus,DocumentLines",
+                $select: "DocEntry,DocNum,DocDate,CardCode,DocTotal,Cancelled,DocumentStatus,DocumentLines",
                 $filter: `DocDate ge '${cutoffIso}' and Cancelled ne 'tYES'`,
                 $orderby: "DocDate desc",
               },
@@ -608,33 +610,45 @@ export default function SalesNfse() {
           erp_closed: o.DocumentStatus === "bost_Close",
         }));
 
-      // Índice das notas ativas no ERP por pedido de origem (BaseType 17 = Order).
+      // Índice das notas ativas no ERP por pedido de origem (BaseType 17 = Order)
+      // e, como fallback, por cliente + valor (notas lançadas sem vínculo de base).
       const erpInvoiceRows = ((erpInvRes as { data?: { value?: unknown[] } } | null)?.data?.value ||
         null) as
         | Array<{
             DocEntry: number;
             DocNum: number | null;
+            CardCode?: string | null;
+            DocTotal?: number | null;
             Cancelled?: string;
             DocumentLines?: Array<{ BaseEntry?: number | null; BaseType?: number | null }>;
           }>
         | null;
       if (erpInvoiceRows) {
         const byOrder = new Map<number, { docEntry: number; docNum: number | null }>();
+        const byMatch = new Map<string, { docEntry: number; docNum: number | null }>();
         const entries = new Set<number>();
         for (const nf of erpInvoiceRows) {
           if (!nf || nf.Cancelled === "tYES") continue;
           entries.add(Number(nf.DocEntry));
+          const ref = { docEntry: Number(nf.DocEntry), docNum: nf.DocNum ?? null };
+          const card = (nf.CardCode || "").trim().toUpperCase();
+          const total = Number(nf.DocTotal || 0);
+          if (card && total > 0) {
+            const key = `${card}|${total.toFixed(2)}`;
+            if (!byMatch.has(key)) byMatch.set(key, ref);
+          }
           for (const line of nf.DocumentLines || []) {
             const base = Number(line?.BaseEntry);
             if (!Number.isFinite(base) || base <= 0) continue;
             if (line?.BaseType != null && Number(line.BaseType) !== 17) continue;
-            if (!byOrder.has(base)) byOrder.set(base, { docEntry: Number(nf.DocEntry), docNum: nf.DocNum ?? null });
+            if (!byOrder.has(base)) byOrder.set(base, ref);
           }
         }
-        setSapInvoices({ available: true, byOrder, entries });
+        setSapInvoices({ available: true, byOrder, byMatch, entries });
       } else {
-        setSapInvoices({ available: false, byOrder: new Map(), entries: new Set() });
+        setSapInvoices({ available: false, byOrder: new Map(), byMatch: new Map(), entries: new Set() });
       }
+
 
       setOrders([...flowRows, ...erpRows]);
       setInvoices((inv || []) as NfseRow[]);
@@ -893,21 +907,32 @@ export default function SalesNfse() {
 
   /**
    * Situação real da emissão, validada contra o ERP:
-   * - se o ERP tem uma NF ativa originada no pedido, está emitida;
-   * - o registro local só vale se a nota ainda existir (não cancelada) no ERP.
+   * - NF ativa originada no pedido (vínculo de base);
+   * - NF ativa do mesmo cliente com o mesmo valor (nota lançada sem vínculo);
+   * - pedido fechado no ERP (faturado integralmente);
+   * - registro local, desde que a nota ainda exista (não cancelada) no ERP.
    */
   const emissionFor = useCallback(
     (order: SalesOrderRow, inv: NfseRow | null | undefined) => {
-      const sapInv = order.sap_doc_entry ? sapInvoices.byOrder.get(Number(order.sap_doc_entry)) : undefined;
+      const byOrder = order.sap_doc_entry ? sapInvoices.byOrder.get(Number(order.sap_doc_entry)) : undefined;
+      const card = (order.supplier_code || "").trim().toUpperCase();
+      const total = Number(order.total_amount || 0);
+      const byMatch =
+        !byOrder && card && total > 0
+          ? sapInvoices.byMatch.get(`${card}|${total.toFixed(2)}`)
+          : undefined;
+      const sapInv = byOrder ?? byMatch;
       const localEntry = inv?.sap_invoice_doc_entry ?? null;
       const localValid =
         !!localEntry && (!sapInvoices.available || sapInvoices.entries.has(Number(localEntry)));
+      const closedInErp = !!order.erp_closed;
       return {
-        emitted: !!sapInv || localValid,
+        emitted: !!sapInv || localValid || closedInErp,
         docNum: sapInv?.docNum ?? (localValid ? inv?.sap_invoice_doc_num ?? null : null),
-        localStale: !!localEntry && !localValid && !sapInv,
+        localStale: !!localEntry && !localValid && !sapInv && !closedInErp,
       };
     },
+
     [sapInvoices],
   );
 
