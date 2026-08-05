@@ -39,8 +39,12 @@ function emailPrefix(email: string): string {
   return i > 0 ? e.slice(0, i) : e;
 }
 function tokenize(s: string): string[] {
-  return normalize(s).replace(/[._\-@]+/g, " ").split(/\s+/).filter(Boolean);
+  // Sem acentos: "Paula Mourão" e "paula.mourao" são a mesma pessoa.
+  return normalize(s)
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[._\-@]+/g, " ").split(/\s+/).filter(Boolean);
 }
+
 function isDesignatedApprover(
   caller: string,
   approverName: string | null,

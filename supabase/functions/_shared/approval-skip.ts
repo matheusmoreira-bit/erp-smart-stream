@@ -33,8 +33,11 @@ function emailPrefix(v: string): string {
   return i > 0 ? s.slice(0, i) : s;
 }
 function tokenize(s: string): string[] {
-  return norm(s).replace(/[._\-@]+/g, " ").split(/\s+/).filter(Boolean);
+  return norm(s)
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[._\-@]+/g, " ").split(/\s+/).filter(Boolean);
 }
+
 
 /** True when `requester` and `approver` identify the same person. */
 export function requesterMatchesApprover(
