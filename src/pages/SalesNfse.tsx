@@ -1257,6 +1257,55 @@ export default function SalesNfse() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Confirmação antes de reintegrar (evita cliques acidentais) */}
+      <AlertDialog open={!!retryTarget} onOpenChange={(open) => !open && setRetryTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reintegrar pedido no ERP?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  O pedido será reenviado ao ERP agora. Confirme os dados antes de prosseguir — a ação
+                  fica registrada na auditoria.
+                </p>
+                {retryTarget && (
+                  <ul className="rounded-md border p-2 text-xs">
+                    <li>
+                      <span className="text-muted-foreground">Cliente: </span>
+                      {retryTarget.supplier_name}
+                    </li>
+                    <li>
+                      <span className="text-muted-foreground">Valor: </span>
+                      {formatCurrency(retryTarget.total_amount, retryTarget.currency)}
+                    </li>
+                    <li>
+                      <span className="text-muted-foreground">Data: </span>
+                      {formatDate(retryTarget.doc_date)}
+                    </li>
+                    <li>
+                      <span className="text-muted-foreground">Tentativas anteriores: </span>
+                      {retryTarget.sap_sync_attempts ?? 0}
+                    </li>
+                  </ul>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const target = retryTarget;
+                setRetryTarget(null);
+                if (target) void retryIntegration(target);
+              }}
+            >
+              Confirmar reintegração
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
 
   );
