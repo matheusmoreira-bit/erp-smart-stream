@@ -74,13 +74,7 @@ export function nearDuplicateKeys(a: string, b: string): boolean {
  */
 export function unifyPeople(users: DirectoryUser[]): DirectoryUser[] {
   const result: DirectoryUser[] = [];
-  const normName = (u: DirectoryUser) =>
-    (u.display_name || "")
-      .trim()
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]/g, "");
+  const normName = (u: DirectoryUser) => normalizeCompact(u.display_name || "");
 
   for (const user of users) {
     const keys = new Set([user.user_key, ...(user.aliasKeys || [])]);
