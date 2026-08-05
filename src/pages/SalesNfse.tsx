@@ -560,6 +560,21 @@ export default function SalesNfse() {
               return { data: { value: [] as unknown[] } };
             })
           : Promise.resolve({ data: { value: [] as unknown[] } }),
+        session && session.erpType === "sap"
+          ? sapQueryAll(
+              session,
+              "Invoices",
+              {
+                $select: "DocEntry,DocNum,DocDate,Cancelled,DocumentStatus,DocumentLines",
+                $filter: `DocDate ge '${cutoffIso}' and Cancelled ne 'tYES'`,
+                $orderby: "DocDate desc",
+              },
+              true,
+            ).catch((err: unknown) => {
+              console.warn("SAP Invoices fetch failed:", (err as Error).message);
+              return null;
+            })
+          : Promise.resolve(null),
       ]);
       if (e1) throw e1;
       if (e2) throw e2;
