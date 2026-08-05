@@ -1094,7 +1094,8 @@ export default function SalesNfse() {
               <tbody>
                 {filtered.map((o) => {
                   const inv = invoiceByExpense.get(o.id);
-                  const emitted = !!inv?.sap_invoice_doc_entry;
+                  const emission = emissionFor(o, inv);
+                  const emitted = emission.emitted;
                   return (
                     <tr key={o.id} className="border-t border-border/60">
                       <td className="px-3 py-2 font-mono text-xs">
