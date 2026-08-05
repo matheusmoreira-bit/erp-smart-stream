@@ -468,6 +468,13 @@ export default function SalesNfse() {
 
   const [orders, setOrders] = useState<SalesOrderRow[]>([]);
   const [invoices, setInvoices] = useState<NfseRow[]>([]);
+  // Notas fiscais lidas direto do ERP, para validar de fato quais pedidos já
+  // tiveram NF emitida (o registro local pode apontar para uma nota cancelada).
+  const [sapInvoices, setSapInvoices] = useState<{
+    available: boolean;
+    byOrder: Map<number, { docEntry: number; docNum: number | null }>;
+    entries: Set<number>;
+  }>({ available: false, byOrder: new Map(), entries: new Set() });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [erpWarning, setErpWarning] = useState<string | null>(null);
@@ -520,7 +527,7 @@ export default function SalesNfse() {
       cutoff.setMonth(cutoff.getMonth() - 12);
       const cutoffIso = cutoff.toISOString().slice(0, 10);
 
-      const [{ data: exp, error: e1 }, { data: inv, error: e2 }, erpRes] = await Promise.all([
+      const [{ data: exp, error: e1 }, { data: inv, error: e2 }, erpRes, erpInvRes] = await Promise.all([
         expenseRead("expenses").viewAll()
           .select("id, supplier_code, supplier_name, total_amount, currency, status, doc_date, requester_name, sap_doc_entry, sap_doc_num, project, nfse_split_mode, sales_usage, cost_center, branch_id, sap_sync_state, sap_integration_error, sap_integration_last_attempt_at, sap_integration_locked_at, sap_sync_attempts, sap_sync_next_retry_at")
           .eq("company_db", companyDb)
@@ -553,6 +560,21 @@ export default function SalesNfse() {
               return { data: { value: [] as unknown[] } };
             })
           : Promise.resolve({ data: { value: [] as unknown[] } }),
+        session && session.erpType === "sap"
+          ? sapQueryAll(
+              session,
+              "Invoices",
+              {
+                $select: "DocEntry,DocNum,DocDate,Cancelled,DocumentStatus,DocumentLines",
+                $filter: `DocDate ge '${cutoffIso}' and Cancelled ne 'tYES'`,
+                $orderby: "DocDate desc",
+              },
+              true,
+            ).catch((err: unknown) => {
+              console.warn("SAP Invoices fetch failed:", (err as Error).message);
+              return null;
+            })
+          : Promise.resolve(null),
       ]);
       if (e1) throw e1;
       if (e2) throw e2;
@@ -585,6 +607,34 @@ export default function SalesNfse() {
           source: "erp" as const,
           erp_closed: o.DocumentStatus === "bost_Close",
         }));
+
+      // Índice das notas ativas no ERP por pedido de origem (BaseType 17 = Order).
+      const erpInvoiceRows = ((erpInvRes as { data?: { value?: unknown[] } } | null)?.data?.value ||
+        null) as
+        | Array<{
+            DocEntry: number;
+            DocNum: number | null;
+            Cancelled?: string;
+            DocumentLines?: Array<{ BaseEntry?: number | null; BaseType?: number | null }>;
+          }>
+        | null;
+      if (erpInvoiceRows) {
+        const byOrder = new Map<number, { docEntry: number; docNum: number | null }>();
+        const entries = new Set<number>();
+        for (const nf of erpInvoiceRows) {
+          if (!nf || nf.Cancelled === "tYES") continue;
+          entries.add(Number(nf.DocEntry));
+          for (const line of nf.DocumentLines || []) {
+            const base = Number(line?.BaseEntry);
+            if (!Number.isFinite(base) || base <= 0) continue;
+            if (line?.BaseType != null && Number(line.BaseType) !== 17) continue;
+            if (!byOrder.has(base)) byOrder.set(base, { docEntry: Number(nf.DocEntry), docNum: nf.DocNum ?? null });
+          }
+        }
+        setSapInvoices({ available: true, byOrder, entries });
+      } else {
+        setSapInvoices({ available: false, byOrder: new Map(), entries: new Set() });
+      }
 
       setOrders([...flowRows, ...erpRows]);
       setInvoices((inv || []) as NfseRow[]);
@@ -841,6 +891,26 @@ export default function SalesNfse() {
     return map;
   }, [invoices]);
 
+  /**
+   * Situação real da emissão, validada contra o ERP:
+   * - se o ERP tem uma NF ativa originada no pedido, está emitida;
+   * - o registro local só vale se a nota ainda existir (não cancelada) no ERP.
+   */
+  const emissionFor = useCallback(
+    (order: SalesOrderRow, inv: NfseRow | null | undefined) => {
+      const sapInv = order.sap_doc_entry ? sapInvoices.byOrder.get(Number(order.sap_doc_entry)) : undefined;
+      const localEntry = inv?.sap_invoice_doc_entry ?? null;
+      const localValid =
+        !!localEntry && (!sapInvoices.available || sapInvoices.entries.has(Number(localEntry)));
+      return {
+        emitted: !!sapInv || localValid,
+        docNum: sapInv?.docNum ?? (localValid ? inv?.sap_invoice_doc_num ?? null : null),
+        localStale: !!localEntry && !localValid && !sapInv,
+      };
+    },
+    [sapInvoices],
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let base = orders;
@@ -857,7 +927,7 @@ export default function SalesNfse() {
     });
   }, [orders, search, invoiceByExpense, originFilter]);
 
-  const pendentes = filtered.filter((o) => !invoiceByExpense.get(o.id)?.sap_invoice_doc_entry);
+  const pendentes = filtered.filter((o) => !emissionFor(o, invoiceByExpense.get(o.id)).emitted);
 
   const emit = useCallback(async () => {
     if (!confirmOrder) return;
@@ -1024,7 +1094,8 @@ export default function SalesNfse() {
               <tbody>
                 {filtered.map((o) => {
                   const inv = invoiceByExpense.get(o.id);
-                  const emitted = !!inv?.sap_invoice_doc_entry;
+                  const emission = emissionFor(o, inv);
+                  const emitted = emission.emitted;
                   return (
                     <tr key={o.id} className="border-t border-border/60">
                       <td className="px-3 py-2 font-mono text-xs">
@@ -1092,7 +1163,7 @@ export default function SalesNfse() {
                         {formatCurrency(Number(o.total_amount), o.currency)}
                       </td>
                       <td className="px-3 py-2">
-                        {inv?.status === "authorized" ? (
+                        {inv?.status === "authorized" && emitted ? (
                           <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-500">
                             <CheckCircle2 className="w-3 h-3" />
                             NFS-e {inv.nfse_number}
@@ -1101,8 +1172,13 @@ export default function SalesNfse() {
                         ) : emitted ? (
                           <Badge variant="outline" className="gap-1">
                             <Loader2 className="w-3 h-3" />
-                            Emitida (doc {inv?.sap_invoice_doc_num}) · aguardando autorização
+                            Emitida (doc {emission.docNum ?? "—"}) · aguardando autorização
                           </Badge>
+                        ) : emission.localStale ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-amber-500">
+                            <AlertTriangle className="w-3 h-3" />
+                            Nota cancelada no ERP — reemitir
+                          </span>
                         ) : inv?.status === "failed" ? (
                           <span className="inline-flex items-center gap-1 text-xs text-destructive">
                             <AlertTriangle className="w-3 h-3" />
