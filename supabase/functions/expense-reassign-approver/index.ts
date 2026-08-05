@@ -265,7 +265,17 @@ Deno.serve(async (req) => {
         totalAmount: doc.total_amount,
         currency: doc.currency,
         docType,
+        resolution: {
+          source: "manual_reassign",
+          reason: `Reprocessamento de roteamento: regra "${matched.name}" aplicada ao CC ${usedCc || "—"}${fallbackInfo ? " (fallback hierárquico do ramo)" : ""}`,
+          ruleId: matched.id,
+          ruleName: matched.name,
+          costCenter: usedCc || null,
+          project: (doc as any).project || null,
+          metadata: { from_approver: doc.current_approver, hierarchical_fallback: fallbackInfo },
+        },
       });
+
 
       reassigned += 1;
       results.push(entry);
