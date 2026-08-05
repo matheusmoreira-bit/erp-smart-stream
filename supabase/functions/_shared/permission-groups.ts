@@ -6,46 +6,22 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
+// Normalização: fonte única em `_shared/text-normalize.ts`.
+import {
+  canonicalIdentity,
+  identityMatches,
+  normalizeText,
+  tokenizePerson,
+} from "./text-normalize.ts";
+
+export { canonicalIdentity, identityMatches };
+
 export function normalizeGroupName(value: unknown): string {
-  return String(value ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-}
-
-export function canonicalIdentity(value: unknown): string {
-  const raw = String(value ?? "").toLowerCase().trim();
-  const prefix = raw.includes("@") ? raw.slice(0, raw.indexOf("@")) : raw;
-  return prefix
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "");
-}
-
-function stripSuffix(v: string): string {
-  return v.replace(/(ext|externo|terceiro|adm|admin)$/, "");
-}
-
-export function identityMatches(a: unknown, b: unknown): boolean {
-  const ca = canonicalIdentity(a);
-  const cb = canonicalIdentity(b);
-  if (!ca || !cb) return false;
-  if (ca === cb) return true;
-  return stripSuffix(ca) === stripSuffix(cb);
+  return normalizeText(value);
 }
 
 function personTokens(value: unknown): string[] {
-  return String(value ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/@[^\s]*/g, " ")
-    .replace(/[^a-z0-9]+/g, " ")
-    .split(" ")
-    .filter(Boolean)
-    // conectivos de nomes próprios não identificam ninguém
-    .filter((t) => !["de", "da", "do", "das", "dos", "e"].includes(t));
+  return tokenizePerson(value);
 }
 
 /**

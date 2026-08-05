@@ -44,15 +44,7 @@ export interface DeprovisionResult {
 }
 
 /** Mesma normalização de `public.canonical_user_key` (login sem sufixos .ext). */
-export function canonicalUserKey(value: string | null | undefined): string {
-  const local = String(value ?? "").trim().toLowerCase().split("@")[0];
-  const noAccents = local
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-  return noAccents
-    .replace(/[._\-\s]?(ext|externo|terceiro|adm|admin)$/g, "")
-    .replace(/[^a-z0-9]/g, "");
-}
+export { canonicalUserKey } from "./text-normalize.ts";
 
 function sameUser(a: string | null | undefined, b: string | null | undefined): boolean {
   const ka = canonicalUserKey(a);

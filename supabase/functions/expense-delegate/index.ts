@@ -30,20 +30,9 @@ function json(status: number, body: unknown) {
   });
 }
 
-function normalize(s: unknown): string {
-  return String(s ?? "").toLowerCase().trim();
-}
-function emailPrefix(email: string): string {
-  const e = normalize(email);
-  const i = e.indexOf("@");
-  return i > 0 ? e.slice(0, i) : e;
-}
-function tokenize(s: string): string[] {
-  // Sem acentos: "Paula Mourão" e "paula.mourao" são a mesma pessoa.
-  return normalize(s)
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/[._\-@]+/g, " ").split(/\s+/).filter(Boolean);
-}
+const normalize = (s: unknown) => normalizeText(s);
+const emailPrefix = (email: string) => emailLocalPart(email);
+const tokenize = (s: string) => tokenizePerson(s);
 
 function isDesignatedApprover(
   caller: string,
