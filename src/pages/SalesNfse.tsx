@@ -527,7 +527,7 @@ export default function SalesNfse() {
       cutoff.setMonth(cutoff.getMonth() - 12);
       const cutoffIso = cutoff.toISOString().slice(0, 10);
 
-      const [{ data: exp, error: e1 }, { data: inv, error: e2 }, erpRes] = await Promise.all([
+      const [{ data: exp, error: e1 }, { data: inv, error: e2 }, erpRes, erpInvRes] = await Promise.all([
         expenseRead("expenses").viewAll()
           .select("id, supplier_code, supplier_name, total_amount, currency, status, doc_date, requester_name, sap_doc_entry, sap_doc_num, project, nfse_split_mode, sales_usage, cost_center, branch_id, sap_sync_state, sap_integration_error, sap_integration_last_attempt_at, sap_integration_locked_at, sap_sync_attempts, sap_sync_next_retry_at")
           .eq("company_db", companyDb)
