@@ -1343,6 +1343,36 @@ export default function SalesNfse() {
                 </p>
               </div>
 
+              {playbook && !detailOrder.sap_doc_entry && (
+                <div className="rounded-md border border-border/60 p-3">
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Causa provável e ação recomendada
+                  </div>
+                  <p className="mt-1 text-xs">{playbook.probable}</p>
+                  <p className="mt-2 text-xs">
+                    <span className="font-medium">Responsável indicado: </span>
+                    {playbook.owner}
+                  </p>
+                  <ol className="mt-2 list-decimal space-y-1 pl-4 text-xs">
+                    {playbook.actions.map((a) => (
+                      <li key={a}>{a}</li>
+                    ))}
+                  </ol>
+                  {codes.length > 0 && (
+                    <div className="mt-2 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                      <span>Códigos retornados pelo ERP:</span>
+                      {codes.map((c) => (
+                        <Badge key={c} variant="outline" className="font-mono text-[10px]">
+                          {c}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+
+
               <div className="rounded-md border border-border/60 p-3">
                 <div className="font-medium">
                   {SYNC_STATE_LABEL[detailOrder.sap_sync_state || ""]?.label ||
