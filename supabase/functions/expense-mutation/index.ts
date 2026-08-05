@@ -302,7 +302,20 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
       totalAmount,
       currency: input.currency || "BRL",
       docType: String(insertPayload.doc_type || "purchase"),
+      resolution: {
+        source: matrixGap ? "default_fallback" : (fallbackUsed ? "self_approval_escalation" : "matrix_rule"),
+        reason: matrixGap
+          ? "Nenhuma regra ativa casou com os critérios do documento — aprovador global de contingência"
+          : fallbackUsed
+            ? "Solicitante era o aprovador designado — redirecionado para o aprovador de contingência"
+            : `Regra da matriz aplicada no nível ${resolvedLevel}${escalatedTo ? ` (escalado para ${escalatedTo})` : ""}`,
+        ruleId: matrixGap ? null : ruleId,
+        costCenter: input.cost_center || items[0]?.cost_center || null,
+        project: input.project || items[0]?.project || null,
+        metadata: { escalated_to: escalatedTo, matrix_gap: matrixGap, fallback_used: fallbackUsed },
+      },
     });
+
   }
 
 
