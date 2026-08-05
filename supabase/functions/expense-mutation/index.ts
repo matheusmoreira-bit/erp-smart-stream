@@ -27,6 +27,8 @@ import { notifyApprovalPending } from "../_shared/approval-notify.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { enforceRateLimit } from "../_shared/rate-limit.ts";
 import { findMatchingRule, pickHierarchicalFallbackRule, type RuleRow } from "../_shared/rule-match.ts";
+import { applyCcRedirect, loadCcRedirects } from "../_shared/cc-redirect.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
