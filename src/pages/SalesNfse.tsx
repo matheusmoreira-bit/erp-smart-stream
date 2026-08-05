@@ -133,6 +133,7 @@ export default function SalesNfse() {
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
   const [xmlPaths, setXmlPaths] = useState<Record<string, string>>({});
   const [xmlLoadingFor, setXmlLoadingFor] = useState<string | null>(null);
+  const [retryingFor, setRetryingFor] = useState<string | null>(null);
   const uploadTargetRef = useRef<{ order: SalesOrderRow; inv: NfseRow | null } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -299,6 +300,33 @@ export default function SalesNfse() {
     },
     [pdfPathFor],
   );
+
+  // Reenvia o pedido de venda ao ERP quando a integração falhou/expirou.
+  const retryIntegration = useCallback(
+    async (order: SalesOrderRow) => {
+      if (order.source !== "erp_flow" || order.sap_doc_entry) return;
+      setRetryingFor(order.id);
+      try {
+        const res = await sapFunctionFetch("expense-to-sap", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ expense_id: order.id }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || (data && data.success === false)) {
+          throw new Error(data?.error || `Falha na integração (HTTP ${res.status})`);
+        }
+        toast.success("Integração solicitada — pedido enviado ao ERP");
+        await load();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Falha ao solicitar integração");
+      } finally {
+        setRetryingFor(null);
+      }
+    },
+    [load],
+  );
+
 
   const XML_REASONS: Record<string, string> = {
     hana_indisponivel: "Esta empresa não tem HanaAPI habilitada.",
@@ -625,9 +653,29 @@ export default function SalesNfse() {
                       <td className="px-3 py-2 font-mono text-xs">
                         {o.sap_doc_num ? `#${o.sap_doc_num}` : "—"}
                         {!o.sap_doc_entry && (
-                          <span className="ml-2 text-[11px] text-muted-foreground">não integrado</span>
+                          <div className="mt-1 flex items-center gap-1">
+                            <span className="text-[11px] text-muted-foreground">não integrado</span>
+                            {o.source === "erp_flow" && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 gap-1 px-1.5 text-[11px]"
+                                disabled={retryingFor === o.id}
+                                title="Solicitar novamente a integração deste pedido no ERP"
+                                onClick={() => void retryIntegration(o)}
+                              >
+                                {retryingFor === o.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="w-3 h-3" />
+                                )}
+                                Reintegrar
+                              </Button>
+                            )}
+                          </div>
                         )}
                       </td>
+
                       <td className="px-3 py-2">
                         <Badge variant="outline" className="text-[11px]">
                           {o.source === "erp_flow" ? "ERP Flow" : "ERP"}
