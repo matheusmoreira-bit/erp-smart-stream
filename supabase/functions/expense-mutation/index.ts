@@ -496,10 +496,27 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
 
   const items: any[] | undefined = Array.isArray(input.items) ? input.items : undefined;
   if (items && items.length > 0) {
+    // Redireciona CCs desativados também na edição (cabeçalho + linhas).
+    const ccRedirects = await loadCcRedirects(admin, String(current.company_db || ""));
+    if (ccRedirects.size > 0) {
+      const head = applyCcRedirect(ccRedirects, current.cost_center, current.project);
+      if (head.redirected) {
+        updates.cost_center = head.costCenter;
+        updates.project = head.project;
+      }
+      for (const it of items) {
+        const line = applyCcRedirect(ccRedirects, it?.cost_center, it?.project);
+        if (line.redirected) {
+          it.cost_center = line.costCenter;
+          it.project = line.project;
+        }
+      }
+    }
     const totalAmount = items.reduce((s, it) => s + Number(it.line_total || 0), 0);
     updates.total_amount = totalAmount;
   }
   if (editableForFix) updates.sap_integration_error = null;
+
 
   // ── Anexos: valida antes de qualquer escrita ────────────────────────────
   const removeIds: string[] = Array.isArray(input.remove_attachment_ids)
