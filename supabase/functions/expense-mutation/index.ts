@@ -26,6 +26,7 @@ import { MATRIX_FALLBACK_APPROVER, notifyMatrixGap } from "../_shared/matrix-fal
 import { notifyApprovalPending } from "../_shared/approval-notify.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { enforceRateLimit } from "../_shared/rate-limit.ts";
+import { findMatchingRule, pickHierarchicalFallbackRule, type RuleRow } from "../_shared/rule-match.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,6 +34,77 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db, x-sap-auth-token",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+/**
+ * Reavalia a matriz de aprovação para um documento que está sem `approval_rule_id`.
+ * Usa o CC do cabeçalho e, quando vazio, os CCs dos itens (caso de rateio/reembolso,
+ * em que o CC só existe nas linhas). Só cai no fallback global quando nem a regra
+ * exata nem a alçada do ramo do CC existem.
+ */
+async function rematchRuleFromMatrix(
+  admin: SupabaseClient,
+  ctx: {
+    companyDb: string;
+    docType: string;
+    totalAmount: number;
+    costCenter: string;
+    project: string;
+    currency: string | null;
+    requesterName: string | null;
+    supplierName: string | null;
+    supplierCode: string | null;
+    expenseId: string;
+    items?: Array<{ cost_center?: string | null }> | null;
+  },
+): Promise<string | null> {
+  if (!ctx.companyDb) return null;
+
+  let itemCcs: string[] = (ctx.items || [])
+    .map((it) => String(it?.cost_center || "").trim())
+    .filter(Boolean);
+  if (itemCcs.length === 0) {
+    const { data } = await admin
+      .from("expense_items")
+      .select("cost_center")
+      .eq("expense_id", ctx.expenseId);
+    itemCcs = ((data || []) as Array<{ cost_center: string | null }>)
+      .map((it) => String(it.cost_center || "").trim())
+      .filter(Boolean);
+  }
+  const candidateCcs = Array.from(new Set(ctx.costCenter ? [ctx.costCenter] : itemCcs));
+  if (candidateCcs.length === 0) return null;
+
+  const { data: rulesRaw } = await admin
+    .from("approval_rules")
+    .select("*")
+    .eq("company_db", ctx.companyDb)
+    .eq("is_active", true);
+  const rules = (rulesRaw || []) as unknown as RuleRow[];
+  if (rules.length === 0) return null;
+
+  const buildCtx = (cc: string) => ({
+    total_amount: ctx.totalAmount,
+    cost_center: cc,
+    project: ctx.project,
+    requester_name: ctx.requesterName || "",
+    supplier_name: `${ctx.supplierName || ""} ${ctx.supplierCode || ""}`.trim(),
+    "supplier.name": String(ctx.supplierName || "").toLowerCase(),
+    "supplier.code": String(ctx.supplierCode || "").toLowerCase(),
+    currency: ctx.currency || "BRL",
+    doc_type: ctx.docType,
+  });
+
+  for (const cc of candidateCcs) {
+    const match = findMatchingRule(rules, buildCtx(cc), ctx.docType);
+    if (match) return match.id;
+  }
+  for (const cc of candidateCcs) {
+    const hier = pickHierarchicalFallbackRule(rules, buildCtx(cc), ctx.docType);
+    if (hier) return hier.rule.id;
+  }
+  return null;
+}
+
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -434,16 +506,40 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   }
 
   if (shouldResubmit) {
-    const nextRuleId = rateioChanged
+    let nextRuleId = rateioChanged
       ? (input.new_approval_rule_id ?? null)
       : (current.approval_rule_id ?? null);
     const nextApproverFromClient = rateioChanged
       ? (input.new_current_approver ?? null)
       : null;
 
+    // Sem regra vinculada (ex.: documento criado antes do CC ser preenchido nos
+    // itens, ou rateio alterado sem regra enviada pelo cliente): antes de cair
+    // no fallback global da matriz, reavalia a matriz com os dados ATUAIS.
+    if (!nextRuleId) {
+      const rematched = await rematchRuleFromMatrix(admin, {
+        companyDb: String(current.company_db || ""),
+        docType: String(current.doc_type || "purchase"),
+        totalAmount: Number((updates as any).total_amount ?? current.total_amount ?? 0),
+        costCenter: String((updates as any).cost_center ?? current.cost_center ?? "").trim(),
+        project: String((updates as any).project ?? current.project ?? "").trim(),
+        currency: current.currency,
+        requesterName: current.requester_name,
+        supplierName: current.supplier_name,
+        supplierCode: current.supplier_code,
+        expenseId,
+        items,
+      });
+      if (rematched) {
+        nextRuleId = rematched;
+        updates.approval_rule_id = rematched;
+      }
+    }
+
     let resolvedLevel = 1;
     let resolvedApprover: string | null = nextApproverFromClient;
     let fallbackUsed = false;
+
     if (nextRuleId) {
       const picked = await resolveApproverWithEscalation(admin, nextRuleId, {
         companyDb: String(current.company_db || ""),
