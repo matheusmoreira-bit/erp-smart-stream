@@ -54,6 +54,23 @@ function formatDate(value?: string | null) {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : value;
 }
 
+function formatDateTime(value?: string | null) {
+  if (!value) return "—";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleString("pt-BR");
+}
+
+/** Traduz o estado técnico da sincronização para uma explicação em português. */
+const SYNC_STATE_LABEL: Record<string, { label: string; hint: string }> = {
+  pending: { label: "Aguardando envio", hint: "O pedido está na fila e ainda não foi enviado ao ERP." },
+  queued: { label: "Na fila de retentativa", hint: "Houve uma falha temporária; o sistema tentará novamente automaticamente." },
+  processing: { label: "Em processamento", hint: "O envio ao ERP está em andamento neste momento." },
+  error: { label: "Erro de integração", hint: "O ERP recusou o documento. Veja a mensagem de erro abaixo." },
+  failed: { label: "Falha definitiva", hint: "As tentativas automáticas se esgotaram. Corrija o motivo e reintegre manualmente." },
+  synced: { label: "Integrado", hint: "O pedido foi criado no ERP com sucesso." },
+};
+
+
 const APPROVED_STATUSES = [
   "aprovado",
   "pc_lancado",
@@ -79,6 +96,13 @@ interface SalesOrderRow {
   source: "erp_flow" | "erp";
   /** true quando o pedido já está fechado/faturado no ERP */
   erp_closed?: boolean;
+  /** diagnóstico da integração com o ERP (somente pedidos do ERP Flow) */
+  sap_sync_state?: string | null;
+  sap_integration_error?: string | null;
+  sap_integration_last_attempt_at?: string | null;
+  sap_integration_locked_at?: string | null;
+  sap_sync_attempts?: number | null;
+  sap_sync_next_retry_at?: string | null;
 }
 
 interface SapOrder {
@@ -134,6 +158,7 @@ export default function SalesNfse() {
   const [xmlPaths, setXmlPaths] = useState<Record<string, string>>({});
   const [xmlLoadingFor, setXmlLoadingFor] = useState<string | null>(null);
   const [retryingFor, setRetryingFor] = useState<string | null>(null);
+  const [detailOrder, setDetailOrder] = useState<SalesOrderRow | null>(null);
   const uploadTargetRef = useRef<{ order: SalesOrderRow; inv: NfseRow | null } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -173,7 +198,7 @@ export default function SalesNfse() {
 
       const [{ data: exp, error: e1 }, { data: inv, error: e2 }, erpRes] = await Promise.all([
         expenseRead("expenses").viewAll()
-          .select("id, supplier_code, supplier_name, total_amount, currency, status, doc_date, requester_name, sap_doc_entry, sap_doc_num, project, nfse_split_mode")
+          .select("id, supplier_code, supplier_name, total_amount, currency, status, doc_date, requester_name, sap_doc_entry, sap_doc_num, project, nfse_split_mode, sap_sync_state, sap_integration_error, sap_integration_last_attempt_at, sap_integration_locked_at, sap_sync_attempts, sap_sync_next_retry_at")
           .eq("company_db", companyDb)
           .eq("doc_type", "sales")
           .in("status", APPROVED_STATUSES)
@@ -653,26 +678,43 @@ export default function SalesNfse() {
                       <td className="px-3 py-2 font-mono text-xs">
                         {o.sap_doc_num ? `#${o.sap_doc_num}` : "—"}
                         {!o.sap_doc_entry && (
-                          <div className="mt-1 flex items-center gap-1">
-                            <span className="text-[11px] text-muted-foreground">não integrado</span>
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            <span className="text-[11px] text-muted-foreground">
+                              {o.source === "erp_flow"
+                                ? SYNC_STATE_LABEL[o.sap_sync_state || ""]?.label || "não integrado"
+                                : "não integrado"}
+                            </span>
                             {o.source === "erp_flow" && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-6 gap-1 px-1.5 text-[11px]"
-                                disabled={retryingFor === o.id}
-                                title="Solicitar novamente a integração deste pedido no ERP"
-                                onClick={() => void retryIntegration(o)}
-                              >
-                                {retryingFor === o.id ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  <RefreshCw className="w-3 h-3" />
-                                )}
-                                Reintegrar
-                              </Button>
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 gap-1 px-1.5 text-[11px]"
+                                  title="Ver detalhes da integração com o ERP"
+                                  onClick={() => setDetailOrder(o)}
+                                >
+                                  <AlertTriangle className="w-3 h-3" />
+                                  Detalhes
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 gap-1 px-1.5 text-[11px]"
+                                  disabled={retryingFor === o.id}
+                                  title="Solicitar novamente a integração deste pedido no ERP"
+                                  onClick={() => void retryIntegration(o)}
+                                >
+                                  {retryingFor === o.id ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <RefreshCw className="w-3 h-3" />
+                                  )}
+                                  Reintegrar
+                                </Button>
+                              </>
                             )}
                           </div>
+
                         )}
                       </td>
 
@@ -910,6 +952,82 @@ export default function SalesNfse() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Diagnóstico da integração com o ERP */}
+      <Dialog open={!!detailOrder} onOpenChange={(open) => !open && setDetailOrder(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Status da integração no ERP</DialogTitle>
+            <DialogDescription>
+              {detailOrder?.supplier_name} · {formatCurrency(detailOrder?.total_amount || 0, detailOrder?.currency)}
+            </DialogDescription>
+          </DialogHeader>
+
+          {detailOrder && (
+            <div className="space-y-3 text-sm">
+              <div className="rounded-md border border-border/60 p-3">
+                <div className="font-medium">
+                  {SYNC_STATE_LABEL[detailOrder.sap_sync_state || ""]?.label ||
+                    (detailOrder.sap_doc_entry ? "Integrado" : "Ainda não enviado ao ERP")}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {SYNC_STATE_LABEL[detailOrder.sap_sync_state || ""]?.hint ||
+                    "Nenhuma tentativa de integração registrada até o momento. Use “Reintegrar” para enviar o pedido ao ERP."}
+                </p>
+              </div>
+
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                <dt className="text-muted-foreground">DocEntry no ERP</dt>
+                <dd className="font-mono">{detailOrder.sap_doc_entry ?? "não gerado"}</dd>
+                <dt className="text-muted-foreground">Estado técnico</dt>
+                <dd className="font-mono">{detailOrder.sap_sync_state || "—"}</dd>
+                <dt className="text-muted-foreground">Tentativas</dt>
+                <dd>{detailOrder.sap_sync_attempts ?? 0}</dd>
+                <dt className="text-muted-foreground">Última tentativa</dt>
+                <dd>{formatDateTime(detailOrder.sap_integration_last_attempt_at)}</dd>
+                <dt className="text-muted-foreground">Próxima retentativa</dt>
+                <dd>{formatDateTime(detailOrder.sap_sync_next_retry_at)}</dd>
+                <dt className="text-muted-foreground">Bloqueio em processamento</dt>
+                <dd>{formatDateTime(detailOrder.sap_integration_locked_at)}</dd>
+              </dl>
+
+              {detailOrder.sap_integration_error && (
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3">
+                  <div className="text-xs font-medium text-destructive">Mensagem retornada pelo ERP</div>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-xs">
+                    {detailOrder.sap_integration_error}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDetailOrder(null)}>
+              Fechar
+            </Button>
+            {detailOrder && !detailOrder.sap_doc_entry && detailOrder.source === "erp_flow" && (
+              <Button
+                className="gap-2"
+                disabled={retryingFor === detailOrder.id}
+                onClick={() => {
+                  const target = detailOrder;
+                  setDetailOrder(null);
+                  void retryIntegration(target);
+                }}
+              >
+                {retryingFor === detailOrder.id ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
+                Reintegrar
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+
   );
 }
