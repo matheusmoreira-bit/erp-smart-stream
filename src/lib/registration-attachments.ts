@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { stripDiacritics } from "@/lib/text-normalize";
 
 export const REGISTRATION_BUCKET = "registration-attachments";
 
@@ -35,9 +36,7 @@ export function validateRegistrationFile(file: File): string | null {
 }
 
 function safeName(name: string) {
-  return name
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+  return stripDiacritics(name)
     .replace(/[^a-zA-Z0-9._-]/g, "_")
     .slice(-120);
 }

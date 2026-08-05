@@ -17,6 +17,7 @@
 
 import type { SapSession } from "@/lib/sap-client";
 import { sapQueryView } from "@/lib/sap-client";
+import { normalizeCompact } from "@/lib/text-normalize";
 
 export const SAP_SUBSTITUTES_TABLE = "VW_AG_APROVADORES_SUBSTITUTOS";
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
@@ -69,11 +70,7 @@ const FIELD_ALIASES: Record<keyof Omit<SapSubstituteRow, "isFromSap">, string[]>
 
 /** Normaliza chave: minúsculas, sem acentos, sem `_ - .` */
 function keyOf(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[_\-.\s]/g, "");
+  return normalizeCompact(s);
 }
 
 function buildKeyIndex(obj: Record<string, unknown>): Map<string, string> {
