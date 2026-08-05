@@ -42,6 +42,7 @@ interface OverdueLogRow {
 
 const DEFAULT_TEMPLATE = `⚠️ *Documento vencido aguardando aprovação*
 
+Empresa: {{company}}
 Fornecedor: {{supplier}}
 Valor: {{currency}} {{amount}}
 Vencimento: {{due_date}} (há {{days_overdue}} dia(s))
@@ -50,6 +51,7 @@ Solicitante: {{requester}}
 Aprove em: {{link}}`;
 
 const TEMPLATE_VARS = [
+  { key: "company", desc: "Empresa (base) do documento" },
   { key: "supplier", desc: "Nome do fornecedor" },
   { key: "amount", desc: "Valor formatado" },
   { key: "currency", desc: "Moeda (BRL, USD…)" },
@@ -241,6 +243,7 @@ export function OverdueRemindersTab() {
   }
 
   const preview = settings.template
+    .replace(/\{\{company\}\}/g, "ANA Gaming")
     .replace(/\{\{supplier\}\}/g, "Fornecedor Exemplo LTDA")
     .replace(/\{\{amount\}\}/g, "R$ 1.234,56")
     .replace(/\{\{currency\}\}/g, "BRL")
