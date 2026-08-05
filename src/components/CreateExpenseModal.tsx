@@ -1971,7 +1971,7 @@ export function CreateExpenseModal({
       toast.error("Informe a data de vencimento");
       return;
     }
-    if (isSales && usageOptions.length > 0 && !salesUsage) {
+    if (isSales && filteredUsageOptions.length > 0 && !salesUsage) {
       toast.error("Informe a Utilização (obrigatória no SAP para pedidos de venda)");
       return;
     }
