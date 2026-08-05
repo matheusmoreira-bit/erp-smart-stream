@@ -158,6 +158,7 @@ export default function SalesNfse() {
   const [xmlPaths, setXmlPaths] = useState<Record<string, string>>({});
   const [xmlLoadingFor, setXmlLoadingFor] = useState<string | null>(null);
   const [retryingFor, setRetryingFor] = useState<string | null>(null);
+  const [detailOrder, setDetailOrder] = useState<SalesOrderRow | null>(null);
   const uploadTargetRef = useRef<{ order: SalesOrderRow; inv: NfseRow | null } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
