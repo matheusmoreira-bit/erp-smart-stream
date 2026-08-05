@@ -907,21 +907,32 @@ export default function SalesNfse() {
 
   /**
    * Situação real da emissão, validada contra o ERP:
-   * - se o ERP tem uma NF ativa originada no pedido, está emitida;
-   * - o registro local só vale se a nota ainda existir (não cancelada) no ERP.
+   * - NF ativa originada no pedido (vínculo de base);
+   * - NF ativa do mesmo cliente com o mesmo valor (nota lançada sem vínculo);
+   * - pedido fechado no ERP (faturado integralmente);
+   * - registro local, desde que a nota ainda exista (não cancelada) no ERP.
    */
   const emissionFor = useCallback(
     (order: SalesOrderRow, inv: NfseRow | null | undefined) => {
-      const sapInv = order.sap_doc_entry ? sapInvoices.byOrder.get(Number(order.sap_doc_entry)) : undefined;
+      const byOrder = order.sap_doc_entry ? sapInvoices.byOrder.get(Number(order.sap_doc_entry)) : undefined;
+      const card = (order.supplier_code || "").trim().toUpperCase();
+      const total = Number(order.total_amount || 0);
+      const byMatch =
+        !byOrder && card && total > 0
+          ? sapInvoices.byMatch.get(`${card}|${total.toFixed(2)}`)
+          : undefined;
+      const sapInv = byOrder ?? byMatch;
       const localEntry = inv?.sap_invoice_doc_entry ?? null;
       const localValid =
         !!localEntry && (!sapInvoices.available || sapInvoices.entries.has(Number(localEntry)));
+      const closedInErp = !!order.erp_closed;
       return {
-        emitted: !!sapInv || localValid,
+        emitted: !!sapInv || localValid || closedInErp,
         docNum: sapInv?.docNum ?? (localValid ? inv?.sap_invoice_doc_num ?? null : null),
-        localStale: !!localEntry && !localValid && !sapInv,
+        localStale: !!localEntry && !localValid && !sapInv && !closedInErp,
       };
     },
+
     [sapInvoices],
   );
 
