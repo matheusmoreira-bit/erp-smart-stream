@@ -528,7 +528,8 @@ export default function SalesNfse() {
           action: "sales_order_retry_integration",
           details: {
             result: "success",
-            document_number: order.document_number,
+            supplier_name: order.supplier_name,
+            sap_doc_num: order.sap_doc_num,
             attempts_before: order.sap_sync_attempts ?? null,
           },
         });
@@ -542,7 +543,8 @@ export default function SalesNfse() {
           details: {
             result: "error",
             error: message,
-            document_number: order.document_number,
+            supplier_name: order.supplier_name,
+            sap_doc_num: order.sap_doc_num,
             attempts_before: order.sap_sync_attempts ?? null,
           },
         });
