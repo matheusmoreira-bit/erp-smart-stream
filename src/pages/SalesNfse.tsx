@@ -70,6 +70,167 @@ const SYNC_STATE_LABEL: Record<string, { label: string; hint: string }> = {
   synced: { label: "Integrado", hint: "O pedido foi criado no ERP com sucesso." },
 };
 
+type BlockCause = {
+  /** categoria da causa: dado faltante, mapeamento, sessão, regra do ERP, etc. */
+  category: string;
+  /** explicação objetiva do bloqueio */
+  detail: string;
+  /** o que fazer para destravar */
+  fix: string;
+  severity: "error" | "warning" | "info";
+};
+
+/** Padrões conhecidos de erro do SAP/Service Layer → causa e correção. */
+const ERROR_PATTERNS: { re: RegExp; cause: Omit<BlockCause, "detail"> }[] = [
+  {
+    re: /sess(ã|a)o|session|401|unauthorized|not logged/i,
+    cause: {
+      category: "Sessão do ERP",
+      fix: "Faça login novamente no ERP e clique em Reintegrar. A sessão do SAP expira em 30 minutos.",
+      severity: "warning",
+    },
+  },
+  {
+    re: /business partner|cardcode|parceiro de neg|BP code/i,
+    cause: {
+      category: "Cadastro do cliente",
+      fix: "O código do cliente (CardCode) não existe ou está inativo no ERP. Corrija o cadastro do cliente e reintegre.",
+      severity: "error",
+    },
+  },
+  {
+    re: /item(code)? |item n(ã|a)o|no matching records.*OITM/i,
+    cause: {
+      category: "Mapeamento de item",
+      fix: "Um item do pedido não existe no ERP. Ajuste o mapeamento de itens ou cadastre o item e reintegre.",
+      severity: "error",
+    },
+  },
+  {
+    re: /filial|BPL|branch/i,
+    cause: {
+      category: "Filial (BPL)",
+      fix: "A filial informada não é válida para este cliente/série. Ajuste a filial do documento e reintegre.",
+      severity: "error",
+    },
+  },
+  {
+    re: /project|projeto|OPRJ/i,
+    cause: {
+      category: "Projeto",
+      fix: "O código de projeto não existe ou está bloqueado no ERP. Corrija o projeto do pedido e reintegre.",
+      severity: "error",
+    },
+  },
+  {
+    re: /cost center|centro de custo|dimension|OOCR/i,
+    cause: {
+      category: "Centro de custo",
+      fix: "O centro de custo não existe ou está inativo na dimensão configurada. Ajuste o CC e reintegre.",
+      severity: "error",
+    },
+  },
+  {
+    re: /tax|imposto|utiliza(ç|c)(ã|a)o|usage|NCM|CFOP/i,
+    cause: {
+      category: "Parametrização fiscal",
+      fix: "Falta parametrização fiscal (utilização, NCM ou CFOP). Ajuste no cadastro fiscal e reintegre.",
+      severity: "error",
+    },
+  },
+  {
+    re: /period|per(í|i)odo|posting date|data de lan(ç|c)amento/i,
+    cause: {
+      category: "Período contábil",
+      fix: "O período contábil da data do documento está fechado no ERP. Ajuste a data ou reabra o período.",
+      severity: "error",
+    },
+  },
+  {
+    re: /timeout|ETIMEDOUT|ECONNRESET|fetch failed|network|503|502|circuit/i,
+    cause: {
+      category: "Indisponibilidade do ERP",
+      fix: "Falha temporária de comunicação com o ERP. Basta reintegrar quando a base voltar a responder.",
+      severity: "warning",
+    },
+  },
+];
+
+/** Determina a causa exata do bloqueio da integração de um pedido de venda. */
+function diagnoseBlock(order: SalesOrderRow): BlockCause {
+  if (order.sap_doc_entry) {
+    return {
+      category: "Integrado",
+      detail: `Pedido criado no ERP (DocEntry ${order.sap_doc_entry}).`,
+      fix: "Nenhuma ação necessária.",
+      severity: "info",
+    };
+  }
+
+  // 1) Erro devolvido pelo ERP tem prioridade — é a causa concreta.
+  const err = (order.sap_integration_error || "").trim();
+  if (err) {
+    const match = ERROR_PATTERNS.find((p) => p.re.test(err));
+    return match
+      ? { ...match.cause, detail: err }
+      : {
+          category: "Erro de integração",
+          detail: err,
+          fix: "Corrija o motivo apontado pelo ERP e clique em Reintegrar.",
+          severity: "error",
+        };
+  }
+
+  // 2) Sem erro registrado: verifica dados obrigatórios ausentes no documento.
+  const missing: string[] = [];
+  if (!order.supplier_code) missing.push("código do cliente (CardCode)");
+  if (!order.doc_date) missing.push("data do documento");
+  if (!order.total_amount) missing.push("valor total");
+  if (!order.sales_usage) missing.push("utilização (fiscal)");
+  if (!order.cost_center) missing.push("centro de custo");
+  if (missing.length) {
+    return {
+      category: "Falta de dados no documento",
+      detail: `Campos obrigatórios ausentes: ${missing.join(", ")}.`,
+      fix: "Edite o pedido preenchendo os campos acima e clique em Reintegrar.",
+      severity: "error",
+    };
+  }
+
+  // 3) Sem erro e sem dado faltante: é questão de fila/estado.
+  if (order.sap_integration_locked_at) {
+    return {
+      category: "Processamento em andamento",
+      detail: `A integração está bloqueada em processamento desde ${formatDateTime(order.sap_integration_locked_at)}.`,
+      fix: "Aguarde o término. Se passar de alguns minutos, reintegre para liberar o bloqueio.",
+      severity: "warning",
+    };
+  }
+  if (order.sap_sync_next_retry_at) {
+    return {
+      category: "Na fila de retentativa",
+      detail: `Próxima tentativa automática em ${formatDateTime(order.sap_sync_next_retry_at)} (${order.sap_sync_attempts ?? 0} tentativa(s) até agora).`,
+      fix: "Aguarde a retentativa automática ou force agora com Reintegrar.",
+      severity: "warning",
+    };
+  }
+  if (!order.sap_integration_last_attempt_at) {
+    return {
+      category: "Nunca enviado ao ERP",
+      detail: "Não há registro de tentativa de integração para este pedido.",
+      fix: "Clique em Reintegrar para enviar o pedido ao ERP agora.",
+      severity: "warning",
+    };
+  }
+  return {
+    category: "Sem retorno do ERP",
+    detail: `Última tentativa em ${formatDateTime(order.sap_integration_last_attempt_at)} não gerou DocEntry nem mensagem de erro.`,
+    fix: "Reintegre e, se persistir, verifique os logs de integração da empresa.",
+    severity: "error",
+  };
+}
+
+
 
 const APPROVED_STATUSES = [
   "aprovado",
