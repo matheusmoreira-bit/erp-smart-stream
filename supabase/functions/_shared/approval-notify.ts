@@ -113,7 +113,7 @@ function buildEmailHtml(title: string, subtitle: string, details: ApprovalNotify
   ${rows ? `<table style="border-collapse:collapse;width:100%;margin-bottom:22px">${rows}</table>` : ""}
   ${approveUrl ? btn("Aprovar", `${approveUrl}?a=approve`, "#0f766e", "#ffffff", "#0f766e") : ""}
   ${approveUrl ? btn("Reprovar", `${approveUrl}?a=reject`, "#ffffff", "#b91c1c", "#fecaca") : ""}
-  ${btn("Abrir no ERP Flow", `${appUrl}/aprovacoes?tab=pending`, "#f1f5f9", "#0f172a", "#e2e8f0")}
+  ${btn("Abrir no ERP Flow", appUrl, "#f1f5f9", "#0f172a", "#e2e8f0")}
   <p style="margin:20px 0 0;font-size:12px;color:#94a3b8;line-height:1.5">
     O link de decisão é pessoal, de uso único e expira em 72 horas.<br>
     Mensagem automática do ERP Flow.
@@ -220,7 +220,7 @@ export async function sendSlackApproval(opts: {
   elements.push({
     type: "button",
     text: { type: "plain_text", text: "Abrir no ERP Flow", emoji: true },
-    url: `${opts.appUrl}/aprovacoes?tab=pending`,
+    url: opts.appUrl,
   });
   blocks.push({ type: "actions", elements });
   await slackCall("chat.postMessage", { channel, text: opts.title, blocks, unfurl_links: false });
@@ -230,6 +230,22 @@ export async function sendSlackApproval(opts: {
  * Notifica o aprovador designado de um documento pendente nos canais ativos.
  * Best-effort — nunca interrompe a operação de negócio.
  */
+/** Nome amigável da empresa (fallback: o próprio company_db). */
+async function resolveCompanyName(admin: any, companyDb?: string | null): Promise<string | null> {
+  const db = (companyDb || "").trim();
+  if (!db) return null;
+  try {
+    const { data } = await admin
+      .from("companies")
+      .select("display_name")
+      .eq("company_db", db)
+      .maybeSingle();
+    return (data?.display_name as string | undefined)?.trim() || db;
+  } catch {
+    return db;
+  }
+}
+
 export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInput): Promise<void> {
   try {
     const email = (input.approverEmail || "").trim().toLowerCase();
@@ -242,21 +258,24 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
       ? `${input.currency || "BRL"} ${Number(input.totalAmount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
       : null;
     const isSales = String(input.docType) === "sales";
-    const title = isSales
+    const companyName = await resolveCompanyName(admin, input.companyDb);
+    const baseTitle = isSales
       ? "Pedido de venda aguardando sua aprovação"
       : "Documento aguardando sua aprovação";
+    const title = companyName ? `${companyName} — ${baseTitle}` : baseTitle;
     const subtitle = `${input.requesterName || "Um solicitante"} enviou um documento para sua alçada${
       input.levelOrder ? ` (nível ${input.levelOrder})` : ""
     }.`;
     const details: ApprovalNotifyDetail[] = input.details ?? [
       { label: isSales ? "Cliente" : "Fornecedor", value: input.supplierName },
       { label: "Valor", value: amount },
-      { label: "Empresa", value: input.companyDb },
+      { label: "Empresa", value: companyName || input.companyDb },
       { label: "Solicitante", value: input.requesterName },
     ];
 
     // In-app (dedupe por documento + nível)
     const refId = `${input.expenseId}:${input.levelOrder ?? 0}`;
+    const docLink = `/aprovacoes?doc=${encodeURIComponent(`internal:${input.expenseId}`)}`;
     const { data: existing } = await admin
       .from("notifications")
       .select("id")
@@ -271,7 +290,7 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
       title,
       body: [subtitle, ...details.filter((d) => d.value).map((d) => `${d.label}: ${d.value}`)].join(" · "),
       category: "approval",
-      link: "/aprovacoes?tab=pending",
+      link: docLink,
       metadata: { ref_id: refId, expense_id: input.expenseId, level_order: input.levelOrder ?? null },
     });
 
@@ -279,7 +298,7 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
     await pushToRecipient(admin, identifier, {
       title,
       body: [subtitle, ...details.filter((d) => d.value).map((d) => `${d.label}: ${d.value}`)].join(" · "),
-      url: "/aprovacoes?tab=pending",
+      url: docLink,
       tag: refId,
     });
 
@@ -295,8 +314,9 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
     });
     const approveUrl = token ? `${appUrl}/aprovar/${token}` : null;
 
-    await sendEmail([email], `[ERP Flow] ${title}`, buildEmailHtml(title, subtitle, details, approveUrl, appUrl));
-    await sendSlackApproval({ email, title, subtitle, details, approveUrl, appUrl });
+    await sendEmail([email], `[ERP Flow] ${title}`, buildEmailHtml(title, subtitle, details, approveUrl, `${appUrl}${docLink}`));
+
+    await sendSlackApproval({ email, title, subtitle, details, approveUrl, appUrl: `${appUrl}${docLink}` });
   } catch (e) {
     console.warn("[approval-notify] erro inesperado:", e instanceof Error ? e.message : String(e));
   }
