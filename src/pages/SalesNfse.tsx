@@ -468,6 +468,13 @@ export default function SalesNfse() {
 
   const [orders, setOrders] = useState<SalesOrderRow[]>([]);
   const [invoices, setInvoices] = useState<NfseRow[]>([]);
+  // Notas fiscais lidas direto do ERP, para validar de fato quais pedidos já
+  // tiveram NF emitida (o registro local pode apontar para uma nota cancelada).
+  const [sapInvoices, setSapInvoices] = useState<{
+    available: boolean;
+    byOrder: Map<number, { docEntry: number; docNum: number | null }>;
+    entries: Set<number>;
+  }>({ available: false, byOrder: new Map(), entries: new Set() });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [erpWarning, setErpWarning] = useState<string | null>(null);
