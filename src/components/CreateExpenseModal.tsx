@@ -277,7 +277,10 @@ export function CreateExpenseModal({
   const usageMapRow = useCallback(
     (row: any) => ({
       code: String(row.ID ?? row.Code ?? row.AbsEntry ?? ""),
-      name: row.Description || row.Usage || row.Name || "",
+      // O nome comercial (ex.: "01-Rec Cactus Plat") vem em `Usage`;
+      // `Description` traz o texto fiscal ("Saída Comissão").
+      name: row.Usage || row.Name || row.Description || "",
+      extra: row.Description || "",
     }),
     [],
   );
@@ -2002,17 +2005,18 @@ export function CreateExpenseModal({
         toast.error(`Item ${n}: preço unitário deve ser maior ou igual a R$ 0,01`);
         return;
       }
-      // Em vendas, centro de custo e projeto são opcionais.
+      // Em vendas, centro de custo é opcional; projeto é obrigatório.
       if (!isSales) {
         if (!it.cost_center || !String(it.cost_center).trim()) {
           toast.error(`Item ${n}: centro de custo é obrigatório`);
           return;
         }
-        if (!it.project || !String(it.project).trim()) {
-          toast.error(`Item ${n}: projeto é obrigatório`);
-          return;
-        }
       }
+      if (!it.project || !String(it.project).trim()) {
+        toast.error(`Item ${n}: projeto é obrigatório`);
+        return;
+      }
+
 
       // Alçada por CC do usuário logado: IMP% só para 1.2.2.%; FOL% só para 1.5.1.3 (Pessoas e Cultura).
       // CC vazio (sem vínculo no IdP) não bloqueia — evita falso negativo.
@@ -3274,8 +3278,9 @@ export function CreateExpenseModal({
                       portalContainer={dialogContainer}
                     />
                     <CachedSearchCombobox
-                      label={`Projeto (Dimensão)${isSales ? "" : " *"}`}
-                      required={!isSales}
+                      label="Projeto (Dimensão) *"
+                      required
+
 
                       options={projectOptions}
                       isLoading={projectsLoading}
