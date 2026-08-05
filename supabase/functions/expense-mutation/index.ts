@@ -434,16 +434,40 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   }
 
   if (shouldResubmit) {
-    const nextRuleId = rateioChanged
+    let nextRuleId = rateioChanged
       ? (input.new_approval_rule_id ?? null)
       : (current.approval_rule_id ?? null);
     const nextApproverFromClient = rateioChanged
       ? (input.new_current_approver ?? null)
       : null;
 
+    // Sem regra vinculada (ex.: documento criado antes do CC ser preenchido nos
+    // itens, ou rateio alterado sem regra enviada pelo cliente): antes de cair
+    // no fallback global da matriz, reavalia a matriz com os dados ATUAIS.
+    if (!nextRuleId) {
+      const rematched = await rematchRuleFromMatrix(admin, {
+        companyDb: String(current.company_db || ""),
+        docType: String(current.doc_type || "purchase"),
+        totalAmount: Number((updates as any).total_amount ?? current.total_amount ?? 0),
+        costCenter: String((updates as any).cost_center ?? current.cost_center ?? "").trim(),
+        project: String((updates as any).project ?? current.project ?? "").trim(),
+        currency: current.currency,
+        requesterName: current.requester_name,
+        supplierName: current.supplier_name,
+        supplierCode: current.supplier_code,
+        expenseId,
+        items,
+      });
+      if (rematched) {
+        nextRuleId = rematched;
+        updates.approval_rule_id = rematched;
+      }
+    }
+
     let resolvedLevel = 1;
     let resolvedApprover: string | null = nextApproverFromClient;
     let fallbackUsed = false;
+
     if (nextRuleId) {
       const picked = await resolveApproverWithEscalation(admin, nextRuleId, {
         companyDb: String(current.company_db || ""),
