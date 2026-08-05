@@ -530,7 +530,7 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
   // ── Load expense ───────────────────────────────────────────────────────
   const { data: exp, error: expErr } = await admin
     .from("expenses")
-    .select("id, approval_rule_id, current_level_order, status, current_approver, requester_name, requester_email, supplier_name, total_amount, currency, company_db, doc_type")
+    .select("id, approval_rule_id, current_level_order, status, current_approver, requester_name, requester_email, supplier_name, total_amount, currency, company_db, doc_type, sap_doc_entry")
     .eq("id", expenseId)
     .maybeSingle();
   if (expErr) {
@@ -1004,6 +1004,35 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
   });
 
   if (String((exp as any).doc_type) === "sales") {
+    // Pedido de venda aprovado no ERP Flow → integra ao SAP (Orders) usando o
+    // Apiuser da empresa. Não depende da sessão SAP do aprovador.
+    if (!(exp as any).sap_doc_entry) {
+      try {
+        const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+        const svcUrl = Deno.env.get("SUPABASE_URL") || "";
+        const sapRes = await fetch(`${svcUrl}/functions/v1/expense-to-sap`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${svcKey}`,
+            apikey: svcKey,
+            "x-internal-retry": "1",
+          },
+          body: JSON.stringify({ expense_id: expenseId }),
+        });
+        const sapBody = await sapRes.json().catch(() => ({}));
+        stageLog("sales_to_sap", sapRes.ok ? "info" : "error", {
+          requestId,
+          expenseId,
+          status: sapRes.status,
+          docEntry: (sapBody as any)?.doc_entry ?? null,
+          error: (sapBody as any)?.error ?? null,
+        });
+      } catch (e) {
+        stageLog("sales_to_sap", "error", { requestId, expenseId, error: (e as Error).message });
+      }
+    }
+
     await notifySalesMilestone(admin, {
       milestone: "approved",
       companyDb: (exp as any).company_db,
