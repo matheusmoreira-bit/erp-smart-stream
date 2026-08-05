@@ -653,9 +653,29 @@ export default function SalesNfse() {
                       <td className="px-3 py-2 font-mono text-xs">
                         {o.sap_doc_num ? `#${o.sap_doc_num}` : "—"}
                         {!o.sap_doc_entry && (
-                          <span className="ml-2 text-[11px] text-muted-foreground">não integrado</span>
+                          <div className="mt-1 flex items-center gap-1">
+                            <span className="text-[11px] text-muted-foreground">não integrado</span>
+                            {o.source === "erp_flow" && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 gap-1 px-1.5 text-[11px]"
+                                disabled={retryingFor === o.id}
+                                title="Solicitar novamente a integração deste pedido no ERP"
+                                onClick={() => void retryIntegration(o)}
+                              >
+                                {retryingFor === o.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="w-3 h-3" />
+                                )}
+                                Reintegrar
+                              </Button>
+                            )}
+                          </div>
                         )}
                       </td>
+
                       <td className="px-3 py-2">
                         <Badge variant="outline" className="text-[11px]">
                           {o.source === "erp_flow" ? "ERP Flow" : "ERP"}
