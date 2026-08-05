@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Loader2 } from "lucide-react";
 import { expenseRead } from "@/lib/expense-read";
 import { ExpenseEventHistory, type ExpenseEventHistoryExpense } from "@/components/ExpenseEventHistory";
+import { NotificationAuditTrail } from "@/components/NotificationAuditTrail";
 
 interface Props {
   expenseId: string | null;
