@@ -1,0 +1,2 @@
+delete from public.approval_rule_levels where rule_id in (select id from public.approval_rules where company_db='SBO_ANAGAMING' and doc_type='purchase');
+delete from public.approval_rules where company_db='SBO_ANAGAMING' and doc_type='purchase';
