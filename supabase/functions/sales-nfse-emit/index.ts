@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
         .eq("company_db", nativeCompanyDb)
         .eq("sap_order_doc_entry", rawOrderEntry)
         .is("expense_id", null)
-        .neq("status", "failed")
+        .not("status", "in", "(failed,cancelled)")
         .maybeSingle();
       if (alreadyNative?.sap_invoice_doc_num) {
         return json(
@@ -212,7 +212,7 @@ Deno.serve(async (req) => {
         .from("sales_order_invoices")
         .select("id, sap_invoice_doc_num, status")
         .eq("expense_id", expenseId)
-        .neq("status", "failed")
+        .not("status", "in", "(failed,cancelled)")
         .maybeSingle();
       if (already?.sap_invoice_doc_num) {
         return json({ error: `Já existe NFS-e emitida para este pedido (doc ${already.sap_invoice_doc_num}).` }, 409);
