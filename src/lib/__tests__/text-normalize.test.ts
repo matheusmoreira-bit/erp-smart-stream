@@ -30,7 +30,7 @@ describe("text-normalize / acentos", () => {
   it("caracteres especiais viram separadores em normalizeWords/Upper", () => {
     expect(normalizeWords("Cactus-Tecnologia S.A.")).toBe("cactus tecnologia s a");
     expect(normalizeUpper("Gestão & Pessoas / C&C")).toBe("GESTAO PESSOAS C C");
-    expect(normalizeCompact("1.5.1.3 – Pessoas e Cultura")).toBe("1513pessoaseculturaa".replace("aa", "a"));
+    expect(normalizeCompact("1.5.1.3 – Pessoas e Cultura")).toBe("1513pessoasecultura");
     expect(slugify("Solicitação de Cadastro!")).toBe("solicitacao-de-cadastro");
   });
 
