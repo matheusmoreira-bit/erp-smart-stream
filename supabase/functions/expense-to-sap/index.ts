@@ -1192,7 +1192,8 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         (() => {
           const remarks = String((expense as any).remarks || "").trim();
           // Pedidos de venda: usar a observação informada no próprio pedido.
-          if (isSales && remarks) return remarks;
+          // Sem observação, usar texto padrão.
+          if (isSales) return remarks || "Referente aos serviços prestados";
           const pcTx: any = (pagcorpLog as any)?.transaction || null;
           const holder = pcTx
             ? (pcTx.cardName || pcTx.accountAlias || pcTx.accountName || "").toString().trim()
