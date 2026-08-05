@@ -927,7 +927,7 @@ export default function SalesNfse() {
     });
   }, [orders, search, invoiceByExpense, originFilter]);
 
-  const pendentes = filtered.filter((o) => !invoiceByExpense.get(o.id)?.sap_invoice_doc_entry);
+  const pendentes = filtered.filter((o) => !emissionFor(o, invoiceByExpense.get(o.id)).emitted);
 
   const emit = useCallback(async () => {
     if (!confirmOrder) return;
