@@ -277,7 +277,10 @@ export function CreateExpenseModal({
   const usageMapRow = useCallback(
     (row: any) => ({
       code: String(row.ID ?? row.Code ?? row.AbsEntry ?? ""),
-      name: row.Description || row.Usage || row.Name || "",
+      // O nome comercial (ex.: "01-Rec Cactus Plat") vem em `Usage`;
+      // `Description` traz o texto fiscal ("Saída Comissão").
+      name: row.Usage || row.Name || row.Description || "",
+      extra: row.Description || "",
     }),
     [],
   );
