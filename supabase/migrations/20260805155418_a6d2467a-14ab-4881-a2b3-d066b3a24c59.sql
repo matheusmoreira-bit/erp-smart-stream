@@ -1,0 +1,1 @@
+ALTER TABLE public.pagcorp_document_relations ADD COLUMN IF NOT EXISTS nf_inferred boolean NOT NULL DEFAULT false;
