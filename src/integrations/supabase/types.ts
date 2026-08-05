@@ -4328,6 +4328,51 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_governance: {
+        Row: {
+          block_self_approval: boolean
+          blocked_recipients: string[]
+          channels: string[]
+          company_db: string | null
+          created_at: string
+          enabled: boolean
+          exclude_test_companies: boolean
+          extra_recipients: string[]
+          id: string
+          notify_requester: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          block_self_approval?: boolean
+          blocked_recipients?: string[]
+          channels?: string[]
+          company_db?: string | null
+          created_at?: string
+          enabled?: boolean
+          exclude_test_companies?: boolean
+          extra_recipients?: string[]
+          id?: string
+          notify_requester?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          block_self_approval?: boolean
+          blocked_recipients?: string[]
+          channels?: string[]
+          company_db?: string | null
+          created_at?: string
+          enabled?: boolean
+          exclude_test_companies?: boolean
+          extra_recipients?: string[]
+          id?: string
+          notify_requester?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       notification_preferences: {
         Row: {
           category: string

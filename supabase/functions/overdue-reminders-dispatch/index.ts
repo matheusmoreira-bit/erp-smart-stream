@@ -237,6 +237,40 @@ Deno.serve(async (req) => {
       .from("companies")
       .select("company_db, is_test, display_name");
     if (companyErr) throw companyErr;
+    // Regras de governança (globais + override por empresa).
+    const { data: govRows } = await sb
+      .from("notification_governance")
+      .select("company_db, exclude_test_companies, block_self_approval, notify_requester, extra_recipients, blocked_recipients, enabled");
+    type Gov = {
+      company_db: string | null;
+      exclude_test_companies: boolean;
+      block_self_approval: boolean;
+      notify_requester: boolean;
+      extra_recipients: string[];
+      blocked_recipients: string[];
+      enabled: boolean;
+    };
+    const govList = (govRows as Gov[] | null) || [];
+    const govGlobal = govList.find((g) => g.company_db === null) || null;
+    const govByCompany: Record<string, Gov> = {};
+    for (const g of govList) if (g.company_db) govByCompany[g.company_db] = g;
+    const govFor = (db: string): Gov =>
+      govByCompany[db] ||
+      govGlobal || {
+        company_db: null,
+        exclude_test_companies: true,
+        block_self_approval: true,
+        notify_requester: false,
+        extra_recipients: [],
+        blocked_recipients: [],
+        enabled: true,
+      };
+    const isBlockedRecipient = (gov: Gov, candidates: (string | null | undefined)[]) => {
+      const list = (gov.blocked_recipients || []).map((x) => x.trim().toLowerCase()).filter(Boolean);
+      if (list.length === 0) return false;
+      return candidates.some((c) => c && list.includes(String(c).trim().toLowerCase()));
+    };
+
     const companyNames: Record<string, string> = {};
     for (const c of ((companyRows as CompanyRow[] | null) || [])) {
       const named = c as CompanyRow & { display_name?: string | null };
@@ -274,7 +308,14 @@ Deno.serve(async (req) => {
       const s = perCompany[exp.company_db] || globalSettings;
       if (!s || !s.enabled) { skipped++; continue; }
 
-      if (testCompanies.has(exp.company_db)) {
+      const gov = govFor(exp.company_db);
+      if (!gov.enabled) {
+        details.push({ id: exp.id, skip: "governance_disabled" });
+        skipped++;
+        continue;
+      }
+
+      if (gov.exclude_test_companies && testCompanies.has(exp.company_db)) {
         details.push({ id: exp.id, skip: "test_company" });
         skipped++;
         continue;
@@ -283,7 +324,7 @@ Deno.serve(async (req) => {
       // Defesa adicional: mesmo que um documento legado ou uma delegação
       // incorreta coloque o solicitante como aprovador, não envie a ele uma
       // cobrança para aprovar a própria solicitação.
-      if (requesterIsCurrentApprover(exp)) {
+      if (gov.block_self_approval && requesterIsCurrentApprover(exp)) {
         await sb.from("overdue_reminder_log").insert({
           expense_id: exp.id,
           company_db: exp.company_db,
@@ -343,13 +384,30 @@ Deno.serve(async (req) => {
         link: `${PUBLIC_APP_URL}/aprovacoes?doc=${encodeURIComponent("internal:" + exp.id)}`,
       };
 
-      const recipients: Array<{ role: "approver" | "requester"; nameCandidates: (string | null | undefined)[]; enabled: boolean }> = [
+      const recipients: Array<{ role: "approver" | "requester" | "watcher"; nameCandidates: (string | null | undefined)[]; enabled: boolean }> = [
         { role: "approver", nameCandidates: [exp.current_approver], enabled: s.notify_approver },
-        { role: "requester", nameCandidates: [exp.requester_email, exp.requester_name], enabled: s.notify_requester },
+        { role: "requester", nameCandidates: [exp.requester_email, exp.requester_name], enabled: s.notify_requester && gov.notify_requester },
+        ...(gov.extra_recipients || []).filter(Boolean).map((name) => ({
+          role: "watcher" as const,
+          nameCandidates: [name] as (string | null | undefined)[],
+          enabled: true,
+        })),
       ];
 
       for (const r of recipients) {
         if (!r.enabled) continue;
+        if (isBlockedRecipient(gov, r.nameCandidates)) {
+          await sb.from("overdue_reminder_log").insert({
+            expense_id: exp.id,
+            company_db: exp.company_db,
+            recipient_role: r.role,
+            recipient_name: r.nameCandidates.find(Boolean) || null,
+            status: "skipped_blocked",
+            response: "destinatário bloqueado nas regras de notificação",
+          });
+          skipped++;
+          continue;
+        }
         const lastForRole = logs.find((l) => l.recipient_role === r.role);
         if (lastForRole) {
           const ageMin = (Date.now() - new Date(lastForRole.sent_at).getTime()) / 60000;

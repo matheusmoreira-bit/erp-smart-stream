@@ -132,7 +132,10 @@ export const NAV_MODULES: NavModule[] = [
     key: "notifications",
     label: "Notificações",
     match: ["/notificacoes"],
-    items: [{ label: "Central de Notificações", path: "/notificacoes", moduleKey: "notifications" }],
+    items: [
+      { label: "Central de Notificações", path: "/notificacoes", moduleKey: "notifications" },
+      { label: "Regras de envio", path: "/notificacoes/regras", moduleKey: "notifications" },
+    ],
   },
   {
     key: "profile",
