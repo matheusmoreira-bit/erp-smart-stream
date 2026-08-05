@@ -404,7 +404,8 @@ export function CreateExpenseModal({
     hasCapability("items_restricted_all") ||
     canSeeAllCostCenters;
   const filteredItemOptions = useMemo(() => {
-    if (isSales) return itemOptions;
+    // Vendas: apenas os itens de receita liberados (SV0003 e SV0006).
+    if (isSales) return itemOptions.filter((o) => SALES_ALLOWED_ITEMS.includes(o.code));
     return itemOptions.filter((o) => isItemAllowedForCostCenter(o.code, userCostCenter, bypassCcItemRules));
   }, [itemOptions, userCostCenter, isSales, bypassCcItemRules]);
 
