@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, BellRing, Mail, Smartphone, MessageSquare, Send } from "lucide-react";
-import { displayUser } from "@/lib/user-display";
+import { displayUserName } from "@/lib/user-display";
 
 export interface NotificationAuditRow {
   id: string;
@@ -112,7 +112,7 @@ export function NotificationAuditTrail({ expenseId = null, limit = 50 }: Props) 
             <div className="flex flex-wrap items-center gap-2">
               <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               <span className="font-medium">
-                {r.recipient_name ? displayUser(r.recipient_name) : displayUser(r.recipient)}
+                {r.recipient_name ? displayUserName(r.recipient_name) : displayUserName(r.recipient)}
               </span>
               <Badge variant="outline" className="text-[11px]">{r.recipient_role}</Badge>
               <Badge variant={statusVariant(r.status)} className="text-[11px]">{r.status}</Badge>
