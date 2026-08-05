@@ -253,6 +253,25 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     if (rc && rc !== companyDb) return json(400, { error: "Regra pertence a outra empresa" });
   }
 
+  if (ccRedirected) {
+    const rematched = await rematchRuleFromMatrix(admin, {
+      companyDb,
+      docType: String(input.doc_type || "purchase"),
+      totalAmount,
+      costCenter: String(input.cost_center || items[0]?.cost_center || "").trim(),
+      project: String(input.project || items[0]?.project || "").trim(),
+      currency: input.currency || "BRL",
+      requesterName,
+      supplierName: input.supplier_name || null,
+      supplierCode: input.supplier_code || null,
+      expenseId: "",
+      items,
+    });
+    if (rematched) ruleId = rematched;
+  }
+
+
+
   // Self-approval guard: when the requester matches the level's approver,
   // skip forward to the next level. If every level matches, fall back to
   // Juliana Gavineli (global validator, all companies).
