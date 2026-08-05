@@ -97,6 +97,31 @@ Deno.serve(async (req) => {
     const filterCompany = String(body?.company_db || "").trim() || null;
     const filterDocEntry = Number(body?.doc_entry) || null;
 
+    // Modo diagnóstico (somente leitura): { inspect: { company_db, doc_entries: [] } }
+    if (body?.inspect?.company_db && Array.isArray(body?.inspect?.doc_entries)) {
+      const companyDb = String(body.inspect.company_db);
+      const creds = await loadCreds(sb, companyDb);
+      const baseUrl = buildBaseUrl(creds.service_layer_url);
+      const cookies = await sapLogin(baseUrl, creds.username, creds.password, creds.company_db || companyDb);
+      const out: unknown[] = [];
+      for (const de of body.inspect.doc_entries as number[]) {
+        const r = await fetch(`${baseUrl}/Invoices(${Number(de)})`, { headers: { Cookie: cookies } });
+        const d = await r.json().catch(() => ({}));
+        out.push({
+          doc_entry: Number(de),
+          doc_num: d?.DocNum ?? null,
+          cancelled: d?.Cancelled ?? null,
+          xml_service_status: d?.U_XmlServiceStatus ?? null,
+          serial: d?.SequenceSerial ?? null,
+          tx_env_auto: d?.U_TX_EnvAuto ?? null,
+          situacao: d?.U_SituacaoDocumento ?? null,
+          chave: d?.U_ChaveAcesso ?? null,
+          series: d?.Series ?? null,
+        });
+      }
+      return json({ ok: true, inspect: out });
+    }
+
     const cutoff = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
     let q = sb
       .from("sales_order_invoices")
