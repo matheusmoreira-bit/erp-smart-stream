@@ -213,8 +213,33 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   const dueDate = input.due_date ? String(input.due_date).trim() : "";
   if (!dueDate) return json(400, { error: "Data de vencimento é obrigatória" });
 
+  // Centros de custo desativados são redirecionados para a alçada ativa
+  // equivalente (CC + projeto) antes de resolver o aprovador.
+  const ccRedirects = await loadCcRedirects(admin, companyDb);
+  const redirectNotes: string[] = [];
+  if (ccRedirects.size > 0) {
+    const head = applyCcRedirect(ccRedirects, input.cost_center, input.project);
+    if (head.redirected) {
+      input.cost_center = head.costCenter;
+      input.project = head.project;
+      redirectNotes.push(`${head.from} → ${head.costCenter}${head.project ? ` / ${head.project}` : ""}`);
+    }
+    for (const it of items) {
+      const line = applyCcRedirect(ccRedirects, it?.cost_center, it?.project);
+      if (line.redirected) {
+        it.cost_center = line.costCenter;
+        it.project = line.project;
+        redirectNotes.push(`${line.from} → ${line.costCenter}${line.project ? ` / ${line.project}` : ""}`);
+      }
+    }
+  }
+  const ccRedirected = redirectNotes.length > 0;
+
   // If pendente_aprovacao and approval_rule_id provided, verify rule exists & is active.
-  const ruleId = input.approval_rule_id ? String(input.approval_rule_id) : null;
+  // Quando houve redirecionamento de CC, a regra enviada pelo cliente foi calculada
+  // com o CC antigo — reavaliamos a matriz com o CC/projeto corrigidos.
+  let ruleId = input.approval_rule_id ? String(input.approval_rule_id) : null;
+
   if (ruleId) {
     const { data: rule, error } = await admin
       .from("approval_rules")
