@@ -288,6 +288,18 @@ export function CreateExpenseModal({
     enabled: isSales,
   });
 
+  // Mantém apenas as utilizações de receita permitidas (comparação tolerante
+  // a acentos, caixa e espaços). Se nenhuma casar, mostra a lista integral.
+  const filteredUsageOptions = useMemo(() => {
+    const norm = (s: string) =>
+      s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+    const allowed = SALES_ALLOWED_USAGES.map(norm);
+    const filtered = usageOptions.filter((o) => allowed.some((a) => norm(o.name) === a || norm(o.name).startsWith(a)));
+    return filtered.length > 0 ? filtered : usageOptions;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usageOptions]);
+
+
 
 
   // Vendas: cada cliente libera apenas as marcas vinculadas (até 3) ou o
