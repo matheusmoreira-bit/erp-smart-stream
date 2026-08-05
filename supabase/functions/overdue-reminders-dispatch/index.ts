@@ -5,6 +5,8 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { logNotificationAudit } from "../_shared/approval-notify.ts";
+import { getChannelSettings } from "../_shared/notification-channels.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -418,8 +420,23 @@ Deno.serve(async (req) => {
           }
         }
 
+        const chans = await getChannelSettings(sb, exp.company_db, "overdue_reminder");
+        if (!chans.whatsapp) {
+          await sb.from("overdue_reminder_log").insert({
+            expense_id: exp.id,
+            company_db: exp.company_db,
+            recipient_role: r.role,
+            recipient_name: r.nameCandidates.find(Boolean) || null,
+            status: "skipped_channel_disabled",
+            response: "canal WhatsApp desativado para esta empresa/evento",
+          });
+          skipped++;
+          continue;
+        }
+
         const phone = await findPhone(sb, exp.company_db, r.nameCandidates);
         if (!phone) {
+
           await sb.from("overdue_reminder_log").insert({
             expense_id: exp.id,
             company_db: exp.company_db,

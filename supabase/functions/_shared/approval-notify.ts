@@ -9,6 +9,8 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { pushToRecipient } from "./web-push.ts";
+import { getChannelSettings } from "./notification-channels.ts";
+
 
 const DEFAULT_TTL_HOURS = 72;
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/slack/api";
@@ -354,6 +356,9 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
       resolution: input.resolution ?? null,
     };
 
+    // Canais habilitados para esta empresa / tipo de evento
+    const channels = await getChannelSettings(admin, input.companyDb, "approval_pending");
+
     // In-app (dedupe por documento + nível)
     const refId = `${input.expenseId}:${input.levelOrder ?? 0}`;
     const docLink = `/aprovacoes?doc=${encodeURIComponent(`internal:${input.expenseId}`)}`;
@@ -368,25 +373,32 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
       return;
     }
 
-    await admin.from("notifications").insert({
-      user_identifier: identifier,
-      company_db: input.companyDb || null,
-      title,
-      body: [subtitle, ...details.filter((d) => d.value).map((d) => `${d.label}: ${d.value}`)].join(" · "),
-      category: "approval",
-      link: docLink,
-      metadata: { ref_id: refId, expense_id: input.expenseId, level_order: input.levelOrder ?? null },
-    });
-    await logNotificationAudit(admin, { ...auditBase, channel: "in_app" });
+    const bodyText = [subtitle, ...details.filter((d) => d.value).map((d) => `${d.label}: ${d.value}`)].join(" · ");
+
+    if (channels.in_app) {
+      await admin.from("notifications").insert({
+        user_identifier: identifier,
+        company_db: input.companyDb || null,
+        title,
+        body: bodyText,
+        category: "approval",
+        link: docLink,
+        metadata: { ref_id: refId, expense_id: input.expenseId, level_order: input.levelOrder ?? null },
+      });
+      await logNotificationAudit(admin, { ...auditBase, channel: "in_app" });
+    } else {
+      await logNotificationAudit(admin, { ...auditBase, channel: "in_app", status: "skipped_channel_disabled" });
+    }
 
     // Push nativo no celular (best-effort, paralelo a e-mail/Slack).
-    await pushToRecipient(admin, identifier, {
-      title,
-      body: [subtitle, ...details.filter((d) => d.value).map((d) => `${d.label}: ${d.value}`)].join(" · "),
-      url: docLink,
-      tag: refId,
-    });
-    await logNotificationAudit(admin, { ...auditBase, channel: "push" });
+    if (channels.push) {
+      await pushToRecipient(admin, identifier, { title, body: bodyText, url: docLink, tag: refId });
+      await logNotificationAudit(admin, { ...auditBase, channel: "push" });
+    } else {
+      await logNotificationAudit(admin, { ...auditBase, channel: "push", status: "skipped_channel_disabled" });
+    }
+
+    if (!channels.email && !channels.slack) return;
 
     if (!email || !isEmail(email)) {
       await logNotificationAudit(admin, { ...auditBase, channel: "email", status: "skipped_no_email" });
@@ -403,11 +415,20 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
     });
     const approveUrl = token ? `${appUrl}/aprovar/${token}` : null;
 
-    await sendEmail([email], `[ERP Flow] ${title}`, buildEmailHtml(title, subtitle, details, approveUrl, `${appUrl}${docLink}`));
-    await logNotificationAudit(admin, { ...auditBase, channel: "email" });
+    if (channels.email) {
+      await sendEmail([email], `[ERP Flow] ${title}`, buildEmailHtml(title, subtitle, details, approveUrl, `${appUrl}${docLink}`));
+      await logNotificationAudit(admin, { ...auditBase, channel: "email" });
+    } else {
+      await logNotificationAudit(admin, { ...auditBase, channel: "email", status: "skipped_channel_disabled" });
+    }
 
-    await sendSlackApproval({ email, title, subtitle, details, approveUrl, appUrl: `${appUrl}${docLink}` });
-    if (slackEnabled()) await logNotificationAudit(admin, { ...auditBase, channel: "slack" });
+    if (channels.slack) {
+      await sendSlackApproval({ email, title, subtitle, details, approveUrl, appUrl: `${appUrl}${docLink}` });
+      if (slackEnabled()) await logNotificationAudit(admin, { ...auditBase, channel: "slack" });
+    } else {
+      await logNotificationAudit(admin, { ...auditBase, channel: "slack", status: "skipped_channel_disabled" });
+    }
+
 
   } catch (e) {
     console.warn("[approval-notify] erro inesperado:", e instanceof Error ? e.message : String(e));
