@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { normalizeText as baseNormalizeText, emailLocalPart } from "@/lib/text-normalize";
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
 import { useMyCapabilities } from "@/hooks/useMyCapabilities";
@@ -74,7 +75,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-import { normalizeText as baseNormalizeText, emailLocalPart } from "@/lib/text-normalize";
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,

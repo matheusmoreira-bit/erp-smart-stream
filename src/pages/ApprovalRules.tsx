@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { normalizeText as baseNormalizeText } from "@/lib/text-normalize";
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 import { motion } from "framer-motion";
@@ -67,7 +68,6 @@ import { toast } from "sonner";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 
 import {
-import { normalizeText as baseNormalizeText } from "@/lib/text-normalize";
   useApprovalRules,
   OPERATOR_LABELS,
   FIELD_OPTIONS,
