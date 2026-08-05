@@ -163,31 +163,48 @@ function buildEmailHtml(title: string, subtitle: string, details: ApprovalNotify
   const rows = details
     .filter((d) => d.value !== null && d.value !== undefined && String(d.value).trim() !== "")
     .map(
-      (d) =>
-        `<tr><td style="padding:8px 12px 8px 0;color:#64748b;font-size:14px;white-space:nowrap">${esc(d.label)}</td>` +
-        `<td style="padding:8px 0;color:#0f172a;font-size:15px;font-weight:600">${esc(d.value)}</td></tr>`,
+      (d, i) =>
+        `<tr>` +
+        `<td style="padding:10px 12px;background:${i % 2 ? "#ffffff" : "#f8fafc"};color:#64748b;font-size:13px;` +
+        `border-bottom:1px solid #eef2f7;white-space:nowrap;vertical-align:top">${esc(d.label)}</td>` +
+        `<td style="padding:10px 12px;background:${i % 2 ? "#ffffff" : "#f8fafc"};color:#0f172a;font-size:14px;` +
+        `font-weight:600;border-bottom:1px solid #eef2f7">${esc(d.value)}</td>` +
+        `</tr>`,
     )
     .join("");
   const btn = (label: string, href: string, bg: string, color: string, border: string) =>
-    `<a href="${esc(href)}" style="display:block;width:100%;box-sizing:border-box;text-align:center;padding:16px 12px;margin:0 0 12px;` +
-    `background:${bg};color:${color};border:1px solid ${border};border-radius:10px;font-size:16px;font-weight:700;text-decoration:none">${esc(label)}</a>`;
-  return `<!doctype html><html><head><meta charset="utf-8">
+    `<a href="${esc(href)}" style="display:block;width:100%;box-sizing:border-box;text-align:center;padding:14px 12px;margin:0 0 10px;` +
+    `background:${bg};color:${color};border:1px solid ${border};border-radius:10px;font-size:15px;font-weight:700;` +
+    `text-decoration:none;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif">${esc(label)}</a>`;
+  return `<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light only"></head>
-<body style="margin:0;padding:0;background:#ffffff">
-<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#ffffff;color:#0f172a;max-width:520px;margin:0 auto;padding:24px 20px">
-  <h1 style="margin:0 0 6px;font-size:20px;line-height:1.3">${esc(title)}</h1>
-  <p style="margin:0 0 18px;font-size:15px;color:#334155">${esc(subtitle)}</p>
-  ${rows ? `<table style="border-collapse:collapse;width:100%;margin-bottom:22px">${rows}</table>` : ""}
-  ${approveUrl ? btn("Aprovar", `${approveUrl}?a=approve`, "#0f766e", "#ffffff", "#0f766e") : ""}
-  ${approveUrl ? btn("Reprovar", `${approveUrl}?a=reject`, "#ffffff", "#b91c1c", "#fecaca") : ""}
-  ${btn("Abrir no ERP Flow", appUrl, "#f1f5f9", "#0f172a", "#e2e8f0")}
-  <p style="margin:20px 0 0;font-size:12px;color:#94a3b8;line-height:1.5">
-    O link de decisão é pessoal, de uso único e expira em 72 horas.<br>
-    Mensagem automática do ERP Flow.
-  </p>
-</div></body></html>`;
+<meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;-webkit-text-size-adjust:100%">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(subtitle)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 12px">
+<tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">
+  <tr><td style="background:#0f172a;padding:14px 20px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#ffffff;font-size:13px;font-weight:700;letter-spacing:.4px">ERP FLOW</td></tr>
+  <tr><td style="padding:22px 20px 0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif">
+    <h1 style="margin:0 0 6px;font-size:19px;line-height:1.35;color:#0f172a;font-weight:700">${esc(title)}</h1>
+    <p style="margin:0 0 18px;font-size:14px;line-height:1.5;color:#475569">${esc(subtitle)}</p>
+  </td></tr>
+  ${rows ? `<tr><td style="padding:0 20px 20px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #eef2f7;border-radius:10px;overflow:hidden;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif">${rows}</table></td></tr>` : ""}
+  <tr><td style="padding:0 20px 4px">
+    ${approveUrl ? btn("Aprovar", `${approveUrl}?a=approve`, "#0f766e", "#ffffff", "#0f766e") : ""}
+    ${approveUrl ? btn("Reprovar", `${approveUrl}?a=reject`, "#ffffff", "#b91c1c", "#fecaca") : ""}
+    ${btn("Abrir no ERP Flow", appUrl, "#f8fafc", "#0f172a", "#e2e8f0")}
+  </td></tr>
+  <tr><td style="padding:8px 20px 22px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#94a3b8;line-height:1.6;border-top:1px solid #f1f5f9">
+    O link de decis&atilde;o &eacute; pessoal, de uso &uacute;nico e expira em 72 horas.<br>
+    Mensagem autom&aacute;tica do ERP Flow.
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
 }
+
 
 async function sendEmail(to: string[], subject: string, html: string) {
   const url = Deno.env.get("SUPABASE_URL");
