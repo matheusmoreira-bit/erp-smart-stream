@@ -1321,6 +1321,8 @@ export default function SalesNfse() {
 
           {detailOrder && (() => {
             const cause = diagnoseBlock(detailOrder);
+            const playbook = ERROR_PLAYBOOK[cause.category];
+            const codes = extractErpCodes(detailOrder.sap_integration_error || "");
             const tone =
               cause.severity === "error"
                 ? "border-destructive/40 bg-destructive/5"
