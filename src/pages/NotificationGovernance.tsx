@@ -1,4 +1,6 @@
 import { NotificationAuditTrail } from "@/components/NotificationAuditTrail";
+import { NotificationChannelSettings } from "@/components/NotificationChannelSettings";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
