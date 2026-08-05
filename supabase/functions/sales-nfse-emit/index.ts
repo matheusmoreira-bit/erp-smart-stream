@@ -356,6 +356,8 @@ Deno.serve(async (req) => {
       id: inserted?.id ?? null,
       doc_entry: Number(invoice.DocEntry),
       doc_num: Number(invoice.DocNum),
+      auto_send: autoSend.ok,
+      auto_send_detail: autoSend.ok ? null : autoSend.detail ?? null,
     });
   } catch (e) {
     console.error("sales-nfse-emit error", e);
