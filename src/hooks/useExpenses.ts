@@ -559,13 +559,26 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         return;
       }
 
-      const { data, error: err } = await expenseRead("expenses")
-        .select("*")
-        .eq("company_db", activeCompanyDb)
-        .eq("doc_type", docType)
-        .order("created_at", { ascending: false });
+      const readExpenses = () =>
+        expenseRead("expenses")
+          .select("*")
+          .eq("company_db", activeCompanyDb)
+          .eq("doc_type", docType)
+          .order("created_at", { ascending: false });
 
-      if (err) throw err;
+      let { data, error: err } = await readExpenses();
+      if (err) {
+        // Uma nova tentativa cobre falhas transitórias (sessão renovada,
+        // cold start da função, rede instável) antes de mostrar erro na tela.
+        await new Promise((r) => setTimeout(r, 1200));
+        ({ data, error: err } = await readExpenses());
+      }
+
+      if (err) {
+        const msg = (err as { message?: string })?.message || String(err);
+        throw new Error(`Erro ao buscar despesas: ${msg}`);
+      }
+
 
       const expenseIds = (data || []).map((e: any) => e.id);
       let itemsMap: Record<string, ExpenseItem[]> = {};
