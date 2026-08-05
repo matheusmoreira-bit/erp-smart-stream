@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeUpper } from "@/lib/text-normalize";
 
 /**
  * Alerta de casamento entre Centro de Custo e Projeto (pedidos de compra).

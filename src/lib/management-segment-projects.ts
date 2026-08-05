@@ -1,4 +1,5 @@
 import type { ManagementSegment } from "@/hooks/useManagementSegments";
+import { normalizeCompact } from "@/lib/text-normalize";
 
 /**
  * Recorte de projetos por segmento de gestão (ANA Gaming).

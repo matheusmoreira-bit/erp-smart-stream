@@ -67,6 +67,7 @@ import { toast } from "sonner";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 
 import {
+import { normalizeText as baseNormalizeText } from "@/lib/text-normalize";
   useApprovalRules,
   OPERATOR_LABELS,
   FIELD_OPTIONS,

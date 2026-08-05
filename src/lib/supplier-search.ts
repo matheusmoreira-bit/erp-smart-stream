@@ -1,4 +1,5 @@
 // Utilitários de busca tolerante para fornecedores/clientes.
+import { normalizeText as baseNormalizeText } from "@/lib/text-normalize";
 //
 // Regras:
 //   • acento-insensível (NFD + remove diacríticos)

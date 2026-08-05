@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
+import { normalizeWords } from "@/lib/text-normalize";
 
 export interface CustomerBrandRule {
   id: string;

@@ -74,6 +74,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+import { normalizeText as baseNormalizeText, emailLocalPart } from "@/lib/text-normalize";
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
