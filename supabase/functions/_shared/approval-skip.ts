@@ -1,4 +1,5 @@
 // Shared helpers to prevent a requester from being their own approver.
+import { emailLocalPart, normalizeText, tokenizePerson } from "./text-normalize.ts";
 //
 // Rule (project-wide, all companies):
 //  - When picking the CURRENT approval level, if the level's designated
@@ -24,19 +25,9 @@ export const SELF_APPROVAL_FALLBACK = {
   email: "juliana.gavineli@anagaming.com.br",
 } as const;
 
-function norm(s: unknown): string {
-  return String(s ?? "").toLowerCase().trim();
-}
-function emailPrefix(v: string): string {
-  const s = norm(v);
-  const i = s.indexOf("@");
-  return i > 0 ? s.slice(0, i) : s;
-}
-function tokenize(s: string): string[] {
-  return norm(s)
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/[._\-@]+/g, " ").split(/\s+/).filter(Boolean);
-}
+const norm = (s: unknown) => normalizeText(s);
+const emailPrefix = (v: string) => emailLocalPart(v);
+const tokenize = (s: string) => tokenizePerson(s);
 
 
 /** True when `requester` and `approver` identify the same person. */

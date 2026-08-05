@@ -17,29 +17,24 @@ export function isPendingApproval(status?: string | null): boolean {
 }
 
 
-export function normalize(s: unknown): string {
-  return String(s ?? "").toLowerCase().trim();
-}
+import {
+  emailLocalPart,
+  normalizeText,
+  tokenizePerson,
+} from "@/lib/text-normalize";
 
-/** Remove acentos — "Paula Mourão" e "paula.mourao" são a mesma pessoa. */
-function stripDiacritics(s: string): string {
-  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+export function normalize(s: unknown): string {
+  return normalizeText(s);
 }
 
 export function emailPrefix(email: string): string {
-  const e = normalize(email);
-  const i = e.indexOf("@");
-  return i > 0 ? e.slice(0, i) : e;
+  return emailLocalPart(email);
 }
 
 export function tokenize(s: string): string[] {
-  const connectors = new Set(["de", "da", "do", "das", "dos", "e"]);
-  return stripDiacritics(normalize(s))
-    .replace(/@[^\s]*/g, " ")
-    .replace(/[._\-@]+/g, " ")
-    .split(/\s+/)
-    .filter((token) => token && !connectors.has(token));
+  return tokenizePerson(s);
 }
+
 
 
 /**

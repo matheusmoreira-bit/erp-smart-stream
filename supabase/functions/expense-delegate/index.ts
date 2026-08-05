@@ -15,6 +15,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireUser, validateSapSession, AuthError } from "../_shared/auth.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { emailLocalPart, normalizeText, tokenizePerson } from "../_shared/text-normalize.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,20 +31,9 @@ function json(status: number, body: unknown) {
   });
 }
 
-function normalize(s: unknown): string {
-  return String(s ?? "").toLowerCase().trim();
-}
-function emailPrefix(email: string): string {
-  const e = normalize(email);
-  const i = e.indexOf("@");
-  return i > 0 ? e.slice(0, i) : e;
-}
-function tokenize(s: string): string[] {
-  // Sem acentos: "Paula Mourão" e "paula.mourao" são a mesma pessoa.
-  return normalize(s)
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/[._\-@]+/g, " ").split(/\s+/).filter(Boolean);
-}
+const normalize = (s: unknown) => normalizeText(s);
+const emailPrefix = (email: string) => emailLocalPart(email);
+const tokenize = (s: string) => tokenizePerson(s);
 
 function isDesignatedApprover(
   caller: string,

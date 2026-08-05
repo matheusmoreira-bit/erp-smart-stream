@@ -8,16 +8,11 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 
+// Fonte única de normalização: `_shared/text-normalize.ts`.
+import { canonicalUserKey } from "./text-normalize.ts";
+
 export function normalizeIdentity(value: string | null | undefined): string {
-  if (!value) return "";
-  const raw = String(value).trim().toLowerCase();
-  const local = raw.includes("@") ? raw.split("@")[0] : raw;
-  return local
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    // sufixos comuns de contas de terceiros/externos e separadores
-    .replace(/[._\-\s]?(ext|externo|terceiro|adm|admin)$/g, "")
-    .replace(/[^a-z0-9]/g, "");
+  return canonicalUserKey(value);
 }
 
 /**

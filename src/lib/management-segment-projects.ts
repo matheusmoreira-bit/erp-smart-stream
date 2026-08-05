@@ -1,4 +1,5 @@
 import type { ManagementSegment } from "@/hooks/useManagementSegments";
+import { normalizeCompact } from "@/lib/text-normalize";
 
 /**
  * Recorte de projetos por segmento de gestão (ANA Gaming).
@@ -20,11 +21,7 @@ export function isSegmentScopedCompany(companyDb: string | null | undefined): bo
 }
 
 function normalize(value: unknown): string {
-  return String(value ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/gi, "")
-    .toUpperCase();
+  return normalizeCompact(value).toUpperCase();
 }
 
 /** Filtra a lista de projetos conforme o segmento de gestão do usuário. */

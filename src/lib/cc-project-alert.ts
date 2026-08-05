@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeUpper } from "@/lib/text-normalize";
 
 /**
  * Alerta de casamento entre Centro de Custo e Projeto (pedidos de compra).
@@ -28,12 +29,7 @@ export const INSTITUTIONAL_PROJECTS = [
 ];
 
 export function normalizeText(v: string): string {
-  return (v || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, " ")
-    .trim();
+  return normalizeUpper(v);
 }
 
 function levenshtein(a: string, b: string): number {

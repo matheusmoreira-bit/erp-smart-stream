@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { normalizeText as baseNormalizeText, emailLocalPart } from "@/lib/text-normalize";
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
 import { useMyCapabilities } from "@/hooks/useMyCapabilities";
@@ -1591,18 +1592,12 @@ function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string }
   } as ApprovalDoc & { __internalId?: string };
 }
 
-function stripDiacritics(value: string): string {
-  return value.normalize("NFD").replace(/\p{Diacritic}/gu, "");
-}
-
 function normalizeIdentity(value?: string | null): string {
-  return stripDiacritics((value || "").toLowerCase().trim());
+  return baseNormalizeText(value);
 }
 
 function identityPrefix(value?: string | null): string {
-  const normalized = normalizeIdentity(value);
-  const at = normalized.indexOf("@");
-  return at > 0 ? normalized.slice(0, at) : normalized;
+  return emailLocalPart(value);
 }
 
 function escapeSapString(value: string): string {

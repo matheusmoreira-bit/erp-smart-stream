@@ -1,4 +1,5 @@
 // Utilitários de busca tolerante para fornecedores/clientes.
+import { normalizeText as baseNormalizeText } from "@/lib/text-normalize";
 //
 // Regras:
 //   • acento-insensível (NFD + remove diacríticos)
@@ -8,15 +9,7 @@
 //   • ranking simples: prefixo do nome > CNPJ exato > nome contém > outros
 
 export function normalizeText(s: string | null | undefined): string {
-  if (!s) return "";
-  return s
-    .toString()
-    .normalize("NFD")
-    // Remove diacríticos (acentos)
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
+  return baseNormalizeText(s);
 }
 
 export function onlyDigits(s: string | null | undefined): string {

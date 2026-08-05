@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { authFetch } from "@/lib/auth-fetch";
 import { createSupplier, type Supplier } from "@/hooks/useSuppliers";
 import type { SapSession } from "@/lib/sap-client";
+import { normalizeWords } from "@/lib/text-normalize";
 
 export interface PagCorpCandidate {
   /** Stable client-side id (tx id + index) */
@@ -69,12 +70,7 @@ export function hasValidBrazilianTaxId(s?: string | null): boolean {
 }
 
 export function normalizeName(s?: string | null): string {
-  return (s || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+  return normalizeWords(s);
 }
 
 /** Upsert a decision (link / import / ignore) so future scans skip it. */

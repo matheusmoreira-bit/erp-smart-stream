@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
+import { normalizeWords } from "@/lib/text-normalize";
 
 export interface CustomerBrandRule {
   id: string;
@@ -17,12 +18,7 @@ export interface CustomerBrandRule {
 
 /** Normaliza texto para comparação (sem acento/caixa/símbolos). */
 export function normalizeKey(value: unknown): string {
-  return String(value ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+  return normalizeWords(value);
 }
 
 /** Máximo de marcas vinculadas por cliente (regra de negócio). */

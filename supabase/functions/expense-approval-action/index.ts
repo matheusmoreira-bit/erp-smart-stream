@@ -29,6 +29,7 @@ import { notifyApprovalPending } from "../_shared/approval-notify.ts";
 import { notifyActionCompleted } from "../_shared/action-notify.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { resolveCallerAliases, normalizeIdentity } from "../_shared/user-aliases.ts";
+import { emailLocalPart, normalizeText, stripDiacritics as baseStripDiacritics, tokenizePerson } from "../_shared/text-normalize.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -81,25 +82,10 @@ function sleep(ms: number) {
 }
 
 
-function normalize(s: unknown): string {
-  return String(s ?? "").toLowerCase().trim();
-}
-function emailPrefix(email: string): string {
-  const e = normalize(email);
-  const i = e.indexOf("@");
-  return i > 0 ? e.slice(0, i) : e;
-}
-function stripDiacritics(s: string): string {
-  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-}
-function tokenize(s: string): string[] {
-  // Drop email domain so tokens like "cactusgaming"/"net" don't pollute the match.
-  const noDomain = normalize(s).replace(/@[^\s]*/g, " ");
-  return stripDiacritics(noDomain)
-    .replace(/[._\-]+/g, " ")
-    .split(/\s+/)
-    .filter((token) => token && !["de", "da", "do", "das", "dos", "e"].includes(token));
-}
+const normalize = (s: unknown) => normalizeText(s);
+const emailPrefix = (email: string) => emailLocalPart(email);
+const stripDiacritics = (s: string) => baseStripDiacritics(s);
+const tokenize = (s: string) => tokenizePerson(s);
 
 /**
  * Strict identity match — no fuzzy edit distance. We accept:

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { normalizeText as baseNormalizeText } from "@/lib/text-normalize";
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 import { motion } from "framer-motion";
@@ -97,11 +98,7 @@ function fieldLabel(field: string): string {
 }
 
 function normalizeSearch(value: unknown): string {
-  return String(value ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
+  return baseNormalizeText(value);
 }
 
 function criterionSummary(c: RuleCriterion): string {
