@@ -140,10 +140,11 @@ async function resolveOne(
   }
 
   try {
+    const PO_SELECT = "doc_entry, doc_num, document_status, doc_total, doc_total_fc, doc_currency, card_code, doc_date";
     // 1) PC no cache — se não achar e o modo permitir, busca direto no SAP e cacheia.
     let { data: po } = await sb
       .from("sap_purchase_order_cache")
-      .select("doc_entry, doc_num, document_status, doc_total, doc_total_fc, doc_currency")
+      .select(PO_SELECT)
       .eq("company_db", log.company_db)
       .eq("doc_entry", log.sap_doc_entry)
       .maybeSingle();
@@ -153,7 +154,7 @@ async function resolveOne(
       if (fetched) {
         const refetch = await sb
           .from("sap_purchase_order_cache")
-          .select("doc_entry, doc_num, document_status, doc_total, doc_total_fc, doc_currency")
+          .select(PO_SELECT)
           .eq("company_db", log.company_db)
           .eq("doc_entry", log.sap_doc_entry)
           .maybeSingle();
@@ -171,7 +172,47 @@ async function resolveOne(
 
     const nfEntries = (nfs || []).map((n: { doc_entry: number }) => n.doc_entry).filter((n) => Number.isFinite(n));
 
-    // 3) Pagamentos cujo invoice_links contenha alguma NF
+    // 2b) Fallback: NF lançada MANUALMENTE no SAP (sem copiar do PC) não tem
+    // BaseEntry, então nunca aparecia vinculada aqui. Inferimos pelo fornecedor
+    // + valor do PC + janela de datas. Marcado como `nf_inferred` para a UI
+    // deixar claro que é um vínculo deduzido, não declarado pelo SAP.
+    let nfInferred = false;
+    const poRow = po as {
+      card_code?: string | null; doc_date?: string | null;
+      doc_total?: number | null; doc_total_fc?: number | null; doc_currency?: string | null;
+    } | null;
+    if (nfEntries.length === 0 && poRow?.card_code) {
+      const cur = poRow.doc_currency || "BRL";
+      const isLocal = cur === "BRL" || cur === "R$";
+      const target = Number((isLocal ? poRow.doc_total : poRow.doc_total_fc) ?? poRow.doc_total ?? 0);
+      const from = poRow.doc_date ? new Date(poRow.doc_date) : null;
+      if (from) from.setDate(from.getDate() - 45);
+      const to = poRow.doc_date ? new Date(poRow.doc_date) : null;
+      if (to) to.setDate(to.getDate() + 180);
+
+      let q = sb
+        .from("sap_nf_entrada_cache")
+        .select("doc_entry, doc_total, doc_currency, doc_date, cancelled")
+        .eq("company_db", log.company_db)
+        .eq("card_code", poRow.card_code)
+        .is("base_po_doc_entry", null);
+      if (from) q = q.gte("doc_date", from.toISOString().slice(0, 10));
+      if (to) q = q.lte("doc_date", to.toISOString().slice(0, 10));
+      const { data: candidates } = await q.limit(200);
+
+      const matched = (candidates || []).filter((n: { doc_total?: number | null; cancelled?: string | null }) =>
+        n.cancelled !== "tYES" && target > 0 && Math.abs(Number(n.doc_total ?? 0) - target) <= 0.02
+      );
+      if (matched.length > 0) {
+        nfInferred = true;
+        for (const m of matched as Array<{ doc_entry: number }>) {
+          if (Number.isFinite(m.doc_entry) && !nfEntries.includes(m.doc_entry)) nfEntries.push(m.doc_entry);
+        }
+      }
+    }
+
+    // 3) Pagamentos cujo invoice_links contenha alguma NF (inclui baixas manuais,
+    //    pois o vínculo é lido do próprio SAP).
     let paymentEntries: number[] = [];
     if (nfEntries.length > 0) {
       // Filtro via `?` (jsonb contains key) não é trivial em array de objetos. Fazemos
@@ -193,6 +234,22 @@ async function resolveOne(
         )
         .map((p: { doc_entry: number }) => p.doc_entry);
     }
+
+    // 3b) Complemento: baixas registradas pelo próprio ERP Flow (settlement)
+    // para o mesmo PC, caso o cache de pagamentos ainda não tenha sincronizado.
+    {
+      const { data: settleLogs } = await sb
+        .from("pagcorp_integration_log")
+        .select("settlement_payment_doc_entry")
+        .eq("company_db", log.company_db)
+        .eq("sap_doc_entry", log.sap_doc_entry)
+        .not("settlement_payment_doc_entry", "is", null);
+      for (const s of (settleLogs || []) as Array<{ settlement_payment_doc_entry: number | null }>) {
+        const e = Number(s.settlement_payment_doc_entry);
+        if (Number.isFinite(e) && !paymentEntries.includes(e)) paymentEntries.push(e);
+      }
+    }
+
 
     const amountFromPagCorpData = (data: Record<string, unknown> | null | undefined): number => Number(
       (data as { amount?: number; totalAmount?: number; total?: number } | null)?.amount ??
@@ -257,7 +314,9 @@ async function resolveOne(
       payment_doc_entries: paymentEntries,
       po_found: !!po,
       nf_found: nfEntries.length > 0,
+      nf_inferred: nfInferred,
       payment_found: paymentEntries.length > 0,
+
       amount_matches: amountMatches,
       last_resolved_at: new Date().toISOString(),
       resolve_error: null,
@@ -281,7 +340,7 @@ async function resolveOne(
 async function loadDetails(sb: ReturnType<typeof createClient>, logId: string) {
   const { data: relData, error: relErr } = await sb
     .from("pagcorp_document_relations")
-    .select("po_doc_entry, po_doc_num, po_status, po_total, po_total_fc, po_currency, nf_doc_entries, payment_doc_entries, po_found, amount_matches, last_resolved_at, resolve_error, company_db")
+    .select("po_doc_entry, po_doc_num, po_status, po_total, po_total_fc, po_currency, nf_doc_entries, payment_doc_entries, po_found, nf_found, nf_inferred, payment_found, amount_matches, last_resolved_at, resolve_error, company_db")
     .eq("pagcorp_log_id", logId)
     .maybeSingle();
   if (relErr) throw new Error(relErr.message);

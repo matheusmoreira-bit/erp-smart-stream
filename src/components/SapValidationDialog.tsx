@@ -33,7 +33,9 @@ interface RelationRow {
   nf_doc_entries: number[] | null;
   payment_doc_entries: number[] | null;
   po_found: boolean;
+  nf_inferred?: boolean | null;
   amount_matches: boolean | null;
+
   last_resolved_at: string | null;
   resolve_error: string | null;
   company_db: string | null;
@@ -189,10 +191,16 @@ export function SapValidationDialog({ open, onClose, pagcorpLogId, docEntry, doc
             <div className="flex items-center gap-2 mb-2">
               <Receipt className="w-4 h-4 text-primary" />
               <span className="font-semibold text-sm">Nota Fiscal de Entrada vinculada</span>
+              {rel?.nf_inferred ? (
+                <Badge variant="secondary" title="NF lançada manualmente no SAP (sem vínculo com o pedido). Vínculo deduzido por fornecedor, valor e período.">
+                  Vínculo inferido
+                </Badge>
+              ) : null}
               <Badge variant="outline" className="ml-auto">{nfs.length}</Badge>
             </div>
             {nfs.length === 0 ? (
               <p className="text-xs text-muted-foreground">Nenhuma NF vinculada a este PC.</p>
+
             ) : (
               <ul className="space-y-1 text-xs">
                 {nfs.map((i) => {

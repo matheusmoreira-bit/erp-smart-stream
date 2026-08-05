@@ -4872,6 +4872,7 @@ export type Database = {
           last_resolved_at: string | null
           nf_doc_entries: number[]
           nf_found: boolean
+          nf_inferred: boolean
           pagcorp_log_id: string
           payment_doc_entries: number[]
           payment_found: boolean
@@ -4892,6 +4893,7 @@ export type Database = {
           last_resolved_at?: string | null
           nf_doc_entries?: number[]
           nf_found?: boolean
+          nf_inferred?: boolean
           pagcorp_log_id: string
           payment_doc_entries?: number[]
           payment_found?: boolean
@@ -4912,6 +4914,7 @@ export type Database = {
           last_resolved_at?: string | null
           nf_doc_entries?: number[]
           nf_found?: boolean
+          nf_inferred?: boolean
           pagcorp_log_id?: string
           payment_doc_entries?: number[]
           payment_found?: boolean
