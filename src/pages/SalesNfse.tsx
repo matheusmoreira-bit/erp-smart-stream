@@ -54,6 +54,23 @@ function formatDate(value?: string | null) {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : value;
 }
 
+function formatDateTime(value?: string | null) {
+  if (!value) return "—";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleString("pt-BR");
+}
+
+/** Traduz o estado técnico da sincronização para uma explicação em português. */
+const SYNC_STATE_LABEL: Record<string, { label: string; hint: string }> = {
+  pending: { label: "Aguardando envio", hint: "O pedido está na fila e ainda não foi enviado ao ERP." },
+  queued: { label: "Na fila de retentativa", hint: "Houve uma falha temporária; o sistema tentará novamente automaticamente." },
+  processing: { label: "Em processamento", hint: "O envio ao ERP está em andamento neste momento." },
+  error: { label: "Erro de integração", hint: "O ERP recusou o documento. Veja a mensagem de erro abaixo." },
+  failed: { label: "Falha definitiva", hint: "As tentativas automáticas se esgotaram. Corrija o motivo e reintegre manualmente." },
+  synced: { label: "Integrado", hint: "O pedido foi criado no ERP com sucesso." },
+};
+
+
 const APPROVED_STATUSES = [
   "aprovado",
   "pc_lancado",
