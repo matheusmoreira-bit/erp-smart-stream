@@ -733,7 +733,15 @@ export default function SalesNfse() {
                             size="sm"
                             variant={emitted ? "ghost" : "default"}
                             disabled={emitted || !o.sap_doc_entry || !!o.erp_closed}
-                            title={o.erp_closed ? "Pedido já faturado/fechado no ERP" : undefined}
+                            title={
+                              emitted
+                                ? "NFS-e já emitida para este pedido"
+                                : o.erp_closed
+                                  ? "Pedido já faturado/fechado no ERP"
+                                  : !o.sap_doc_entry
+                                    ? "Pedido ainda não integrado ao ERP — a NFS-e só pode ser emitida após a integração"
+                                    : undefined
+                            }
                             onClick={() => setConfirmOrder(o)}
                           >
                             {emitted ? "Emitida" : "Emitir NFS-e"}
