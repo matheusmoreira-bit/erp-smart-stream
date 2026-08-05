@@ -100,6 +100,56 @@ function isWithinWindow(s: Settings): boolean {
   return true;
 }
 
+const slug = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+// Resolve identificadores adicionais (código SAP) a partir de nome de exibição
+// ou e-mail — o campo `current_approver` costuma guardar "Felipe Escudeiro".
+async function expandIdentifiers(
+  sb: ReturnType<typeof createClient>,
+  raw: string[],
+): Promise<string[]> {
+  const out = new Set<string>();
+  for (const c of raw) {
+    out.add(c);
+    out.add(slug(c));
+    const at = c.indexOf("@");
+    if (at > 0) {
+      out.add(c.slice(0, at));
+      out.add(slug(c.slice(0, at)));
+    }
+  }
+
+  // e-mails → user_key
+  const emails = raw.filter((c) => c.includes("@")).map((c) => c.toLowerCase());
+  if (emails.length > 0) {
+    const { data } = await sb
+      .from("sap_user_emails")
+      .select("user_key, email")
+      .in("email", emails);
+    for (const r of (data as { user_key: string }[] | null) || []) out.add(r.user_key);
+  }
+
+  // nomes de exibição → sap_user_code / user_key
+  const { data: dir } = await sb
+    .from("sap_user_directory")
+    .select("user_key, sap_user_code, display_name");
+  const wanted = new Set(raw.map(slug));
+  for (const r of (dir as { user_key: string; sap_user_code: string | null; display_name: string | null }[] | null) || []) {
+    const names = [r.display_name, r.user_key, r.sap_user_code].filter(Boolean).map((n) => slug(String(n)));
+    if (names.some((n) => wanted.has(n))) {
+      if (r.user_key) out.add(r.user_key);
+      if (r.sap_user_code) out.add(r.sap_user_code);
+    }
+  }
+
+  return Array.from(out).filter((v) => v.length > 0);
+}
+
 async function findPhone(
   sb: ReturnType<typeof createClient>,
   companyDB: string,
@@ -109,21 +159,32 @@ async function findPhone(
     .map((c) => (c || "").trim())
     .filter((c) => c.length > 0);
   if (clean.length === 0) return null;
-  // Também tenta prefixo antes do "@" caso venha um e-mail.
-  const expanded = new Set<string>();
-  for (const c of clean) {
-    expanded.add(c);
-    const at = c.indexOf("@");
-    if (at > 0) expanded.add(c.slice(0, at));
-  }
-  const codes = Array.from(expanded);
-  const { data } = await sb
+
+  const codes = await expandIdentifiers(sb, clean);
+  if (codes.length === 0) return null;
+
+  const pick = (rows: { user_code: string; phone: string }[] | null) =>
+    rows?.find((r) => r.phone && r.phone.trim()) || null;
+
+  // 1) telefone cadastrado na própria empresa
+  const { data: sameCompany } = await sb
     .from("user_phones")
     .select("user_code, phone")
     .eq("company_db", companyDB)
     .in("user_code", codes)
-    .limit(5);
-  const row = (data as { user_code: string; phone: string }[] | null)?.find((r) => r.phone && r.phone.trim());
+    .limit(10);
+  let row = pick(sameCompany as { user_code: string; phone: string }[] | null);
+
+  // 2) fallback: mesmo usuário em qualquer outra base
+  if (!row) {
+    const { data: anyCompany } = await sb
+      .from("user_phones")
+      .select("user_code, phone")
+      .in("user_code", codes)
+      .limit(10);
+    row = pick(anyCompany as { user_code: string; phone: string }[] | null);
+  }
+
   return row ? normalizePhone(row.phone) : null;
 }
 
