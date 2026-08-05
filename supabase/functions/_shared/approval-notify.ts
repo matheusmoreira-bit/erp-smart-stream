@@ -89,7 +89,73 @@ export interface ApprovalNotifyInput {
   currency?: string | null;
   docType?: string | null;
   details?: ApprovalNotifyDetail[];
+  /** Explica POR QUE este destinatário é o aprovador atual (trilha de auditoria). */
+  resolution?: ApproverResolution | null;
 }
+
+/** Origem/justificativa da resolução do aprovador atual. */
+export interface ApproverResolution {
+  /** matrix_rule | next_level | manual_reassign | sla_escalation | substitute | self_approval_escalation | default_fallback */
+  source: string;
+  reason?: string | null;
+  ruleId?: string | null;
+  ruleName?: string | null;
+  matrixVersion?: string | null;
+  costCenter?: string | null;
+  project?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+/**
+ * Registra na trilha de auditoria quem recebeu a notificação de um documento
+ * e por qual regra/matriz essa pessoa foi resolvida como aprovador atual.
+ * Best-effort: nunca interrompe o envio.
+ */
+export async function logNotificationAudit(admin: any, entry: {
+  expenseId?: string | null;
+  companyDb?: string | null;
+  docType?: string | null;
+  channel: string;
+  recipient: string;
+  recipientName?: string | null;
+  recipientRole?: string;
+  levelOrder?: number | null;
+  eventKey?: string;
+  status?: string;
+  amount?: number | null;
+  currency?: string | null;
+  resolution?: ApproverResolution | null;
+  metadata?: Record<string, unknown> | null;
+}): Promise<void> {
+  try {
+    const r = entry.resolution || null;
+    await admin.from("notification_audit_log").insert({
+      expense_id: entry.expenseId || null,
+      company_db: entry.companyDb || null,
+      doc_type: entry.docType || null,
+      channel: entry.channel,
+      recipient: String(entry.recipient || "").trim().toLowerCase(),
+      recipient_name: entry.recipientName || null,
+      recipient_role: entry.recipientRole || "approver",
+      level_order: entry.levelOrder ?? null,
+      event_key: entry.eventKey || "approval_pending",
+      status: entry.status || "sent",
+      amount: entry.amount ?? null,
+      currency: entry.currency || null,
+      resolution_source: r?.source || null,
+      resolution_reason: r?.reason || null,
+      rule_id: r?.ruleId || null,
+      rule_name: r?.ruleName || null,
+      matrix_version: r?.matrixVersion || null,
+      cost_center: r?.costCenter || null,
+      project: r?.project || null,
+      metadata: { ...(entry.metadata || {}), ...(r?.metadata || {}) },
+    });
+  } catch (e) {
+    console.warn("[approval-notify] audit log falhou:", e instanceof Error ? e.message : String(e));
+  }
+}
+
 
 function buildEmailHtml(title: string, subtitle: string, details: ApprovalNotifyDetail[], approveUrl: string | null, appUrl: string) {
   const rows = details
