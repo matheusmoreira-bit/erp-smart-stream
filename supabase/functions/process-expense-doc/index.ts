@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { normalizeText as baseNormalizeText } from "../_shared/text-normalize.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,10 +32,7 @@ const STOP_TOKENS = new Set([
 ]);
 
 function normalizeText(s: string): string {
-  return (s || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // strip accents
+  return baseNormalizeText(s)
     .replace(/\b(s\.?\s*a\.?|s\.?\s*\/?\s*a\.?|ltda\.?|me|epp|eireli|inc\.?|llc|corp\.?|cia\.?)\b/g, "")
     .replace(/[^a-z0-9 ]+/g, " ")
     .replace(/\s+/g, " ")

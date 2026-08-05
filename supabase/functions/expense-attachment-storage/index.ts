@@ -31,6 +31,7 @@ import {
 } from "../_shared/permission-groups.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { resolveCallerAliases, normalizeIdentity } from "../_shared/user-aliases.ts";
+import { canonicalIdentity, emailLocalPart, normalizeText } from "../_shared/text-normalize.ts";
 
 const BUCKET = "expense-attachments";
 const SIGN_TTL_SECONDS = 300;
@@ -50,23 +51,11 @@ function json(status: number, body: unknown) {
   });
 }
 
-function normalize(s: unknown): string {
-  return String(s ?? "").toLowerCase().trim();
-}
-function emailPrefix(v: string): string {
-  const s = normalize(v);
-  const i = s.indexOf("@");
-  return i > 0 ? s.slice(0, i) : s;
-}
+const normalize = (s: unknown) => normalizeText(s);
+const emailPrefix = (v: string) => emailLocalPart(v);
 // Canonicalize identifiers so "leonardo.rossini", "Leonardo Rossini" and
 // "leonardo_rossini" all match. Strips accents and non-alphanumerics.
-function canonicalId(v: unknown): string {
-  return emailPrefix(String(v ?? ""))
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "");
-}
+const canonicalId = (v: unknown) => canonicalIdentity(v);
 function callerMatches(caller: string, candidate: unknown): boolean {
   const c = normalize(caller);
   const v = normalize(candidate);

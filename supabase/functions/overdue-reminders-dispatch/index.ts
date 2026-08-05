@@ -6,6 +6,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { logNotificationAudit } from "../_shared/approval-notify.ts";
 import { getChannelSettings } from "../_shared/notification-channels.ts";
+import { normalizeText } from "../_shared/text-normalize.ts";
 
 
 const corsHeaders = {
@@ -108,12 +109,7 @@ function isWithinWindow(s: Settings): boolean {
   return true;
 }
 
-const slug = (s: string) =>
-  s
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
+const slug = (s: string) => normalizeText(s);
 
 function identityParts(value?: string | null): Set<string> {
   const normalized = slug(value || "");

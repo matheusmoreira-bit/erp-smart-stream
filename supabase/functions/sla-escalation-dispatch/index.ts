@@ -7,6 +7,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { notifyApprovalPending } from "../_shared/approval-notify.ts";
+import { emailLocalPart, normalizeText, stripDiacritics as baseStripDiacritics, tokenizePerson } from "../_shared/text-normalize.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -34,15 +35,10 @@ interface Settings {
   notify_email: boolean;
 }
 
-const norm = (s: unknown) => String(s ?? "").toLowerCase().trim();
-const stripAccents = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-const emailPrefix = (s: string) => {
-  const v = norm(s);
-  const i = v.indexOf("@");
-  return i > 0 ? v.slice(0, i) : v;
-};
-const tokens = (s: string) =>
-  stripAccents(norm(s)).replace(/[._\-@]+/g, " ").split(/\s+/).filter(Boolean);
+const norm = (s: unknown) => normalizeText(s);
+const stripAccents = (s: string) => baseStripDiacritics(s);
+const emailPrefix = (s: string) => emailLocalPart(s);
+const tokens = (s: string) => tokenizePerson(s);
 
 /** Compara duas identidades (nome ou e-mail) de forma tolerante. */
 function sameIdentity(a: string | null | undefined, b: string | null | undefined): boolean {
