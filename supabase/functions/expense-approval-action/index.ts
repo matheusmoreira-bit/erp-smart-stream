@@ -29,7 +29,7 @@ import { notifyApprovalPending } from "../_shared/approval-notify.ts";
 import { notifyActionCompleted } from "../_shared/action-notify.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { resolveCallerAliases, normalizeIdentity } from "../_shared/user-aliases.ts";
-import { emailLocalPart, normalizeText, stripDiacritics as baseStripDiacritics, tokenizePerson } from "../_shared/text-normalize.ts";
+import { emailLocalPart, identityMatches, normalizeText, stripDiacritics as baseStripDiacritics, tokenizePerson } from "../_shared/text-normalize.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -107,6 +107,8 @@ function isDesignatedApprover(
   if (ae) {
     if (c === ae) return true;
     if (emailPrefix(c) === emailPrefix(ae) && emailPrefix(ae).length > 0) return true;
+    // Contas externas/serviço (.ext) representam a mesma pessoa.
+    if (identityMatches(c, ae)) return true;
   }
 
   const nameTokens = tokenize(approverName || "");
