@@ -1163,7 +1163,7 @@ export default function SalesNfse() {
                         {formatCurrency(Number(o.total_amount), o.currency)}
                       </td>
                       <td className="px-3 py-2">
-                        {inv?.status === "authorized" ? (
+                        {inv?.status === "authorized" && emitted ? (
                           <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-500">
                             <CheckCircle2 className="w-3 h-3" />
                             NFS-e {inv.nfse_number}
@@ -1172,8 +1172,13 @@ export default function SalesNfse() {
                         ) : emitted ? (
                           <Badge variant="outline" className="gap-1">
                             <Loader2 className="w-3 h-3" />
-                            Emitida (doc {inv?.sap_invoice_doc_num}) · aguardando autorização
+                            Emitida (doc {emission.docNum ?? "—"}) · aguardando autorização
                           </Badge>
+                        ) : emission.localStale ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-amber-500">
+                            <AlertTriangle className="w-3 h-3" />
+                            Nota cancelada no ERP — reemitir
+                          </span>
                         ) : inv?.status === "failed" ? (
                           <span className="inline-flex items-center gap-1 text-xs text-destructive">
                             <AlertTriangle className="w-3 h-3" />
