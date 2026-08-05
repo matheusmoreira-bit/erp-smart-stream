@@ -891,6 +891,26 @@ export default function SalesNfse() {
     return map;
   }, [invoices]);
 
+  /**
+   * Situação real da emissão, validada contra o ERP:
+   * - se o ERP tem uma NF ativa originada no pedido, está emitida;
+   * - o registro local só vale se a nota ainda existir (não cancelada) no ERP.
+   */
+  const emissionFor = useCallback(
+    (order: SalesOrderRow, inv: NfseRow | null | undefined) => {
+      const sapInv = order.sap_doc_entry ? sapInvoices.byOrder.get(Number(order.sap_doc_entry)) : undefined;
+      const localEntry = inv?.sap_invoice_doc_entry ?? null;
+      const localValid =
+        !!localEntry && (!sapInvoices.available || sapInvoices.entries.has(Number(localEntry)));
+      return {
+        emitted: !!sapInv || localValid,
+        docNum: sapInv?.docNum ?? (localValid ? inv?.sap_invoice_doc_num ?? null : null),
+        localStale: !!localEntry && !localValid && !sapInv,
+      };
+    },
+    [sapInvoices],
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let base = orders;
