@@ -222,6 +222,22 @@ Deno.serve(async (req) => {
                 .update({ last_error: String(item.error).slice(0, 1000) })
                 .eq("id", row.id);
             }
+          } else if (body?.force) {
+            // Re-enfileira: alguns serviços fiscais só reprocessam quando o UDF
+            // volta a 0 e é marcado novamente (equivale a clicar "Enviar NFS-e").
+            const reset = await fetch(`${baseUrl}/Invoices(${docEntry})`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json", Cookie: cookies },
+              body: JSON.stringify({ U_XmlServiceStatus: "0" }),
+            });
+            const again = await fetch(`${baseUrl}/Invoices(${docEntry})`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json", Cookie: cookies },
+              body: JSON.stringify({ U_XmlServiceStatus: "1" }),
+            });
+            item.action = reset.ok && again.ok
+              ? "reenfileirada para transmissão"
+              : `falha ao reenfileirar (${reset.status}/${again.status})`;
           } else {
             item.action = "já estava na fila do addon";
           }
