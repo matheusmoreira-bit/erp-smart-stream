@@ -172,6 +172,14 @@ export function CreateExpenseModal({
    *  destacada visualmente como "provavelmente precisa de revisão". */
   lowAiConfidenceThreshold?: number;
 }) {
+  // Vendas: itens de receita liberados no formulário de pedido de venda.
+  const SALES_ALLOWED_ITEMS = ["SV0003", "SV0006"];
+  // Vendas: utilizações (NotaFiscalUsage) liberadas.
+  const SALES_ALLOWED_USAGES = [
+    "01-Rec Cactus Plat",
+    "02-Rec Cactus Comiss",
+    "03-Rec Cactus Distr",
+  ];
   const isSales = mode === "sales";
 
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
