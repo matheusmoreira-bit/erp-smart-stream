@@ -71,7 +71,18 @@ export function DocumentMilestonesDialog({ expenseId, open, onOpenChange }: Prop
           </div>
         )}
         {!loading && error && <p className="py-6 text-sm text-destructive text-center">{error}</p>}
-        {!loading && !error && expense && <ExpenseEventHistory expense={expense} />}
+        {!loading && !error && expense && (
+          <>
+            <ExpenseEventHistory expense={expense} />
+            <section className="mt-4">
+              <h3 className="text-sm font-semibold mb-2">Notificações enviadas</h3>
+              <p className="text-xs text-muted-foreground mb-2">
+                Quem foi notificado e por qual regra essa pessoa foi resolvida como aprovador atual.
+              </p>
+              <NotificationAuditTrail expenseId={expense.id as string} />
+            </section>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
