@@ -976,7 +976,11 @@ export default function SalesNfse() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok || body?.error) throw new Error(body?.error || `Falha ao emitir (${res.status})`);
-      toast.success(`NFS-e criada no ERP — documento ${body.doc_num}`);
+      toast.success(
+        body?.auto_send
+          ? `NFS-e criada e enviada à prefeitura — documento ${body.doc_num}`
+          : `NFS-e criada no ERP — documento ${body.doc_num} (envio automático não concluído, transmita pelo ERP)`,
+      );
       setConfirmOrder(null);
       await load();
     } catch (e) {

@@ -287,6 +287,34 @@ Deno.serve(async (req) => {
       return json({ error: `SAP Invoices falhou [${res.status}]: ${String(msg).slice(0, 400)}` }, 400);
     }
 
+    /* ── Envio automático da NFS-e (addon fiscal) ──────────────────────
+       O botão "Enviar NFS-e" do addon apenas marca o documento para o
+       serviço fiscal transmitir. Fazemos o mesmo via Service Layer,
+       marcando o UDF de fila de transmissão. Não é fatal: se a base não
+       tiver o campo (ou o serviço estiver desligado), a nota continua
+       criada e o envio pode ser feito manualmente no ERP.
+       Desativável por empresa com a credencial `nfse_autosend = false`. */
+    let autoSend: { ok: boolean; detail?: string } = { ok: false, detail: "desativado" };
+    if (String(creds.nfse_autosend ?? "true").toLowerCase() !== "false") {
+      try {
+        const sendRes = await fetch(`${baseUrl}/Invoices(${Number(invoice.DocEntry)})`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Cookie: session.cookies },
+          body: JSON.stringify({ U_XmlServiceStatus: "1" }),
+        });
+        if (sendRes.ok) {
+          autoSend = { ok: true };
+        } else {
+          const t = await sendRes.text().catch(() => "");
+          autoSend = { ok: false, detail: `HTTP ${sendRes.status}: ${t.slice(0, 200)}` };
+        }
+      } catch (e) {
+        autoSend = { ok: false, detail: (e as Error).message?.slice(0, 200) };
+      }
+      if (!autoSend.ok) console.error("sales-nfse-emit auto-send falhou", autoSend.detail);
+    }
+
+
     const { data: inserted, error: insErr } = await supabase
       .from("sales_order_invoices")
       .insert({
@@ -301,6 +329,7 @@ Deno.serve(async (req) => {
         total_amount: Number(invoice.DocTotal ?? expense.total_amount ?? 0),
         currency: invoice.DocCurrency || expense.currency || "BRL",
         status: "issued",
+        last_error: autoSend.ok ? null : `Envio automático não concluído — enviar manualmente no ERP (${autoSend.detail ?? ""})`.slice(0, 1000),
         created_by_email: (auth as { email?: string })?.email ?? null,
       })
       .select("id")
@@ -327,6 +356,8 @@ Deno.serve(async (req) => {
       id: inserted?.id ?? null,
       doc_entry: Number(invoice.DocEntry),
       doc_num: Number(invoice.DocNum),
+      auto_send: autoSend.ok,
+      auto_send_detail: autoSend.ok ? null : autoSend.detail ?? null,
     });
   } catch (e) {
     console.error("sales-nfse-emit error", e);
