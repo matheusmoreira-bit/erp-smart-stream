@@ -952,6 +952,82 @@ export default function SalesNfse() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Diagnóstico da integração com o ERP */}
+      <Dialog open={!!detailOrder} onOpenChange={(open) => !open && setDetailOrder(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Status da integração no ERP</DialogTitle>
+            <DialogDescription>
+              {detailOrder?.supplier_name} · {formatCurrency(detailOrder?.total_amount || 0, detailOrder?.currency)}
+            </DialogDescription>
+          </DialogHeader>
+
+          {detailOrder && (
+            <div className="space-y-3 text-sm">
+              <div className="rounded-md border border-border/60 p-3">
+                <div className="font-medium">
+                  {SYNC_STATE_LABEL[detailOrder.sap_sync_state || ""]?.label ||
+                    (detailOrder.sap_doc_entry ? "Integrado" : "Ainda não enviado ao ERP")}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {SYNC_STATE_LABEL[detailOrder.sap_sync_state || ""]?.hint ||
+                    "Nenhuma tentativa de integração registrada até o momento. Use “Reintegrar” para enviar o pedido ao ERP."}
+                </p>
+              </div>
+
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                <dt className="text-muted-foreground">DocEntry no ERP</dt>
+                <dd className="font-mono">{detailOrder.sap_doc_entry ?? "não gerado"}</dd>
+                <dt className="text-muted-foreground">Estado técnico</dt>
+                <dd className="font-mono">{detailOrder.sap_sync_state || "—"}</dd>
+                <dt className="text-muted-foreground">Tentativas</dt>
+                <dd>{detailOrder.sap_sync_attempts ?? 0}</dd>
+                <dt className="text-muted-foreground">Última tentativa</dt>
+                <dd>{formatDateTime(detailOrder.sap_integration_last_attempt_at)}</dd>
+                <dt className="text-muted-foreground">Próxima retentativa</dt>
+                <dd>{formatDateTime(detailOrder.sap_sync_next_retry_at)}</dd>
+                <dt className="text-muted-foreground">Bloqueio em processamento</dt>
+                <dd>{formatDateTime(detailOrder.sap_integration_locked_at)}</dd>
+              </dl>
+
+              {detailOrder.sap_integration_error && (
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3">
+                  <div className="text-xs font-medium text-destructive">Mensagem retornada pelo ERP</div>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-xs">
+                    {detailOrder.sap_integration_error}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDetailOrder(null)}>
+              Fechar
+            </Button>
+            {detailOrder && !detailOrder.sap_doc_entry && detailOrder.source === "erp_flow" && (
+              <Button
+                className="gap-2"
+                disabled={retryingFor === detailOrder.id}
+                onClick={() => {
+                  const target = detailOrder;
+                  setDetailOrder(null);
+                  void retryIntegration(target);
+                }}
+              >
+                {retryingFor === detailOrder.id ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
+                Reintegrar
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+
   );
 }
