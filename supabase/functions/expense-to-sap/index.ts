@@ -1190,6 +1190,9 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       // o nome do solicitante fica preservado nas Observações (Comments).
       Comments: truncateSapText(
         (() => {
+          const remarks = String((expense as any).remarks || "").trim();
+          // Pedidos de venda: usar a observação informada no próprio pedido.
+          if (isSales && remarks) return remarks;
           const pcTx: any = (pagcorpLog as any)?.transaction || null;
           const holder = pcTx
             ? (pcTx.cardName || pcTx.accountAlias || pcTx.accountName || "").toString().trim()
@@ -1198,10 +1201,11 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
             ? `PagCorp${holder ? ` ${holder}` : ""}`
             : `${isSales ? "Pedido de venda" : "Despesa interna"} #${expense.id.slice(0, 8)}`;
           const solicitanteTag = requesterCode ? ` [Solicitante: ${requesterCode}]` : "";
-          return `${prefix} — ${expense.requester_name}${solicitanteTag}${expense.remarks ? ` — ${expense.remarks}` : ""}`;
+          return `${prefix} — ${expense.requester_name}${solicitanteTag}${remarks ? ` — ${remarks}` : ""}`;
         })(),
         190,
       ),
+
       // Campo dedicado no SAP (UDF) — quando existir na base, permite filtrar
       // pelos pedidos criados por um usuário específico sem depender do texto.
       ...(requesterCode ? { U_FGR_SOLICITANTE: truncateSapText(requesterCode, 50) } : {}),
