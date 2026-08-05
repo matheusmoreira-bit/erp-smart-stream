@@ -3278,8 +3278,9 @@ export function CreateExpenseModal({
                       portalContainer={dialogContainer}
                     />
                     <CachedSearchCombobox
-                      label={`Projeto (Dimensão)${isSales ? "" : " *"}`}
-                      required={!isSales}
+                      label="Projeto (Dimensão) *"
+                      required
+
 
                       options={projectOptions}
                       isLoading={projectsLoading}
