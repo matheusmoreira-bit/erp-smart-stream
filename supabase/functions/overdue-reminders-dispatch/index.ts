@@ -441,9 +441,32 @@ Deno.serve(async (req) => {
           status: res.ok ? "sent" : "error",
           response: `${res.status} ${res.body}`.slice(0, 1000),
         });
+        await logNotificationAudit(sb, {
+          expenseId: exp.id,
+          companyDb: exp.company_db,
+          docType: (exp as any).doc_type ?? null,
+          channel: "whatsapp",
+          recipient: phone,
+          recipientName: r.nameCandidates.find(Boolean) || null,
+          recipientRole: r.role,
+          eventKey: "overdue_reminder",
+          status: res.ok ? "sent" : "error",
+          amount: (exp as any).total_amount ?? null,
+          currency: (exp as any).currency ?? null,
+          resolution: {
+            source: r.role === "approver" ? "current_approver" : `reminder_${r.role}`,
+            reason: r.role === "approver"
+              ? `Aprovador atual do documento (${(exp as any).current_approver || "—"}) — lembrete de vencimento`
+              : `Destinatário configurado nas regras de lembrete (papel: ${r.role})`,
+            ruleId: (exp as any).approval_rule_id || null,
+            costCenter: (exp as any).cost_center || null,
+            project: (exp as any).project || null,
+          },
+        });
         if (res.ok) sent++;
         else skipped++;
         details.push({ id: exp.id, role: r.role, phone, sent: res.ok });
+
       }
     }
 
