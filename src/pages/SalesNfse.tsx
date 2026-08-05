@@ -30,6 +30,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { expenseRead } from "@/lib/expense-read";
+import { logAuditAction } from "@/hooks/useAuditLog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -323,6 +334,7 @@ export default function SalesNfse() {
   const [xmlLoadingFor, setXmlLoadingFor] = useState<string | null>(null);
   const [retryingFor, setRetryingFor] = useState<string | null>(null);
   const [detailOrder, setDetailOrder] = useState<SalesOrderRow | null>(null);
+  const [retryTarget, setRetryTarget] = useState<SalesOrderRow | null>(null);
   const uploadTargetRef = useRef<{ order: SalesOrderRow; inv: NfseRow | null } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -495,6 +507,12 @@ export default function SalesNfse() {
     async (order: SalesOrderRow) => {
       if (order.source !== "erp_flow" || order.sap_doc_entry) return;
       setRetryingFor(order.id);
+      const auditBase = {
+        entity_type: "sales_order",
+        entity_id: order.id,
+        actor_email: session?.userName || undefined,
+        company_db: companyDb || undefined,
+      };
       try {
         const res = await sapFunctionFetch("expense-to-sap", {
           method: "POST",
@@ -505,15 +523,37 @@ export default function SalesNfse() {
         if (!res.ok || (data && data.success === false)) {
           throw new Error(data?.error || `Falha na integração (HTTP ${res.status})`);
         }
+        await logAuditAction({
+          ...auditBase,
+          action: "sales_order_retry_integration",
+          details: {
+            result: "success",
+            supplier_name: order.supplier_name,
+            sap_doc_num: order.sap_doc_num,
+            attempts_before: order.sap_sync_attempts ?? null,
+          },
+        });
         toast.success("Integração solicitada — pedido enviado ao ERP");
         await load();
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Falha ao solicitar integração");
+        const message = e instanceof Error ? e.message : "Falha ao solicitar integração";
+        await logAuditAction({
+          ...auditBase,
+          action: "sales_order_retry_integration",
+          details: {
+            result: "error",
+            error: message,
+            supplier_name: order.supplier_name,
+            sap_doc_num: order.sap_doc_num,
+            attempts_before: order.sap_sync_attempts ?? null,
+          },
+        });
+        toast.error(message);
       } finally {
         setRetryingFor(null);
       }
     },
-    [load],
+    [load, session?.userName, companyDb],
   );
 
 
@@ -870,7 +910,7 @@ export default function SalesNfse() {
                                   className="h-6 gap-1 px-1.5 text-[11px]"
                                   disabled={retryingFor === o.id}
                                   title="Solicitar novamente a integração deste pedido no ERP"
-                                  onClick={() => void retryIntegration(o)}
+                                  onClick={() => setRetryTarget(o)}
                                 >
                                   {retryingFor === o.id ? (
                                     <Loader2 className="w-3 h-3 animate-spin" />
@@ -1203,7 +1243,7 @@ export default function SalesNfse() {
                 onClick={() => {
                   const target = detailOrder;
                   setDetailOrder(null);
-                  void retryIntegration(target);
+                  setRetryTarget(target);
                 }}
               >
                 {retryingFor === detailOrder.id ? (
@@ -1217,6 +1257,55 @@ export default function SalesNfse() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Confirmação antes de reintegrar (evita cliques acidentais) */}
+      <AlertDialog open={!!retryTarget} onOpenChange={(open) => !open && setRetryTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reintegrar pedido no ERP?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  O pedido será reenviado ao ERP agora. Confirme os dados antes de prosseguir — a ação
+                  fica registrada na auditoria.
+                </p>
+                {retryTarget && (
+                  <ul className="rounded-md border p-2 text-xs">
+                    <li>
+                      <span className="text-muted-foreground">Cliente: </span>
+                      {retryTarget.supplier_name}
+                    </li>
+                    <li>
+                      <span className="text-muted-foreground">Valor: </span>
+                      {formatCurrency(retryTarget.total_amount, retryTarget.currency)}
+                    </li>
+                    <li>
+                      <span className="text-muted-foreground">Data: </span>
+                      {formatDate(retryTarget.doc_date)}
+                    </li>
+                    <li>
+                      <span className="text-muted-foreground">Tentativas anteriores: </span>
+                      {retryTarget.sap_sync_attempts ?? 0}
+                    </li>
+                  </ul>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const target = retryTarget;
+                setRetryTarget(null);
+                if (target) void retryIntegration(target);
+              }}
+            >
+              Confirmar reintegração
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
 
   );
