@@ -1898,6 +1898,42 @@ export type Database = {
         }
         Relationships: []
       }
+      cost_center_redirects: {
+        Row: {
+          company_db: string
+          created_at: string
+          from_cost_center: string
+          id: string
+          is_active: boolean
+          reason: string | null
+          to_cost_center: string
+          to_project: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          from_cost_center: string
+          id?: string
+          is_active?: boolean
+          reason?: string | null
+          to_cost_center: string
+          to_project?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          from_cost_center?: string
+          id?: string
+          is_active?: boolean
+          reason?: string | null
+          to_cost_center?: string
+          to_project?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       document_drafts: {
         Row: {
           company_db: string
