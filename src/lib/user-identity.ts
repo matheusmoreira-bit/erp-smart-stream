@@ -16,7 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { displayUserName } from "@/lib/user-display";
 
 export { canonicalUserKey } from "@/lib/text-normalize";
-import { canonicalUserKey, normalizeText } from "@/lib/text-normalize";
+import { canonicalUserKey, normalizeCompact } from "@/lib/text-normalize";
 
 /** Duas identidades (e-mail, UserCode, nome de login) são a mesma pessoa? */
 export function sameUser(a: unknown, b: unknown): boolean {
