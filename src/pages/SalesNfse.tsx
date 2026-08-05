@@ -1127,8 +1127,28 @@ export default function SalesNfse() {
             </DialogDescription>
           </DialogHeader>
 
-          {detailOrder && (
+          {detailOrder && (() => {
+            const cause = diagnoseBlock(detailOrder);
+            const tone =
+              cause.severity === "error"
+                ? "border-destructive/40 bg-destructive/5"
+                : cause.severity === "warning"
+                  ? "border-amber-500/40 bg-amber-500/5"
+                  : "border-border/60";
+            return (
             <div className="space-y-3 text-sm">
+              <div className={`rounded-md border p-3 ${tone}`}>
+                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                  Causa do bloqueio
+                </div>
+                <div className="mt-0.5 font-medium">{cause.category}</div>
+                <p className="mt-1 whitespace-pre-wrap break-words text-xs">{cause.detail}</p>
+                <p className="mt-2 text-xs">
+                  <span className="font-medium">Como corrigir: </span>
+                  {cause.fix}
+                </p>
+              </div>
+
               <div className="rounded-md border border-border/60 p-3">
                 <div className="font-medium">
                   {SYNC_STATE_LABEL[detailOrder.sap_sync_state || ""]?.label ||
@@ -1139,6 +1159,7 @@ export default function SalesNfse() {
                     "Nenhuma tentativa de integração registrada até o momento. Use “Reintegrar” para enviar o pedido ao ERP."}
                 </p>
               </div>
+
 
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                 <dt className="text-muted-foreground">DocEntry no ERP</dt>
