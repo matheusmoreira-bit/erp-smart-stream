@@ -173,6 +173,7 @@ export function CreateExpenseModal({
   lowAiConfidenceThreshold?: number;
 }) {
   const isSales = mode === "sales";
+
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
   // Capacidade do GRUPO: cadastrar direto no ERP ou apenas solicitar cadastro.
   const { has: hasCapability, isPrivileged: isPrivilegedUser } = useMyCapabilities();
