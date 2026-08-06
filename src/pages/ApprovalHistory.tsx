@@ -18,6 +18,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Checkbox } from "@/components/ui/checkbox";
 import { RelationsMap } from "@/components/RelationsMap";
 import { PageTitle } from "@/components/PageTitle";
+import { PageHeader } from "@/components/PageHeader";
+
 import { displayUserName } from "@/lib/user-display";
 import { ChevronDown } from "lucide-react";
 
