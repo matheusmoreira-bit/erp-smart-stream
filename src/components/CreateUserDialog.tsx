@@ -45,6 +45,7 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
   const [password, setPassword] = useState(() => generateStrongPassword(16));
   const [passwordMode, setPasswordMode] = useState<PasswordMode>("auto");
   const [showPassword, setShowPassword] = useState(false);
+  const [sendCredentials, setSendCredentials] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<ReplicationResult[] | null>(null);
   const policy = checkPasswordPolicy(password, userCode);
