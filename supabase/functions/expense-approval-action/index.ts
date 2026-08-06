@@ -519,7 +519,7 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
   // ── Load expense ───────────────────────────────────────────────────────
   const { data: exp, error: expErr } = await admin
     .from("expenses")
-    .select("id, approval_rule_id, current_level_order, status, current_approver, requester_name, requester_email, supplier_name, total_amount, currency, company_db, doc_type, sap_doc_entry")
+    .select("id, approval_rule_id, current_level_order, status, current_approver, requester_name, requester_email, supplier_name, supplier_code, cost_center, project, total_amount, currency, company_db, doc_type, sap_doc_entry")
     .eq("id", expenseId)
     .maybeSingle();
   if (expErr) {
