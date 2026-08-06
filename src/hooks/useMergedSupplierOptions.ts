@@ -184,9 +184,13 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
       $select: "CardCode,CardName,AliasName,Currency,Frozen",
       $filter: `CardType eq '${cardType}'`,
     },
-    // Só ativa o fallback via Service Layer se o HANA já respondeu e não
-    // trouxe dados (empresa sem Apiuser, ou erro na view).
-    enabled: hanaLoaded && (hanaOptions === null || hanaOptions.length === 0),
+    // Ativa o fallback via Service Layer assim que sabemos que o HANA não tem
+    // dados para esta empresa. Quando já sabemos disso pelo cache em memória,
+    // a lista começa a carregar em paralelo, sem esperar o round-trip do HANA.
+    enabled:
+      (hanaOptions === null || hanaOptions.length === 0) &&
+      (hanaLoaded || hanaMemory.get(`${hanaCacheKey}:${companyDb}`)?.rows.length === 0),
+
     mapRow: (row: any) =>
       ({
         code: row.CardCode,
