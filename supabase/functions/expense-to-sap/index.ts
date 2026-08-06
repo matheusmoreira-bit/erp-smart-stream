@@ -1186,26 +1186,18 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       DocDueDate: dueDate,
       TaxDate: docDate,
       BPL_IDAssignedToInvoice: branchId,
-      // Fallback: quando o SAP não tiver o UDF U_FGR_SOLICITANTE configurado,
-      // o nome do solicitante fica preservado nas Observações (Comments).
+      // Observação enviada ao SAP: "{código da despesa} - {observação}",
+      // limitada a 190 caracteres.
       Comments: truncateSapText(
         (() => {
           const remarks = String((expense as any).remarks || "").trim();
-          // Pedidos de venda: usar a observação informada no próprio pedido.
-          // Sem observação, usar texto padrão.
-          if (isSales) return remarks || "Referente aos serviços prestados";
-          const pcTx: any = (pagcorpLog as any)?.transaction || null;
-          const holder = pcTx
-            ? (pcTx.cardName || pcTx.accountAlias || pcTx.accountName || "").toString().trim()
-            : "";
-          const prefix = (expense as any).origin === "pagcorp" || pcTx
-            ? `PagCorp${holder ? ` ${holder}` : ""}`
-            : `${isSales ? "Pedido de venda" : "Despesa interna"} #${expense.id.slice(0, 8)}`;
-          const solicitanteTag = requesterCode ? ` [Solicitante: ${requesterCode}]` : "";
-          return `${prefix} — ${expense.requester_name}${solicitanteTag}${remarks ? ` — ${remarks}` : ""}`;
+          const code = String(expense.id).slice(0, 8).toUpperCase();
+          const text = remarks || (isSales ? "Referente aos serviços prestados" : "");
+          return text ? `${code} - ${text}` : code;
         })(),
         190,
       ),
+
 
       // Campo dedicado no SAP (UDF) — quando existir na base, permite filtrar
       // pelos pedidos criados por um usuário específico sem depender do texto.
