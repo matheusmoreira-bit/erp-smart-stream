@@ -579,7 +579,17 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
     }
     const totalAmount = items.reduce((s, it) => s + Number(it.line_total || 0), 0);
     updates.total_amount = totalAmount;
+
+    // Cabeçalho segue as linhas: ao editar CC/projeto dos itens, o header é
+    // recalculado (primeiro valor distinto) para não exibir dado antigo.
+    const uniq = (vals: unknown[]) =>
+      Array.from(new Set(vals.map((v) => String(v ?? "").trim()).filter(Boolean)));
+    const lineProjects = uniq(items.map((it: any) => it?.project));
+    const lineCcs = uniq(items.map((it: any) => it?.cost_center));
+    if (input.project === undefined && lineProjects.length > 0) updates.project = lineProjects[0];
+    if (input.cost_center === undefined && lineCcs.length > 0) updates.cost_center = lineCcs[0];
   }
+
   if (editableForFix) updates.sap_integration_error = null;
 
 
