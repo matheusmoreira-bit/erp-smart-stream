@@ -45,6 +45,8 @@ interface Caller {
   aliases: Set<string>;
 }
 
+let authPhaseTimings: Record<string, number> = {};
+
 const CALLER_TTL_MS = 300_000;
 const callerCache = new Map<string, { expiresAt: number; value: Caller }>();
 
@@ -64,6 +66,7 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
   let id: string | undefined;
   let privileged = false;
 
+  const tIdent = Date.now();
   const [cloudUser, sap] = await Promise.all([
     requireUser(req).catch((e) => {
       if (!(e instanceof AuthError)) throw e;
@@ -83,6 +86,7 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
     if (sap.userName.toLowerCase() === "manager") privileged = true;
   }
 
+  const tWave = Date.now();
   // Todas as consultas de identidade/permissão em UMA rodada paralela.
   // (Antes eram até 5 idas sequenciais ao banco — ~1,3 s só de autenticação.)
   const [adminRole, sapAdmin, viewAll, branch, aliases] = await Promise.all([
@@ -108,6 +112,7 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
     }),
   ]);
 
+  authPhaseTimings = { identify_ms: tWave - tIdent, perms_ms: Date.now() - tWave };
   privileged = privileged || adminRole || sapAdmin || viewAll;
   const directorateBranch = privileged ? null : branch;
 
@@ -198,7 +203,7 @@ Deno.serve(async (req) => {
         directorate_branch: caller.directorateBranch,
         generated_at: new Date().toISOString(),
         took_ms: Date.now() - startedAt,
-        timings: { auth_ms: authMs, data_ms: Date.now() - tQuery },
+        timings: { auth_ms: authMs, data_ms: Date.now() - tQuery, ...authPhaseTimings },
       },
       cors,
     );
