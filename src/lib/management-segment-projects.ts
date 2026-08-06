@@ -1,4 +1,4 @@
-import type { ManagementSegment } from "@/hooks/useManagementSegments";
+import { segmentsForCompany, type ManagementSegment } from "@/hooks/useManagementSegments";
 import { normalizeCompact } from "@/lib/text-normalize";
 
 /**
