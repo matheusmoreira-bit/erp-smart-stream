@@ -90,6 +90,8 @@ import { RelationsMap } from "@/components/RelationsMap";
 
 import {
   useExpenses,
+  type ServerQuery,
+  type ServerFilter,
   STATUS_LABELS,
   useStatusLabel,
   STATUS_COLORS,
@@ -882,7 +884,11 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const erpLabel = getErpShortLabel(session?.erpType);
   const { isAdmin: isLovableAdmin } = useAuth();
   const navigate = useNavigate();
-  const { expenses, isLoading, error, refresh, createExpense, updateExpense, submitForApproval, cancelExpense, reactivateExpense, retrySapIntegration, approveExpense, rejectExpense, addAttachments } = useExpenses(mode);
+  // Consulta paginada no servidor: montada mais abaixo (depende dos filtros) e
+  // aplicada pelo hook — evita trazer a lista inteira da empresa para o browser.
+  const [serverQuery, setServerQuery] = useState<ServerQuery | null>(null);
+  const { expenses, total: flowTotal, sapKeys: serverSapKeys, isLoading, error, refresh, createExpense, updateExpense, submitForApproval, cancelExpense, reactivateExpense, retrySapIntegration, approveExpense, rejectExpense, addAttachments } = useExpenses(mode, { server: serverQuery, waitForServer: true });
+  const serverMode = !!serverQuery;
   const { getLabel } = useCompanies(true);
   // Filtros persistidos por modo (purchase/sales) para manter seleção ao trocar de tela.
   const filterKey = (name: string) => `expenses:${mode}:${name}`;
@@ -892,6 +898,12 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     if (!search) { setIsSearchPending(false); return; }
     setIsSearchPending(true);
     const t = setTimeout(() => setIsSearchPending(false), 250);
+    return () => clearTimeout(t);
+  }, [search]);
+  // Busca com debounce — cada digitação não dispara uma consulta ao servidor.
+  const [searchDebounced, setSearchDebounced] = useState(search);
+  useEffect(() => {
+    const t = setTimeout(() => setSearchDebounced(search), 350);
     return () => clearTimeout(t);
   }, [search]);
   const [filtersOpen, setFiltersOpen] = useState(false);
