@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { identityMatches } from "@/lib/permission-group-utils";
+import { getIsCloudAdmin, getIsSapUserAdmin } from "@/lib/auth-cache";
+
 
 /**
  * Capability key (permission_group_modules.module_key) que libera a visão de
