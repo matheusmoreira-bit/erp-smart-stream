@@ -49,6 +49,7 @@ import SapSyncRuns from "./pages/SapSyncRuns.tsx";
 import BackofficeCopilot from "./pages/BackofficeCopilot.tsx";
 import InfraHealth from "./pages/InfraHealth.tsx";
 import DbPerformance from "./pages/DbPerformance.tsx";
+import FlowPerformance from "./pages/FlowPerformance.tsx";
 import IntegrationHealth from "./pages/IntegrationHealth.tsx";
 import AuditTimeline from "./pages/AuditTimeline.tsx";
 import AccessReview from "./pages/AccessReview.tsx";
@@ -106,6 +107,7 @@ const App = () => (
               <Route path="/backoffice/copiloto" element={<AdminRoute><BackofficeCopilot /></AdminRoute>} />
               <Route path="/backoffice/infra-health" element={<AdminRoute><InfraHealth /></AdminRoute>} />
               <Route path="/backoffice/desempenho-banco" element={<AdminRoute><DbPerformance /></AdminRoute>} />
+              <Route path="/backoffice/performance" element={<AdminRoute><FlowPerformance /></AdminRoute>} />
               <Route path="/backoffice/saude-integracoes" element={<AdminRoute><IntegrationHealth /></AdminRoute>} />
               <Route path="/backoffice/retry-queue" element={<AdminRoute><BackofficeRetryQueue /></AdminRoute>} />
               <Route path="/backoffice/revisao-acessos" element={<AdminRoute><AccessReview /></AdminRoute>} />
