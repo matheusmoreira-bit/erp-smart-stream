@@ -407,7 +407,7 @@ export function useApprovalRules(options?: { backfill?: boolean }) {
         p_details: { name: input.name, doc_type: input.doc_type || "both" } as any,
       });
 
-      await fetchRules();
+      await fetchRules({ force: true });
       return rule;
     },
     [fetchRules, activeCompanyDb]
@@ -463,7 +463,7 @@ export function useApprovalRules(options?: { backfill?: boolean }) {
         p_details: { name: input.name, doc_type: input.doc_type || "both" } as any,
       });
 
-      await fetchRules();
+      await fetchRules({ force: true });
     },
     [fetchRules, activeCompanyDb]
   );
@@ -482,7 +482,7 @@ export function useApprovalRules(options?: { backfill?: boolean }) {
         p_company_db: activeCompanyDb,
         p_details: {} as any,
       });
-      await fetchRules();
+      await fetchRules({ force: true });
     },
     [fetchRules, activeCompanyDb]
   );
@@ -501,7 +501,7 @@ export function useApprovalRules(options?: { backfill?: boolean }) {
         p_company_db: activeCompanyDb,
         p_details: {} as any,
       });
-      await fetchRules();
+      await fetchRules({ force: true });
     },
     [fetchRules, activeCompanyDb]
   );
