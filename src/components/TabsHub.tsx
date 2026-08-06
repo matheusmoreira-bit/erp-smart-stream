@@ -15,7 +15,7 @@ interface TabsHubProps<K extends string> {
   tabs: readonly HubTabDef<K>[];
   active: K;
   moduleLabel?: string;
-  /** Destino do botão voltar (default: "/menu") */
+  /** Destino do botão voltar (default: "/") */
   backTo?: string;
 }
 
@@ -24,7 +24,7 @@ interface TabsHubProps<K extends string> {
  * Renderiza a própria régua de submódulos (não depende do submenu global,
  * que pode não encontrar o host em algumas telas).
  */
-export function TabsHub<K extends string>({ tabs, active, moduleLabel, backTo = "/menu" }: TabsHubProps<K>) {
+export function TabsHub<K extends string>({ tabs, active, moduleLabel, backTo = "/" }: TabsHubProps<K>) {
   const navigate = useNavigate();
   const { userModules } = useModuleAccess();
 
