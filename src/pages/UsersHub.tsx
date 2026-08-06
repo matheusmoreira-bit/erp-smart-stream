@@ -1,3 +1,4 @@
+import UsersPage from "./Users";
 import UserActivity from "./UserActivity";
 import UserProductivity from "./UserProductivity";
 import IdpSync from "./IdpSync";
@@ -20,7 +21,8 @@ type TabKey =
   | "idp";
 
 const TABS: readonly HubTabDef<TabKey>[] = [
-  { key: "list", label: "Gestão de usuários", module: "users", path: "/usuarios/lista", render: () => <UsersPermissions /> },
+  { key: "list", label: "Gestão de usuários", module: "users", path: "/usuarios/lista", render: () => <UsersPage embedded /> },
+  { key: "permissions", label: "Permissões e grupos", module: "users", path: "/usuarios/permissoes", render: () => <UsersPermissions /> },
   { key: "admins", label: "Administradores", module: "users", path: "/usuarios/administradores", render: () => <UsersAdmins /> },
   { key: "sap", label: "Usuários SAP", module: "users", path: "/usuarios/sap", render: () => <SapUsersAdmin /> },
   { key: "idp", label: "Sincronização IdP", module: "users", path: "/usuarios/sincronizacao-idp", render: () => <IdpSync /> },

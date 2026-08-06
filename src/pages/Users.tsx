@@ -52,7 +52,7 @@ function formatLastLogin(user: SapUser): string {
   return `${day}/${month}/${year}${timePart ? `, ${timePart}` : ""}`;
 }
 
-export default function UsersPage() {
+export default function UsersPage({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
   const { session } = useSap();
   const { users, isLoading, error, actionLoading, refresh, toggleLock, resetPassword, createUser } = useSapUsers();
@@ -204,38 +204,50 @@ export default function UsersPage() {
   const currentMsg = confirmAction ? confirmMessages[confirmAction.type] : null;
 
   return (
-    <div className="min-h-screen bg-background">
-      <PageTitle title="Usuários" />
-      <header className="border-b border-border px-6 py-6">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+    <div className={embedded ? "" : "min-h-screen bg-background"}>
+      {!embedded && <PageTitle title="Usuários" />}
+      <header className={embedded ? "px-0 pb-4" : "border-b border-border px-6 py-6"}>
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
-            <Button variant="ghost" size="icon" aria-label="Voltar" onClick={() => navigate("/")}>
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
+            {!embedded && (
+              <Button variant="ghost" size="icon" aria-label="Voltar" onClick={() => navigate("/")}>
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+            )}
             <div className="min-w-0">
-              <h1 className="text-2xl font-bold text-foreground">Gestão de Usuários</h1>
-              <p className="text-sm text-muted-foreground">Gerencie o acesso e senhas dos usuários do SAP</p>
+              <h1 className={embedded ? "text-lg font-semibold text-foreground" : "text-2xl font-bold text-foreground"}>
+                Gestão de Usuários
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                {embedded
+                  ? `Usuários da empresa ${session?.companyDB || ""}`
+                  : "Gerencie o acesso e senhas dos usuários do SAP"}
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
+          <div className="flex items-center gap-2 flex-wrap">
+            {!embedded && <ThemeToggle />}
             <CreateUserDialog onCreateUser={createUser} isLoading={isLoading} />
-            <Button variant="outline" size="sm" onClick={() => navigate("/usuarios/atividade")}>
-              <BarChart3 className="w-4 h-4 mr-2" />
-              Atividade
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/usuarios/produtividade")}>
-              <TrendingUp className="w-4 h-4 mr-2" />
-              Produtividade
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/usuarios/sincronizacao-idp")}>
-              <Users className="w-4 h-4 mr-2" />
-              Sincronização IdP
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/usuarios/licencas")}>
-              <DollarSign className="w-4 h-4 mr-2" />
-              Licenças
-            </Button>
+            {!embedded && (
+              <>
+                <Button variant="outline" size="sm" onClick={() => navigate("/usuarios/atividade")}>
+                  <BarChart3 className="w-4 h-4 mr-2" />
+                  Atividade
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => navigate("/usuarios/produtividade")}>
+                  <TrendingUp className="w-4 h-4 mr-2" />
+                  Produtividade
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => navigate("/usuarios/sincronizacao-idp")}>
+                  <Users className="w-4 h-4 mr-2" />
+                  Sincronização IdP
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => navigate("/usuarios/licencas")}>
+                  <DollarSign className="w-4 h-4 mr-2" />
+                  Licenças
+                </Button>
+              </>
+            )}
             <Button variant="outline" size="sm" onClick={refresh} disabled={isLoading}>
               <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
               Atualizar
@@ -244,7 +256,8 @@ export default function UsersPage() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-6 space-y-4">
+      <main className={embedded ? "max-w-6xl mx-auto space-y-4" : "max-w-6xl mx-auto px-6 py-6 space-y-4"}>
+
         {error && (
           <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">
             {error}
