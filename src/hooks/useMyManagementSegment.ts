@@ -5,7 +5,7 @@ import { useManagementSegments, type ManagementSegment } from "@/hooks/useManage
 /** Segmento de gestão (ANA Gaming / Lótus / CSC) do usuário logado. Padrão: ANA Gaming. */
 export function useMyManagementSegment(): { segment: ManagementSegment; loading: boolean } {
   const { session } = useSap();
-  const { segmentOf, loading } = useManagementSegments();
+  const { segmentOf, loading } = useManagementSegments(session?.companyDB);
   const segment = useMemo(
     () => segmentOf(session?.userName, (session as { email?: string } | null)?.email),
     [segmentOf, session],
