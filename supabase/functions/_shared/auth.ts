@@ -272,8 +272,13 @@ export async function requireAdmin(req: Request) {
   return user;
 }
 
+/** URL do Service Layer por base — muda raramente; cache de 10 min. */
+const sapBaseUrlCache = new Map<string, { expiresAt: number; url: string }>();
+
 // deno-lint-ignore no-explicit-any
 async function getSapBaseUrl(admin: any, companyDB: string): Promise<string> {
+  const cached = sapBaseUrlCache.get(companyDB);
+  if (cached && cached.expiresAt > Date.now()) return cached.url;
   const fallback = Deno.env.get("SAP_DEFAULT_BASE_URL") || "https://jyl32uqm9176-sl.s1p-zona-01-4fd9831d6a58.saas.wevy.cloud/b1s/v2";
   const { data } = await admin
     .from("system_credentials")
