@@ -221,12 +221,16 @@ function ExpenseDetailModal({
   const showCancel = canCancel && (expense.status === "rascunho" || expense.status === "pendente_aprovacao");
   const alreadyInSap = !!(expense.sap_doc_entry || expense.sap_doc_num);
   const hasSapError = !!expense.sap_integration_error && !alreadyInSap;
-  // Edição só permitida enquanto o documento NÃO foi integrado ao ERP.
-  // Após editar, o documento retorna ao fluxo de aprovação (nível 1).
-  const showEdit = canEdit && !alreadyInSap && (
+  // Edição permitida enquanto a NF de entrada NÃO foi lançada no ERP.
+  // Se o documento já está no ERP (pc_lancado), a edição retorna o documento
+  // ao fluxo de aprovação e, ao final, o pedido é atualizado (patch completo)
+  // no ERP para não gerar divergência.
+  const nfLancada = ["nf_entrada", "pagamento", "finalizado"].includes(expense.status);
+  const showEdit = canEdit && !nfLancada && (
     expense.status === "rascunho" ||
     expense.status === "pendente_aprovacao" ||
-    (expense.status === "aprovado" && hasSapError)
+    expense.status === "pc_lancado" ||
+    (expense.status === "aprovado" && (hasSapError || alreadyInSap))
   );
   const showRetrySap = canRetrySap && expense.status === "aprovado" && !expense.sap_doc_entry;
   const showApproval = canApprove && expense.status === "pendente_aprovacao";
