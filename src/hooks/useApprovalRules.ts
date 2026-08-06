@@ -259,7 +259,7 @@ export function normalizeCriteria(criteria: RuleCriterion[] | undefined | null):
 // A matriz muda pouco e é grande (centenas de regras + níveis); telas de
 // leitura passam a renderizar imediatamente enquanto revalidam em segundo plano.
 const rulesCache = new Map<string, { rules: ApprovalRule[]; at: number }>();
-const RULES_TTL_MS = 5 * 60 * 1000;
+const RULES_TTL_MS = 6 * 60 * 60 * 1000; // 6 horas
 
 export function useApprovalRules(options?: { backfill?: boolean }) {
   const backfillEnabled = options?.backfill !== false;
