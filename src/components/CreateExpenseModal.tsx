@@ -58,7 +58,7 @@ import { type ExpenseItem, type CreateExpenseInput, type RateioType, RATEIO_TYPE
 import { SupplierFormModal, type SupplierFormPrefill } from "@/components/SupplierFormModal";
 import { useMyCapabilities } from "@/hooks/useMyCapabilities";
 import { useMyManagementSegment } from "@/hooks/useMyManagementSegment";
-import { filterProjectsBySegment } from "@/lib/management-segment-projects";
+import { filterProjectsBySegment, filterInstitutionalProjects } from "@/lib/management-segment-projects";
 
 
 import { RegistrationRequestModal } from "@/components/RegistrationRequestModal";
@@ -340,6 +340,19 @@ export function CreateExpenseModal({
     myManagementSegment,
     sapSession?.companyDB,
   ]);
+
+  // CC operacional (1.8/1.9/1.10/1.11): esconde projetos institucionais para
+  // quem não é CSC. Vale para todas as empresas.
+  const projectOptionsForCc = useCallback(
+    (ccCode: string | null | undefined) =>
+      filterInstitutionalProjects(projectOptions, myManagementSegment, ccCode),
+    [projectOptions, myManagementSegment],
+  );
+  const headerProjectOptions = useMemo(
+    () => projectOptionsForCc(headerCostCenter?.code ?? null),
+    [projectOptionsForCc, headerCostCenter],
+  );
+
 
 
   // ---- Alerta de casamento Centro de Custo × Projeto (auditável) ----
@@ -3134,7 +3147,7 @@ export function CreateExpenseModal({
               />
               <CachedSearchCombobox
                 label="Projeto (padrão p/ itens)"
-                options={projectOptions}
+                options={headerProjectOptions}
                 isLoading={projectsLoading}
                 value={headerProject}
                 onChange={applyHeaderProject}
@@ -3263,7 +3276,14 @@ export function CreateExpenseModal({
                       onChange={(val) => {
                         setItems((prev) => {
                           const updated = [...prev];
-                          updated[i] = { ...updated[i], sapCostCenter: val, cost_center: val?.code || "" };
+                          const next = { ...updated[i], sapCostCenter: val, cost_center: val?.code || "" };
+                          // CC operacional: limpa projeto institucional selecionado (não-CSC)
+                          const allowed = projectOptionsForCc(val?.code ?? null);
+                          if (next.sapProject && !allowed.some((o) => o.code === next.sapProject?.code)) {
+                            next.sapProject = null;
+                            next.project = "";
+                          }
+                          updated[i] = next;
                           return updated;
                         });
                         maybeTriggerCcAlert(i, val, item.sapProject || null);
@@ -3282,7 +3302,7 @@ export function CreateExpenseModal({
                       required
 
 
-                      options={projectOptions}
+                      options={projectOptionsForCc(item.sapCostCenter?.code ?? item.cost_center)}
                       isLoading={projectsLoading}
                       value={item.sapProject || null}
                       onChange={(val) => {
