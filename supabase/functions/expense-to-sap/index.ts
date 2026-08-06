@@ -1048,7 +1048,14 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       }
     }
 
-    if (expense.sap_doc_entry) {
+    // Documento já existe no SAP. Se ele voltou para "aprovado" (foi editado no
+    // ERP Flow e reaprovado) e ainda não tem NF de entrada lançada, fazemos o
+    // PATCH completo do documento — itens, valores, centros de custo, projeto,
+    // datas e observação — para não gerar divergência entre Flow e ERP.
+    const isPatchMode = !!expense.sap_doc_entry
+      && (body.patch_document === true || String((expense as any).status || "") === "aprovado");
+
+    if (expense.sap_doc_entry && !isPatchMode) {
       const existingAttachmentEntry = Number(expense.sap_attachment_entry || 0);
       if (existingAttachmentEntry > 0) {
         attachmentStatus = "success";
@@ -1081,6 +1088,22 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
+    if (isPatchMode) {
+      // Guard-rails: NF de entrada lançada no Flow ou documento fechado no SAP.
+      const { data: nfRows } = await supabase
+        .from("nf_entrada_imports")
+        .select("status, sap_invoice_draft_id")
+        .eq("expense_id", expenseId);
+      const nfPosted = (nfRows || []).some((r: any) =>
+        r.sap_invoice_draft_id || ["awaiting_invoice", "completed"].includes(String(r.status))
+      );
+      if (nfPosted) {
+        throw new Error("NF de entrada já lançada para este pedido — atualização no ERP não permitida.");
+      }
+      await assertSapDocumentEditable(sap.baseUrl, sap.cookies, sapEndpoint, Number(expense.sap_doc_entry));
+    }
+
 
     // 3. Build Purchase Order payload
     const today = new Date().toISOString().slice(0, 10);
