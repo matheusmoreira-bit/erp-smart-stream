@@ -569,7 +569,9 @@ export function useExpenses(docType: ExpenseDocType = "purchase", options?: { st
           .eq("company_db", activeCompanyDb)
           .eq("doc_type", docType);
         const scoped = statusScope ? base.in("status", statusScope.split(",")) : base;
-        return scoped.order("created_at", { ascending: false });
+        return scoped
+          .include("items", "attachments")
+          .order("created_at", { ascending: false });
       };
 
       let { data, error: err } = await readExpenses();
@@ -586,12 +588,13 @@ export function useExpenses(docType: ExpenseDocType = "purchase", options?: { st
       }
 
 
-      const expenseIds = (data || []).map((e: any) => e.id);
-      let itemsMap: Record<string, ExpenseItem[]> = {};
-      let attachmentsMap: Record<string, ExpenseAttachment[]> = {};
-      if (expenseIds.length > 0) {
-        const [{ data: items }, { data: atts }] = await Promise.all([expenseRead("expense_items").select("*").in("expense_id", expenseIds), expenseRead("expense_attachments").select("*").in("expense_id", expenseIds),
-        ]);
+      const itemsMap: Record<string, ExpenseItem[]> = {};
+      const attachmentsMap: Record<string, ExpenseAttachment[]> = {};
+      {
+        // Itens e anexos vêm na mesma resposta (`include`) — antes eram duas
+        // chamadas extras à edge function por tipo de documento.
+        const items = childItems;
+        const atts = childAttachments;
         if (items) {
           for (const item of items as any[]) {
             if (!itemsMap[item.expense_id]) itemsMap[item.expense_id] = [];
