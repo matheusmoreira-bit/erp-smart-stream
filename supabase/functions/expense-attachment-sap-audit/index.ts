@@ -47,7 +47,7 @@ async function loginSap(creds: Record<string, string>, companyDb: string) {
   console.log(`[audit] login SAP ${db} @ ${baseUrl}`);
   const res = await fetch(`${baseUrl}/Login`, {
     method: "POST",
-    signal: AbortSignal.timeout(20000),
+    signal: AbortSignal.timeout(60000),
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ UserName: user, Password: pass, CompanyDB: db }),
   });
