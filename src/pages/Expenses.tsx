@@ -215,9 +215,12 @@ function ExpenseDetailModal({
   mode?: "purchase" | "sales";
   originBadge?: "erp_flow" | "erp";
   erpLabel?: string;
+  canSyncFromErp?: boolean;
+  onSynced?: () => void;
 }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showPullback, setShowPullback] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const statusLabel = useStatusLabel();
   const isSalesDoc = mode === "sales";
