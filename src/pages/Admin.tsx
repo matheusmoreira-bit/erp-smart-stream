@@ -747,6 +747,7 @@ export default function Admin() {
                     { label: "Saúde das Integrações", icon: Activity, to: "/backoffice/saude-integracoes" },
                     { label: "Infra & Backups", icon: Server, to: "/backoffice/infra-health" },
                     { label: "Desempenho do banco", icon: Database, to: "/backoffice/desempenho-banco" },
+                    { label: "Painel de performance", icon: Gauge, to: "/backoffice/performance" },
                     { label: "Retries SAP", icon: RefreshCw, to: "/backoffice/retry-queue" },
                     { label: "Auditoria de baixas PagCorp", icon: FileCheck2, to: "/backoffice/baixas-pagcorp" },
                     { label: "Revisão de acessos", icon: ShieldCheck, to: "/backoffice/revisao-acessos" },
