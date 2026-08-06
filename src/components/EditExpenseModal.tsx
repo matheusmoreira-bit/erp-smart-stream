@@ -392,7 +392,19 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
           </DialogTitle>
         </DialogHeader>
 
+        {!!(expense?.sap_doc_entry || expense?.sap_doc_num) && (
+          <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+            <span>
+              Este pedido já está lançado no ERP e ainda não tem NF de entrada. As alterações
+              retornam o documento ao fluxo de aprovação e, após a aprovação final, o documento
+              no ERP é atualizado integralmente (itens, valores, centros de custo e projeto).
+            </span>
+          </div>
+        )}
+
         <div className="space-y-4 mt-2">
+
           {/* Fornecedor / Cliente com busca */}
           <div>
             <CachedSearchCombobox
