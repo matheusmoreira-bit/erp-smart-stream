@@ -70,17 +70,17 @@ export async function invalidateSapCache(
     console.warn("invalidateSapCache: failed to purge sap_cache rows", e);
   }
   // Fire in-memory listeners so mounted hooks reload immediately.
-  for (const k of keys) notifyKey(k, companyDb);
+  for (const k of keys) notifyKey(k, companyDb, "hard");
 }
 
 /** Dispara os listeners montados de uma cacheKey (escopo por companyDb). */
-function notifyKey(cacheKey: string, companyDb?: string | null) {
+function notifyKey(cacheKey: string, companyDb: string | null | undefined, mode: InvalidationMode) {
   const set = listeners.get(listenerKey(cacheKey, companyDb));
-  if (set) for (const cb of set) cb();
+  if (set) for (const cb of set) cb(mode);
   // Também avisa listeners que não escoparam por companyDb (raro).
   if (companyDb) {
     const globalSet = listeners.get(listenerKey(cacheKey, null));
-    if (globalSet) for (const cb of globalSet) cb();
+    if (globalSet) for (const cb of globalSet) cb(mode);
   }
 }
 
