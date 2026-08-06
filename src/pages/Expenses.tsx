@@ -1408,7 +1408,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(key); setSortDir(key === "amount" || key === "created" ? "desc" : "asc"); }
   };
-  const sorted = [...filtered].sort((a, b) => {
+  const compareRows = (a: { exp: Expense; origin: string }, b: { exp: Expense; origin: string }) => {
     const dir = sortDir === "asc" ? 1 : -1;
     const va = (() => {
       switch (sortKey) {
@@ -1440,7 +1440,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     if (va < vb) return -1 * dir;
     if (va > vb) return 1 * dir;
     return 0;
-  });
+  };
+  const sorted = [...filtered].sort(compareRows);
 
   // ─── Paginação (mesma página para cards mobile e tabela desktop) ───
   const PAGE_SIZE_OPTIONS = [15, 30, 50, 100] as const;
