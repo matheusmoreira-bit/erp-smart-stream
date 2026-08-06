@@ -87,6 +87,7 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
     setPassword(generateStrongPassword(16));
     setPasswordMode("auto");
     setShowPassword(false);
+    setSendCredentials(true);
     setResults(null);
   };
 
