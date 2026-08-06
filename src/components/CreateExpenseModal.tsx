@@ -3295,7 +3295,7 @@ export function CreateExpenseModal({
                       required
 
 
-                      options={projectOptions}
+                      options={projectOptionsForCc(item.sapCostCenter?.code ?? item.cost_center)}
                       isLoading={projectsLoading}
                       value={item.sapProject || null}
                       onChange={(val) => {
