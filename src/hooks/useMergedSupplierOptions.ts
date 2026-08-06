@@ -48,7 +48,13 @@ interface Options {
   isSales?: boolean;
 }
 
+/** Cache em memória (por aba) da lista HANA — evita refazer a chamada ao reabrir o modal. */
+const hanaMemory = new Map<string, { rows: any[]; at: number }>();
+/** Chamadas em voo, para deduplicar requisições simultâneas. */
+const hanaInflight = new Map<string, Promise<any>>();
+
 export function useMergedSupplierOptions({ companyDb, isSales = false }: Options) {
+
   const { session } = useSap();
 
   // 1) Lista SAP — traz todos, incluindo Frozen, para poder marcá-los.
