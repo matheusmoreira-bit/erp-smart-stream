@@ -2078,14 +2078,29 @@ export default function ApprovalsPage() {
     .filter((e) => e.status === "pendente_aprovacao")
     .map((e) => {
       const doc = mapInternalExpense(e);
-      if (!doc.approverEmail && e.approval_rule_id) {
+      if (e.approval_rule_id) {
         const rule = rulesById.get(e.approval_rule_id);
-        const level = rule?.levels?.find((l: any) => l.level_order === e.current_level_order)
-                    ?? rule?.levels?.[0];
-        if (level?.approver_email) doc.approverEmail = level.approver_email;
+        const levels = (rule?.levels || []).filter(
+          (l: any) => l.level_order === e.current_level_order,
+        );
+        const current = levels.length > 0 ? levels : (rule?.levels || []).slice(0, 1);
+        if (!doc.approverEmail && current[0]?.approver_email) {
+          doc.approverEmail = current[0].approver_email;
+        }
+        // Sempre mostra o(s) aprovador(es) do nível atual da regra — inclusive
+        // quando há aprovadores paralelos (mesmo `level_order`). Uma delegação
+        // explícita em `current_approver` continua tendo precedência.
+        const hasOverride = !!(e.current_approver && e.current_approver.trim());
+        if (!hasOverride && current.length > 0) {
+          const names = current
+            .map((l: any) => displayUserName(l.approver_name || l.approver_email || ""))
+            .filter(Boolean);
+          if (names.length > 0) doc.currentApprover = names.join(" / ");
+        }
       }
       return doc;
     });
+
 
   // Deduplica por chave única — evita mostrar o mesmo lançamento duas vezes
   // quando o usuário é aprovador principal E substituto ativo do aprovador
