@@ -2082,49 +2082,35 @@ export default function ApprovalsPage() {
 
 
   // Merge SAP approvals with internal pending expenses.
-  // Enriquece o `approverEmail` do doc interno olhando o nível atual da regra —
-  // isso torna a filtragem robusta a variações de acento/caixa no
-  // `current_approver` (ex.: "Paula Mourão" vs. userName SAP "paula.mourao").
-  const rulesById = useMemo(() => {
-    const map = new Map<string, typeof rules[number]>();
-    for (const r of rules || []) map.set(r.id, r);
-    return map;
-  }, [rules]);
-
-  const internalPending = (expenses || [])
-    .filter((e) => e.status === "pendente_aprovacao")
-    .map((e) => {
-      const doc = mapInternalExpense(e);
-      if (e.approval_rule_id) {
-        const rule = rulesById.get(e.approval_rule_id);
-        const levels = (rule?.levels || []).filter(
-          (l: any) => l.level_order === e.current_level_order,
-        );
-        const current = levels.length > 0 ? levels : (rule?.levels || []).slice(0, 1);
-        if (!doc.approverEmail && current[0]?.approver_email) {
-          doc.approverEmail = current[0].approver_email;
-        }
-        // Sempre mostra o(s) aprovador(es) do nível atual da regra — inclusive
-        // quando há aprovadores paralelos (mesmo `level_order`). Uma delegação
-        // explícita em `current_approver` continua tendo precedência.
-        const hasOverride = !!(e.current_approver && e.current_approver.trim());
-        if (!hasOverride && current.length > 0) {
-          const names = current
-            .map((l: any) => displayUserName(l.approver_name || l.approver_email || ""))
-            .filter(Boolean);
-          if (names.length > 0) doc.currentApprover = names.join(" / ");
-        }
-        // Lista completa do nível atual — usada para o filtro "Para aprovar",
-        // já que `currentApprover` pode conter vários nomes concatenados.
-        (doc as unknown as { __levelApprovers?: Array<{ name: string; email: string }> }).__levelApprovers =
-          current.map((l: any) => ({
-            name: l.approver_name || "",
-            email: l.approver_email || "",
-          }));
-      }
-
-      return doc;
-    });
+  // Os aprovadores do nível atual já vêm resolvidos pelo servidor
+  // (`level_approvers`) — a tela não precisa mais baixar a matriz inteira só
+  // para descobrir quem aprova cada documento.
+  const internalPending = useMemo(
+    () =>
+      (expenses || [])
+        .filter((e) => e.status === "pendente_aprovacao")
+        .map((e) => {
+          const doc = mapInternalExpense(e);
+          const current = ((e as { level_approvers?: Array<{ name: string; email: string }> })
+            .level_approvers) || [];
+          if (current.length > 0) {
+            if (!doc.approverEmail && current[0]?.email) doc.approverEmail = current[0].email;
+            // Uma delegação explícita em `current_approver` tem precedência.
+            const hasOverride = !!(e.current_approver && e.current_approver.trim());
+            if (!hasOverride) {
+              const names = current
+                .map((l) => displayUserName(l.name || l.email || ""))
+                .filter(Boolean);
+              if (names.length > 0) doc.currentApprover = names.join(" / ");
+            }
+            // Lista completa do nível atual — usada pelo filtro "Para aprovar".
+            (doc as unknown as { __levelApprovers?: Array<{ name: string; email: string }> }).__levelApprovers =
+              current;
+          }
+          return doc;
+        }),
+    [expenses],
+  );
 
 
   // Deduplica por chave única — evita mostrar o mesmo lançamento duas vezes
