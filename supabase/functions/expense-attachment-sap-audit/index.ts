@@ -282,6 +282,21 @@ Deno.serve(async (req) => {
     }
 
     report.push(entry);
+    await admin.from("integration_log").insert({
+      system_name: "sap",
+      action: "expense-attachment-audit",
+      company_db: companyDb,
+      status: (entry.errors?.length || 0) > 0 ? "partial" : "success",
+      duration_ms: Date.now() - startedAt,
+      request_meta: { run_id: runId, dry_run: dryRun, limit },
+      response_meta: {
+        checked: entry.checked,
+        missing: entry.missing,
+        patched: entry.patched,
+        errors: entry.errors,
+        skipped: entry.skipped ?? null,
+      },
+    } as any);
   }
 
   const totals = {
