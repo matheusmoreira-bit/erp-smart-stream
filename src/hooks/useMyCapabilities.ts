@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import { identityMatches } from "@/lib/permission-group-utils";
+import {
+  getIsCloudAdmin,
+  getIsSapUserAdmin,
+  getGroupAssignments,
+  getGroupModules,
+} from "@/lib/auth-cache";
+
 
 export interface MyCapabilities {
   /** Capacidades ligadas em pelo menos um grupo do usuário. */
