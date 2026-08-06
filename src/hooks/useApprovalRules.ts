@@ -352,6 +352,7 @@ export function useApprovalRules(options?: { backfill?: boolean }) {
           levels: levelsMap[r.id] || [],
         };
       });
+      rulesCache.set(activeCompanyDb, { rules: normalized, at: Date.now() });
       setRules(normalized);
 
     } catch (e) {
