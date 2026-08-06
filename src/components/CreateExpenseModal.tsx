@@ -58,7 +58,7 @@ import { type ExpenseItem, type CreateExpenseInput, type RateioType, RATEIO_TYPE
 import { SupplierFormModal, type SupplierFormPrefill } from "@/components/SupplierFormModal";
 import { useMyCapabilities } from "@/hooks/useMyCapabilities";
 import { useMyManagementSegment } from "@/hooks/useMyManagementSegment";
-import { filterProjectsBySegment } from "@/lib/management-segment-projects";
+import { filterProjectsBySegment, filterInstitutionalProjects } from "@/lib/management-segment-projects";
 
 
 import { RegistrationRequestModal } from "@/components/RegistrationRequestModal";
