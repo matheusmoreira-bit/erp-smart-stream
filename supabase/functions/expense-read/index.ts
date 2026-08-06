@@ -61,13 +61,16 @@ interface Caller {
   /** Diretoria (CC de 2º nível) visível ao grupo "Usuário Administrativo". */
   directorateBranch: string | null;
   companyDB: string | null;
+  /** Aliases do caller (e-mails/UserCodes equivalentes), resolvidos uma vez. */
+  aliases: Set<string>;
 }
 
 /**
- * Cache por instância (60s) da identificação do caller: uma única tela dispara
- * várias chamadas seguidas e cada uma refazia JWT + sessão SAP + grupos.
+ * Cache por instância (5 min) da identificação do caller: uma única tela
+ * dispara várias chamadas seguidas e cada uma refazia JWT + sessão SAP +
+ * grupos + aliases (5 a 7 idas ao banco por requisição).
  */
-const CALLER_TTL_MS = 60_000;
+const CALLER_TTL_MS = 300_000;
 const callerCache = new Map<string, { expiresAt: number; value: Caller }>();
 
 function callerCacheKey(req: Request): string {
