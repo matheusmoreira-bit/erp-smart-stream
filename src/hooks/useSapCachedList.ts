@@ -334,15 +334,40 @@ export function useSapCachedList({
     load(true);
   }, [load]);
 
-  // Subscribe to invalidation events broadcast via invalidateSapCache().
+  // Invalidação: eventos locais (invalidateSapCache) + Realtime da tabela
+  // `sap_cache` (outra aba, outro usuário ou edge function após escrever no SAP).
   useEffect(() => {
     if (!enabled) return;
-    const unsub = subscribe(cacheKey, session?.companyDB, () => {
+    ensureRealtimeInvalidation();
+    const unsub = subscribe(cacheKey, session?.companyDB, (mode) => {
       loadedRef.current = false;
-      load(true);
+      // "soft": outro cliente já gravou dados novos — relê do banco (barato).
+      // "hard": cache apagado — busca no ERP.
+      load(mode === "hard");
     });
     return unsub;
   }, [cacheKey, session?.companyDB, enabled, load]);
+
+  // Revalidação ao voltar para a aba: se os dados em tela já passaram do TTL,
+  // busca a versão atual em segundo plano (mantém a tela rápida e atualizada).
+  useEffect(() => {
+    if (!enabled || typeof window === "undefined") return;
+    const onFocus = () => {
+      if (document.visibilityState === "hidden") return;
+      const age = Date.now() - lastLoadedAtRef.current;
+      if (lastLoadedAtRef.current && age > getCacheTtlMs(cacheKey)) {
+        loadedRef.current = false;
+        void load(true);
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [enabled, cacheKey, load]);
+
 
   return { options, isLoading, reload };
 }
