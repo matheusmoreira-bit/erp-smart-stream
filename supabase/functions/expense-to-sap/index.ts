@@ -1388,14 +1388,8 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
           lastSapPayload = sapPayload;
           console.log("[expense-to-sap] Retrying with today's dates due to date range error:", msg1.slice(0, 200));
           sapResult = await sendDocument();
-          lastSapResponse = sapResult.response;
-          purchaseOrderStatus = "success";
-          if (attachmentEntry !== null) {
-            await ensureSapDocumentAttachmentLinked(sap.baseUrl, sap.cookies, sapEndpoint, sapResult.docEntry, attachmentEntry);
-            attachmentLinkStatus = "success";
-          }
-          return await finishSuccess(sapResult);
-        }
+        } else {
+
         // Fallback: SAP FGR validation "EXISTEM LINHAS MARCA/BRAND (PROJETO)"
         // (SBO_ANAGAMING requires every line to have ProjectCode). Retry once
         // forcing ProjectCode = "ANA GAMING" on lines that don't have one.
