@@ -85,9 +85,29 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
     setUserCode("");
     setUserName("");
     setEmail("");
-    setPassword("Sap@2025");
+    setPassword(DEFAULT_PASSWORD);
+    setPasswordMode("default");
+    setShowPassword(false);
     setResults(null);
   };
+
+  const applyMode = (mode: PasswordMode) => {
+    setPasswordMode(mode);
+    if (mode === "default") setPassword(DEFAULT_PASSWORD);
+    else if (mode === "auto") setPassword(generateUniquePassword());
+    else setPassword("");
+    setShowPassword(mode !== "manual");
+  };
+
+  const copyPassword = async () => {
+    try {
+      await navigator.clipboard.writeText(password);
+      toast.success("Senha copiada");
+    } catch {
+      toast.error("Não foi possível copiar");
+    }
+  };
+
 
   const toggleDb = (db: string) => {
     setSelectedDbs((prev) => {
