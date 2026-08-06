@@ -197,6 +197,7 @@ export function useSapCachedList({
   const [options, setOptions] = useState<SapSearchOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const loadedRef = useRef(false);
+  const lastLoadedAtRef = useRef(0);
   const mapRowRef = useRef(mapRow);
   mapRowRef.current = mapRow;
   const paramsRef = useRef(params);
