@@ -365,6 +365,61 @@ async function postSapDocument(
   return { docEntry: body.DocEntry, docNum: body.DocNum, response: body };
 }
 
+/**
+ * Atualiza (patch completo) um documento já existente no SAP.
+ * O Service Layer substitui a coleção DocumentLines inteira quando ela é
+ * enviada no corpo, então mandamos todas as linhas com LineNum sequencial —
+ * garantindo que itens, valores, centros de custo e projetos fiquem idênticos
+ * ao que foi aprovado no ERP Flow (sem divergência).
+ */
+async function patchSapDocument(
+  sapBaseUrl: string,
+  cookies: string,
+  endpoint: string,
+  docEntry: number,
+  payload: Record<string, unknown>,
+): Promise<any> {
+  const res = await fetch(`${sapBaseUrl}/${endpoint}(${docEntry})`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: cookies, Prefer: "return=representation" },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 204) return {};
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = body?.error?.message?.value || JSON.stringify(body);
+    throw new Error(`SAP ${endpoint}(${docEntry}) update failed [${res.status}]: ${msg}`);
+  }
+  return body;
+}
+
+/** Só é seguro atualizar documentos abertos e sem documento de destino. */
+async function assertSapDocumentEditable(
+  sapBaseUrl: string,
+  cookies: string,
+  endpoint: string,
+  docEntry: number,
+): Promise<void> {
+  const res = await fetch(
+    `${sapBaseUrl}/${endpoint}(${docEntry})?$select=DocumentStatus,Cancelled,DocNum`,
+    { headers: { Cookie: cookies } },
+  );
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = body?.error?.message?.value || JSON.stringify(body);
+    throw new Error(`Não foi possível ler o documento no SAP [${res.status}]: ${msg}`);
+  }
+  if (String(body?.Cancelled || "") === "tYES") {
+    throw new Error("Documento cancelado no SAP — não é possível atualizar.");
+  }
+  if (String(body?.DocumentStatus || "") !== "bost_Open") {
+    throw new Error(
+      "Documento já encerrado/copiado no SAP (NF de entrada ou recebimento lançado) — atualização não permitida.",
+    );
+  }
+}
+
+
 async function getSapDocumentAttachmentEntry(
   sapBaseUrl: string,
   cookies: string,
