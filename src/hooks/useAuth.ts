@@ -47,13 +47,7 @@ export function useAuth() {
 
         if (session?.user) {
           setTimeout(async () => {
-            const { data } = await supabase
-              .from("user_roles")
-              .select("role")
-              .eq("user_id", session.user.id)
-              .eq("role", "admin")
-              .maybeSingle();
-            setIsAdmin(!!data);
+            setIsAdmin(await getIsCloudAdmin());
             setLoading(false);
           }, 0);
         } else {
@@ -63,16 +57,11 @@ export function useAuth() {
       }
     );
 
-    const hydrateAdmin = async (userId: string) => {
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId)
-        .eq("role", "admin")
-        .maybeSingle();
-      setIsAdmin(!!data);
+    const hydrateAdmin = async (_userId: string) => {
+      setIsAdmin(await getIsCloudAdmin());
       setLoading(false);
     };
+
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session && !tokenHasSub(session.access_token)) {
