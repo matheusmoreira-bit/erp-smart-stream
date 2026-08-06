@@ -469,12 +469,17 @@ Deno.serve(async (req) => {
       {
         data: rows,
         ...(children || {}),
+        ...(keys ? { keys } : {}),
+        count: total,
+        hasMore,
+        truncated,
         scoped,
         privileged: caller.privileged,
         directorate: caller.directorateBranch,
       },
       cors,
     );
+
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[expense-read] erro", msg);
