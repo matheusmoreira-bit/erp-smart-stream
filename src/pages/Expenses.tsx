@@ -1003,6 +1003,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
   const showSourceToggle = session?.erpType === "sap";
   const SAP_PAGE_STEP = 100;
+  /** Janela em que o cache do ERP é considerado fresco o bastante para não revalidar. */
+  const SAP_CACHE_FRESH_MS = 10 * 60 * 1000;
   const SAP_CACHE_KEY = isSales ? "sales_orders_sl_v1" : "purchase_orders_hana_v1";
 
 
