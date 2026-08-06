@@ -560,6 +560,34 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     levels = (lvls || []) as any;
   }
 
+  // RATEIO: se as linhas pertencem a alçadas diferentes (CC/projeto distintos),
+  // a cadeia efetiva é a mescla das cadeias de cada ramificação — todas
+  // precisam aprovar, sem repetir quem fecha mais de uma delas.
+  try {
+    const { data: rateioItems } = await admin
+      .from("expense_items")
+      .select("cost_center, project, line_total")
+      .eq("expense_id", expenseId);
+    const mergedChain = await buildRateioChain(admin, (rateioItems || []) as any, {
+      companyDb: String((exp as any).company_db || ""),
+      docType: String((exp as any).doc_type || "purchase"),
+      currency: (exp as any).currency || "BRL",
+      requesterName: (exp as any).requester_name || null,
+      supplierName: (exp as any).supplier_name || null,
+      supplierCode: (exp as any).supplier_code || null,
+      headerCostCenter: (exp as any).cost_center || null,
+      headerProject: (exp as any).project || null,
+    });
+    if (mergedChain && mergedChain.length > 0) {
+      levels = mergedChain as any;
+      stageLog("rateio_chain", "info", {
+        requestId, expenseId, levels: mergedChain.map((l) => `${l.level_order}:${l.approver_name}`),
+      });
+    }
+  } catch (e) {
+    stageLog("rateio_chain", "warn", { requestId, expenseId, error: String((e as Error)?.message || e) });
+  }
+
   // Suporte a APROVADORES PARALELOS: múltiplas linhas podem compartilhar
   // o mesmo `level_order` (o primeiro que decidir encerra o nível).
   const distinctLevels = Array.from(new Set(levels.map((l) => l.level_order))).sort((a, b) => a - b);
