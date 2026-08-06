@@ -90,18 +90,23 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
   let privileged = false;
   let companyDB: string | null = null;
 
-  try {
-    const u = await requireUser(req);
-    email = u.email || null;
-    identity = u.email || null;
-    id = u.id;
-    const { data } = await admin.rpc("has_role", { _user_id: u.id, _role: "admin" });
+  // JWT do Cloud e sessão SAP são independentes: valida os dois em paralelo.
+  const [cloudUser, sap] = await Promise.all([
+    requireUser(req).catch((e) => {
+      if (!(e instanceof AuthError)) throw e;
+      return null;
+    }),
+    validateSapSession(req),
+  ]);
+
+  if (cloudUser) {
+    email = cloudUser.email || null;
+    identity = cloudUser.email || null;
+    id = cloudUser.id;
+    const { data } = await admin.rpc("has_role", { _user_id: cloudUser.id, _role: "admin" });
     if (data === true) privileged = true;
-  } catch (e) {
-    if (!(e instanceof AuthError)) throw e;
   }
 
-  const sap = await validateSapSession(req);
   if (sap) {
     userName = sap.userName;
     if (!identity) identity = sap.userName;
@@ -125,7 +130,13 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
     }
   }
 
-  return { identity, email, userName, id, privileged, directorateBranch, companyDB };
+  const aliases = await resolveCallerAliases(admin, {
+    id,
+    email: email ?? undefined,
+    userName: userName ?? identity ?? undefined,
+  });
+
+  return { identity, email, userName, id, privileged, directorateBranch, companyDB, aliases };
 }
 
 async function identifyCallerCached(req: Request, admin: SupabaseClient): Promise<Caller> {
