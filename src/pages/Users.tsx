@@ -21,7 +21,7 @@ import { ProvisionSapAccessDialog } from "@/components/ProvisionSapAccessDialog"
 import UserGroupDialog from "@/components/UserGroupDialog";
 import { useUserGroupAdmin } from "@/hooks/useUserGroupAdmin";
 import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
-import { useManagementSegments, MANAGEMENT_SEGMENT_LABEL, type ManagementSegment } from "@/hooks/useManagementSegments";
+import { useManagementSegments, MANAGEMENT_SEGMENT_LABEL, MANAGEMENT_SEGMENTS, type ManagementSegment } from "@/hooks/useManagementSegments";
 
 
 
@@ -354,8 +354,11 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
                               }
                             }}
                           >
-                            <option value="gestao_1">Gestão 1</option>
-                            <option value="gestao_2">Gestão 2</option>
+                            {MANAGEMENT_SEGMENTS.map((s) => (
+                              <option key={s} value={s}>
+                                {MANAGEMENT_SEGMENT_LABEL[s]}
+                              </option>
+                            ))}
                           </select>
                         </div>
                         <p className="text-sm text-muted-foreground truncate flex items-center gap-1">

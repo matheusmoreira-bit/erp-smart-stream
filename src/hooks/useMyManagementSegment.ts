@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useSap } from "@/contexts/SapContext";
 import { useManagementSegments, type ManagementSegment } from "@/hooks/useManagementSegments";
 
-/** Segmento de gestão (Gestão 1/2) do usuário logado. Padrão: Gestão 1. */
+/** Segmento de gestão (ANA Gaming / Lótus / CSC) do usuário logado. Padrão: ANA Gaming. */
 export function useMyManagementSegment(): { segment: ManagementSegment; loading: boolean } {
   const { session } = useSap();
   const { segmentOf, loading } = useManagementSegments();

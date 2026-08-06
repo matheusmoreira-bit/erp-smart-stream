@@ -8,9 +8,11 @@ import { normalizeCompact } from "@/lib/text-normalize";
  * aplicada aos grupos que a tenham ligada. O mapeamento abaixo define quais
  * projetos cada segmento enxerga nas bases da ANA Gaming.
  */
-export const SEGMENT_PROJECT_CODES: Record<ManagementSegment, string[]> = {
+export const SEGMENT_PROJECT_CODES: Record<ManagementSegment, string[] | null> = {
   gestao_1: ["ANA GAMING", "7K"],
   gestao_2: ["VERA", "CASSINO"],
+  // CSC atende todas as frentes: sem recorte de projetos.
+  csc: null,
 };
 
 /** Bases em que o recorte por segmento vale (ANA Gaming produção e teste). */
@@ -31,7 +33,9 @@ export function filterProjectsBySegment<T extends { code: string; name?: string 
   companyDb: string | null | undefined,
 ): T[] {
   if (!isSegmentScopedCompany(companyDb)) return options;
-  const allowed = SEGMENT_PROJECT_CODES[segment].map(normalize);
+  const codes = SEGMENT_PROJECT_CODES[segment];
+  if (!codes) return options;
+  const allowed = codes.map(normalize);
   const filtered = options.filter(
     (o) => allowed.includes(normalize(o.code)) || allowed.includes(normalize(o.name)),
   );
