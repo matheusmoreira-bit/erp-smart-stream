@@ -11,6 +11,7 @@ import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { buildSapBaseUrl, loadSapCreds, sapCookieLogin, sapLogout } from "../_shared/sap-cache.ts";
 import { KYP_ADAPTERS } from "../_shared/kyp/becompliance.ts";
 import { resolveBeComplianceConfig } from "../_shared/kyp/config.ts";
+import { reaproveitarDiligencia } from "../_shared/kyp/dedupe.ts";
 import { notifyActionCompleted } from "../_shared/action-notify.ts";
 import { classificarDocumento, decidirAcao, type KYPProviderConfig } from "../_shared/kyp/types.ts";
 
@@ -161,14 +162,37 @@ async function runKyp(sb: Sb, documento: string, nome: string, companyDb: string
   let decisao = decidirAcao(atual);
 
   if (decisao.acao === "CREATE") {
-    const criada = await adapter.criarDiligencia(session, {
+    // Só cria nova due diligence se não houver nenhuma ou a mais recente estiver
+    // vencida — e desde que não tenhamos aberto uma há pouco (anti-duplicidade).
+    const reuso = await reaproveitarDiligencia(sb, doc.documento);
+    const criada = reuso ?? await adapter.criarDiligencia(session, {
       documento: doc.documento,
       nome: nome || doc.documento,
       tipoPessoa: doc.tipoPessoa,
       empresas: companyDb ? [companyDb] : [],
     });
+    if (!reuso) {
+      await sb.from("kyp_avaliacoes").insert({
+        documento: doc.documento,
+        tipo_pessoa: doc.tipoPessoa,
+        nome: nome || null,
+        provider_code: providerCode,
+        acao: "CREATE",
+        motivo: decisao.motivo,
+        provider_ref_id: criada.providerRefId || null,
+        empresas_afetadas: companyDb ? [companyDb] : [],
+        sucesso: true,
+        disparado_por: "registration",
+      });
+    }
     atual = criada;
-    decisao = { acao: "NOOP", motivo: "Diligência aberta no provedor — aguardando análise." };
+    decisao = {
+      acao: "NOOP",
+      motivo: reuso
+        ? "Diligência já aberta para este documento — aguardando análise (sem duplicar)."
+        : "Diligência aberta no provedor — aguardando análise.",
+    };
+
     return {
       available: true,
       ok: false,
