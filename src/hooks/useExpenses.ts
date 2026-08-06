@@ -543,11 +543,15 @@ async function logExpenseDecision(
 
 /* ───────────────── Hook ───────────────── */
 
-export function useExpenses(docType: ExpenseDocType = "purchase") {
+export function useExpenses(docType: ExpenseDocType = "purchase", options?: { statuses?: string[] }) {
   const { session } = useSap();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Escopo opcional por status — telas que só precisam de um subconjunto
+  // (ex.: Aprovações, que usa apenas "pendente_aprovacao") evitam trazer todo
+  // o histórico da empresa com itens e anexos.
+  const statusScope = options?.statuses?.length ? [...options.statuses].sort().join(",") : "";
 
   const fetchExpenses = useCallback(async () => {
     setIsLoading(true);
@@ -559,12 +563,14 @@ export function useExpenses(docType: ExpenseDocType = "purchase") {
         return;
       }
 
-      const readExpenses = () =>
-        expenseRead("expenses")
+      const readExpenses = () => {
+        const base = expenseRead("expenses")
           .select("*")
           .eq("company_db", activeCompanyDb)
-          .eq("doc_type", docType)
-          .order("created_at", { ascending: false });
+          .eq("doc_type", docType);
+        const scoped = statusScope ? base.in("status", statusScope.split(",")) : base;
+        return scoped.order("created_at", { ascending: false });
+      };
 
       let { data, error: err } = await readExpenses();
       if (err) {
