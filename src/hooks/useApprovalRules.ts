@@ -368,7 +368,7 @@ export function useApprovalRules(options?: { backfill?: boolean; enabled?: boole
     } finally {
       setIsLoading(false);
     }
-  }, [activeCompanyDb, backfillEnabled]);
+  }, [activeCompanyDb, backfillEnabled, enabled]);
 
   const createRule = useCallback(
     async (input: CreateRuleInput, createdBy: string) => {
