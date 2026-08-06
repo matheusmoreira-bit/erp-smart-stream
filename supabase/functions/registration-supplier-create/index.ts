@@ -9,6 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { AuthError, requireUser, validateSapSession } from "../_shared/auth.ts";
 import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { buildSapBaseUrl, loadSapCreds, sapCookieLogin, sapLogout } from "../_shared/sap-cache.ts";
+import { purgeSapListCache } from "../_shared/sap-list-cache.ts";
 import { KYP_ADAPTERS } from "../_shared/kyp/becompliance.ts";
 import { resolveBeComplianceConfig } from "../_shared/kyp/config.ts";
 import { reaproveitarDiligencia } from "../_shared/kyp/dedupe.ts";
