@@ -5,6 +5,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { requireAdminOrSapAdmin, authErrorResponse } from "../_shared/auth.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { purgeSapListCache } from "../_shared/sap-list-cache.ts";
 
 
 const corsHeaders = {
