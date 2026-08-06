@@ -1,0 +1,206 @@
+// FLUXOS DE APROVAÇÃO INDEPENDENTES POR SEGMENTO (rateio).
+//
+// Regra do negócio: quando as linhas de um mesmo documento pertencem a
+// combinações distintas de (centro de custo, projeto), CADA segmento segue a
+// sua própria cadeia de alçada, de forma INDEPENDENTE e em paralelo.
+// O documento só é aprovado quando TODOS os segmentos concluírem as suas
+// cadeias. Não existe mescla de cadeias — se a mesma pessoa aparece em dois
+// segmentos, ela aprova cada segmento no seu momento.
+//
+// Ex.: PC com 2 linhas no CC 1.10.2.2
+//   • projeto DONALD  → Leonardo Rossini → Santiago Macedo → Marco Tulio
+//   • projeto BET.BET → Diogo Faria → Marco Tulio
+//   ⇒ dois fluxos paralelos; níveis cujo aprovador é o solicitante são pulados.
+
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { findMatchingRule, pickHierarchicalFallbackRule, type RuleRow } from "./rule-match.ts";
+import { pickApproverSkippingRequester, type ApprovalLevel } from "./approval-skip.ts";
+import type { RateioItem, RateioChainContext } from "./rateio-chain.ts";
+
+export interface RateioSegment {
+  segment_key: string;
+  cost_center: string;
+  project: string;
+  amount: number;
+  rule_id: string;
+  chain: ApprovalLevel[];
+}
+
+export interface SegmentRow {
+  id: string;
+  expense_id: string;
+  segment_key: string;
+  cost_center: string | null;
+  project: string | null;
+  amount: number;
+  rule_id: string | null;
+  chain: ApprovalLevel[];
+  current_level: number;
+  status: string;
+  current_approver: string | null;
+  current_approver_email: string | null;
+}
+
+async function levelsOf(admin: SupabaseClient, ruleId: string): Promise<ApprovalLevel[]> {
+  const { data } = await admin
+    .from("approval_rule_levels")
+    .select("level_order, approver_name, approver_email")
+    .eq("rule_id", ruleId)
+    .order("level_order", { ascending: true });
+  return ((data || []) as ApprovalLevel[]).filter((l) => l.approver_name || l.approver_email);
+}
+
+/**
+ * Calcula os segmentos (CC + projeto) do documento com a cadeia de cada um.
+ * Retorna `null` quando não há rateio de alçada (um único segmento, ou todos
+ * os segmentos caem na MESMA regra → fluxo normal de nível único).
+ */
+export async function buildRateioSegments(
+  admin: SupabaseClient,
+  items: RateioItem[],
+  ctx: RateioChainContext,
+): Promise<RateioSegment[] | null> {
+  const rows = (items || []).filter(Boolean);
+  if (rows.length < 2 || !ctx.companyDb) return null;
+
+  const groups = new Map<string, { cc: string; project: string; amount: number }>();
+  for (const it of rows) {
+    const cc = String(it.cost_center || ctx.headerCostCenter || "").trim();
+    const project = String(it.project || ctx.headerProject || "").trim();
+    const key = `${cc.toLowerCase()}||${project.toLowerCase()}`;
+    const amount = Number(it.line_total || 0);
+    const prev = groups.get(key);
+    if (prev) prev.amount += amount;
+    else groups.set(key, { cc, project, amount });
+  }
+  if (groups.size < 2) return null;
+
+  const { data: rulesRaw } = await admin
+    .from("approval_rules")
+    .select("id, name, is_active, priority, doc_type, criteria, company_db")
+    .eq("company_db", ctx.companyDb)
+    .eq("is_active", true);
+  const rules = (rulesRaw || []) as unknown as RuleRow[];
+  if (rules.length === 0) return null;
+
+  const ordered = Array.from(groups.entries()).sort((a, b) => b[1].amount - a[1].amount);
+  const segments: RateioSegment[] = [];
+  for (const [key, g] of ordered) {
+    const evalCtx: Record<string, unknown> = {
+      total_amount: g.amount,
+      cost_center: g.cc,
+      project: g.project,
+      requester_name: ctx.requesterName || "",
+      supplier_name: `${ctx.supplierName || ""} ${ctx.supplierCode || ""}`.trim(),
+      "supplier.name": String(ctx.supplierName || "").toLowerCase(),
+      "supplier.code": String(ctx.supplierCode || "").toLowerCase(),
+      currency: ctx.currency || "BRL",
+      doc_type: ctx.docType,
+    };
+    const match = findMatchingRule(rules, evalCtx, ctx.docType)
+      || pickHierarchicalFallbackRule(rules, evalCtx, ctx.docType)?.rule
+      || null;
+    if (!match) return null; // segmento sem alçada → fluxo padrão trata
+    const chain = await levelsOf(admin, match.id);
+    if (chain.length === 0) return null;
+    segments.push({
+      segment_key: key,
+      cost_center: g.cc,
+      project: g.project,
+      amount: g.amount,
+      rule_id: match.id,
+      chain,
+    });
+  }
+
+  // Todos os segmentos na mesma regra → não é rateio de alçada.
+  if (new Set(segments.map((s) => s.rule_id)).size < 2) return null;
+  return segments;
+}
+
+/** Rótulo do aprovador atual do documento = aprovadores pendentes de cada segmento. */
+export function pendingApproverLabel(rows: Array<{ status: string; current_approver: string | null }>): string | null {
+  const names = Array.from(new Set(
+    rows.filter((r) => r.status === "pendente").map((r) => (r.current_approver || "").trim()).filter(Boolean),
+  ));
+  return names.length ? names.join(" / ") : null;
+}
+
+/**
+ * Persiste os segmentos do documento (substituindo os anteriores), já
+ * posicionando cada um no primeiro nível cujo aprovador não é o solicitante.
+ */
+export async function persistRateioSegments(
+  admin: SupabaseClient,
+  expenseId: string,
+  segments: RateioSegment[],
+  requesterName: string | null,
+  requesterEmail: string | null,
+): Promise<SegmentRow[]> {
+  await admin.from("expense_approval_segments").delete().eq("expense_id", expenseId);
+
+  const payload = segments.map((s) => {
+    const picked = pickApproverSkippingRequester(s.chain, requesterName, requesterEmail, 1);
+    return {
+      expense_id: expenseId,
+      segment_key: s.segment_key,
+      cost_center: s.cost_center || null,
+      project: s.project || null,
+      amount: s.amount,
+      rule_id: s.rule_id,
+      chain: s.chain,
+      current_level: picked.level_order,
+      status: "pendente",
+      current_approver: picked.approver_name || null,
+      current_approver_email: picked.approver_email,
+    };
+  });
+
+  const { data } = await admin.from("expense_approval_segments").insert(payload).select("*");
+  return ((data || []) as unknown as SegmentRow[]);
+}
+
+/** Carrega os segmentos de um documento. */
+export async function loadRateioSegments(
+  admin: SupabaseClient,
+  expenseId: string,
+): Promise<SegmentRow[]> {
+  const { data } = await admin
+    .from("expense_approval_segments")
+    .select("*")
+    .eq("expense_id", expenseId);
+  return ((data || []) as unknown as SegmentRow[]);
+}
+
+/**
+ * Avança um segmento para o próximo nível DISTINTO da sua cadeia, pulando
+ * níveis cujo aprovador é o solicitante. Devolve o estado resultante.
+ */
+export function advanceSegment(
+  seg: SegmentRow,
+  requesterName: string | null,
+  requesterEmail: string | null,
+): { status: string; current_level: number; current_approver: string | null; current_approver_email: string | null; finished: boolean } {
+  const chain = (seg.chain || []) as ApprovalLevel[];
+  const distinct = Array.from(new Set(chain.map((l) => l.level_order))).sort((a, b) => a - b);
+  const next = distinct.find((lo) => lo > Number(seg.current_level));
+  if (!next) {
+    return {
+      status: "aprovado",
+      current_level: Number(seg.current_level),
+      current_approver: null,
+      current_approver_email: null,
+      finished: true,
+    };
+  }
+  const picked = pickApproverSkippingRequester(chain, requesterName, requesterEmail, next);
+  // Quando todos os níveis restantes eram do solicitante, o helper devolve o
+  // fallback global — nesse caso o segmento continua pendente com ele.
+  return {
+    status: "pendente",
+    current_level: picked.level_order,
+    current_approver: picked.approver_name || null,
+    current_approver_email: picked.approver_email,
+    finished: false,
+  };
+}

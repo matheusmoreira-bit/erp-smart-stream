@@ -23,7 +23,15 @@ import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
 import { pickApproverSkippingRequester, SELF_APPROVAL_FALLBACK } from "../_shared/approval-skip.ts";
-import { buildRateioChain } from "../_shared/rateio-chain.ts";
+import {
+  buildRateioSegments,
+  loadRateioSegments,
+  persistRateioSegments,
+  advanceSegment,
+  pendingApproverLabel,
+  type SegmentRow,
+} from "../_shared/rateio-segments.ts";
+
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
 import { notifySalesMilestone } from "../_shared/sales-notify.ts";
 import { notifyApprovalPending } from "../_shared/approval-notify.ts";
@@ -560,33 +568,47 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     levels = (lvls || []) as any;
   }
 
-  // RATEIO: se as linhas pertencem a alçadas diferentes (CC/projeto distintos),
-  // a cadeia efetiva é a mescla das cadeias de cada ramificação — todas
-  // precisam aprovar, sem repetir quem fecha mais de uma delas.
+  // RATEIO: quando as linhas pertencem a alçadas diferentes (CC/projeto
+  // distintos), CADA segmento segue a sua própria cadeia, de forma
+  // INDEPENDENTE. O documento só é aprovado quando todos os segmentos
+  // concluírem. Não há mescla de cadeias.
+  let segmentRows: SegmentRow[] = [];
   try {
-    const { data: rateioItems } = await admin
-      .from("expense_items")
-      .select("cost_center, project, line_total")
-      .eq("expense_id", expenseId);
-    const mergedChain = await buildRateioChain(admin, (rateioItems || []) as any, {
-      companyDb: String((exp as any).company_db || ""),
-      docType: String((exp as any).doc_type || "purchase"),
-      currency: (exp as any).currency || "BRL",
-      requesterName: (exp as any).requester_name || null,
-      supplierName: (exp as any).supplier_name || null,
-      supplierCode: (exp as any).supplier_code || null,
-      headerCostCenter: (exp as any).cost_center || null,
-      headerProject: (exp as any).project || null,
-    });
-    if (mergedChain && mergedChain.length > 0) {
-      levels = mergedChain as any;
-      stageLog("rateio_chain", "info", {
-        requestId, expenseId, levels: mergedChain.map((l) => `${l.level_order}:${l.approver_name}`),
+    segmentRows = await loadRateioSegments(admin, expenseId);
+    if (segmentRows.length === 0) {
+      // Backfill para documentos criados antes dos fluxos por segmento.
+      const { data: rateioItems } = await admin
+        .from("expense_items")
+        .select("cost_center, project, line_total")
+        .eq("expense_id", expenseId);
+      const segs = await buildRateioSegments(admin, (rateioItems || []) as any, {
+        companyDb: String((exp as any).company_db || ""),
+        docType: String((exp as any).doc_type || "purchase"),
+        currency: (exp as any).currency || "BRL",
+        requesterName: (exp as any).requester_name || null,
+        supplierName: (exp as any).supplier_name || null,
+        supplierCode: (exp as any).supplier_code || null,
+        headerCostCenter: (exp as any).cost_center || null,
+        headerProject: (exp as any).project || null,
+      });
+      if (segs && segs.length > 0) {
+        segmentRows = await persistRateioSegments(
+          admin, expenseId, segs,
+          (exp as any).requester_name || null, (exp as any).requester_email || null,
+        );
+      }
+    }
+    if (segmentRows.length > 0) {
+      stageLog("rateio_segments", "info", {
+        requestId, expenseId,
+        segments: segmentRows.map((s) => `${s.segment_key}@${s.current_level}:${s.current_approver}:${s.status}`),
       });
     }
   } catch (e) {
-    stageLog("rateio_chain", "warn", { requestId, expenseId, error: String((e as Error)?.message || e) });
+    stageLog("rateio_segments", "warn", { requestId, expenseId, error: String((e as Error)?.message || e) });
   }
+  const pendingSegments = segmentRows.filter((s) => s.status === "pendente");
+  const segmentMode = pendingSegments.length > 0;
 
   // Suporte a APROVADORES PARALELOS: múltiplas linhas podem compartilhar
   // o mesmo `level_order` (o primeiro que decidir encerra o nível).
@@ -598,7 +620,7 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
   const currentLevelRow = currentLevelRows[0] || null;
   stageLog("load_levels", "info", {
     requestId, expenseId, currentLevel, totalLevels, isFinalLevel,
-    parallelAtCurrent: currentLevelRows.length,
+    parallelAtCurrent: currentLevelRows.length, segmentMode,
   });
 
 
@@ -606,17 +628,21 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
   // Regra: `expenses.current_approver` é fonte de verdade quando presente —
   // isso permite delegação (reatribuição do aprovador atual) sem alterar a
   // regra global. Só cai para o nível da regra quando não houver override.
+  // Em modo SEGMENTO, os alvos são os aprovadores pendentes de cada segmento.
   const overrideApprover = ((exp as any).current_approver as string | null) || null;
   const overrideIsEmail = !!overrideApprover && overrideApprover.includes("@");
 
   // Casa contra QUALQUER linha do nível atual (paralelo). Se houver override
   // (delegação), o nome/email do override toma precedência.
-  const designatedTargets: Array<{ name: string | null; email: string | null }> = overrideApprover
-    ? [{
-        name: overrideIsEmail ? null : overrideApprover,
-        email: overrideIsEmail ? overrideApprover : null,
-      }]
-    : currentLevelRows.map((row) => ({ name: row.approver_name, email: row.approver_email }));
+  const designatedTargets: Array<{ name: string | null; email: string | null }> = segmentMode
+    ? pendingSegments.map((s) => ({ name: s.current_approver, email: s.current_approver_email }))
+    : (overrideApprover
+      ? [{
+          name: overrideIsEmail ? null : overrideApprover,
+          email: overrideIsEmail ? overrideApprover : null,
+        }]
+      : currentLevelRows.map((row) => ({ name: row.approver_name, email: row.approver_email })));
+
 
   let isMatch = !!callerIdentity && designatedTargets.some((t) =>
     isDesignatedApprover(callerIdentity as string, t.name, t.email),
@@ -846,6 +872,17 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
       action_role: actionRole,
     } as any);
     await writeAuditLog("rejected", currentLevel);
+    if (segmentRows.length > 0) {
+      // Reprovação encerra o documento inteiro — todos os segmentos param.
+      await admin.from("expense_approval_segments").update({
+        status: "rejeitado",
+        current_approver: null,
+        current_approver_email: null,
+        decided_by: actor,
+        decided_at: new Date().toISOString(),
+      }).eq("expense_id", expenseId).eq("status", "pendente");
+    }
+
 
     // Fluxo paralelo: avisa o solicitante do desfecho da ação pedida.
     await notifyActionCompleted(admin, {
@@ -897,7 +934,102 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
   } as any);
   await writeAuditLog("approved", currentLevel);
 
-  if (!isFinalLevel) {
+  // ── RATEIO: aprovação por SEGMENTO (fluxos independentes) ──────────────
+  if (segmentMode) {
+    const reqName = (exp as any).requester_name || null;
+    const reqEmail = (exp as any).requester_email || null;
+    const mine = pendingSegments.filter((s) =>
+      !!callerIdentity && isDesignatedApprover(callerIdentity as string, s.current_approver, s.current_approver_email),
+    );
+    // Admin/superusuário/substituto sem casar textualmente → aprova todos os
+    // segmentos pendentes (override explícito).
+    const targets = mine.length > 0 ? mine : pendingSegments;
+
+    const advancedNotifications: Array<{ name: string | null; email: string | null; level: number; seg: SegmentRow }> = [];
+    for (const seg of targets) {
+      const next = advanceSegment(seg, reqName, reqEmail);
+      await admin.from("expense_approval_segments").update({
+        status: next.status,
+        current_level: next.current_level,
+        current_approver: next.current_approver,
+        current_approver_email: next.current_approver_email,
+        decided_by: actor,
+        decided_at: new Date().toISOString(),
+      }).eq("id", seg.id);
+      if (!next.finished) {
+        advancedNotifications.push({
+          name: next.current_approver, email: next.current_approver_email, level: next.current_level, seg,
+        });
+      }
+    }
+
+    const after = await loadRateioSegments(admin, expenseId);
+    const stillPending = after.filter((s) => s.status === "pendente");
+    stageLog("rateio_segments", "info", {
+      requestId, expenseId, approvedSegments: targets.map((t) => t.segment_key),
+      stillPending: stillPending.map((s) => `${s.segment_key}:${s.current_approver}`),
+    });
+
+    if (stillPending.length > 0) {
+      const label = pendingApproverLabel(after);
+      const minLevel = Math.min(...stillPending.map((s) => Number(s.current_level) || 1));
+      const updates: Record<string, unknown> = {
+        current_approver: label,
+        current_level_order: minLevel,
+      };
+      if (remarks) updates.remarks = remarks;
+      await admin.from("expenses").update(updates).eq("id", expenseId);
+
+      for (const n of advancedNotifications) {
+        await notifyApprovalPending(admin, {
+          expenseId,
+          companyDb: (exp as any).company_db,
+          approverEmail: n.email,
+          approverName: n.name,
+          levelOrder: n.level,
+          requesterName: (exp as any).requester_name,
+          supplierName: (exp as any).supplier_name,
+          totalAmount: Number(n.seg.amount || (exp as any).total_amount || 0),
+          currency: (exp as any).currency,
+          docType: String((exp as any).doc_type || "purchase"),
+          resolution: {
+            source: "next_level",
+            reason: `Próximo nível da alçada do segmento ${n.seg.cost_center || "—"} / ${n.seg.project || "—"}`,
+            ruleId: n.seg.rule_id,
+            costCenter: n.seg.cost_center,
+            project: n.seg.project,
+            metadata: { segment: n.seg.segment_key, independent_chain: true },
+          },
+        });
+      }
+
+      return await respond(200, {
+        ok: true,
+        action: "approve",
+        finalized: false,
+        overrideUsed: isOverride && !isMatch,
+        nextApproverName: stillPending[0]?.current_approver || null,
+        nextApproverEmail: stillPending[0]?.current_approver_email || null,
+        currentLevel: minLevel,
+        pendingSegments: stillPending.map((s) => ({
+          cost_center: s.cost_center, project: s.project, approver: s.current_approver, level: s.current_level,
+        })),
+        expense: {
+          id: expenseId,
+          requester_name: (exp as any).requester_name,
+          requester_email: (exp as any).requester_email,
+          supplier_name: (exp as any).supplier_name,
+          total_amount: (exp as any).total_amount,
+          currency: (exp as any).currency,
+          company_db: (exp as any).company_db,
+        },
+      });
+    }
+    // Todos os segmentos aprovados → segue para a finalização normal abaixo.
+  }
+
+  if (!segmentMode && !isFinalLevel) {
+
     // Próximo nível DISTINTO (paralelo: várias linhas com o mesmo level_order
     // contam como 1 só nível). Self-approval guard continua valendo.
     const nextDistinct = distinctLevels.find((lo) => lo > currentLevel) || (currentLevel + 1);
