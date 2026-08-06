@@ -191,11 +191,12 @@ export function useSapCachedList({
         return;
       }
 
+      const effectiveParams = withActiveFilter(endpoint, paramsRef.current);
       let rows: any[] | null = null;
       try {
         const { data: svcData, error: svcErr } = await supabase.functions.invoke(
           "sap-list-service",
-          { body: { company_db: companyDB, endpoint, params: paramsRef.current } },
+          { body: { company_db: companyDB, endpoint, params: effectiveParams } },
         );
         if (svcErr) throw svcErr;
         if (svcData?.code === "no_apiuser" || svcData?.code === "sap_unavailable") {
@@ -209,9 +210,10 @@ export function useSapCachedList({
       }
 
       if (rows === null) {
-        const { data } = await sapQueryAll(session, endpoint, paramsRef.current, false);
+        const { data } = await sapQueryAll(session, endpoint, effectiveParams, false);
         rows = data?.value || [];
       }
+
 
       // Filtra centros de custo auto-gerados pelo SAP (prefixo "Centr_")
       if (endpoint === "CostCenters" || endpoint === "ProfitCenters") {
