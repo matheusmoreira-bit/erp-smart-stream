@@ -139,8 +139,12 @@ export function findMatchingRule(
 }
 
 export interface ApprovalSegment {
-  /** Chave do agrupamento — código do centro de custo ou "__no_cc__". */
+  /** Chave do agrupamento — centro de custo + projeto ("cc||projeto"). */
+  segmentKey: string;
+  /** Código do centro de custo do grupo ou "__no_cc__". */
   costCenter: string;
+  /** Projeto do grupo (vazio quando as linhas não têm projeto). */
+  project: string;
   lines: DocumentLine[];
   amount: number;
   amountFC: number;
@@ -149,6 +153,13 @@ export interface ApprovalSegment {
   /** Emails/nomes na cadeia (ordenados por level_order). */
   approverEmails: string[];
   approverNames: string[];
+}
+
+/** Chave de segmento de uma linha do documento (CC + projeto). */
+export function lineSegmentKey(line: DocumentLine): string {
+  const cc = (line.CostingCode || "").trim() || "__no_cc__";
+  const project = (line.Project || "").trim();
+  return `${cc}||${project.toLowerCase()}`;
 }
 
 function toList(arr: string[]): string {
