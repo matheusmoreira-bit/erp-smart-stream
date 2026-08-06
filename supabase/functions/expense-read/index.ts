@@ -372,26 +372,43 @@ Deno.serve(async (req) => {
     if (scoped && table === "expenses") {
       // O recorte de propriedade é feito em memória, então a janela é montada
       // varrendo a tabela em blocos até preencher a página pedida.
+      // As varreduras vão em ONDAS PARALELAS: antes eram até 20 consultas
+      // sequenciais (+1 por bloco para os rateios), o que fazia a tela de
+      // aprovações esperar dezenas de segundos.
       const CHUNK = 500;
+      const WAVE = 4;
       const SCAN_CAP = MAX_ROWS * 5;
       const need = rangeTo != null ? rangeTo + 1 : limit;
-      let offset = 0;
+      let page = 0;
       let scanned = 0;
       let exhausted = false;
       const collected: any[] = [];
       while (
-        (collected.length < need || (countRequested && !exhausted) || (wantKeys && !exhausted)) &&
+        !exhausted &&
+        (collected.length < need || countRequested || wantKeys) &&
         scanned < SCAN_CAP
       ) {
-        const q = build(select);
-        if (!q) break;
-        const { data, error } = await q.range(offset, offset + CHUNK - 1);
-        if (error) return json(500, { error: error.message }, cors);
-        const batch = (data || []) as any[];
-        scanned += batch.length;
-        offset += CHUNK;
-        collected.push(...(await filterOwned(batch)));
-        if (batch.length < CHUNK) { exhausted = true; break; }
+        const pages: number[] = [];
+        for (let i = 0; i < WAVE; i++) pages.push(page + i);
+        page += WAVE;
+        const results = await Promise.all(
+          pages.map(async (p) => {
+            const q = build(select);
+            if (!q) return { data: [] as any[], error: null };
+            return await q.range(p * CHUNK, p * CHUNK + CHUNK - 1);
+          }),
+        );
+        const flat: any[] = [];
+        for (const r of results as any[]) {
+          if (r?.error) return json(500, { error: r.error.message }, cors);
+          const batch = (r?.data || []) as any[];
+          scanned += batch.length;
+          flat.push(...batch);
+          if (batch.length < CHUNK) exhausted = true;
+        }
+        if (flat.length === 0) { exhausted = true; break; }
+        // Um único lookup de rateio por onda (em vez de um por bloco).
+        collected.push(...(await filterOwned(flat)));
       }
       if (filterError === "__EMPTY_IN__") return json(200, { data: [], count: 0 }, cors);
       if (filterError) return json(400, { error: filterError }, cors);
@@ -403,6 +420,7 @@ Deno.serve(async (req) => {
         : collected.slice(0, limit);
       hasMore = !exhausted || collected.length > need;
     } else {
+
       const q = build(select, { count: countRequested });
       if (filterError === "__EMPTY_IN__") return json(200, { data: [], count: 0 }, cors);
       if (filterError || !q) return json(400, { error: filterError || "consulta inválida" }, cors);
