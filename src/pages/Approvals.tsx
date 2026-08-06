@@ -35,6 +35,7 @@ import { Badge } from "@/components/ui/badge";
 import { useApprovals, type ApprovalDoc, type DocumentLine } from "@/hooks/useApprovals";
 import { FilterMultiSelect } from "@/components/FilterMultiSelect";
 import { useExpenses, type Expense } from "@/hooks/useExpenses";
+import { expenseRead } from "@/lib/expense-read";
 import { useMyRequests, type MyRequestDoc, type ApprovalHistoryEntry } from "@/hooks/useMyRequests";
 import { useLazyList } from "@/hooks/useLazyList";
 import { savePostLoginPath } from "@/lib/post-login-redirect";
