@@ -921,17 +921,20 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
 
     // Centro de custo é obrigatório em cada linha (cabeçalho como fallback).
     // Sem CC o SAP grava sem apropriação — bloqueamos antes de enviar.
+    // Exceção: pedidos de venda usam o CC padrão 1.1.1.1 como fallback.
+    const isSalesDoc = String((expense as any).doc_type || "") === "sales";
     const headerCc = String((expense as any).cost_center || "").trim();
     const missingCcLines: number[] = [];
     (items as any[]).forEach((it, idx) => {
       const lineCc = String(it.cost_center || "").trim();
       if (!lineCc && !headerCc) missingCcLines.push(idx + 1);
     });
-    if (missingCcLines.length > 0) {
+    if (missingCcLines.length > 0 && !isSalesDoc) {
       throw new Error(
         `Centro de custo é obrigatório. Linha(s) sem centro de custo: ${missingCcLines.join(", ")}.`,
       );
     }
+
 
     // Lock anti-duplicação: impede dois cliques simultâneos de criar 2 POs no SAP.
     // Pulado se já há sap_doc_entry (caso de re-link de anexos tratado abaixo).
