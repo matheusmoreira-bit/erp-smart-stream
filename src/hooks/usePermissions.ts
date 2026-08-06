@@ -3,6 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import { canonicalUserKey } from "@/lib/user-identity";
 import {
+  getIsCloudAdmin,
+  getIsSapUserAdmin,
+  getGroupAssignments,
+  getGroupModules,
+} from "@/lib/auth-cache";
+
+import {
   CAPABILITY_CATALOG,
   CAPABILITY_CATEGORIES,
   type CapabilityDef,
