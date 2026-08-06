@@ -11,6 +11,7 @@ import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { buildSapBaseUrl, loadSapCreds, sapCookieLogin, sapLogout } from "../_shared/sap-cache.ts";
 import { KYP_ADAPTERS } from "../_shared/kyp/becompliance.ts";
 import { resolveBeComplianceConfig } from "../_shared/kyp/config.ts";
+import { reaproveitarDiligencia } from "../_shared/kyp/dedupe.ts";
 import { notifyActionCompleted } from "../_shared/action-notify.ts";
 import { classificarDocumento, decidirAcao, type KYPProviderConfig } from "../_shared/kyp/types.ts";
 

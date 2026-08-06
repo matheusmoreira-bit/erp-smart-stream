@@ -9,6 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { releaseWatcherLock, tryWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { KYP_ADAPTERS } from "../_shared/kyp/becompliance.ts";
 import { resolveBeComplianceConfig } from "../_shared/kyp/config.ts";
+import { reaproveitarDiligencia } from "../_shared/kyp/dedupe.ts";
 import {
   decidirAcao,
   type KYPDiligenciaResult,
