@@ -514,17 +514,41 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   const status = current.status as string;
   const hasSapError = !!current.sap_integration_error;
   const alreadyInSap = !!(current.sap_doc_entry || current.sap_doc_num);
+
+  // Bloqueio definitivo: depois que a NF de entrada foi lançada (ou o documento
+  // seguiu para pagamento/finalização) qualquer alteração geraria divergência
+  // com o ERP.
+  const lockedStatuses = new Set(["nf_entrada", "pagamento", "finalizado", "cancelado", "rejeitado"]);
+  if (lockedStatuses.has(status)) {
+    return json(409, {
+      error: "Documento com NF de entrada lançada (ou encerrado) — edição não permitida.",
+    });
+  }
   if (alreadyInSap) {
-    return json(409, {
-      error: "Documento já integrado ao ERP — edição não permitida.",
-    });
+    const { data: nfRows } = await admin
+      .from("nf_entrada_imports")
+      .select("status, sap_invoice_draft_id")
+      .eq("expense_id", expenseId);
+    const nfPosted = (nfRows || []).some((r: any) =>
+      r.sap_invoice_draft_id || ["awaiting_invoice", "completed"].includes(String(r.status))
+    );
+    if (nfPosted) {
+      return json(409, {
+        error: "Já existe NF de entrada lançada no ERP para este pedido — edição não permitida.",
+      });
+    }
   }
+
+  // Documento já integrado ao ERP e ainda sem NF de entrada: pode ser editado.
+  // Volta ao nível 1 de aprovação e, ao final, sofre patch completo no ERP.
   const editableForFix = status === "aprovado" && hasSapError && !alreadyInSap;
-  if (status !== "rascunho" && status !== "pendente_aprovacao" && !editableForFix) {
+  const editableIntegrated = alreadyInSap && (status === "pc_lancado" || status === "aprovado");
+  if (status !== "rascunho" && status !== "pendente_aprovacao" && !editableForFix && !editableIntegrated) {
     return json(409, {
-      error: "Somente pedidos em rascunho, pendentes de aprovação ou aprovados com erro de integração podem ser alterados.",
+      error: "Somente pedidos em rascunho, pendentes de aprovação, com erro de integração ou já lançados sem NF de entrada podem ser alterados.",
     });
   }
+
 
   const input = body?.input ?? {};
   const updates: Record<string, unknown> = {};
