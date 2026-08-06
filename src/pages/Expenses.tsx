@@ -537,17 +537,31 @@ function ExpenseDetailModal({
                       Integração com ERP
                     </span>
                   </div>
-                  {!isErpNative && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2 text-xs"
-                      onClick={onViewIntegration}
-                    >
-                      Ver detalhes
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-1">
+                    {canSyncFromErp && !isErpNative && !!expense.sap_doc_entry && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs gap-1.5"
+                        onClick={() => setShowPullback(true)}
+                        title={`Trazer para o Flow as alterações feitas no ${erpLabel || "ERP"} (sem reabrir aprovação)`}
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" /> Sincronizar do {erpLabel || "ERP"}
+                      </Button>
+                    )}
+                    {!isErpNative && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs"
+                        onClick={onViewIntegration}
+                      >
+                        Ver detalhes
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-xs">
                   {expense.sap_doc_num != null && (
