@@ -509,17 +509,32 @@ Deno.serve(async (req) => {
 
   let lockAcquired = false;
   try {
+    let body: { companyDb?: string; action?: string; decision?: string; limit?: number } = {};
+    try { body = await req.json(); } catch { /* no body */ }
+    const isList = body.action === "list";
+
+    // Leitura (action=list) é somente-leitura e já é escopada por usuário:
+    // aceita qualquer usuário autenticado no Cloud, mesmo com a sessão SAP
+    // expirada (30 min) — antes o histórico do SAP sumia da tela nesse caso.
     let caller: Awaited<ReturnType<typeof requireAdminOrSapSession>>;
     try {
-      caller = await requireAdminOrSapSession(req);
+      caller = isList
+        ? (await requireUserOrSapSession(req)) as Awaited<ReturnType<typeof requireAdminOrSapSession>>
+        : await requireAdminOrSapSession(req);
     } catch (err) {
       const r = authErrorResponse(err, corsHeaders);
       if (r) return r;
       throw err;
     }
+    if (!(caller as { source?: string }).source) {
+      const u = caller as unknown as { email?: string | null };
+      caller = {
+        ...(caller as object),
+        source: "cloud_user",
+        userName: u.email || "",
+      } as typeof caller;
+    }
 
-    let body: { companyDb?: string; action?: string; decision?: string; limit?: number } = {};
-    try { body = await req.json(); } catch { /* no body */ }
     const companyDb = (body.companyDb || req.headers.get("x-company-db") || "").trim();
     if (!companyDb) {
       return jsonResponse({ success: false, error: "companyDb é obrigatório" }, 400);
@@ -527,9 +542,10 @@ Deno.serve(async (req) => {
     if (caller.source === "sap_session" && caller.companyDB !== companyDb) {
       return jsonResponse({ success: false, error: "Empresa inválida para a sessão atual" }, 403);
     }
-    if (body.action === "list") {
+    if (isList) {
       return await listApprovalHistory(supabase, req, caller, { ...body, companyDb });
     }
+
 
     // Lock anti-execução-paralela
     lockAcquired = await tryWatcherLock(supabase, "approval-history-sync", 20);
