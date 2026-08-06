@@ -108,10 +108,12 @@ Deno.serve(async (req) => {
 
   const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
   const auditKey = Deno.env.get("ATTACHMENT_AUDIT_KEY") || "";
+  const auditKey2 = Deno.env.get("ATTACHMENT_AUDIT_KEY2") || "";
   const bearer = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
   const provided = req.headers.get("x-internal-key") || "";
   const internal = (!!svcKey && (provided === svcKey || bearer === svcKey)) ||
-    (!!auditKey && provided === auditKey);
+    (!!auditKey && provided === auditKey) ||
+    (!!auditKey2 && provided === auditKey2);
   if (!internal) {
     let ok = false;
     try { ok = await isCallerPrivileged(req, admin); } catch { ok = false; }
