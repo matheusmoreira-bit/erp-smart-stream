@@ -125,6 +125,16 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
   return { identity, email, userName, id, privileged, directorateBranch, companyDB };
 }
 
+async function identifyCallerCached(req: Request, admin: SupabaseClient): Promise<Caller> {
+  const key = callerCacheKey(req);
+  const hit = callerCache.get(key);
+  if (hit && hit.expiresAt > Date.now()) return hit.value;
+  const value = await identifyCaller(req, admin);
+  if (callerCache.size > 500) callerCache.clear();
+  callerCache.set(key, { expiresAt: Date.now() + CALLER_TTL_MS, value });
+  return value;
+}
+
 /** Uma despesa pertence ao caller quando ele é solicitante, criador ou aprovador. */
 function ownsExpense(
   row: Record<string, unknown>,
