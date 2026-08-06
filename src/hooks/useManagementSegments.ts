@@ -2,17 +2,24 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { canonicalUserKey } from "@/lib/user-identity";
 
-export type ManagementSegment = "gestao_1" | "gestao_2";
+export type ManagementSegment = "gestao_1" | "gestao_2" | "csc";
 
 export const MANAGEMENT_SEGMENT_LABEL: Record<ManagementSegment, string> = {
-  gestao_1: "Gestão 1",
-  gestao_2: "Gestão 2",
+  gestao_1: "ANA Gaming",
+  gestao_2: "Lótus",
+  csc: "CSC",
 };
 
+export const MANAGEMENT_SEGMENTS: ManagementSegment[] = ["gestao_1", "gestao_2", "csc"];
+
+function parseSegment(value: string | null | undefined): ManagementSegment {
+  return value === "gestao_2" || value === "csc" ? value : "gestao_1";
+}
+
 /**
- * Campo opcional de segmentação da empresa (Gestão 1 / Gestão 2),
+ * Campo opcional de segmentação da empresa (ANA Gaming / Lótus / CSC),
  * guardado por usuário canônico em `sap_user_directory.management_segment`.
- * Padrão: Gestão 1.
+ * Padrão: ANA Gaming.
  */
 export function useManagementSegments() {
   const [map, setMap] = useState<Record<string, ManagementSegment>>({});
@@ -25,7 +32,7 @@ export function useManagementSegments() {
       .select("user_key, management_segment");
     const next: Record<string, ManagementSegment> = {};
     for (const row of (data || []) as { user_key: string; management_segment: string | null }[]) {
-      next[row.user_key] = row.management_segment === "gestao_2" ? "gestao_2" : "gestao_1";
+      next[row.user_key] = parseSegment(row.management_segment);
     }
     setMap(next);
     setLoading(false);
