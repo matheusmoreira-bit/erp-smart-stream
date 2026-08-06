@@ -220,7 +220,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
               </h1>
               <p className="text-sm text-muted-foreground">
                 {embedded
-                  ? `Usuários da empresa ${session?.companyName || session?.companyDB || ""}`
+                  ? `Usuários da empresa ${session?.companyDB || ""}`
                   : "Gerencie o acesso e senhas dos usuários do SAP"}
               </p>
             </div>
