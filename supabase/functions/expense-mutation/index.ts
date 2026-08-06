@@ -396,6 +396,17 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     if (itemsErr) return json(500, { error: `Falha ao inserir itens: ${itemsErr.message}` });
   }
 
+  // Fluxos independentes por segmento (CC + projeto) — cada um com a sua cadeia.
+  if (rateioSegments && rateioSegments.length > 0) {
+    try {
+      await persistRateioSegments(admin, expenseId, rateioSegments, requesterName, requesterEmail);
+    } catch (e) {
+      console.warn("[expense-mutation] falha ao gravar segmentos de rateio:", (e as Error)?.message || e);
+    }
+  }
+
+
+
   await admin.from("expense_approval_log").insert({
     expense_id: expenseId,
     decision: "created",
