@@ -284,21 +284,26 @@ export function useApprovalRules(options?: { backfill?: boolean }) {
       const ruleIds = (data || []).map((r: any) => r.id);
       let levelsMap: Record<string, ApprovalRuleLevel[]> = {};
       if (ruleIds.length > 0) {
-        // Chunk the .in() query to avoid URL length limits when there are many rules
+        // Chunk the .in() query to avoid URL length limits when there are many rules.
+        // Os chunks são buscados em paralelo — com centenas de regras, o modo
+        // sequencial adicionava vários round-trips ao carregamento da tela.
         const CHUNK_SIZE = 100;
-        for (let i = 0; i < ruleIds.length; i += CHUNK_SIZE) {
-          const chunk = ruleIds.slice(i, i + CHUNK_SIZE);
-          const { data: levels, error: lvlErr } = await supabase
-            .from("approval_rule_levels")
-            .select("*")
-            .in("rule_id", chunk)
-            .order("level_order", { ascending: true });
+        const chunks: string[][] = [];
+        for (let i = 0; i < ruleIds.length; i += CHUNK_SIZE) chunks.push(ruleIds.slice(i, i + CHUNK_SIZE));
+        const results = await Promise.all(
+          chunks.map((chunk) =>
+            supabase
+              .from("approval_rule_levels")
+              .select("*")
+              .in("rule_id", chunk)
+              .order("level_order", { ascending: true }),
+          ),
+        );
+        for (const { data: levels, error: lvlErr } of results) {
           if (lvlErr) throw lvlErr;
-          if (levels) {
-            for (const lvl of levels as any[]) {
-              if (!levelsMap[lvl.rule_id]) levelsMap[lvl.rule_id] = [];
-              levelsMap[lvl.rule_id].push(lvl);
-            }
+          for (const lvl of (levels || []) as any[]) {
+            if (!levelsMap[lvl.rule_id]) levelsMap[lvl.rule_id] = [];
+            levelsMap[lvl.rule_id].push(lvl);
           }
         }
       }
@@ -309,9 +314,10 @@ export function useApprovalRules(options?: { backfill?: boolean }) {
         const normalizedCriteria = normalizeCriteria(rawCriteria);
         // Backfill oportunista: se a normalização mudou a forma persistida
         // (regra legada sem `logic`/`group`/`groupLogic`), grava a versão
-        // normalizada de volta no banco em segundo plano. Falhas são
-        // silenciosas — na próxima leitura tentaremos de novo.
-        if (JSON.stringify(rawCriteria) !== JSON.stringify(normalizedCriteria)) {
+        // normalizada de volta no banco em segundo plano. Desligado em telas
+        // que só leem a matriz (ex.: Aprovações), para não gerar centenas de
+        // writes durante o carregamento.
+        if (backfillEnabled && JSON.stringify(rawCriteria) !== JSON.stringify(normalizedCriteria)) {
           void supabase
             .from("approval_rules")
             .update({ criteria: normalizedCriteria as any })
