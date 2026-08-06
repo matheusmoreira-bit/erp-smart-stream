@@ -23,6 +23,11 @@ const SCOPED_COMPANY_DBS = [
   "SBO_TESTE_20260318_ANAGAMING",
   "open_gaming_sa",
   "SBO_OPENGAMING",
+  "SBO_TST_OPENGAMING",
+  // Bases só com gestão CSC (CSC enxerga todos os projetos).
+  "SBO_CACTUS",
+  "SBO_INSTITUTO_ANA",
+  "cactus_providers",
 ];
 
 export function isSegmentScopedCompany(companyDb: string | null | undefined): boolean {
