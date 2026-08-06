@@ -923,7 +923,102 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
   } as any);
   await writeAuditLog("approved", currentLevel);
 
-  if (!isFinalLevel) {
+  // ── RATEIO: aprovação por SEGMENTO (fluxos independentes) ──────────────
+  if (segmentMode) {
+    const reqName = (exp as any).requester_name || null;
+    const reqEmail = (exp as any).requester_email || null;
+    const mine = pendingSegments.filter((s) =>
+      !!callerIdentity && isDesignatedApprover(callerIdentity as string, s.current_approver, s.current_approver_email),
+    );
+    // Admin/superusuário/substituto sem casar textualmente → aprova todos os
+    // segmentos pendentes (override explícito).
+    const targets = mine.length > 0 ? mine : pendingSegments;
+
+    const advancedNotifications: Array<{ name: string | null; email: string | null; level: number; seg: SegmentRow }> = [];
+    for (const seg of targets) {
+      const next = advanceSegment(seg, reqName, reqEmail);
+      await admin.from("expense_approval_segments").update({
+        status: next.status,
+        current_level: next.current_level,
+        current_approver: next.current_approver,
+        current_approver_email: next.current_approver_email,
+        decided_by: actor,
+        decided_at: new Date().toISOString(),
+      }).eq("id", seg.id);
+      if (!next.finished) {
+        advancedNotifications.push({
+          name: next.current_approver, email: next.current_approver_email, level: next.current_level, seg,
+        });
+      }
+    }
+
+    const after = await loadRateioSegments(admin, expenseId);
+    const stillPending = after.filter((s) => s.status === "pendente");
+    stageLog("rateio_segments", "info", {
+      requestId, expenseId, approvedSegments: targets.map((t) => t.segment_key),
+      stillPending: stillPending.map((s) => `${s.segment_key}:${s.current_approver}`),
+    });
+
+    if (stillPending.length > 0) {
+      const label = pendingApproverLabel(after);
+      const minLevel = Math.min(...stillPending.map((s) => Number(s.current_level) || 1));
+      const updates: Record<string, unknown> = {
+        current_approver: label,
+        current_level_order: minLevel,
+      };
+      if (remarks) updates.remarks = remarks;
+      await admin.from("expenses").update(updates).eq("id", expenseId);
+
+      for (const n of advancedNotifications) {
+        await notifyApprovalPending(admin, {
+          expenseId,
+          companyDb: (exp as any).company_db,
+          approverEmail: n.email,
+          approverName: n.name,
+          levelOrder: n.level,
+          requesterName: (exp as any).requester_name,
+          supplierName: (exp as any).supplier_name,
+          totalAmount: Number(n.seg.amount || (exp as any).total_amount || 0),
+          currency: (exp as any).currency,
+          docType: String((exp as any).doc_type || "purchase"),
+          resolution: {
+            source: "next_level",
+            reason: `Próximo nível da alçada do segmento ${n.seg.cost_center || "—"} / ${n.seg.project || "—"}`,
+            ruleId: n.seg.rule_id,
+            costCenter: n.seg.cost_center,
+            project: n.seg.project,
+            metadata: { segment: n.seg.segment_key, independent_chain: true },
+          },
+        });
+      }
+
+      return await respond(200, {
+        ok: true,
+        action: "approve",
+        finalized: false,
+        overrideUsed: isOverride && !isMatch,
+        nextApproverName: stillPending[0]?.current_approver || null,
+        nextApproverEmail: stillPending[0]?.current_approver_email || null,
+        currentLevel: minLevel,
+        pendingSegments: stillPending.map((s) => ({
+          cost_center: s.cost_center, project: s.project, approver: s.current_approver, level: s.current_level,
+        })),
+        expense: {
+          id: expenseId,
+          requester_name: (exp as any).requester_name,
+          requester_email: (exp as any).requester_email,
+          supplier_name: (exp as any).supplier_name,
+          total_amount: (exp as any).total_amount,
+          currency: (exp as any).currency,
+          company_db: (exp as any).company_db,
+        },
+      });
+    }
+    // Todos os segmentos aprovados → segue para a finalização normal abaixo.
+  }
+
+  if (!segmentMode && !isFinalLevel) {
+
     // Próximo nível DISTINTO (paralelo: várias linhas com o mesmo level_order
     // contam como 1 só nível). Self-approval guard continua valendo.
     const nextDistinct = distinctLevels.find((lo) => lo > currentLevel) || (currentLevel + 1);
