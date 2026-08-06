@@ -18,8 +18,15 @@ type SapSessionValidation = {
   source: "sap_session";
 };
 
-const SAP_SESSION_VALIDATION_CACHE_TTL_MS = 60_000;
+// A validação em si (token assinado / probe no Service Layer) é cara: cada
+// tela dispara várias requisições e todas pagavam esse custo. O resultado é
+// cacheado por 5 min; as checagens de segurança (revogação/desligamento) são
+// revalidadas em janela curta e separada — ver SAP_SESSION_SECURITY_TTL_MS.
+const SAP_SESSION_VALIDATION_CACHE_TTL_MS = 300_000;
+const SAP_SESSION_SECURITY_TTL_MS = 60_000;
 const sapSessionValidationCache = new Map<string, { expiresAt: number; value: SapSessionValidation }>();
+/** key → timestamp até o qual as checagens de revogação/IdP são consideradas frescas. */
+const sapSessionSecurityCache = new Map<string, number>();
 const encoder = new TextEncoder();
 
 /* ─────────── Strict header validation ───────────
