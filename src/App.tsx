@@ -48,6 +48,7 @@ import SapStatusSync from "./pages/SapStatusSync.tsx";
 import SapSyncRuns from "./pages/SapSyncRuns.tsx";
 import BackofficeCopilot from "./pages/BackofficeCopilot.tsx";
 import InfraHealth from "./pages/InfraHealth.tsx";
+import DbPerformance from "./pages/DbPerformance.tsx";
 import IntegrationHealth from "./pages/IntegrationHealth.tsx";
 import AuditTimeline from "./pages/AuditTimeline.tsx";
 import AccessReview from "./pages/AccessReview.tsx";
