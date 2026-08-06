@@ -2175,8 +2175,9 @@ export function CreateExpenseModal({
 
       // Documento integrado ao ERP SEM anexo → notifica fiscal@anagaming.com.br
       // com o resumo do lançamento para que o time solicite o anexo depois.
+      // Pedidos de venda podem ser integrados sem anexo → não notificar.
       // Best-effort: falha aqui NÃO deve reverter a criação já concluída.
-      if (!files || files.length === 0) {
+      if (!isSales && (!files || files.length === 0)) {
         try {
           const { data: userRes } = await supabase.auth.getUser();
           const requester = userRes?.user;
