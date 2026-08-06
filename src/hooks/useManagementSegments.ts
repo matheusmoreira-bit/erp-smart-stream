@@ -2,18 +2,36 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { canonicalUserKey } from "@/lib/user-identity";
 
-export type ManagementSegment = "gestao_1" | "gestao_2" | "csc";
+export type ManagementSegment = "gestao_1" | "gestao_2" | "csc" | "betbet" | "donald";
 
 export const MANAGEMENT_SEGMENT_LABEL: Record<ManagementSegment, string> = {
   gestao_1: "ANA Gaming",
   gestao_2: "Lótus",
   csc: "CSC",
+  betbet: "BET.BET",
+  donald: "DONALD",
 };
 
-export const MANAGEMENT_SEGMENTS: ManagementSegment[] = ["gestao_1", "gestao_2", "csc"];
+export const MANAGEMENT_SEGMENTS: ManagementSegment[] = [
+  "gestao_1",
+  "gestao_2",
+  "csc",
+  "betbet",
+  "donald",
+];
+
+/** Segmentos oferecidos em cada base (a Open Gaming usa CSC / BET.BET / DONALD). */
+export function segmentsForCompany(companyDb: string | null | undefined): ManagementSegment[] {
+  if (companyDb === "open_gaming_sa" || companyDb === "SBO_OPENGAMING") {
+    return ["csc", "betbet", "donald"];
+  }
+  return ["gestao_1", "gestao_2", "csc"];
+}
+
+const VALID_SEGMENTS = new Set<string>(MANAGEMENT_SEGMENTS);
 
 function parseSegment(value: string | null | undefined): ManagementSegment {
-  return value === "gestao_2" || value === "csc" ? value : "gestao_1";
+  return value && VALID_SEGMENTS.has(value) ? (value as ManagementSegment) : "gestao_1";
 }
 
 /**
