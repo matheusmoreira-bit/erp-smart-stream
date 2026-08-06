@@ -294,6 +294,7 @@ export function useSapCachedList({
       // 3. Only cache non-empty results
       if (rows.length > 0) {
         const expiresAt = new Date(Date.now() + getCacheTtlMs(cacheKey)).toISOString();
+        markSelfCacheWrite(cacheKey, companyDB);
         await supabase
           .from("sap_cache")
           .upsert(
@@ -306,6 +307,8 @@ export function useSapCachedList({
             { onConflict: "cache_key,company_db" }
           );
       }
+      lastLoadedAtRef.current = Date.now();
+
 
 
       setOptions(rows.map(mapRowRef.current));
