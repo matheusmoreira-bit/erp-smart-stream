@@ -7135,6 +7135,33 @@ export type Database = {
         }
         Relationships: []
       }
+      user_management_segments: {
+        Row: {
+          company_db: string
+          created_at: string
+          id: string
+          segment: string
+          updated_at: string
+          user_key: string
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          id?: string
+          segment: string
+          updated_at?: string
+          user_key: string
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          id?: string
+          segment?: string
+          updated_at?: string
+          user_key?: string
+        }
+        Relationships: []
+      }
       user_phones: {
         Row: {
           company_db: string
