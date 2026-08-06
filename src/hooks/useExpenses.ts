@@ -574,13 +574,14 @@ export function useExpenses(docType: ExpenseDocType = "purchase", options?: { st
           .order("created_at", { ascending: false });
       };
 
-      let { data, error: err } = await readExpenses();
-      if (err) {
+      let res = await readExpenses();
+      if (res.error) {
         // Uma nova tentativa cobre falhas transitórias (sessão renovada,
         // cold start da função, rede instável) antes de mostrar erro na tela.
         await new Promise((r) => setTimeout(r, 1200));
-        ({ data, error: err } = await readExpenses());
+        res = await readExpenses();
       }
+      const { data, error: err, items: childItems, attachments: childAttachments } = res;
 
       if (err) {
         const msg = (err as { message?: string })?.message || String(err);
