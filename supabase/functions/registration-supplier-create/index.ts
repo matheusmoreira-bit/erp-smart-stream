@@ -650,6 +650,9 @@ Deno.serve(async (req) => {
       );
 
       const finalCode = created.CardCode ?? cardCode;
+      // Novo BP no SAP: limpa o cache de listas para que os comboboxes de todas
+      // as telas abertas passem a enxergar o fornecedor imediatamente.
+      await purgeSapListCache(sb as any, companyDb, "business_partners");
       const fin = await closeAndNotify(sb, r, requestId, finalCode, caller.email, false);
       return json(200, { ok: true, cardCode: finalCode, ...fin });
     } finally {
