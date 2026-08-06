@@ -37,7 +37,7 @@ function formatDate(iso?: string | null) {
 
 export default function ApprovalHistory() {
   const navigate = useNavigate();
-  const { session } = useSap();
+  const { session, logout } = useSap();
   const { isAdmin: isLovableAdmin } = useAuth();
   const isAdmin = isLovableAdmin || (session?.isSuperUser ?? false);
   const { hasAccess: canViewAllApprovals } = useModuleAccess("approvals_view_all");
