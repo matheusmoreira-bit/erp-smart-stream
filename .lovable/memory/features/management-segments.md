@@ -9,7 +9,7 @@ type: feature
 - Hook `src/hooks/useManagementSegments.ts` (segmentOf / setSegment por chave canônica).
 - Editável na tela de Usuários (`/usuarios/lista`), linha "Gestão".
 - Recorte de projetos (`src/lib/management-segment-projects.ts`, capacidade `projects_scope_by_segment`):
-  - ANA Gaming → `ANA GAMING`, `7K`
+  - ANA Gaming → `7K`
   - Lótus → `VERA`, `CASSINO`
   - CSC → sem recorte (vê todos os projetos)
 - Vale apenas nas bases ANA Gaming (`SBO_ANAGAMING`, `SBO_TESTE_20260318_ANAGAMING`).
