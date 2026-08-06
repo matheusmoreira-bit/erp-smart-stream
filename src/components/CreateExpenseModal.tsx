@@ -2987,7 +2987,7 @@ export function CreateExpenseModal({
             />
             <div>
               <label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
-                <span>Data do Documento *</span>
+                <span>{isSales ? "Data de Lançamento *" : "Data do Documento *"}</span>
                 {docDate ? (
                   <CheckCircle2 className="w-3.5 h-3.5 text-green-500" aria-label="Preenchido" />
                 ) : (
@@ -3003,7 +3003,13 @@ export function CreateExpenseModal({
                     : "bg-amber-500/5 border-amber-500/50"
                 }`}
               />
+              {isSales && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Competência da nota. A data do documento no ERP é sempre a data de hoje.
+                </p>
+              )}
             </div>
+
             <div>
               <label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
                 <span>Data de Vencimento *</span>
