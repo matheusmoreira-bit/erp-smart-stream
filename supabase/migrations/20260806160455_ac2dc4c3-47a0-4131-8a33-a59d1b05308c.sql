@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.record_db_query_metrics(JSONB) FROM anon;
