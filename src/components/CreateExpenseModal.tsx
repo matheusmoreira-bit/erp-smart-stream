@@ -341,6 +341,19 @@ export function CreateExpenseModal({
     sapSession?.companyDB,
   ]);
 
+  // CC operacional (1.8/1.9/1.10/1.11): esconde projetos institucionais para
+  // quem não é CSC. Vale para todas as empresas.
+  const projectOptionsForCc = useCallback(
+    (ccCode: string | null | undefined) =>
+      filterInstitutionalProjects(projectOptions, myManagementSegment, ccCode),
+    [projectOptions, myManagementSegment],
+  );
+  const headerProjectOptions = useMemo(
+    () => projectOptionsForCc(headerCostCenter?.code ?? null),
+    [projectOptionsForCc, headerCostCenter],
+  );
+
+
 
   // ---- Alerta de casamento Centro de Custo × Projeto (auditável) ----
   const ccAlertEnabled = !isSales && projectOptions.length > 1;
