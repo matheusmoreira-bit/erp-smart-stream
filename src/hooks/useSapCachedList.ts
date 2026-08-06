@@ -65,16 +65,72 @@ export async function invalidateSapCache(
     console.warn("invalidateSapCache: failed to purge sap_cache rows", e);
   }
   // Fire in-memory listeners so mounted hooks reload immediately.
-  for (const k of keys) {
-    const set = listeners.get(listenerKey(k, companyDb));
-    if (set) for (const cb of set) cb();
-    // Also broadcast to listeners that didn't scope by companyDb (rare).
-    if (companyDb) {
-      const globalSet = listeners.get(listenerKey(k, null));
-      if (globalSet) for (const cb of globalSet) cb();
-    }
+  for (const k of keys) notifyKey(k, companyDb);
+}
+
+/** Dispara os listeners montados de uma cacheKey (escopo por companyDb). */
+function notifyKey(cacheKey: string, companyDb?: string | null) {
+  const set = listeners.get(listenerKey(cacheKey, companyDb));
+  if (set) for (const cb of set) cb();
+  // Também avisa listeners que não escoparam por companyDb (raro).
+  if (companyDb) {
+    const globalSet = listeners.get(listenerKey(cacheKey, null));
+    if (globalSet) for (const cb of globalSet) cb();
   }
 }
+
+// -----------------------------------------------------------------------------
+// Invalidação automática (Realtime)
+// -----------------------------------------------------------------------------
+// Quando o cache do ERP é atualizado ou limpo por OUTRO ator — outra aba, outro
+// usuário ou uma edge function após uma escrita no SAP (criação de fornecedor,
+// item, etc.) — as telas abertas precisam saber disso sem depender do TTL.
+// Escutamos as mudanças da tabela `sap_cache` via Realtime e re-carregamos
+// apenas as listas afetadas (cacheKey + company_db).
+let realtimeStarted = false;
+// Ecos das próprias escritas deste cliente: ignoramos por alguns segundos para
+// não gerar refetch redundante logo após um upsert local.
+const selfWrites = new Map<string, number>();
+const SELF_ECHO_MS = 5000;
+
+export function markSelfCacheWrite(cacheKey: string, companyDb?: string | null) {
+  selfWrites.set(listenerKey(cacheKey, companyDb), Date.now());
+}
+
+function isSelfEcho(cacheKey: string, companyDb?: string | null) {
+  const k = listenerKey(cacheKey, companyDb);
+  const at = selfWrites.get(k);
+  if (!at) return false;
+  if (Date.now() - at > SELF_ECHO_MS) {
+    selfWrites.delete(k);
+    return false;
+  }
+  return true;
+}
+
+function ensureRealtimeInvalidation() {
+  if (realtimeStarted || typeof window === "undefined") return;
+  realtimeStarted = true;
+  supabase
+    .channel("sap-cache-invalidation")
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "sap_cache" },
+      (payload: any) => {
+        const rec = (payload?.new ?? payload?.old ?? {}) as {
+          cache_key?: string;
+          company_db?: string | null;
+        };
+        const cacheKey = rec?.cache_key;
+        if (!cacheKey) return;
+        const companyDb = rec?.company_db ?? null;
+        if (isSelfEcho(cacheKey, companyDb)) return;
+        notifyKey(cacheKey, companyDb);
+      },
+    )
+    .subscribe();
+}
+
 
 // -----------------------------------------------------------------------------
 // Entidades que só devem exibir registros ATIVOS (todas as empresas/bases)
