@@ -334,18 +334,44 @@ function ExpenseDetailModal({
                 <p className="text-xs text-muted-foreground">Solicitante</p>
                 <p className="text-foreground font-medium">{expense.requester_name}</p>
               </div>
-              {expense.cost_center && (
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Centro de Custo</p>
-                  <p className="text-foreground">{expense.cost_center}</p>
-                </div>
-              )}
-              {expense.project && (
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Projeto</p>
-                  <p className="text-foreground">{expense.project}</p>
-                </div>
-              )}
+              {(() => {
+                const uniq = (vals: (string | null | undefined)[]) =>
+                  Array.from(new Set(vals.map((v) => (v || "").trim()).filter(Boolean)));
+                const ccs = uniq([...(expense.items || []).map((i: any) => i.cost_center), expense.cost_center]);
+                const projs = uniq([...(expense.items || []).map((i: any) => i.project), expense.project]);
+                const lineCcs = uniq((expense.items || []).map((i: any) => i.cost_center));
+                const lineProjs = uniq((expense.items || []).map((i: any) => i.project));
+                const ccList = lineCcs.length ? lineCcs : ccs;
+                const projList = lineProjs.length ? lineProjs : projs;
+                const Multi = () => (
+                  <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wider bg-sky-500/15 text-sky-600 border border-sky-500/30 rounded-full px-1.5 py-0.5">
+                    Múltiplos
+                  </span>
+                );
+                return (
+                  <>
+                    {ccList.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">Centro de Custo</p>
+                        <p className="text-foreground">
+                          {ccList.join(", ")}
+                          {ccList.length > 1 && <Multi />}
+                        </p>
+                      </div>
+                    )}
+                    {projList.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">Projeto</p>
+                        <p className="text-foreground">
+                          {projList.join(", ")}
+                          {projList.length > 1 && <Multi />}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Data de Criação</p>
                 <p className="text-foreground">{formatDate(expense.created_at)}</p>
