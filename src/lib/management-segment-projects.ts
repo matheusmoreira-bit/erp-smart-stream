@@ -1,4 +1,4 @@
-import type { ManagementSegment } from "@/hooks/useManagementSegments";
+import { segmentsForCompany, type ManagementSegment } from "@/hooks/useManagementSegments";
 import { normalizeCompact } from "@/lib/text-normalize";
 
 /**
@@ -11,12 +11,19 @@ import { normalizeCompact } from "@/lib/text-normalize";
 export const SEGMENT_PROJECT_CODES: Record<ManagementSegment, string[] | null> = {
   gestao_1: ["7K"],
   gestao_2: ["VERA", "CASSINO"],
+  betbet: ["BET.BET"],
+  donald: ["DONALD"],
   // CSC atende todas as frentes: sem recorte de projetos.
   csc: null,
 };
 
-/** Bases em que o recorte por segmento vale (ANA Gaming produção e teste). */
-const SCOPED_COMPANY_DBS = ["SBO_ANAGAMING", "SBO_TESTE_20260318_ANAGAMING"];
+/** Bases em que o recorte por segmento vale (ANA Gaming e Open Gaming). */
+const SCOPED_COMPANY_DBS = [
+  "SBO_ANAGAMING",
+  "SBO_TESTE_20260318_ANAGAMING",
+  "open_gaming_sa",
+  "SBO_OPENGAMING",
+];
 
 export function isSegmentScopedCompany(companyDb: string | null | undefined): boolean {
   return !!companyDb && SCOPED_COMPANY_DBS.includes(companyDb);
@@ -33,6 +40,8 @@ export function filterProjectsBySegment<T extends { code: string; name?: string 
   companyDb: string | null | undefined,
 ): T[] {
   if (!isSegmentScopedCompany(companyDb)) return options;
+  // Segmento de outra base (ex.: ANA Gaming em Open Gaming) não recorta nada.
+  if (!segmentsForCompany(companyDb).includes(segment)) return options;
   const codes = SEGMENT_PROJECT_CODES[segment];
   if (!codes) return options;
   const allowed = codes.map(normalize);
