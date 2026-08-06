@@ -1414,7 +1414,9 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         }
         lastSapPayload = sapPayload;
         sapResult = await sendDocument();
+        }
       }
+
       lastSapResponse = sapResult.response;
       purchaseOrderStatus = "success";
       if (attachmentEntry !== null) {
