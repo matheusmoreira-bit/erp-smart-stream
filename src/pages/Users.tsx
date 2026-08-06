@@ -139,8 +139,11 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
 
   const filteredUsers = useMemo(() => {
     let list = users;
+    const q = search.trim().toLowerCase();
 
-    if (viewMode === "recorrentes" && hasAnyLoginData) {
+    // A busca sempre percorre a lista completa: usuários recém-criados ainda
+    // não têm último acesso e ficariam escondidos pelo modo "recorrentes".
+    if (viewMode === "recorrentes" && hasAnyLoginData && !q) {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - 60);
       list = list.filter((u) => {
@@ -150,8 +153,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
       });
     }
 
-    if (search.trim()) {
-      const q = search.toLowerCase();
+    if (q) {
       list = list.filter(
         (u) =>
           u.UserName.toLowerCase().includes(q) ||
@@ -164,6 +166,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
       (a.UserName || a.UserCode || "").localeCompare(b.UserName || b.UserCode || "", "pt-BR", { sensitivity: "base" })
     );
   }, [users, search, viewMode, hasAnyLoginData]);
+
 
   const handleConfirm = async () => {
     if (!confirmAction) return;
