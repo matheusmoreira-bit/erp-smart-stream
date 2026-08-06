@@ -227,7 +227,7 @@ function applyFilters(query: any, filters: any[]): { query: any; error?: string 
   return { query };
 }
 
-const OR_RE = /^[A-Za-z0-9_.,%@\-\s:+*'"]+$/;
+const OR_RE = /^[A-Za-zÀ-ÿ0-9_.,%@\-\s:+*'"()]+$/;
 
 Deno.serve(async (req) => {
   const cors = corsFor(req, "POST, OPTIONS");
