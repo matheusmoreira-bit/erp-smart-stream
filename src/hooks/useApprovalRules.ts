@@ -255,24 +255,43 @@ export function normalizeCriteria(criteria: RuleCriterion[] | undefined | null):
 
 
 
+// Cache em memória da matriz por empresa (stale-while-revalidate).
+// A matriz muda pouco e é grande (centenas de regras + níveis); telas de
+// leitura passam a renderizar imediatamente enquanto revalidam em segundo plano.
+const rulesCache = new Map<string, { rules: ApprovalRule[]; at: number }>();
+const RULES_TTL_MS = 5 * 60 * 1000;
+
 export function useApprovalRules(options?: { backfill?: boolean }) {
   const backfillEnabled = options?.backfill !== false;
   const { session } = useSap();
   const activeCompanyDb = session?.companyDB || null;
-  const [rules, setRules] = useState<ApprovalRule[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const cached = activeCompanyDb ? rulesCache.get(activeCompanyDb) : undefined;
+  const [rules, setRules] = useState<ApprovalRule[]>(cached?.rules || []);
+  const [isLoading, setIsLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchRules = useCallback(async () => {
-    setIsLoading(true);
+
+  const fetchRules = useCallback(async (opts?: { force?: boolean }) => {
     setError(null);
     try {
       // Scope rules to the active company. If there is no session, return nothing
       // instead of leaking other companies' rules.
       if (!activeCompanyDb) {
         setRules([]);
+        setIsLoading(false);
         return;
       }
+
+      const hit = rulesCache.get(activeCompanyDb);
+      if (hit) {
+        setRules(hit.rules);
+        setIsLoading(false);
+        // Cache fresco e sem force: nada a revalidar.
+        if (!opts?.force && Date.now() - hit.at < RULES_TTL_MS) return;
+      } else {
+        setIsLoading(true);
+      }
+
 
       const { data, error: err } = await supabase
         .from("approval_rules")
@@ -333,6 +352,7 @@ export function useApprovalRules(options?: { backfill?: boolean }) {
           levels: levelsMap[r.id] || [],
         };
       });
+      rulesCache.set(activeCompanyDb, { rules: normalized, at: Date.now() });
       setRules(normalized);
 
     } catch (e) {
@@ -387,7 +407,7 @@ export function useApprovalRules(options?: { backfill?: boolean }) {
         p_details: { name: input.name, doc_type: input.doc_type || "both" } as any,
       });
 
-      await fetchRules();
+      await fetchRules({ force: true });
       return rule;
     },
     [fetchRules, activeCompanyDb]
@@ -443,7 +463,7 @@ export function useApprovalRules(options?: { backfill?: boolean }) {
         p_details: { name: input.name, doc_type: input.doc_type || "both" } as any,
       });
 
-      await fetchRules();
+      await fetchRules({ force: true });
     },
     [fetchRules, activeCompanyDb]
   );
@@ -462,7 +482,7 @@ export function useApprovalRules(options?: { backfill?: boolean }) {
         p_company_db: activeCompanyDb,
         p_details: {} as any,
       });
-      await fetchRules();
+      await fetchRules({ force: true });
     },
     [fetchRules, activeCompanyDb]
   );
@@ -481,7 +501,7 @@ export function useApprovalRules(options?: { backfill?: boolean }) {
         p_company_db: activeCompanyDb,
         p_details: {} as any,
       });
-      await fetchRules();
+      await fetchRules({ force: true });
     },
     [fetchRules, activeCompanyDb]
   );
@@ -490,5 +510,11 @@ export function useApprovalRules(options?: { backfill?: boolean }) {
     fetchRules();
   }, [fetchRules]);
 
-  return { rules, isLoading, error, refresh: fetchRules, createRule, updateRule, toggleRule, deleteRule };
+  // refresh() é usado como handler de clique em vários lugares — não pode
+  // aceitar parâmetros; sempre revalida ignorando o cache.
+  const refresh = useCallback(async () => {
+    await fetchRules({ force: true });
+  }, [fetchRules]);
+
+  return { rules, isLoading, error, refresh, createRule, updateRule, toggleRule, deleteRule };
 }
