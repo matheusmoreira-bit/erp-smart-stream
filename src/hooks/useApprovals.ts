@@ -365,22 +365,29 @@ async function getStageApprovers(session: SapSession, stageCode: number): Promis
   }
 
   try {
+    // A coleção de aprovadores da etapa é ApprovalStageApprovers[].UserID e
+    // não é retornada quando se usa $select — por isso buscamos a entidade inteira.
     const res = await sapQuery(
       session,
-      `ApprovalStages(${stageCode})?$select=Code,StageApprovers`,
+      `ApprovalStages(${stageCode})`,
       undefined,
       true,
     );
-    const raw = res.data as { StageApprovers?: Array<{ UserCode?: number }> };
-    const ids = (raw?.StageApprovers || [])
-      .map((a) => Number(a.UserCode))
-      .filter((n) => Number.isFinite(n) && n > 0);
+    const raw = res.data as {
+      ApprovalStageApprovers?: Array<{ UserID?: number }>;
+      StageApprovers?: Array<{ UserCode?: number }>;
+    };
+    const ids = Array.from(new Set([
+      ...(raw?.ApprovalStageApprovers || []).map((a) => Number(a.UserID)),
+      ...(raw?.StageApprovers || []).map((a) => Number(a.UserCode)),
+    ].filter((n) => Number.isFinite(n) && n > 0)));
     bucket.set(stageCode, ids);
     return ids;
   } catch {
     return [];
   }
 }
+
 
 async function fetchDraftsByEntries(session: SapSession, entries: number[]): Promise<Map<number, SLDraft>> {
   const map = new Map<number, SLDraft>();
