@@ -29,6 +29,8 @@ import { enforceRateLimit } from "../_shared/rate-limit.ts";
 import { findMatchingRule, pickHierarchicalFallbackRule, type RuleRow } from "../_shared/rule-match.ts";
 import { applyCcRedirect, loadCcRedirects } from "../_shared/cc-redirect.ts";
 import { buildRateioChain } from "../_shared/rateio-chain.ts";
+import { buildRateioSegments, persistRateioSegments } from "../_shared/rateio-segments.ts";
+
 
 
 const corsHeaders = {
