@@ -40,6 +40,8 @@ export function filterProjectsBySegment<T extends { code: string; name?: string 
   companyDb: string | null | undefined,
 ): T[] {
   if (!isSegmentScopedCompany(companyDb)) return options;
+  // Segmento de outra base (ex.: ANA Gaming em Open Gaming) não recorta nada.
+  if (!segmentsForCompany(companyDb).includes(segment)) return options;
   const codes = SEGMENT_PROJECT_CODES[segment];
   if (!codes) return options;
   const allowed = codes.map(normalize);
