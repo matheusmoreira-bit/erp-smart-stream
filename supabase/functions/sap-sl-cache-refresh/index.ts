@@ -110,6 +110,25 @@ Deno.serve(async (req) => {
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
   try {
+    const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
+    if (body?.debug_path && body?.company_db) {
+      const { data: credRows } = await sb
+        .from("system_credentials")
+        .select("credential_key,credential_value")
+        .eq("system_name", "sap")
+        .eq("company_db", body.company_db);
+      const creds: Record<string, string> = {};
+      for (const row of credRows || []) creds[row.credential_key as string] = row.credential_value as string;
+      const baseUrl = buildBaseUrl(creds.service_layer_url);
+      const cookie = await login(baseUrl, creds.company_db || body.company_db, creds.username, creds.password);
+      try {
+        const out = await slGet<unknown>(baseUrl, cookie, body.debug_path);
+        return new Response(JSON.stringify(out), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } finally { await logout(baseUrl, cookie); }
+    }
+
     // 1) Empresas SAP sem middleware HANA
     const { data: flags, error: flagErr } = await sb
       .from("system_credentials")
