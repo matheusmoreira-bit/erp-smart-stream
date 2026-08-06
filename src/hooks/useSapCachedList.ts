@@ -238,6 +238,7 @@ export function useSapCachedList({
 
             // Cache válido (ou sem sessão para revalidar): encerra aqui.
             if (!isExpired || !session) {
+              lastLoadedAtRef.current = Date.now();
               setIsLoading(false);
               return;
             }
