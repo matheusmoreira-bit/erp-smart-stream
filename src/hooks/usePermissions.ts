@@ -3,6 +3,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import { canonicalUserKey } from "@/lib/user-identity";
 import {
+  clearAuthCache,
+
+  getIsCloudAdmin,
+  getIsSapUserAdmin,
+  getGroupAssignments,
+  getGroupModules,
+} from "@/lib/auth-cache";
+
+import {
   CAPABILITY_CATALOG,
   CAPABILITY_CATEGORIES,
   type CapabilityDef,
@@ -401,27 +410,13 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
       setLoading(true);
 
       // Cloud admin?
-      const { data: { session: authSession } } = await supabase.auth.getSession();
-      if (authSession?.user) {
-        const { data: roleData } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", authSession.user.id)
-          .eq("role", "admin")
-          .maybeSingle();
-        if (roleData) { grantAll(); return; }
-      }
+      if (await getIsCloudAdmin()) { grantAll(); return; }
 
       // SAP admin (matched by email/prefix)?
-      const { data: isAdminBySap } = await supabase.rpc("is_sap_user_admin", {
-        _sap_username: identifier,
-      });
-      if (isAdminBySap) { grantAll(); return; }
+      if (await getIsSapUserAdmin(identifier)) { grantAll(); return; }
 
       // Global assignments — one row per (sap_email, group_id).
-      const { data: allAssignments } = await supabase
-        .from("user_group_assignments")
-        .select("group_id, sap_email");
+      const allAssignments = await getGroupAssignments();
 
       const myKey = canonicalUserKey(identifier);
       const mine = (allAssignments || []).filter(
@@ -437,12 +432,10 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
         return;
       }
 
-      const groupIds = mine.map((a: any) => a.group_id);
+      const groupIds = mine.map((a: any) => a.group_id).filter(Boolean) as string[];
 
-      const { data: modules } = await supabase
-        .from("permission_group_modules")
-        .select("module_key, can_view, can_create, can_edit, can_delete, can_approve, can_integrate, can_export, group_id")
-        .in("group_id", groupIds);
+      const modules = await getGroupModules(groupIds);
+
 
       if (cancelled) return;
 
@@ -485,7 +478,12 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
   // reload permissions automatically so the menu updates without re-login.
   useEffect(() => {
     if (!session?.userName) return;
-    const bump = () => setRefreshTick((n) => n + 1);
+    const bump = () => {
+      // Invalida o cache compartilhado antes de recarregar.
+      clearAuthCache();
+      setRefreshTick((n) => n + 1);
+    };
+
     // Unique channel per hook instance — the same page can mount useModuleAccess
     // in multiple components (MainMenu, MobileBottomNav, MobileMenuSheet…) and
     // Realtime rejects re-subscribing callbacks under the same channel name.

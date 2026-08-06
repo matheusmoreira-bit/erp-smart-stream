@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import { identityMatches } from "@/lib/permission-group-utils";
+import {
+  getIsCloudAdmin,
+  getIsSapUserAdmin,
+  getGroupAssignments,
+  getGroupModules,
+} from "@/lib/auth-cache";
+
 
 export interface MyCapabilities {
   /** Capacidades ligadas em pelo menos um grupo do usuário. */
@@ -49,48 +55,26 @@ export function useMyCapabilities(): MyCapabilities {
 
       try {
         if (!privileged) {
-          const {
-            data: { session: authSession },
-          } = await supabase.auth.getSession();
-          if (authSession?.user) {
-            const { data: roleData } = await supabase
-              .from("user_roles")
-              .select("role")
-              .eq("user_id", authSession.user.id)
-              .eq("role", "admin")
-              .maybeSingle();
-            if (roleData) privileged = true;
-          }
-          if (!privileged) {
-            const { data: isAdminBySap } = await supabase.rpc("is_sap_user_admin", {
-              _sap_username: identifier,
-            });
-            if (isAdminBySap) privileged = true;
-          }
+          if (await getIsCloudAdmin()) privileged = true;
+          if (!privileged && (await getIsSapUserAdmin(identifier))) privileged = true;
         }
 
-        const { data: assignments } = await supabase
-          .from("user_group_assignments")
-          .select("sap_email, group_id, permission_groups(name)");
+        const assignments = await getGroupAssignments();
 
-        const mine = (assignments || []).filter((a: any) =>
-          identityMatches(a.sap_email, identifier),
-        );
-        names = mine.map((a: any) => String(a.permission_groups?.name || "")).filter(Boolean);
+        const mine = assignments.filter((a) => identityMatches(a.sap_email, identifier));
+        names = mine.map((a) => String(a.permission_groups?.name || "")).filter(Boolean);
 
-        const groupIds = Array.from(new Set(mine.map((a: any) => a.group_id))).filter(Boolean);
+        const groupIds = Array.from(new Set(mine.map((a) => a.group_id))).filter(
+          Boolean,
+        ) as string[];
         if (groupIds.length) {
-          const { data: rows } = await supabase
-            .from("permission_group_modules")
-            .select("module_key, can_view, group_id")
-            .in("group_id", groupIds);
+          const rows = await getGroupModules(groupIds);
           caps = new Set(
-            (rows || [])
-              .filter((r: any) => r.can_view !== false)
-              .map((r: any) => String(r.module_key)),
+            rows.filter((r) => r.can_view !== false).map((r) => String(r.module_key)),
           );
         }
       } catch {
+
         /* mantém defaults restritos */
       }
 
