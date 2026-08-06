@@ -35,6 +35,7 @@ import { Badge } from "@/components/ui/badge";
 import { useApprovals, type ApprovalDoc, type DocumentLine } from "@/hooks/useApprovals";
 import { FilterMultiSelect } from "@/components/FilterMultiSelect";
 import { useExpenses, type Expense } from "@/hooks/useExpenses";
+import { expenseRead } from "@/lib/expense-read";
 import { useMyRequests, type MyRequestDoc, type ApprovalHistoryEntry } from "@/hooks/useMyRequests";
 import { useLazyList } from "@/hooks/useLazyList";
 import { savePostLoginPath } from "@/lib/post-login-redirect";
@@ -1989,8 +1990,11 @@ export default function ApprovalsPage() {
   const { isAdmin: isLovableAdmin } = useAuth();
   const navigate = useNavigate();
   const { approvals, isLoading, isRefreshing, error, lastUpdatedAt, refresh, refreshCache, removeLocal: removeApprovalLocal } = useApprovals();
-  const { expenses: purchaseExpenses, refresh: refreshPurchase, approveExpense, rejectExpense, isLoading: isLoadingPurchase, removeLocal: removePurchaseLocal } = useExpenses("purchase");
-  const { expenses: salesExpenses, refresh: refreshSales, isLoading: isLoadingSales, removeLocal: removeSalesLocal } = useExpenses("sales");
+  // Esta tela só usa documentos internos pendentes de aprovação — buscar todo
+  // o histórico (com itens e anexos) era o principal custo do carregamento.
+  const PENDING_ONLY = useMemo(() => ["pendente_aprovacao"], []);
+  const { expenses: purchaseExpenses, refresh: refreshPurchase, approveExpense, rejectExpense, isLoading: isLoadingPurchase, removeLocal: removePurchaseLocal } = useExpenses("purchase", { statuses: PENDING_ONLY });
+  const { expenses: salesExpenses, refresh: refreshSales, isLoading: isLoadingSales, removeLocal: removeSalesLocal } = useExpenses("sales", { statuses: PENDING_ONLY });
   const expenses = [...purchaseExpenses, ...salesExpenses];
   const refreshExpenses = () => Promise.all([refreshPurchase(), refreshSales()]);
   const removeExpenseLocal = (internalId: string) => {
@@ -2056,7 +2060,8 @@ export default function ApprovalsPage() {
   const { getCostCentersForEmail } = useApproverCostCenters(session?.companyDB);
   const { officials: activeOfficials } = useActiveOfficialsForMe();
   const { grants: substituteGrants, refresh: refreshSubstituteGrants } = useSubstituteGrantsForMe();
-  const { rules } = useApprovalRules();
+  // Somente leitura nesta tela — evita centenas de writes de backfill no load.
+  const { rules } = useApprovalRules({ backfill: false });
 
 
   // Merge SAP approvals with internal pending expenses.
@@ -2158,12 +2163,27 @@ export default function ApprovalsPage() {
         setDocParam(null);
         navigate(`${salesHit ? "/vendas/pedidos" : "/compras"}?doc=${encodeURIComponent(rawId)}`);
       } else {
-        // Documento não existe (id inválido, empresa diferente ou sem permissão
-        // de visualização). Limpa o `?doc=` e mantém o usuário na listagem.
-        toast.error("Documento não encontrado.", {
-          description: "O link pode estar inválido, pertencer a outra empresa ou você não tem permissão para visualizá-lo.",
-        });
+        // A listagem desta tela traz apenas pendentes. Antes de dizer que o
+        // documento não existe, faz uma consulta pontual pelo id.
         setDocParam(null);
+        void (async () => {
+          const { data: found } = await expenseRead("expenses")
+            .select("id, doc_type")
+            .eq("id", rawId)
+            .limit(1);
+          const row = Array.isArray(found) ? found[0] : null;
+          if (row) {
+            const isSales = (row as { doc_type?: string }).doc_type === "sales";
+            toast.info("Este documento não está mais pendente.", {
+              description: `Abrindo em ${isSales ? "Vendas" : "Compras"}…`,
+            });
+            navigate(`${isSales ? "/vendas/pedidos" : "/compras"}?doc=${encodeURIComponent(rawId)}`);
+          } else {
+            toast.error("Documento não encontrado.", {
+              description: "O link pode estar inválido, pertencer a outra empresa ou você não tem permissão para visualizá-lo.",
+            });
+          }
+        })();
       }
     } else {
       // Chave `sap:<id>` inexistente na listagem carregada.
