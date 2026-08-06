@@ -9,7 +9,7 @@ import { normalizeCompact } from "@/lib/text-normalize";
  * projetos cada segmento enxerga nas bases da ANA Gaming.
  */
 export const SEGMENT_PROJECT_CODES: Record<ManagementSegment, string[] | null> = {
-  gestao_1: ["ANA GAMING", "7K"],
+  gestao_1: ["7K"],
   gestao_2: ["VERA", "CASSINO"],
   // CSC atende todas as frentes: sem recorte de projetos.
   csc: null,
