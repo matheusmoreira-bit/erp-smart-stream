@@ -182,6 +182,8 @@ export function useSapCachedList({
             setIsLoading(false);
           }
         }
+      }
+
 
       // 2. If no cache hit (or expired/forced) and we have a SAP session, fetch from SAP.
       //    Prefer the server-side Apiuser route (edge function sap-list-service)
