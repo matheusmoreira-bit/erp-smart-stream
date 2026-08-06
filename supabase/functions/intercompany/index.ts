@@ -665,6 +665,8 @@ Deno.serve(async (req) => {
         if (!r.ok) throw new Error(r.error);
         return { code };
       });
+      // Cadastro mestre replicado: invalida as listas cacheadas da base destino.
+      await purgeSapListCache(sb as any, String(target_company_db), isBP ? "business_partners" : "items");
       return json({ results });
     }
 
