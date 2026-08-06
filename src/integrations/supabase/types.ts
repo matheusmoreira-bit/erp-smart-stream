@@ -1934,6 +1934,51 @@ export type Database = {
         }
         Relationships: []
       }
+      db_query_metrics: {
+        Row: {
+          company_db: string | null
+          duration_ms: number
+          id: number
+          ok: boolean
+          operation: string
+          row_count: number | null
+          screen: string
+          source: string
+          started_at: string
+          status_code: number | null
+          target: string
+          user_id: string | null
+        }
+        Insert: {
+          company_db?: string | null
+          duration_ms: number
+          id?: number
+          ok?: boolean
+          operation?: string
+          row_count?: number | null
+          screen: string
+          source?: string
+          started_at?: string
+          status_code?: number | null
+          target: string
+          user_id?: string | null
+        }
+        Update: {
+          company_db?: string | null
+          duration_ms?: number
+          id?: number
+          ok?: boolean
+          operation?: string
+          row_count?: number | null
+          screen?: string
+          source?: string
+          started_at?: string
+          status_code?: number | null
+          target?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       document_drafts: {
         Row: {
           company_db: string
@@ -7507,6 +7552,56 @@ export type Database = {
               title: string
             }[]
           }
+      get_db_query_metrics_by_screen: {
+        Args: { _hours?: number }
+        Returns: {
+          avg_ms: number
+          error_rate: number
+          errors: number
+          last_at: string
+          max_ms: number
+          p50_ms: number
+          p95_ms: number
+          p99_ms: number
+          screen: string
+          slow_count: number
+          total: number
+          total_ms: number
+        }[]
+      }
+      get_db_query_metrics_by_target: {
+        Args: { _hours?: number; _screen?: string }
+        Returns: {
+          avg_ms: number
+          errors: number
+          last_at: string
+          max_ms: number
+          operation: string
+          p50_ms: number
+          p95_ms: number
+          p99_ms: number
+          screens: number
+          source: string
+          target: string
+          total: number
+          total_ms: number
+        }[]
+      }
+      get_db_slow_query_samples: {
+        Args: { _hours?: number; _limit?: number; _min_ms?: number }
+        Returns: {
+          company_db: string
+          duration_ms: number
+          ok: boolean
+          operation: string
+          row_count: number
+          screen: string
+          source: string
+          started_at: string
+          status_code: number
+          target: string
+        }[]
+      }
       get_default_expense_approver: {
         Args: { _company_db?: string }
         Returns: string
@@ -7606,6 +7701,17 @@ export type Database = {
           source: string
           status: string
           subject: string
+        }[]
+      }
+      get_pg_slow_queries: {
+        Args: { _limit?: number }
+        Returns: {
+          calls: number
+          max_ms: number
+          mean_ms: number
+          query: string
+          rows_total: number
+          total_ms: number
         }[]
       }
       get_sap_sync_health: { Args: { _last_n?: number }; Returns: Json }
@@ -7717,6 +7823,7 @@ export type Database = {
         Returns: string
       }
       preview_next_codigo: { Args: { p_item_base_id: string }; Returns: string }
+      prune_db_query_metrics: { Args: never; Returns: undefined }
       prune_edge_function_metrics: { Args: never; Returns: undefined }
       prune_old_integration_data: { Args: never; Returns: undefined }
       purge_expense_action_idempotency: {
@@ -7745,6 +7852,7 @@ export type Database = {
           new_level_order: number
         }[]
       }
+      record_db_query_metrics: { Args: { _events: Json }; Returns: number }
       register_external_api_failure: {
         Args: { _company_db: string; _reason: string; _user_code: string }
         Returns: undefined
