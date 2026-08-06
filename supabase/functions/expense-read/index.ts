@@ -63,6 +63,22 @@ interface Caller {
   companyDB: string | null;
 }
 
+/**
+ * Cache por instância (60s) da identificação do caller: uma única tela dispara
+ * várias chamadas seguidas e cada uma refazia JWT + sessão SAP + grupos.
+ */
+const CALLER_TTL_MS = 60_000;
+const callerCache = new Map<string, { expiresAt: number; value: Caller }>();
+
+function callerCacheKey(req: Request): string {
+  return [
+    req.headers.get("authorization") || "",
+    req.headers.get("x-sap-session") || "",
+    req.headers.get("x-sap-user") || "",
+    req.headers.get("x-company-db") || "",
+  ].join("|");
+}
+
 async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Caller> {
   let identity: string | null = null;
   let email: string | null = null;
