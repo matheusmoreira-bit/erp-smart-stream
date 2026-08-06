@@ -1149,6 +1149,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
     (async () => {
       // 1) Carrega cache imediatamente
+      let cacheFresh = false;
       try {
         const { data: cached } = await supabase
           .from("sap_cache")
@@ -1163,13 +1164,19 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
             setSapHasMore(rows.length >= SAP_PAGE_STEP);
             setSapFromCache(true);
             setSapCacheUpdatedAt((cached as any).updated_at || null);
+            const updatedAt = (cached as any).updated_at
+              ? new Date((cached as any).updated_at).getTime()
+              : 0;
+            // Consulta ao HANA leva ~15s: com cache recente (10 min) não vale
+            // repetir a cada montagem da tela. O botão "Sincronizar" força.
+            cacheFresh = Date.now() - updatedAt < SAP_CACHE_FRESH_MS;
           }
         }
       } catch (e) {
         console.warn("[Expenses] leitura de cache SAP falhou:", e);
       }
 
-      if (cancelled) return;
+      if (cancelled || cacheFresh) return;
       // 2) Revalida em background
       await revalidate(false);
     })();
