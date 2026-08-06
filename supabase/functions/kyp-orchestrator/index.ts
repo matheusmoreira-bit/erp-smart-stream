@@ -253,7 +253,28 @@ async function avaliarFornecedor(
     }
 
     if (decisao.acao === "CREATE") {
+      // Trava anti-duplicidade: se já abrimos uma diligência para este documento
+      // recentemente, reaproveitamos em vez de criar outra.
+      const reuso = await reaproveitarDiligencia(sb, forn.documento);
+      if (reuso) {
+        await sb.from("kyp_fornecedores").update({
+          status_atual: "PENDENTE",
+          ultima_avaliacao_em: new Date().toISOString(),
+          kyp_provider_id: ctx.providerId,
+          provider_ref_id: reuso.providerRefId || null,
+          provider_status: "pending",
+        }).eq("id", forn.id);
+        await registrar(
+          "NOOP",
+          "Diligência já aberta recentemente para este documento — criação evitada (anti-duplicidade).",
+          true,
+          reuso,
+          empresas,
+        );
+        return "NOOP";
+      }
       const criada = await ctx.adapter.criarDiligencia(ctx.session, {
+
         documento: forn.documento,
         nome: forn.nome ?? forn.documento,
         tipoPessoa: forn.tipo_pessoa,
