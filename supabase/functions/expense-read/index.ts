@@ -261,11 +261,7 @@ Deno.serve(async (req) => {
     const limit = Math.min(Number(body?.limit ?? MAX_ROWS) || MAX_ROWS, MAX_ROWS);
     const wantsAll = body?.scope === "all";
 
-    const aliases = await resolveCallerAliases(admin, {
-      id: caller.id,
-      email: caller.email ?? undefined,
-      userName: caller.userName ?? caller.identity ?? undefined,
-    });
+    const aliases = caller.aliases;
 
     const scoped = !(caller.privileged && wantsAll) && !caller.privileged;
 
