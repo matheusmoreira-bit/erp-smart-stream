@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { UserPlus, Loader2, CheckCircle2, XCircle, Building2 } from "lucide-react";
+import { UserPlus, Loader2, CheckCircle2, XCircle, Building2, RefreshCw, Copy, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
+import { PasswordPolicyChecklist } from "@/components/PasswordPolicyChecklist";
+import { checkPasswordPolicy, generateStrongPassword } from "@/lib/password-policy";
+
+type PasswordMode = "auto" | "manual";
+
 
 interface ReplicationResult {
   companyDB: string;
@@ -37,9 +42,13 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
   const [userCode, setUserCode] = useState("");
   const [userName, setUserName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("Sap@2025");
+  const [password, setPassword] = useState(() => generateStrongPassword(16));
+  const [passwordMode, setPasswordMode] = useState<PasswordMode>("auto");
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<ReplicationResult[] | null>(null);
+  const policy = checkPasswordPolicy(password, userCode);
+
 
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [selectedDbs, setSelectedDbs] = useState<Set<string>>(new Set());
@@ -74,9 +83,28 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
     setUserCode("");
     setUserName("");
     setEmail("");
-    setPassword("Sap@2025");
+    setPassword(generateStrongPassword(16));
+    setPasswordMode("auto");
+    setShowPassword(false);
     setResults(null);
   };
+
+  const applyMode = (mode: PasswordMode) => {
+    setPasswordMode(mode);
+    if (mode === "auto") setPassword(generateStrongPassword(16, userCode));
+    else setPassword("");
+    setShowPassword(mode !== "manual");
+  };
+
+  const copyPassword = async () => {
+    try {
+      await navigator.clipboard.writeText(password);
+      toast.success("Senha copiada");
+    } catch {
+      toast.error("Não foi possível copiar");
+    }
+  };
+
 
   const toggleDb = (db: string) => {
     setSelectedDbs((prev) => {
@@ -90,6 +118,10 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
   const handleSubmit = async () => {
     if (!userCode.trim() || !userName.trim() || !password.trim()) {
       toast.error("Preencha código, nome e senha");
+      return;
+    }
+    if (!policy.valid) {
+      toast.error(`Senha inválida: ${policy.failed[0]?.label ?? "não atende à política"}`);
       return;
     }
     if (selectedDbs.size === 0) {
@@ -172,10 +204,53 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
               <Label htmlFor="email">E-mail</Label>
               <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="joao@empresa.com" disabled={submitting} />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Senha *</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} disabled={submitting} />
+            <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3">
+              <Label className="text-sm">Senha provisionada *</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  { id: "auto", label: "Gerar automática" },
+                  { id: "manual", label: "Definir manualmente" },
+                ] as { id: PasswordMode; label: string }[]).map((m) => (
+                  <Button
+                    key={m.id}
+                    type="button"
+                    size="sm"
+                    variant={passwordMode === m.id ? "default" : "outline"}
+                    className="h-7 text-xs"
+                    disabled={submitting}
+                    onClick={() => applyMode(m.id)}
+                  >
+                    {m.label}
+                  </Button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => { setPassword(e.target.value); setPasswordMode("manual"); }}
+                  disabled={submitting}
+                  autoComplete="new-password"
+                  className="font-mono"
+                  placeholder="Digite a senha"
+                />
+                <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}>
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </Button>
+                <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={copyPassword} disabled={!password} aria-label="Copiar senha">
+                  <Copy className="w-4 h-4" />
+                </Button>
+                <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => { setPassword(generateStrongPassword(16, userCode)); setPasswordMode("auto"); setShowPassword(true); }} disabled={submitting} aria-label="Gerar nova senha">
+                  <RefreshCw className="w-4 h-4" />
+                </Button>
+              </div>
+              <PasswordPolicyChecklist password={password} userCode={userCode} />
+              <p className="text-xs text-muted-foreground">
+                O usuário deverá alterar a senha no primeiro login.
+              </p>
             </div>
+
 
             <div className="space-y-2 pt-1">
               <div className="flex items-center justify-between">
@@ -269,7 +344,7 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
               <Button variant="outline" onClick={() => handleClose(false)} disabled={submitting}>
                 Cancelar
               </Button>
-              <Button onClick={handleSubmit} disabled={submitting || isLoading || selectedDbs.size === 0}>
+              <Button onClick={handleSubmit} disabled={submitting || isLoading || selectedDbs.size === 0 || !policy.valid}>
                 {submitting ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
