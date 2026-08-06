@@ -280,7 +280,20 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
               <p className="text-xs text-muted-foreground">
                 O usuário deverá alterar a senha no primeiro login.
               </p>
+              <label className="flex items-start gap-2 pt-1 cursor-pointer">
+                <Checkbox
+                  checked={sendCredentials}
+                  onCheckedChange={(v) => setSendCredentials(v === true)}
+                  disabled={submitting || !email.trim()}
+                  aria-label="Enviar credenciais por e-mail"
+                />
+                <span className="text-xs text-muted-foreground leading-snug">
+                  Enviar credenciais provisórias por e-mail ao novo usuário
+                  {!email.trim() && " (informe o e-mail acima)"}
+                </span>
+              </label>
             </div>
+
 
 
             <div className="space-y-2 pt-1">
