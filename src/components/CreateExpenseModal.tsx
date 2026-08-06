@@ -1980,7 +1980,7 @@ export function CreateExpenseModal({
       return;
     }
     if (!docDate) {
-      toast.error("Informe a data do documento");
+      toast.error(isSales ? "Informe a data de lançamento" : "Informe a data do documento");
       return;
     }
     if (!dueDate) {
