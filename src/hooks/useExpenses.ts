@@ -575,7 +575,7 @@ export interface SapKey {
 
 export function useExpenses(
   docType: ExpenseDocType = "purchase",
-  options?: { statuses?: string[]; server?: ServerQuery | null; waitForServer?: boolean },
+  options?: { statuses?: string[]; server?: ServerQuery | null; waitForServer?: boolean; enabled?: boolean },
 ) {
   const { session } = useSap();
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -588,14 +588,17 @@ export function useExpenses(
   const serverKey = options?.server ? JSON.stringify(options.server) : "";
   // Telas paginadas montam a consulta em um efeito: sem ela, não busca nada
   // (evita um primeiro fetch da lista inteira antes dos filtros existirem).
-  const waitForServer = Boolean(options?.waitForServer) && !serverKey;
+  // `enabled: false`: o hook é usado apenas pelas mutações (aprovar/rejeitar/
+  // criar) e a listagem vem de outra fonte — não dispara nenhuma leitura.
+  const fetchEnabled = options?.enabled !== false;
+  const waitForServer = (Boolean(options?.waitForServer) && !serverKey) || !fetchEnabled;
   // Escopo opcional por status — telas que só precisam de um subconjunto
   // (ex.: Aprovações, que usa apenas "pendente_aprovacao") evitam trazer todo
   // o histórico da empresa com itens e anexos.
   const statusScope = options?.statuses?.length ? [...options.statuses].sort().join(",") : "";
 
   const fetchExpenses = useCallback(async () => {
-    if (waitForServer) return;
+    if (waitForServer) { setIsLoading(false); return; }
     setIsLoading(true);
     setError(null);
     try {
