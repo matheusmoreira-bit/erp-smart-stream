@@ -944,6 +944,14 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   useEffect(() => {
     setDocParam(selectedExpense?.id ?? null);
   }, [selectedExpense]);
+  // Mantém o documento aberto sincronizado com a lista recarregada após uma
+  // edição (evita cabeçalho com CC/projeto antigos).
+  useEffect(() => {
+    if (!selectedExpense) return;
+    const fresh = expenses.find((e) => e.id === selectedExpense.id);
+    if (fresh && fresh !== selectedExpense) setSelectedExpense(fresh);
+  }, [expenses]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Auto-open the deep-linked document once expenses are loaded.
   const deepLinkHandledRef = useRef(false);
   useEffect(() => {
