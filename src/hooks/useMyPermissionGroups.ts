@@ -41,32 +41,17 @@ export function useMyPermissionGroups(): MyPermissionGroups {
 
       try {
         if (!privileged) {
-          const { data: { session: authSession } } = await supabase.auth.getSession();
-          if (authSession?.user) {
-            const { data: roleData } = await supabase
-              .from("user_roles")
-              .select("role")
-              .eq("user_id", authSession.user.id)
-              .eq("role", "admin")
-              .maybeSingle();
-            if (roleData) privileged = true;
-          }
-          if (!privileged) {
-            const { data: isAdminBySap } = await supabase.rpc("is_sap_user_admin", {
-              _sap_username: identifier,
-            });
-            if (isAdminBySap) privileged = true;
-          }
+          if (await getIsCloudAdmin()) privileged = true;
+          if (!privileged && (await getIsSapUserAdmin(identifier))) privileged = true;
         }
 
-        const { data: assignments } = await supabase
-          .from("user_group_assignments")
-          .select("sap_email, permission_groups(name)");
+        const assignments = await getGroupAssignments();
 
-        names = (assignments || [])
-          .filter((a: any) => identityMatches(a.sap_email, identifier))
-          .map((a: any) => String(a.permission_groups?.name || ""))
+        names = assignments
+          .filter((a) => identityMatches(a.sap_email, identifier))
+          .map((a) => String(a.permission_groups?.name || ""))
           .filter(Boolean);
+
       } catch {
         /* mantém defaults */
       }
