@@ -76,7 +76,45 @@ export async function invalidateSapCache(
   }
 }
 
+// -----------------------------------------------------------------------------
+// Entidades que só devem exibir registros ATIVOS (todas as empresas/bases)
+// -----------------------------------------------------------------------------
+// Centros de custo e projetos desativados no ERP não podem aparecer em nenhum
+// combobox do sistema. Como várias telas compartilham a mesma cacheKey
+// (`cost_centers` / `projects`), o filtro é aplicado aqui — de forma central —
+// tanto na consulta ao ERP quanto nas linhas vindas do cache (que podem ter
+// sido gravadas por uma tela que não enviou o $filter).
+const ACTIVE_ONLY_ENDPOINTS = new Set(["CostCenters", "ProfitCenters", "Projects"]);
+
+function withActiveFilter(
+  endpoint: string,
+  params?: Record<string, string | number>,
+): Record<string, string | number> | undefined {
+  if (!ACTIVE_ONLY_ENDPOINTS.has(endpoint)) return params;
+  const next: Record<string, string | number> = { ...(params || {}) };
+  const existing = String(next.$filter || "");
+  if (!existing.includes("Active")) {
+    next.$filter = existing ? `(${existing}) and Active eq 'tYES'` : "Active eq 'tYES'";
+  }
+  const select = String(next.$select || "");
+  if (select && !select.split(",").some((f) => f.trim() === "Active")) {
+    next.$select = `${select},Active`;
+  }
+  return next;
+}
+
+function filterActiveRows(endpoint: string, rows: any[]): any[] {
+  if (!ACTIVE_ONLY_ENDPOINTS.has(endpoint)) return rows;
+  return rows.filter((r: any) => {
+    const active = r?.Active;
+    // Se o ERP não devolveu o campo, mantém a linha (fallback conservador).
+    if (active === undefined || active === null || active === "") return true;
+    return String(active).toLowerCase() !== "tno" && active !== false;
+  });
+}
+
 interface UseSapCachedListParams {
+
   cacheKey: string;
   endpoint: string;
   params?: Record<string, string | number>;
