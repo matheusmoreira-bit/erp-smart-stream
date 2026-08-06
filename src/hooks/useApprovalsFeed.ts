@@ -1,0 +1,139 @@
+// Feed da tela de Aprovações: UMA chamada ao servidor + pintura instantânea.
+//
+// Estratégia (stale-while-revalidate):
+//   1. No mount, o estado é hidratado do cache local (sessionStorage) — a lista
+//      aparece imediatamente, sem esperar rede.
+//   2. Em paralelo, revalida no servidor via `approvals-feed`.
+//
+// Isso substitui os dois `useExpenses` (compras + vendas) e o download da
+// matriz de regras inteira que a tela fazia no carregamento.
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSap } from "@/contexts/SapContext";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
+import type { Expense } from "@/hooks/useExpenses";
+
+export interface ApprovalFeedDoc extends Expense {
+  doc_type?: "purchase" | "sales";
+  /** Aprovadores do nível atual da regra (resolvidos no servidor). */
+  level_approvers?: Array<{ name: string; email: string }>;
+}
+
+interface FeedState {
+  docs: ApprovalFeedDoc[];
+  privileged: boolean;
+  generatedAt: string | null;
+}
+
+const EMPTY: FeedState = { docs: [], privileged: false, generatedAt: null };
+
+function cacheKey(companyDb: string, user: string) {
+  return `approvals-feed:${companyDb}:${user}`;
+}
+
+function readCache(key: string): FeedState | null {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as FeedState;
+    return Array.isArray(parsed?.docs) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(key: string, value: FeedState) {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* quota — cache é apenas otimização */
+  }
+}
+
+export function useApprovalsFeed() {
+  const { session } = useSap();
+  const companyDb = session?.companyDB || "";
+  const userKey = (session?.userName || "").toLowerCase();
+  const key = companyDb ? cacheKey(companyDb, userKey) : "";
+
+  const [state, setState] = useState<FeedState>(() => (key && readCache(key)) || EMPTY);
+  // Só mostra "carregando" quando não há nada em cache para pintar.
+  const [isLoading, setIsLoading] = useState<boolean>(() => !(key && readCache(key)));
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inFlight = useRef<Promise<void> | null>(null);
+
+  const load = useCallback(async () => {
+    if (!companyDb) {
+      setState(EMPTY);
+      setIsLoading(false);
+      return;
+    }
+    if (inFlight.current) return inFlight.current;
+
+    const run = (async () => {
+      setIsRefreshing(true);
+      setError(null);
+      try {
+        const res = await sapFunctionFetch("approvals-feed", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ company_db: companyDb }),
+        });
+        const body = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(body?.error || `approvals-feed ${res.status}`);
+        const next: FeedState = {
+          docs: (body?.docs || []) as ApprovalFeedDoc[],
+          privileged: Boolean(body?.privileged),
+          generatedAt: body?.generated_at || new Date().toISOString(),
+        };
+        setState(next);
+        if (key) writeCache(key, next);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Erro ao carregar aprovações");
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+        inFlight.current = null;
+      }
+    })();
+    inFlight.current = run;
+    return run;
+  }, [companyDb, key]);
+
+  // Troca de empresa: repinta do cache daquela empresa antes de revalidar.
+  useEffect(() => {
+    const cached = key ? readCache(key) : null;
+    if (cached) {
+      setState(cached);
+      setIsLoading(false);
+    } else {
+      setState(EMPTY);
+      setIsLoading(Boolean(companyDb));
+    }
+    void load();
+  }, [key, companyDb, load]);
+
+  /** Remove um documento da lista sem esperar o servidor (ação otimista). */
+  const removeLocal = useCallback(
+    (id: string) => {
+      setState((prev) => {
+        const next = { ...prev, docs: prev.docs.filter((d) => d.id !== id) };
+        if (key) writeCache(key, next);
+        return next;
+      });
+    },
+    [key],
+  );
+
+  return {
+    docs: state.docs,
+    privileged: state.privileged,
+    generatedAt: state.generatedAt,
+    isLoading,
+    isRefreshing,
+    error,
+    refresh: load,
+    removeLocal,
+  };
+}
