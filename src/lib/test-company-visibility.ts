@@ -51,23 +51,10 @@ export async function resolveTestCompanyVisibility(params: {
 
   try {
     if (!can) {
-      const { data: { session: authSession } } = await supabase.auth.getSession();
-      if (authSession?.user) {
-        const { data: roleData } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", authSession.user.id)
-          .eq("role", "admin")
-          .maybeSingle();
-        if (roleData) can = true;
-      }
-      if (!can) {
-        const { data: isAdminBySap } = await supabase.rpc("is_sap_user_admin", {
-          _sap_username: identifier,
-        });
-        if (isAdminBySap) can = true;
-      }
+      if (await getIsCloudAdmin()) can = true;
+      if (!can && (await getIsSapUserAdmin(identifier))) can = true;
     }
+
 
     if (!can) {
       const [{ data: assignments }, { data: caps }] = await Promise.all([
