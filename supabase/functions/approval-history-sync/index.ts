@@ -459,7 +459,7 @@ async function listApprovalHistory(
     .limit(limit);
   if (decision !== "all") q = q.eq("decision", decision);
 
-  if (caller.source === "sap_session") {
+  if (caller.source === "sap_session" || (caller as { source?: string }).source === "cloud_user") {
     let canReadAll = false;
     try {
       await requireAdminOrSapAdmin(req);
