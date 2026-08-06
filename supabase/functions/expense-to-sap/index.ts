@@ -1376,6 +1376,26 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         sapResult = await sendDocument();
       } catch (e1) {
         const msg1 = e1 instanceof Error ? e1.message : String(e1);
+        // Fallback de período contábil: o SAP recusa datas fora do intervalo
+        // permitido ("Specify a date within the permissible range", -5002).
+        // Nesse caso reintegramos com a data de hoje em TaxDate/DocDueDate.
+        const outOfDateRange = /permissible range|-5002|intervalo permitido/i.test(msg1);
+        if (outOfDateRange && !isPatchMode) {
+          (sapPayload as any).DocDate = today;
+          (sapPayload as any).TaxDate = today;
+          const currentDue = String((sapPayload as any).DocDueDate || today);
+          if (currentDue < today) (sapPayload as any).DocDueDate = today;
+          lastSapPayload = sapPayload;
+          console.log("[expense-to-sap] Retrying with today's dates due to date range error:", msg1.slice(0, 200));
+          sapResult = await sendDocument();
+          lastSapResponse = sapResult.response;
+          purchaseOrderStatus = "success";
+          if (attachmentEntry !== null) {
+            await ensureSapDocumentAttachmentLinked(sap.baseUrl, sap.cookies, sapEndpoint, sapResult.docEntry, attachmentEntry);
+            attachmentLinkStatus = "success";
+          }
+          return await finishSuccess(sapResult);
+        }
         // Fallback: SAP FGR validation "EXISTEM LINHAS MARCA/BRAND (PROJETO)"
         // (SBO_ANAGAMING requires every line to have ProjectCode). Retry once
         // forcing ProjectCode = "ANA GAMING" on lines that don't have one.
@@ -1383,6 +1403,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         // Project "X does not exist" error → strip ProjectCode from all lines (company has no projects registered).
         const projectDoesNotExist = /Project .* does not exist|540000156/i.test(msg1);
         if (!needsProjectFallback && !projectDoesNotExist) throw e1;
+
         const lines = (sapPayload as any).DocumentLines as Array<Record<string, unknown>>;
         // Companies without a project registry (e.g. cactus_providers) must integrate with ProjectCode = null.
         const companiesWithoutProjects = new Set(["cactus_providers"]);
