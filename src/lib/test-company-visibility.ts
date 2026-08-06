@@ -59,20 +59,16 @@ export async function resolveTestCompanyVisibility(params: {
 
 
     if (!can) {
-      const [{ data: assignments }, { data: caps }] = await Promise.all([
-        supabase.from("user_group_assignments").select("sap_email, group_id"),
-        supabase
-          .from("permission_group_modules")
-          .select("group_id, can_view")
-          .eq("module_key", TEST_COMPANIES_CAPABILITY),
-      ]);
-      const enabledGroups = new Set(
-        (caps || []).filter((c: any) => c.can_view !== false).map((c: any) => c.group_id),
+      const assignments = await getGroupAssignments();
+      const mine = assignments.filter((a) => identityMatches(a.sap_email, identifier));
+      const modules = await getGroupModules(
+        mine.map((a) => a.group_id).filter(Boolean) as string[],
       );
-      can = (assignments || []).some(
-        (a: any) => identityMatches(a.sap_email, identifier) && enabledGroups.has(a.group_id),
+      can = modules.some(
+        (m) => m.module_key === TEST_COMPANIES_CAPABILITY && m.can_view !== false,
       );
     }
+
   } catch {
     can = false;
   }
