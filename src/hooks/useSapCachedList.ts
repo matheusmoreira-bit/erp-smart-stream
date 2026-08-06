@@ -215,6 +215,9 @@ export function useSapCachedList({
       if (endpoint === "CostCenters" || endpoint === "ProfitCenters") {
         rows = rows.filter((r: any) => !String(r?.CenterCode || "").startsWith("Centr_"));
       }
+      // Remove registros desativados no ERP (CCs/projetos inativos)
+      rows = filterActiveRows(endpoint, rows);
+
 
       // 3. Only cache non-empty results
       if (rows.length > 0) {
