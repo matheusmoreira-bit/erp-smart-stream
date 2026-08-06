@@ -2097,7 +2097,15 @@ export default function ApprovalsPage() {
             .filter(Boolean);
           if (names.length > 0) doc.currentApprover = names.join(" / ");
         }
+        // Lista completa do nível atual — usada para o filtro "Para aprovar",
+        // já que `currentApprover` pode conter vários nomes concatenados.
+        (doc as unknown as { __levelApprovers?: Array<{ name: string; email: string }> }).__levelApprovers =
+          current.map((l: any) => ({
+            name: l.approver_name || "",
+            email: l.approver_email || "",
+          }));
       }
+
       return doc;
     });
 
