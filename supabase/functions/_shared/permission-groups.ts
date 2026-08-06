@@ -81,6 +81,13 @@ export async function getPermissionGroups(
     .filter(Boolean);
 }
 
+/**
+ * Cache por instância (60s): a mesma tela dispara várias chamadas seguidas e
+ * cada uma refazia duas consultas de grupos/capacidades.
+ */
+const CAPS_TTL_MS = 60_000;
+const capsCache = new Map<string, { expiresAt: number; value: Set<string> }>();
+
 /** Capacidades ligadas em algum grupo da identidade. */
 export async function getCapabilities(
   admin: SupabaseClient,
@@ -88,6 +95,12 @@ export async function getCapabilities(
 ): Promise<Set<string>> {
   const wanted = identities.map(canonicalIdentity).filter(Boolean);
   if (!wanted.length) return new Set();
+
+  const cacheKey = [...wanted].sort().join("|");
+  const hit = capsCache.get(cacheKey);
+  if (hit && hit.expiresAt > Date.now()) return new Set(hit.value);
+  if (capsCache.size > 500) capsCache.clear();
+
   const { data } = await admin
     .from("user_group_assignments")
     .select("sap_email, group_id");
