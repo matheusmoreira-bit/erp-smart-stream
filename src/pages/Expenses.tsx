@@ -725,6 +725,16 @@ function ExpenseDetailModal({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {showPullback && (
+        <SapPullbackDialog
+          open={showPullback}
+          onOpenChange={setShowPullback}
+          expenseId={expense.id}
+          erpLabel={erpLabel || "ERP"}
+          onApplied={() => onSynced?.()}
+        />
+      )}
     </>
   );
 }
