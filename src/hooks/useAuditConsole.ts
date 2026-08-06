@@ -16,7 +16,8 @@ export function useAuditRuns(limit = 50) {
   return useQuery({
     queryKey: ["audit-console", "runs", companyDB, limit],
     enabled: !!companyDB,
-    refetchInterval: 5000,
+    refetchInterval: 30000,
+    staleTime: 15000,
     queryFn: async (): Promise<AuditRun[]> => {
       const { data, error } = await supabase
         .from("audit_console_runs")
@@ -262,7 +263,8 @@ export function useAuditDocuments(runId?: string) {
   return useQuery({
     queryKey: ["audit-console", "documents", companyDB, runId],
     enabled: !!companyDB,
-    refetchInterval: 5000,
+    refetchInterval: 30000,
+    staleTime: 15000,
     queryFn: async (): Promise<AuditDocument[]> => {
       let q = supabase
         .from("audit_console_documents")

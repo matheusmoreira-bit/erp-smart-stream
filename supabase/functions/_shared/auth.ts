@@ -18,8 +18,15 @@ type SapSessionValidation = {
   source: "sap_session";
 };
 
-const SAP_SESSION_VALIDATION_CACHE_TTL_MS = 60_000;
+// A validação em si (token assinado / probe no Service Layer) é cara: cada
+// tela dispara várias requisições e todas pagavam esse custo. O resultado é
+// cacheado por 5 min; as checagens de segurança (revogação/desligamento) são
+// revalidadas em janela curta e separada — ver SAP_SESSION_SECURITY_TTL_MS.
+const SAP_SESSION_VALIDATION_CACHE_TTL_MS = 300_000;
+const SAP_SESSION_SECURITY_TTL_MS = 60_000;
 const sapSessionValidationCache = new Map<string, { expiresAt: number; value: SapSessionValidation }>();
+/** key → timestamp até o qual as checagens de revogação/IdP são consideradas frescas. */
+const sapSessionSecurityCache = new Map<string, number>();
 const encoder = new TextEncoder();
 
 /* ─────────── Strict header validation ───────────
@@ -265,8 +272,13 @@ export async function requireAdmin(req: Request) {
   return user;
 }
 
+/** URL do Service Layer por base — muda raramente; cache de 10 min. */
+const sapBaseUrlCache = new Map<string, { expiresAt: number; url: string }>();
+
 // deno-lint-ignore no-explicit-any
 async function getSapBaseUrl(admin: any, companyDB: string): Promise<string> {
+  const cached = sapBaseUrlCache.get(companyDB);
+  if (cached && cached.expiresAt > Date.now()) return cached.url;
   const fallback = Deno.env.get("SAP_DEFAULT_BASE_URL") || "https://jyl32uqm9176-sl.s1p-zona-01-4fd9831d6a58.saas.wevy.cloud/b1s/v2";
   const { data } = await admin
     .from("system_credentials")
@@ -281,6 +293,8 @@ async function getSapBaseUrl(admin: any, companyDB: string): Promise<string> {
   let url = rawUrl.replace(/\/+$/, "");
   if (url.includes("/b1s/v1")) url = url.replace("/b1s/v1", "/b1s/v2");
   else if (!url.includes("/b1s/v2")) url = `${url}/b1s/v2`;
+  if (sapBaseUrlCache.size > 100) sapBaseUrlCache.clear();
+  sapBaseUrlCache.set(companyDB, { expiresAt: Date.now() + 600_000, url });
   return url;
 }
 
@@ -414,47 +428,38 @@ export async function validateSapSession(req: Request) {
   if (!headers) return null;
   const { sapSession, routeId, sapUser, companyDB, sapAuthToken } = headers;
 
-  // Sessão revogada (ex.: troca de senha) morre imediatamente, mesmo que o
-  // Service Layer ainda a aceite.
-  try {
-    const revokeAdmin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      { auth: { persistSession: false } },
-    );
-    if (await isErpSessionRevoked(revokeAdmin, sapSession)) {
-      sapSessionValidationCache.delete(
-        getSapSessionValidationCacheKey(companyDB, sapUser, sapSession, routeId),
-      );
-      return null;
-    }
-  } catch { /* falha aberta: não derruba o app por indisponibilidade */ }
-
-  // Desligado no IdP (JumpCloud/Okta): a sessão morre mesmo que o bloqueio no
-  // SAP não tenha sido aplicado. Falha de leitura não derruba o app.
-  try {
-    const deprovAdmin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      { auth: { persistSession: false } },
-    );
-    const { data: deprovisioned, error } = await deprovAdmin.rpc("is_erp_user_deprovisioned", {
-      _user_key: sapUser,
-      _company_db: companyDB,
-    });
-    if (!error && deprovisioned === true) {
-      sapSessionValidationCache.delete(
-        getSapSessionValidationCacheKey(companyDB, sapUser, sapSession, routeId),
-      );
-      return null;
-    }
-  } catch { /* falha aberta */ }
-
-
   const cacheKey = getSapSessionValidationCacheKey(companyDB, sapUser, sapSession, routeId);
+
+  // Checagens de segurança (sessão revogada por troca de senha / usuário
+  // desligado no IdP). São 2 idas ao banco: rodam em paralelo e no máximo uma
+  // vez por minuto por sessão, em vez de a cada requisição.
+  const securityFreshUntil = sapSessionSecurityCache.get(cacheKey) ?? 0;
+  if (securityFreshUntil <= Date.now()) {
+    try {
+      const securityAdmin = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        { auth: { persistSession: false } },
+      );
+      const [revoked, deprovisioned] = await Promise.all([
+        isErpSessionRevoked(securityAdmin, sapSession).catch(() => false),
+        securityAdmin
+          .rpc("is_erp_user_deprovisioned", { _user_key: sapUser, _company_db: companyDB })
+          .then(({ data, error }) => (!error && data === true))
+          .catch(() => false),
+      ]);
+      if (revoked || deprovisioned) {
+        sapSessionValidationCache.delete(cacheKey);
+        sapSessionSecurityCache.delete(cacheKey);
+        return null;
+      }
+      if (sapSessionSecurityCache.size > 500) sapSessionSecurityCache.clear();
+      sapSessionSecurityCache.set(cacheKey, Date.now() + SAP_SESSION_SECURITY_TTL_MS);
+    } catch { /* falha aberta: não derruba o app por indisponibilidade */ }
+  }
+
   const cached = sapSessionValidationCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
-
 
   try {
     const signed = await verifySapAuthToken(sapAuthToken, sapSession, sapUser, companyDB);

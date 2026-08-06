@@ -61,13 +61,16 @@ interface Caller {
   /** Diretoria (CC de 2º nível) visível ao grupo "Usuário Administrativo". */
   directorateBranch: string | null;
   companyDB: string | null;
+  /** Aliases do caller (e-mails/UserCodes equivalentes), resolvidos uma vez. */
+  aliases: Set<string>;
 }
 
 /**
- * Cache por instância (60s) da identificação do caller: uma única tela dispara
- * várias chamadas seguidas e cada uma refazia JWT + sessão SAP + grupos.
+ * Cache por instância (5 min) da identificação do caller: uma única tela
+ * dispara várias chamadas seguidas e cada uma refazia JWT + sessão SAP +
+ * grupos + aliases (5 a 7 idas ao banco por requisição).
  */
-const CALLER_TTL_MS = 60_000;
+const CALLER_TTL_MS = 300_000;
 const callerCache = new Map<string, { expiresAt: number; value: Caller }>();
 
 function callerCacheKey(req: Request): string {
@@ -87,18 +90,23 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
   let privileged = false;
   let companyDB: string | null = null;
 
-  try {
-    const u = await requireUser(req);
-    email = u.email || null;
-    identity = u.email || null;
-    id = u.id;
-    const { data } = await admin.rpc("has_role", { _user_id: u.id, _role: "admin" });
+  // JWT do Cloud e sessão SAP são independentes: valida os dois em paralelo.
+  const [cloudUser, sap] = await Promise.all([
+    requireUser(req).catch((e) => {
+      if (!(e instanceof AuthError)) throw e;
+      return null;
+    }),
+    validateSapSession(req),
+  ]);
+
+  if (cloudUser) {
+    email = cloudUser.email || null;
+    identity = cloudUser.email || null;
+    id = cloudUser.id;
+    const { data } = await admin.rpc("has_role", { _user_id: cloudUser.id, _role: "admin" });
     if (data === true) privileged = true;
-  } catch (e) {
-    if (!(e instanceof AuthError)) throw e;
   }
 
-  const sap = await validateSapSession(req);
   if (sap) {
     userName = sap.userName;
     if (!identity) identity = sap.userName;
@@ -122,7 +130,13 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
     }
   }
 
-  return { identity, email, userName, id, privileged, directorateBranch, companyDB };
+  const aliases = await resolveCallerAliases(admin, {
+    id,
+    email: email ?? undefined,
+    userName: userName ?? identity ?? undefined,
+  });
+
+  return { identity, email, userName, id, privileged, directorateBranch, companyDB, aliases };
 }
 
 async function identifyCallerCached(req: Request, admin: SupabaseClient): Promise<Caller> {
@@ -247,11 +261,7 @@ Deno.serve(async (req) => {
     const limit = Math.min(Number(body?.limit ?? MAX_ROWS) || MAX_ROWS, MAX_ROWS);
     const wantsAll = body?.scope === "all";
 
-    const aliases = await resolveCallerAliases(admin, {
-      id: caller.id,
-      email: caller.email ?? undefined,
-      userName: caller.userName ?? caller.identity ?? undefined,
-    });
+    const aliases = caller.aliases;
 
     const scoped = !(caller.privileged && wantsAll) && !caller.privileged;
 
