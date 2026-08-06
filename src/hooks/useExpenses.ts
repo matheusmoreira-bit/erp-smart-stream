@@ -543,17 +543,59 @@ async function logExpenseDecision(
 
 /* ───────────────── Hook ───────────────── */
 
-export function useExpenses(docType: ExpenseDocType = "purchase", options?: { statuses?: string[] }) {
+/** Filtro server-side aceito pela edge `expense-read`. */
+export interface ServerFilter {
+  op: "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "like" | "ilike" | "in" | "is" | "not_is";
+  column: string;
+  value?: unknown;
+}
+
+/**
+ * Consulta paginada no servidor. Quando informada, o hook busca apenas a
+ * página pedida (em vez de toda a lista da empresa) e aplica os filtros
+ * diretamente no banco.
+ */
+export interface ServerQuery {
+  page: number;
+  pageSize: number;
+  order?: { column: string; ascending: boolean };
+  filters?: ServerFilter[];
+  /** Cláusula `or` PostgREST (busca textual em várias colunas). */
+  or?: string;
+  viewAll?: boolean;
+  /** Traz as chaves ERP de todo o conjunto filtrado (dedup com a lista do ERP). */
+  withKeys?: boolean;
+}
+
+export interface SapKey {
+  company_db: string | null;
+  sap_doc_entry: number | null;
+  sap_doc_num: number | null;
+}
+
+export function useExpenses(
+  docType: ExpenseDocType = "purchase",
+  options?: { statuses?: string[]; server?: ServerQuery | null; waitForServer?: boolean },
+) {
   const { session } = useSap();
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [total, setTotal] = useState<number | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [sapKeys, setSapKeys] = useState<SapKey[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Serializa a consulta server-side para manter `fetchExpenses` estável.
+  const serverKey = options?.server ? JSON.stringify(options.server) : "";
+  // Telas paginadas montam a consulta em um efeito: sem ela, não busca nada
+  // (evita um primeiro fetch da lista inteira antes dos filtros existirem).
+  const waitForServer = Boolean(options?.waitForServer) && !serverKey;
   // Escopo opcional por status — telas que só precisam de um subconjunto
   // (ex.: Aprovações, que usa apenas "pendente_aprovacao") evitam trazer todo
   // o histórico da empresa com itens e anexos.
   const statusScope = options?.statuses?.length ? [...options.statuses].sort().join(",") : "";
 
   const fetchExpenses = useCallback(async () => {
+    if (waitForServer) return;
     setIsLoading(true);
     setError(null);
     try {
@@ -563,13 +605,34 @@ export function useExpenses(docType: ExpenseDocType = "purchase", options?: { st
         return;
       }
 
+      const server: ServerQuery | null = serverKey ? JSON.parse(serverKey) : null;
+
       const readExpenses = () => {
-        const base = expenseRead("expenses")
+        let q = expenseRead("expenses")
           .select("*")
           .eq("company_db", activeCompanyDb)
           .eq("doc_type", docType);
-        const scoped = statusScope ? base.in("status", statusScope.split(",")) : base;
-        return scoped
+        if (statusScope) q = q.in("status", statusScope.split(","));
+        if (server) {
+          for (const f of server.filters || []) {
+            switch (f.op) {
+              case "in": q = q.in(f.column, (f.value as unknown[]) || []); break;
+              case "is": q = q.is(f.column, f.value ?? null); break;
+              case "not_is": q = q.not(f.column, "is", f.value ?? null); break;
+              default: q = (q as any)[f.op](f.column, f.value);
+            }
+          }
+          if (server.or) q = q.or(server.or);
+          if (server.viewAll) q = q.viewAll();
+          if (server.withKeys) q = q.withKeys();
+          const ord = server.order || { column: "created_at", ascending: false };
+          return q
+            .include("items", "attachments")
+            .order(ord.column, { ascending: ord.ascending })
+            .withCount()
+            .page(server.page, server.pageSize);
+        }
+        return q
           .include("items", "attachments")
           .order("created_at", { ascending: false });
       };
@@ -617,13 +680,16 @@ export function useExpenses(docType: ExpenseDocType = "purchase", options?: { st
           attachments: attachmentsMap[e.id] || [],
         }))
       );
+      setTotal(res.count ?? null);
+      setHasMore(Boolean(res.hasMore));
+      setSapKeys(res.keys ?? null);
     } catch (e) {
       console.error("Error fetching expenses:", e);
       setError(e instanceof Error ? e.message : "Erro ao buscar despesas");
     } finally {
       setIsLoading(false);
     }
-  }, [session?.companyDB, docType, statusScope]);
+  }, [session?.companyDB, docType, statusScope, serverKey, waitForServer]);
 
   const createExpenseCore = useCallback(
     async (input: CreateExpenseInput) => {
@@ -1500,8 +1566,12 @@ export function useExpenses(docType: ExpenseDocType = "purchase", options?: { st
 
   return {
     expenses,
+    total,
+    hasMore,
+    sapKeys,
     isLoading,
     error,
+
     refresh: fetchExpenses,
     removeLocal,
     createExpense,

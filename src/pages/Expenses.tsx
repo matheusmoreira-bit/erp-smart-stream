@@ -50,6 +50,7 @@ import { exportListReportPdf, exportListReportCsv, exportExpenseDetailPdf } from
 import { getErpShortLabel } from "@/lib/erp-labels";
 import { isPendingApproval } from "@/lib/approval-authz";
 import { buildDuplicateDraftPayload } from "@/lib/expense-duplicate";
+import { expenseRead } from "@/lib/expense-read";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -90,6 +91,8 @@ import { RelationsMap } from "@/components/RelationsMap";
 
 import {
   useExpenses,
+  type ServerQuery,
+  type ServerFilter,
   STATUS_LABELS,
   useStatusLabel,
   STATUS_COLORS,
@@ -882,7 +885,11 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const erpLabel = getErpShortLabel(session?.erpType);
   const { isAdmin: isLovableAdmin } = useAuth();
   const navigate = useNavigate();
-  const { expenses, isLoading, error, refresh, createExpense, updateExpense, submitForApproval, cancelExpense, reactivateExpense, retrySapIntegration, approveExpense, rejectExpense, addAttachments } = useExpenses(mode);
+  // Consulta paginada no servidor: montada mais abaixo (depende dos filtros) e
+  // aplicada pelo hook — evita trazer a lista inteira da empresa para o browser.
+  const [serverQuery, setServerQuery] = useState<ServerQuery | null>(null);
+  const { expenses, total: flowTotal, sapKeys: serverSapKeys, isLoading, error, refresh, createExpense, updateExpense, submitForApproval, cancelExpense, reactivateExpense, retrySapIntegration, approveExpense, rejectExpense, addAttachments } = useExpenses(mode, { server: serverQuery, waitForServer: true });
+  const serverMode = !!serverQuery;
   const { getLabel } = useCompanies(true);
   // Filtros persistidos por modo (purchase/sales) para manter seleção ao trocar de tela.
   const filterKey = (name: string) => `expenses:${mode}:${name}`;
@@ -892,6 +899,12 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     if (!search) { setIsSearchPending(false); return; }
     setIsSearchPending(true);
     const t = setTimeout(() => setIsSearchPending(false), 250);
+    return () => clearTimeout(t);
+  }, [search]);
+  // Busca com debounce — cada digitação não dispara uma consulta ao servidor.
+  const [searchDebounced, setSearchDebounced] = useState(search);
+  useEffect(() => {
+    const t = setTimeout(() => setSearchDebounced(search), 350);
     return () => clearTimeout(t);
   }, [search]);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -1280,7 +1293,9 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   // e também por (company_db + DocNum) — cobre casos onde apenas um dos dois foi persistido.
   const sessionCompany = (session?.companyDB || "").toLowerCase();
   const flowSapKeys = new Set<string>();
-  for (const e of expenses) {
+  // Em modo paginado, o servidor devolve as chaves de TODO o conjunto filtrado
+  // (não só da página) para que a deduplicação continue correta.
+  for (const e of (serverSapKeys as any[]) || expenses) {
     const comp = (e.company_db || sessionCompany || "").toLowerCase();
     const entry = e.sap_doc_entry != null ? Number(e.sap_doc_entry) : null;
     const num = e.sap_doc_num != null ? Number(e.sap_doc_num) : null;
@@ -1373,7 +1388,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     );
   };
 
-  const flowFiltered = expenses.filter((e) => applyFilters(e, true, "erp_flow"));
+  // Em modo paginado, filtros e escopo já foram aplicados no banco.
+  const flowFiltered = serverMode ? expenses : expenses.filter((e) => applyFilters(e, true, "erp_flow"));
   // Registros vindos do ERP (HanaAPI/Service Layer) também respeitam o escopo:
   // sem "Ver todos", o usuário só vê o que solicitou ou aprova.
   const sapFiltered = sapOnly.filter((e) => applyFilters(e, true, "erp"));
@@ -1393,7 +1409,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(key); setSortDir(key === "amount" || key === "created" ? "desc" : "asc"); }
   };
-  const sorted = [...filtered].sort((a, b) => {
+  const compareRows = (a: { exp: Expense; origin: string }, b: { exp: Expense; origin: string }) => {
     const dir = sortDir === "asc" ? 1 : -1;
     const va = (() => {
       switch (sortKey) {
@@ -1425,7 +1441,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     if (va < vb) return -1 * dir;
     if (va > vb) return 1 * dir;
     return 0;
-  });
+  };
+  const sorted = [...filtered].sort(compareRows);
 
   // ─── Paginação (mesma página para cards mobile e tabela desktop) ───
   const PAGE_SIZE_OPTIONS = [15, 30, 50, 100] as const;
@@ -1477,18 +1494,120 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   })();
 
   const [page, setPage] = useState(1);
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+
+  /* ─── Filtros server-side ───────────────────────────────────────
+     Traduz busca, status e filtros avançados em predicados aplicados
+     diretamente no banco, para que apenas a página exibida trafegue. */
+  const buildServerSpec = useCallback((): { filters: ServerFilter[]; or?: string; order: { column: string; ascending: boolean } } => {
+    const f = advFilters;
+    const filters: ServerFilter[] = [];
+    const like = (column: string, v: string) => {
+      const t = v.trim();
+      if (t) filters.push({ op: "ilike", column, value: `%${t}%` });
+    };
+    if (statusFilter !== "all") filters.push({ op: "eq", column: "status", value: statusFilter });
+    like("supplier_name", f.supplier);
+    like("supplier_code", f.supplier_code);
+    like("requester_name", f.requester);
+    like("requester_email", f.requester_email);
+    like("current_approver", f.approver);
+    like("cost_center", f.cost_center);
+    like("project", f.project);
+    like("remarks", f.remarks);
+    if (f.currency.trim()) filters.push({ op: "ilike", column: "currency", value: f.currency.trim() });
+    if (f.branch_id.trim()) filters.push({ op: "eq", column: "branch_id", value: Number(f.branch_id.trim()) });
+    const minV = f.min_amount ? Number(f.min_amount.replace(",", ".")) : null;
+    const maxV = f.max_amount ? Number(f.max_amount.replace(",", ".")) : null;
+    if (minV != null && Number.isFinite(minV)) filters.push({ op: "gte", column: "total_amount", value: minV });
+    if (maxV != null && Number.isFinite(maxV)) filters.push({ op: "lte", column: "total_amount", value: maxV });
+    const range = (column: string, from: string, to: string) => {
+      if (from) filters.push({ op: "gte", column, value: from });
+      if (to) filters.push({ op: "lte", column, value: `${to}T23:59:59.999Z` });
+    };
+    range("doc_date", f.doc_date_from, f.doc_date_to);
+    range("due_date", f.due_date_from, f.due_date_to);
+    range("created_at", f.created_from, f.created_to);
+    if (f.only_missing_due) filters.push({ op: "is", column: "due_date", value: null });
+    if (f.only_overdue) {
+      filters.push({ op: "not_is", column: "due_date", value: null });
+      filters.push({ op: "lt", column: "due_date", value: new Date().toISOString().slice(0, 10) });
+    }
+    if (f.only_sap_error) filters.push({ op: "not_is", column: "sap_integration_error", value: null });
+
+    // Busca textual → cláusula `or` (sem vírgulas/parênteses, que são
+    // separadores no PostgREST).
+    let or: string | undefined;
+    const term = searchDebounced.trim().replace(/[(),*%]/g, " ").replace(/\s+/g, " ").trim();
+    if (term) {
+      const pattern = `*${term.replace(/ /g, "*")}*`;
+      const parts = [
+        `supplier_name.ilike.${pattern}`,
+        `requester_name.ilike.${pattern}`,
+        `remarks.ilike.${pattern}`,
+        `supplier_code.ilike.${pattern}`,
+        `project.ilike.${pattern}`,
+      ];
+      if (/^\d+$/.test(term)) {
+        parts.push(`sap_doc_num.eq.${term}`, `sap_doc_entry.eq.${term}`);
+      }
+      or = parts.join(",");
+    }
+
+    const orderColumn = ({
+      status: "status",
+      supplier: "supplier_name",
+      requester: "requester_name",
+      created: "created_at",
+      doc: "doc_date",
+      due: "due_date",
+      amount: "total_amount",
+      origin: "created_at",
+    } as const)[sortKey];
+
+    return { filters, or, order: { column: orderColumn, ascending: sortDir === "asc" } };
+  }, [advFilters, statusFilter, searchDebounced, sortKey, sortDir]);
+
+  useEffect(() => {
+    const spec = buildServerSpec();
+    const next: ServerQuery = {
+      page,
+      pageSize,
+      order: spec.order,
+      filters: spec.filters,
+      or: spec.or,
+      viewAll: effectiveShowAll,
+      withKeys: showSourceToggle && sourceMode === "both",
+    };
+    setServerQuery((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+  }, [buildServerSpec, page, pageSize, effectiveShowAll, showSourceToggle, sourceMode]);
+
+  // Contagens: o total das linhas do ERP Flow vem do servidor; as linhas que
+  // existem apenas no ERP são anexadas depois da última página do Flow.
+  const flowCount = serverMode ? (flowTotal ?? flowFiltered.length) : flowFiltered.length;
+  const sapSorted = serverMode
+    ? [...sapFiltered.map((exp) => ({ exp, origin: "erp" as const }))].sort(compareRows)
+    : [];
+  const totalCount = serverMode ? flowCount + sapSorted.length : filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   // Reset apenas para mudanças que alteram fortemente a listagem (busca, ordenação, tamanho de página, modo compra/venda).
   // Toggles de status / fonte ERP / "ver todos" preservam a página atual (e a rolagem — ver preserveScroll abaixo).
   useEffect(() => {
     setPage(1);
-  }, [search, mode, sortKey, sortDir, pageSize]);
+  }, [searchDebounced, mode, sortKey, sortDir, pageSize, statusFilter, advanced]);
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
   const pageStart = (page - 1) * pageSize;
-  const pageItems = sorted.slice(pageStart, pageStart + pageSize);
+  const pageItems = serverMode
+    ? (() => {
+        const flowRows = flowFiltered.map((exp) => ({ exp, origin: "erp_flow" as const }));
+        const sapStart = Math.max(0, pageStart - flowCount);
+        const sapTake = Math.max(0, pageSize - flowRows.length);
+        return [...flowRows, ...sapSorted.slice(sapStart, sapStart + sapTake)];
+      })()
+    : sorted.slice(pageStart, pageStart + pageSize);
   const visibleItems = pageItems; // compat com blocos existentes
+
 
   const handleSubmitForApproval = async (id: string) => {
     setIsSubmitting(true);
@@ -1692,7 +1811,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
             {(() => {
               const reportOptions = {
                 title: isSales ? "Relatório de Vendas" : "Relatório de Compras",
-                subtitle: `${filtered.length} registro(s) · ${companyLabel}`,
+                subtitle: `${totalCount} registro(s) · ${companyLabel}`,
                 meta: [
                   { label: "Empresa", value: companyLabel },
                   { label: "Usuário", value: session?.userName || "—" },
@@ -1709,8 +1828,34 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   { header: "ERP #", cell: (r: typeof filtered[number]) => r.exp.sap_doc_num ? `#${r.exp.sap_doc_num}` : "—" },
                   { header: "Origem", cell: (r: typeof filtered[number]) => r.origin === "erp_flow" ? "ERP Flow" : erpLabel },
                 ],
-                rows: filtered,
+                rows: pageItems,
                 fileName: isSales ? "vendas" : "compras",
+              };
+              // Exportações consideram TODO o conjunto filtrado (não só a
+              // página atual): busca as linhas sob demanda no servidor.
+              const collectRows = async () => {
+                if (!serverMode) return filtered;
+                const spec = buildServerSpec();
+                let q = expenseRead<Expense>("expenses")
+                  .select("*")
+                  .eq("company_db", session?.companyDB || "")
+                  .eq("doc_type", mode);
+                for (const f of spec.filters) {
+                  if (f.op === "is") q = q.is(f.column, f.value ?? null);
+                  else if (f.op === "not_is") q = q.not(f.column, "is", f.value ?? null);
+                  else q = (q as any)[f.op](f.column, f.value);
+                }
+                if (spec.or) q = q.or(spec.or);
+                if (effectiveShowAll) q = q.viewAll();
+                const res = await q.order(spec.order.column, { ascending: spec.order.ascending }).limit(2000);
+                if (res.error) {
+                  toast.error("Não foi possível carregar todos os registros para exportação.");
+                  return pageItems;
+                }
+                return [
+                  ...(res.data || []).map((exp) => ({ exp, origin: "erp_flow" as const })),
+                  ...sapSorted,
+                ];
               };
               return (
                 <>
@@ -1718,8 +1863,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                     variant="outline"
                     size="sm"
                     className="gap-1.5 w-full sm:w-auto justify-center"
-                    disabled={filtered.length === 0}
-                    onClick={() => { void exportListReportPdf(reportOptions); }}
+                    disabled={totalCount === 0}
+                    onClick={() => { void collectRows().then((rows) => exportListReportPdf({ ...reportOptions, rows, subtitle: `${rows.length} registro(s) · ${companyLabel}` })); }}
                     title="Exportar em PDF respeitando os filtros aplicados"
                   >
                     <FileDown className="w-4 h-4" aria-hidden="true" /> <span className="truncate">Exportar PDF</span>
@@ -1728,8 +1873,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                     variant="outline"
                     size="sm"
                     className="gap-1.5 w-full sm:w-auto justify-center"
-                    disabled={filtered.length === 0}
-                    onClick={() => { exportListReportCsv(reportOptions); }}
+                    disabled={totalCount === 0}
+                    onClick={() => { void collectRows().then((rows) => exportListReportCsv({ ...reportOptions, rows, subtitle: `${rows.length} registro(s) · ${companyLabel}` })); }}
                     title="Exportar em CSV respeitando os filtros aplicados"
                   >
                     <FileDown className="w-4 h-4" aria-hidden="true" /> <span className="truncate">Exportar CSV</span>
@@ -1752,7 +1897,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           <div className="glass-card px-4 py-3 flex items-center gap-3 min-w-0">
             <DollarSign className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
             <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">Total</p>
+              <p className="text-xs text-muted-foreground">{serverMode ? "Total (página)" : "Total"}</p>
               <p className="text-lg font-bold font-mono text-foreground truncate">{formatCurrency(totalValue)}</p>
             </div>
           </div>
@@ -1760,7 +1905,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
             <Calendar className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
             <div className="min-w-0">
               <p className="text-xs text-muted-foreground">Registros</p>
-              <p className="text-lg font-bold font-mono text-foreground">{filtered.length}</p>
+              <p className="text-lg font-bold font-mono text-foreground">{totalCount}</p>
             </div>
           </div>
         </div>
@@ -2005,7 +2150,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
             <p className="text-destructive mb-4">{error}</p>
             <Button variant="outline" onClick={refresh}>Tentar novamente</Button>
           </div>
-        ) : filtered.length === 0 ? (
+        ) : totalCount === 0 ? (
           <div className="text-center py-20">
             <DollarSign className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
             <p className="text-muted-foreground">{emptyLabel}</p>
@@ -2147,13 +2292,13 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
             </div>
 
             {/* Pagination controls (compartilhada entre cards e tabela) */}
-            {sorted.length > 0 && (
+            {totalCount > 0 && (
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-4 text-xs text-muted-foreground">
                 <div className="flex items-center gap-2">
                   <span>
                     Mostrando <span className="text-foreground font-medium">{pageStart + 1}</span>–
-                    <span className="text-foreground font-medium">{Math.min(pageStart + pageSize, sorted.length)}</span> de{" "}
-                    <span className="text-foreground font-medium">{sorted.length}</span>
+                    <span className="text-foreground font-medium">{Math.min(pageStart + pageSize, totalCount)}</span> de{" "}
+                    <span className="text-foreground font-medium">{totalCount}</span>
                   </span>
                   <div className="flex items-center gap-1">
                     <span className="hidden sm:inline">·</span>

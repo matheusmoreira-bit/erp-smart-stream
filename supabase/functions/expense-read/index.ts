@@ -227,7 +227,7 @@ function applyFilters(query: any, filters: any[]): { query: any; error?: string 
   return { query };
 }
 
-const OR_RE = /^[A-Za-z0-9_.,%@\-\s:+*'"]+$/;
+const OR_RE = /^[A-Za-zÀ-ÿ0-9_.,%@\-\s:+*'"()]+$/;
 
 Deno.serve(async (req) => {
   const cors = corsFor(req, "POST, OPTIONS");
@@ -289,50 +289,52 @@ Deno.serve(async (req) => {
       if (allowedExpenseIds.length === 0) return json(200, { data: [] }, cors);
     }
 
-    let query: any = admin.from(table).select(select);
+    /* ── Builder reutilizável (mesmos filtros/ordem em cada consulta) ── */
+    const usableFilters = filters.filter((f: any) => !(allowedExpenseIds && f?.column === "expense_id"));
+    let filterError: string | undefined;
 
-    const applied = applyFilters(query, filters.filter((f: any) =>
-      !(allowedExpenseIds && f?.column === "expense_id")
-    ));
-    if (applied.error === "__EMPTY_IN__") return json(200, { data: [] }, cors);
-    if (applied.error) return json(400, { error: applied.error }, cors);
-    query = applied.query;
-
-    if (allowedExpenseIds) query = query.in("expense_id", allowedExpenseIds);
-
-    if (typeof body?.or === "string" && body.or.trim()) {
-      const orClause = body.or.trim();
-      if (!OR_RE.test(orClause) || orClause.length > 2000) {
-        return json(400, { error: "cláusula or inválida" }, cors);
-      }
-      query = query.or(orClause);
+    const orClause = typeof body?.or === "string" && body.or.trim() ? body.or.trim() : null;
+    if (orClause && (!OR_RE.test(orClause) || orClause.length > 2000)) {
+      return json(400, { error: "cláusula or inválida" }, cors);
     }
 
     const order = body?.order;
-    if (order && IDENT.test(String(order.column ?? ""))) {
-      query = query.order(String(order.column), {
-        ascending: order.ascending !== false,
-        nullsFirst: Boolean(order.nullsFirst),
-      });
-    }
+    const orderColumn = order && IDENT.test(String(order.column ?? "")) ? String(order.column) : null;
 
+    const build = (cols: string, opts?: { count?: boolean }) => {
+      let q: any = opts?.count
+        ? admin.from(table).select(cols, { count: "exact" })
+        : admin.from(table).select(cols);
+      const applied = applyFilters(q, usableFilters);
+      if (applied.error) { filterError = applied.error; return null; }
+      q = applied.query;
+      if (allowedExpenseIds) q = q.in("expense_id", allowedExpenseIds);
+      if (orClause) q = q.or(orClause);
+      if (orderColumn) {
+        q = q.order(orderColumn, {
+          ascending: order.ascending !== false,
+          nullsFirst: Boolean(order.nullsFirst),
+        });
+        // Desempate estável para paginação consistente entre páginas.
+        if (orderColumn !== "id") q = q.order("id", { ascending: true });
+      }
+      return q;
+    };
+
+    /* ── Janela solicitada (paginação server-side) ── */
+    let rangeFrom: number | null = null;
+    let rangeTo: number | null = null;
     if (Array.isArray(body?.range) && body.range.length === 2) {
-      const from = Math.max(0, Number(body.range[0]) || 0);
-      const to = Math.max(from, Number(body.range[1]) || from);
-      query = query.range(from, Math.min(to, from + MAX_ROWS - 1));
-    } else {
-      // Sobre-busca no modo escopado: o recorte fino é feito em memória.
-      query = query.limit(scoped && table === "expenses" ? MAX_ROWS : limit);
+      rangeFrom = Math.max(0, Number(body.range[0]) || 0);
+      rangeTo = Math.max(rangeFrom, Number(body.range[1]) || rangeFrom);
+      rangeTo = Math.min(rangeTo, rangeFrom + MAX_ROWS - 1);
     }
+    const countRequested = body?.count === true || body?.count === "exact";
+    const wantKeys = body?.keys === true && table === "expenses";
 
-    const { data, error } = await query;
-    if (error) return json(500, { error: error.message }, cors);
-
-    let rows: any[] = data || [];
-
-    if (scoped && table === "expenses") {
-      // Se o select do cliente não trouxe as colunas de dono, resolvemos os
-      // donos em uma segunda consulta para não vazar linhas alheias.
+    /** Aplica o recorte de propriedade (modo escopado) a um lote de linhas. */
+    const filterOwned = async (batch: any[]): Promise<any[]> => {
+      if (batch.length === 0) return batch;
       const hasOwnerCols =
         select === "*" ||
         (select.includes("requester_email") &&
@@ -340,31 +342,104 @@ Deno.serve(async (req) => {
       if (hasOwnerCols) {
         const byItems = await directorateItemIds(
           admin,
-          rows.map((r) => String(r.id)).filter(Boolean),
+          batch.map((r) => String(r.id)).filter(Boolean),
           caller.directorateBranch,
         );
-        rows = rows.filter(
+        return batch.filter(
           (r) => ownsExpense(r, aliases, caller.directorateBranch) || byItems.has(String(r.id)),
         );
-      } else {
-        const ids = rows.map((r) => r.id).filter(Boolean);
-        if (ids.length === 0) return json(200, { data: [] }, cors);
-        const { data: owners } = await admin
-          .from("expenses")
-          .select(OWNER_COLUMNS)
-          .in("id", ids);
-        const byItems = await directorateItemIds(admin, ids, caller.directorateBranch);
-        const allowed = new Set(
-          (owners || [])
-            .filter((r: any) =>
-              ownsExpense(r, aliases, caller.directorateBranch) || byItems.has(String(r.id)),
-            )
-            .map((r: any) => String(r.id)),
-        );
-        rows = rows.filter((r) => allowed.has(String(r.id)));
       }
-      rows = rows.slice(0, limit);
+      const ids = batch.map((r) => r.id).filter(Boolean);
+      if (ids.length === 0) return [];
+      const { data: owners } = await admin.from("expenses").select(OWNER_COLUMNS).in("id", ids);
+      const byItems = await directorateItemIds(admin, ids, caller.directorateBranch);
+      const allowed = new Set(
+        (owners || [])
+          .filter((r: any) =>
+            ownsExpense(r, aliases, caller.directorateBranch) || byItems.has(String(r.id)),
+          )
+          .map((r: any) => String(r.id)),
+      );
+      return batch.filter((r) => allowed.has(String(r.id)));
+    };
+
+    let rows: any[] = [];
+    let total: number | null = null;
+    let hasMore = false;
+    let truncated = false;
+    let keySource: any[] | null = null;
+
+    if (scoped && table === "expenses") {
+      // O recorte de propriedade é feito em memória, então a janela é montada
+      // varrendo a tabela em blocos até preencher a página pedida.
+      const CHUNK = 500;
+      const SCAN_CAP = MAX_ROWS * 5;
+      const need = rangeTo != null ? rangeTo + 1 : limit;
+      let offset = 0;
+      let scanned = 0;
+      let exhausted = false;
+      const collected: any[] = [];
+      while (
+        (collected.length < need || (countRequested && !exhausted) || (wantKeys && !exhausted)) &&
+        scanned < SCAN_CAP
+      ) {
+        const q = build(select);
+        if (!q) break;
+        const { data, error } = await q.range(offset, offset + CHUNK - 1);
+        if (error) return json(500, { error: error.message }, cors);
+        const batch = (data || []) as any[];
+        scanned += batch.length;
+        offset += CHUNK;
+        collected.push(...(await filterOwned(batch)));
+        if (batch.length < CHUNK) { exhausted = true; break; }
+      }
+      if (filterError === "__EMPTY_IN__") return json(200, { data: [], count: 0 }, cors);
+      if (filterError) return json(400, { error: filterError }, cors);
+      truncated = !exhausted;
+      total = exhausted ? collected.length : null;
+      keySource = collected;
+      rows = rangeFrom != null
+        ? collected.slice(rangeFrom, (rangeTo as number) + 1)
+        : collected.slice(0, limit);
+      hasMore = !exhausted || collected.length > need;
+    } else {
+      const q = build(select, { count: countRequested });
+      if (filterError === "__EMPTY_IN__") return json(200, { data: [], count: 0 }, cors);
+      if (filterError || !q) return json(400, { error: filterError || "consulta inválida" }, cors);
+      const windowed = rangeFrom != null
+        ? q.range(rangeFrom, rangeTo as number)
+        : q.limit(limit);
+      const { data, error, count } = await windowed;
+      if (error) return json(500, { error: error.message }, cors);
+      rows = (data || []) as any[];
+      total = typeof count === "number" ? count : null;
+      const consumed = (rangeFrom ?? 0) + rows.length;
+      hasMore = total != null ? consumed < total : rows.length >= (rangeTo != null ? rangeTo - rangeFrom! + 1 : limit);
     }
+
+    /* ── Chaves ERP de todo o conjunto filtrado (dedup ERP Flow × ERP) ── */
+    let keys: Array<{ company_db: string | null; sap_doc_entry: number | null; sap_doc_num: number | null }> | undefined;
+    if (wantKeys) {
+      if (keySource) {
+        keys = keySource.map((r: any) => ({
+          company_db: r.company_db ?? null,
+          sap_doc_entry: r.sap_doc_entry ?? null,
+          sap_doc_num: r.sap_doc_num ?? null,
+        }));
+      } else {
+        const kq = build("company_db, sap_doc_entry, sap_doc_num");
+        if (kq) {
+          const { data: kdata } = await kq.limit(MAX_ROWS * 5);
+          keys = ((kdata || []) as any[]).map((r) => ({
+            company_db: r.company_db ?? null,
+            sap_doc_entry: r.sap_doc_entry ?? null,
+            sap_doc_num: r.sap_doc_num ?? null,
+          }));
+        }
+      }
+      keys = (keys || []).filter((k) => k.sap_doc_entry != null || k.sap_doc_num != null);
+    }
+
 
     // Filhos na mesma chamada (evita 2 round-trips extras por tela).
     let children: Record<string, any[]> | undefined;
@@ -394,12 +469,17 @@ Deno.serve(async (req) => {
       {
         data: rows,
         ...(children || {}),
+        ...(keys ? { keys } : {}),
+        count: total,
+        hasMore,
+        truncated,
         scoped,
         privileged: caller.privileged,
         directorate: caller.directorateBranch,
       },
       cors,
     );
+
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[expense-read] erro", msg);

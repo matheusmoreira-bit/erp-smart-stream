@@ -26,6 +26,10 @@ interface Spec {
   limit?: number;
   range?: [number, number];
   scope?: "auto" | "all";
+  /** Solicita a contagem total do conjunto filtrado (paginação server-side). */
+  count?: boolean;
+  /** Retorna as chaves ERP (DocEntry/DocNum) de todo o conjunto filtrado. */
+  keys?: boolean;
   /** Tabelas filhas retornadas na mesma resposta (evita round-trips). */
   include?: Array<"items" | "attachments">;
 }
@@ -37,6 +41,13 @@ export interface ExpenseReadResult<T = any> {
   privileged?: boolean;
   items?: any[];
   attachments?: any[];
+  /** Total de linhas do conjunto filtrado (null quando não pôde ser apurado). */
+  count?: number | null;
+  /** Há mais linhas além da janela retornada. */
+  hasMore?: boolean;
+  /** A varredura foi interrompida pelo teto de linhas — total é aproximado. */
+  truncated?: boolean;
+  keys?: Array<{ company_db: string | null; sap_doc_entry: number | null; sap_doc_num: number | null }>;
 }
 
 class ExpenseReadBuilder<T = any> implements PromiseLike<ExpenseReadResult<T>> {
@@ -74,6 +85,17 @@ class ExpenseReadBuilder<T = any> implements PromiseLike<ExpenseReadResult<T>> {
   range(from: number, to: number) { this.spec.range = [from, to]; return this; }
   /** Traz itens/anexos das despesas na mesma resposta. */
   include(...tables: Array<"items" | "attachments">) { this.spec.include = tables; return this; }
+  /** Pede a contagem total do conjunto filtrado. */
+  withCount(enabled = true) { this.spec.count = enabled; return this; }
+  /** Pede as chaves ERP de todo o conjunto filtrado (dedup com a lista do ERP). */
+  withKeys(enabled = true) { this.spec.keys = enabled; return this; }
+  /** Página 1-based traduzida para `range`. */
+  page(page: number, pageSize: number) {
+    const p = Math.max(1, Math.floor(page));
+    const size = Math.max(1, Math.floor(pageSize));
+    this.spec.range = [(p - 1) * size, p * size - 1];
+    return this;
+  }
   /** Solicita a visão global — só é honrada pelo servidor para privilegiados. */
   viewAll(enabled = true) { this.spec.scope = enabled ? "all" : "auto"; return this; }
 
@@ -100,6 +122,10 @@ class ExpenseReadBuilder<T = any> implements PromiseLike<ExpenseReadResult<T>> {
         privileged: body?.privileged,
         items: body?.items,
         attachments: body?.attachments,
+        count: body?.count ?? null,
+        hasMore: Boolean(body?.hasMore),
+        truncated: Boolean(body?.truncated),
+        keys: body?.keys,
       };
     } catch (e) {
       return { data: null, error: { message: e instanceof Error ? e.message : String(e) } };
