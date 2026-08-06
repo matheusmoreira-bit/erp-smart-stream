@@ -255,7 +255,9 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     if (rc && rc !== companyDb) return json(400, { error: "Regra pertence a outra empresa" });
   }
 
-  if (ccRedirected) {
+  // Rematch quando houve redirecionamento de CC OU quando o cliente não
+  // conseguiu casar nenhuma regra (ex.: CC/projeto só existem nos itens).
+  if (ccRedirected || !ruleId) {
     const rematched = await rematchRuleFromMatrix(admin, {
       companyDb,
       docType: String(input.doc_type || "purchase"),
