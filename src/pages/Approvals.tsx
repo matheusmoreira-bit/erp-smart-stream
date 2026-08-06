@@ -2161,12 +2161,27 @@ export default function ApprovalsPage() {
         setDocParam(null);
         navigate(`${salesHit ? "/vendas/pedidos" : "/compras"}?doc=${encodeURIComponent(rawId)}`);
       } else {
-        // Documento não existe (id inválido, empresa diferente ou sem permissão
-        // de visualização). Limpa o `?doc=` e mantém o usuário na listagem.
-        toast.error("Documento não encontrado.", {
-          description: "O link pode estar inválido, pertencer a outra empresa ou você não tem permissão para visualizá-lo.",
-        });
+        // A listagem desta tela traz apenas pendentes. Antes de dizer que o
+        // documento não existe, faz uma consulta pontual pelo id.
         setDocParam(null);
+        void (async () => {
+          const { data: found } = await expenseRead("expenses")
+            .select("id, doc_type")
+            .eq("id", rawId)
+            .limit(1);
+          const row = Array.isArray(found) ? found[0] : null;
+          if (row) {
+            const isSales = (row as { doc_type?: string }).doc_type === "sales";
+            toast.info("Este documento não está mais pendente.", {
+              description: `Abrindo em ${isSales ? "Vendas" : "Compras"}…`,
+            });
+            navigate(`${isSales ? "/vendas/pedidos" : "/compras"}?doc=${encodeURIComponent(rawId)}`);
+          } else {
+            toast.error("Documento não encontrado.", {
+              description: "O link pode estar inválido, pertencer a outra empresa ou você não tem permissão para visualizá-lo.",
+            });
+          }
+        })();
       }
     } else {
       // Chave `sap:<id>` inexistente na listagem carregada.
