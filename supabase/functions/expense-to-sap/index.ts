@@ -1346,13 +1346,34 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     };
     lastSapPayload = sapPayload;
 
-    // 4. Post to PurchaseOrders. The link stage succeeds in the same call as
-    // the PO creation because SAP B1 binds AttachmentEntry into the document
-    // header at insert time.
+    // 4. Cria (POST) ou atualiza (PATCH) o documento no SAP.
+    // No patch, campos imutáveis do cabeçalho (filial, data de lançamento e
+    // moeda) são preservados; todo o resto — inclusive a coleção completa de
+    // linhas com LineNum — é reenviado para espelhar o documento aprovado.
+    const patchDocEntry = isPatchMode ? Number(expense.sap_doc_entry) : 0;
+    const sendDocument = async (): Promise<{ docEntry: number; docNum: number; response: any }> => {
+      if (!isPatchMode) {
+        return await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, sapEndpoint);
+      }
+      const patchPayload: Record<string, unknown> = { ...sapPayload };
+      delete patchPayload.BPL_IDAssignedToInvoice;
+      delete patchPayload.DocDate;
+      delete patchPayload.DocCurrency;
+      patchPayload.DocumentLines = ((sapPayload as any).DocumentLines as Array<Record<string, unknown>>)
+        .map((l, i) => ({ LineNum: i, ...l }));
+      lastSapPayload = patchPayload;
+      const resp = await patchSapDocument(sap.baseUrl, sap.cookies, sapEndpoint, patchDocEntry, patchPayload);
+      return {
+        docEntry: patchDocEntry,
+        docNum: Number(resp?.DocNum) || Number(expense.sap_doc_num) || 0,
+        response: resp,
+      };
+    };
+
     let sapResult;
     try {
       try {
-        sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, sapEndpoint);
+        sapResult = await sendDocument();
       } catch (e1) {
         const msg1 = e1 instanceof Error ? e1.message : String(e1);
         // Fallback: SAP FGR validation "EXISTEM LINHAS MARCA/BRAND (PROJETO)"
@@ -1377,7 +1398,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
           console.log("[expense-to-sap] Retrying PO with ProjectCode=ANA GAMING fallback due to:", msg1.slice(0, 200));
         }
         lastSapPayload = sapPayload;
-        sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, sapEndpoint);
+        sapResult = await sendDocument();
       }
       lastSapResponse = sapResult.response;
       purchaseOrderStatus = "success";
@@ -1392,9 +1413,12 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       // "pending" forever.
       if (attachmentEntry !== null) attachmentLinkStatus = "failed";
       const msg = e instanceof Error ? e.message : String(e);
-      await persistStatus({ sap_integration_error: `Falha ao criar Pedido de Compra: ${msg}` });
+      await persistStatus({
+        sap_integration_error: `${isPatchMode ? "Falha ao atualizar o documento no ERP" : "Falha ao criar Pedido de Compra"}: ${msg}`,
+      });
       throw e;
     }
+
 
     // 5. Update expense record (clear error + flush all stage statuses)
     await supabase
