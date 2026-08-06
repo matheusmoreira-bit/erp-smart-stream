@@ -1562,8 +1562,12 @@ export function useExpenses(
 
   return {
     expenses,
+    total,
+    hasMore,
+    sapKeys,
     isLoading,
     error,
+
     refresh: fetchExpenses,
     removeLocal,
     createExpense,
