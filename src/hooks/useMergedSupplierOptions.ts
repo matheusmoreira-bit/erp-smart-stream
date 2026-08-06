@@ -48,7 +48,13 @@ interface Options {
   isSales?: boolean;
 }
 
+/** Cache em memória (por aba) da lista HANA — evita refazer a chamada ao reabrir o modal. */
+const hanaMemory = new Map<string, { rows: any[]; at: number }>();
+/** Chamadas em voo, para deduplicar requisições simultâneas. */
+const hanaInflight = new Map<string, Promise<any>>();
+
 export function useMergedSupplierOptions({ companyDb, isSales = false }: Options) {
+
   const { session } = useSap();
 
   // 1) Lista SAP — traz todos, incluindo Frozen, para poder marcá-los.
@@ -93,57 +99,66 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
       setHanaLoaded(true);
       return;
     }
-    setHanaLoaded(false);
+
+    const memKey = `${hanaCacheKey}:${companyDb}`;
+    const mem = hanaMemory.get(memKey);
+    const memFresh = mem && Date.now() - mem.at < HANA_TTL_MS;
+
+    // 0) Cache em memória — reabrir o formulário é instantâneo.
+    if (hanaReloadTick === 0 && mem) {
+      setHanaOptions(mem.rows.length ? mapHanaRows(mem.rows) : null);
+      setHanaLoaded(true);
+      if (memFresh) return;
+    }
+
+    if (hanaReloadTick > 0 || !mem) setHanaLoaded(false);
+
     (async () => {
-      let servedFromCache = false;
-      // 1) Cache local (rápido) — só é ignorado em reload explícito.
-      if (hanaReloadTick === 0) {
+      let servedFromCache = !!mem;
+      // 1) Cache persistente (rápido) — só é ignorado em reload explícito.
+      if (hanaReloadTick === 0 && !mem) {
         try {
           const { data: cached } = await (supabase as any)
             .from("sap_cache")
             .select("data, expires_at")
             .eq("cache_key", hanaCacheKey)
             .eq("company_db", companyDb)
-            .order("updated_at", { ascending: false })
-            .limit(1)
             .maybeSingle();
           const rows = cached?.data as any[] | undefined;
           if (!cancelled && Array.isArray(rows) && rows.length > 0) {
             setHanaOptions(mapHanaRows(rows));
             setHanaLoaded(true);
             servedFromCache = true;
+            const valid = cached?.expires_at && new Date(cached.expires_at) > new Date();
+            hanaMemory.set(memKey, { rows, at: valid ? Date.now() : 0 });
             // Cache ainda válido → não revalida agora.
-            if (cached?.expires_at && new Date(cached.expires_at) > new Date()) return;
+            if (valid) return;
           }
         } catch {
           /* cache é best-effort */
         }
       }
 
-      // 2) Revalida na origem (bloqueante só quando não houve cache).
+      // 2) Revalida na origem (dedupe de chamadas concorrentes).
       try {
-        const { data, error } = await supabase.functions.invoke("sap-suppliers-hana", {
-          body: { company_db: companyDb, is_sales: isSales },
-        });
+        const force = hanaReloadTick > 0;
+        const reqKey = `${memKey}:${force ? "force" : "soft"}`;
+        let pending = hanaInflight.get(reqKey);
+        if (!pending) {
+          pending = supabase.functions
+            .invoke("sap-suppliers-hana", { body: { company_db: companyDb, is_sales: isSales, force } })
+            .finally(() => hanaInflight.delete(reqKey));
+          hanaInflight.set(reqKey, pending);
+        }
+        const { data, error } = await pending;
         if (cancelled) return;
         if (error) throw error;
         if (data?.error === "hana_unavailable" || !Array.isArray(data?.rows)) {
+          hanaMemory.set(memKey, { rows: [], at: Date.now() });
           if (!servedFromCache) setHanaOptions(null);
         } else {
+          hanaMemory.set(memKey, { rows: data.rows as any[], at: Date.now() });
           setHanaOptions(mapHanaRows(data.rows as any[]));
-          if ((data.rows as any[]).length > 0) {
-            void (supabase as any)
-              .from("sap_cache")
-              .upsert(
-                {
-                  cache_key: hanaCacheKey,
-                  company_db: companyDb,
-                  data: data.rows,
-                  expires_at: new Date(Date.now() + HANA_TTL_MS).toISOString(),
-                },
-                { onConflict: "cache_key,company_db" },
-              );
-          }
         }
       } catch (e) {
         console.warn("[useMergedSupplierOptions] HANA suppliers indisponível, usando Service Layer.", e);
@@ -153,6 +168,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
       }
     })();
     return () => { cancelled = true; };
+
   }, [companyDb, isSales, hanaReloadTick, hanaCacheKey]);
 
 
@@ -168,9 +184,13 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
       $select: "CardCode,CardName,AliasName,Currency,Frozen",
       $filter: `CardType eq '${cardType}'`,
     },
-    // Só ativa o fallback via Service Layer se o HANA já respondeu e não
-    // trouxe dados (empresa sem Apiuser, ou erro na view).
-    enabled: hanaLoaded && (hanaOptions === null || hanaOptions.length === 0),
+    // Ativa o fallback via Service Layer assim que sabemos que o HANA não tem
+    // dados para esta empresa. Quando já sabemos disso pelo cache em memória,
+    // a lista começa a carregar em paralelo, sem esperar o round-trip do HANA.
+    enabled:
+      (hanaOptions === null || hanaOptions.length === 0) &&
+      (hanaLoaded || hanaMemory.get(`${hanaCacheKey}:${companyDb}`)?.rows.length === 0),
+
     mapRow: (row: any) =>
       ({
         code: row.CardCode,
