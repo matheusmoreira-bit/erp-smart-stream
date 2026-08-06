@@ -28,6 +28,7 @@ import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { enforceRateLimit } from "../_shared/rate-limit.ts";
 import { findMatchingRule, pickHierarchicalFallbackRule, type RuleRow } from "../_shared/rule-match.ts";
 import { applyCcRedirect, loadCcRedirects } from "../_shared/cc-redirect.ts";
+import { buildRateioChain } from "../_shared/rateio-chain.ts";
 
 
 const corsHeaders = {
