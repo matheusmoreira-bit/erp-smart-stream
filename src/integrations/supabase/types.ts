@@ -7430,6 +7430,7 @@ export type Database = {
           official_name: string
         }[]
       }
+      approvals_feed_bundle: { Args: { _company_db: string }; Returns: Json }
       archive_audit_trail: {
         Args: { _batch_limit?: number; _keep_months?: number }
         Returns: {
