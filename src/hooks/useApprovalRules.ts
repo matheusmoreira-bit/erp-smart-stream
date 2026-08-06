@@ -261,19 +261,27 @@ export function normalizeCriteria(criteria: RuleCriterion[] | undefined | null):
 const rulesCache = new Map<string, { rules: ApprovalRule[]; at: number }>();
 const RULES_TTL_MS = 6 * 60 * 60 * 1000; // 6 horas
 
-export function useApprovalRules(options?: { backfill?: boolean }) {
+export function useApprovalRules(options?: { backfill?: boolean; enabled?: boolean }) {
   const backfillEnabled = options?.backfill !== false;
+  // `enabled: false` adia o download da matriz (centenas de regras + milhares
+  // de níveis). Telas de listagem só precisam dela quando o usuário abre um
+  // documento — carregar no mount atrasava a primeira pintura.
+  const enabled = options?.enabled !== false;
   const { session } = useSap();
   const activeCompanyDb = session?.companyDB || null;
   const cached = activeCompanyDb ? rulesCache.get(activeCompanyDb) : undefined;
   const [rules, setRules] = useState<ApprovalRule[]>(cached?.rules || []);
-  const [isLoading, setIsLoading] = useState(!cached);
+  const [isLoading, setIsLoading] = useState(!cached && enabled);
   const [error, setError] = useState<string | null>(null);
 
 
   const fetchRules = useCallback(async (opts?: { force?: boolean }) => {
     setError(null);
     try {
+      if (!enabled && !opts?.force) {
+        setIsLoading(false);
+        return;
+      }
       // Scope rules to the active company. If there is no session, return nothing
       // instead of leaking other companies' rules.
       if (!activeCompanyDb) {
@@ -360,7 +368,7 @@ export function useApprovalRules(options?: { backfill?: boolean }) {
     } finally {
       setIsLoading(false);
     }
-  }, [activeCompanyDb, backfillEnabled]);
+  }, [activeCompanyDb, backfillEnabled, enabled]);
 
   const createRule = useCallback(
     async (input: CreateRuleInput, createdBy: string) => {

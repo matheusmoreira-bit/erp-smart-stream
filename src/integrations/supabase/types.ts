@@ -1623,6 +1623,27 @@ export type Database = {
           },
         ]
       }
+      auth_caller_cache: {
+        Row: {
+          cache_key: string
+          created_at: string
+          expires_at: string
+          payload: Json
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string
+          expires_at: string
+          payload: Json
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string
+          expires_at?: string
+          payload?: Json
+        }
+        Relationships: []
+      }
       baixas_recebimento: {
         Row: {
           card_code: string
@@ -7430,6 +7451,7 @@ export type Database = {
           official_name: string
         }[]
       }
+      approvals_feed_bundle: { Args: { _company_db: string }; Returns: Json }
       archive_audit_trail: {
         Args: { _batch_limit?: number; _keep_months?: number }
         Returns: {
