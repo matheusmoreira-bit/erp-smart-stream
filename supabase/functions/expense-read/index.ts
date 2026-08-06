@@ -224,7 +224,7 @@ Deno.serve(async (req) => {
 
   try {
     const admin = service();
-    const caller = await identifyCaller(req, admin);
+    const caller = await identifyCallerCached(req, admin);
     if (!caller.identity) {
       console.warn("[expense-read] sem identidade", {
         hasAuthorization: !!req.headers.get("authorization"),
@@ -356,9 +356,38 @@ Deno.serve(async (req) => {
       rows = rows.slice(0, limit);
     }
 
+    // Filhos na mesma chamada (evita 2 round-trips extras por tela).
+    let children: Record<string, any[]> | undefined;
+    if (table === "expenses" && Array.isArray(body?.include) && body.include.length) {
+      const ids = rows.map((r: any) => r.id).filter(Boolean).slice(0, 5000);
+      const want = new Set(body.include.map((v: unknown) => String(v)));
+      children = {};
+      if (ids.length) {
+        const [items, atts] = await Promise.all([
+          want.has("items")
+            ? admin.from("expense_items").select("*").in("expense_id", ids)
+            : Promise.resolve({ data: null }),
+          want.has("attachments")
+            ? admin.from("expense_attachments").select("*").in("expense_id", ids)
+            : Promise.resolve({ data: null }),
+        ]);
+        if (want.has("items")) children.items = (items as any).data || [];
+        if (want.has("attachments")) children.attachments = (atts as any).data || [];
+      } else {
+        if (want.has("items")) children.items = [];
+        if (want.has("attachments")) children.attachments = [];
+      }
+    }
+
     return json(
       200,
-      { data: rows, scoped, privileged: caller.privileged, directorate: caller.directorateBranch },
+      {
+        data: rows,
+        ...(children || {}),
+        scoped,
+        privileged: caller.privileged,
+        directorate: caller.directorateBranch,
+      },
       cors,
     );
   } catch (e) {
