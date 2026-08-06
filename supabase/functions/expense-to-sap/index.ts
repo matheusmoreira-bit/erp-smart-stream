@@ -1330,7 +1330,12 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
           line.ItemDescription = truncateSapText(it.description, 100);
           if (invoiceDesc) line.FreeText = invoiceDesc;
         }
-        if (it.cost_center || expense.cost_center) line.CostingCode = it.cost_center || expense.cost_center;
+        // Centro de custo: linha > cabeçalho. Em pedidos de venda o CC é
+        // opcional na tela, mas o SAP exige a dimensão — usa 1.1.1.1 como
+        // fallback para não travar a integração.
+        const salesCcFallback = isSales ? "1.1.1.1" : "";
+        const resolvedCc = String(it.cost_center || expense.cost_center || salesCcFallback).trim();
+        if (resolvedCc) line.CostingCode = resolvedCc;
         // Open Gaming: se o projeto não vier preenchido na linha nem no cabeçalho,
         // aplica fallback fixo "OPEN GAMING" (política interna da empresa).
         const projectFallback = expense.company_db === "open_gaming_sa" ? "OPEN GAMING" : "";
