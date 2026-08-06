@@ -476,7 +476,12 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
   // reload permissions automatically so the menu updates without re-login.
   useEffect(() => {
     if (!session?.userName) return;
-    const bump = () => setRefreshTick((n) => n + 1);
+    const bump = () => {
+      // Invalida o cache compartilhado antes de recarregar.
+      clearAuthCache();
+      setRefreshTick((n) => n + 1);
+    };
+
     // Unique channel per hook instance — the same page can mount useModuleAccess
     // in multiple components (MainMenu, MobileBottomNav, MobileMenuSheet…) and
     // Realtime rejects re-subscribing callbacks under the same channel name.
