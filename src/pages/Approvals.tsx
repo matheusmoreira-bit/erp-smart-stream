@@ -62,7 +62,7 @@ import { useApproverCostCenters } from "@/hooks/useApproverCostCenters";
 import { useActiveOfficialsForMe, useSubstituteGrantsForMe } from "@/hooks/useApproverSubstitutes";
 import { useCostCenterNames } from "@/hooks/useCostCenterNames";
 import { shouldShowRateio, sumSelectedShare, type RateioInfo } from "@/lib/rateio";
-import { segmentDocByRules, segmentsForApprover, isTrulySegmented, type ApprovalSegment } from "@/lib/approvalSegments";
+import { segmentDocByRules, segmentsForApprover, isTrulySegmented, lineSegmentKey, type ApprovalSegment } from "@/lib/approvalSegments";
 import { useApprovalRules, type ApprovalRule } from "@/hooks/useApprovalRules";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RelationsMap } from "@/components/RelationsMap";
@@ -603,25 +603,24 @@ function ApprovalDetailModal({
     };
   }, [doc, explainMeta.docType, explainMeta.requesterName]);
 
-  // Mapeia CostingCode → segmento (para saber a qual aprovador cada linha
-  // pertence quando exibimos com blur).
+  // Mapeia (centro de custo + projeto) → segmento (para saber a qual aprovador
+  // cada linha pertence quando exibimos com blur).
   const segmentByCC = useMemo(() => {
     const m = new Map<string, ApprovalSegment>();
     for (const s of segments) {
-      if (s.costCenter === "__all__") continue;
-      m.set(s.costCenter, s);
+      if (s.segmentKey === "__all__") continue;
+      m.set(s.segmentKey, s);
     }
     return m;
   }, [segments]);
   const myCCs = useMemo(
-    () => new Set(mySegments.map((s) => s.costCenter)),
+    () => new Set(mySegments.map((s) => s.segmentKey)),
     [mySegments],
   );
   const isLineMine = useCallback(
     (line: DocumentLine): boolean => {
       if (!maskOtherSegments) return true;
-      const key = (line.CostingCode || "").trim() || "__no_cc__";
-      return myCCs.has(key);
+      return myCCs.has(lineSegmentKey(line));
     },
     [maskOtherSegments, myCCs],
   );
@@ -1145,7 +1144,7 @@ function ApprovalDetailModal({
                     <tbody>
                       {visibleLines.map((line, i) => {
                         const mine = isLineMine(line);
-                        const key = (line.CostingCode || "").trim() || "__no_cc__";
+                        const key = lineSegmentKey(line);
                         const seg = segmentByCC.get(key);
                         const otherApprover = !mine
                           ? (seg?.approverNames?.[0] || seg?.approverEmails?.[0] || "outro aprovador")

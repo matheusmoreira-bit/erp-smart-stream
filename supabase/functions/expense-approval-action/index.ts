@@ -23,6 +23,7 @@ import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
 import { pickApproverSkippingRequester, SELF_APPROVAL_FALLBACK } from "../_shared/approval-skip.ts";
+import { buildRateioChain } from "../_shared/rateio-chain.ts";
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
 import { notifySalesMilestone } from "../_shared/sales-notify.ts";
 import { notifyApprovalPending } from "../_shared/approval-notify.ts";
@@ -518,7 +519,7 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
   // ── Load expense ───────────────────────────────────────────────────────
   const { data: exp, error: expErr } = await admin
     .from("expenses")
-    .select("id, approval_rule_id, current_level_order, status, current_approver, requester_name, requester_email, supplier_name, total_amount, currency, company_db, doc_type, sap_doc_entry")
+    .select("id, approval_rule_id, current_level_order, status, current_approver, requester_name, requester_email, supplier_name, supplier_code, cost_center, project, total_amount, currency, company_db, doc_type, sap_doc_entry")
     .eq("id", expenseId)
     .maybeSingle();
   if (expErr) {
@@ -557,6 +558,34 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
       });
     }
     levels = (lvls || []) as any;
+  }
+
+  // RATEIO: se as linhas pertencem a alçadas diferentes (CC/projeto distintos),
+  // a cadeia efetiva é a mescla das cadeias de cada ramificação — todas
+  // precisam aprovar, sem repetir quem fecha mais de uma delas.
+  try {
+    const { data: rateioItems } = await admin
+      .from("expense_items")
+      .select("cost_center, project, line_total")
+      .eq("expense_id", expenseId);
+    const mergedChain = await buildRateioChain(admin, (rateioItems || []) as any, {
+      companyDb: String((exp as any).company_db || ""),
+      docType: String((exp as any).doc_type || "purchase"),
+      currency: (exp as any).currency || "BRL",
+      requesterName: (exp as any).requester_name || null,
+      supplierName: (exp as any).supplier_name || null,
+      supplierCode: (exp as any).supplier_code || null,
+      headerCostCenter: (exp as any).cost_center || null,
+      headerProject: (exp as any).project || null,
+    });
+    if (mergedChain && mergedChain.length > 0) {
+      levels = mergedChain as any;
+      stageLog("rateio_chain", "info", {
+        requestId, expenseId, levels: mergedChain.map((l) => `${l.level_order}:${l.approver_name}`),
+      });
+    }
+  } catch (e) {
+    stageLog("rateio_chain", "warn", { requestId, expenseId, error: String((e as Error)?.message || e) });
   }
 
   // Suporte a APROVADORES PARALELOS: múltiplas linhas podem compartilhar
