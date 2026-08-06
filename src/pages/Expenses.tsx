@@ -1810,7 +1810,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
             {(() => {
               const reportOptions = {
                 title: isSales ? "Relatório de Vendas" : "Relatório de Compras",
-                subtitle: `${filtered.length} registro(s) · ${companyLabel}`,
+                subtitle: `${totalCount} registro(s) · ${companyLabel}`,
                 meta: [
                   { label: "Empresa", value: companyLabel },
                   { label: "Usuário", value: session?.userName || "—" },
@@ -1827,8 +1827,34 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   { header: "ERP #", cell: (r: typeof filtered[number]) => r.exp.sap_doc_num ? `#${r.exp.sap_doc_num}` : "—" },
                   { header: "Origem", cell: (r: typeof filtered[number]) => r.origin === "erp_flow" ? "ERP Flow" : erpLabel },
                 ],
-                rows: filtered,
+                rows: pageItems,
                 fileName: isSales ? "vendas" : "compras",
+              };
+              // Exportações consideram TODO o conjunto filtrado (não só a
+              // página atual): busca as linhas sob demanda no servidor.
+              const collectRows = async () => {
+                if (!serverMode) return filtered;
+                const spec = buildServerSpec();
+                let q = expenseRead<Expense>("expenses")
+                  .select("*")
+                  .eq("company_db", session?.companyDB || "")
+                  .eq("doc_type", mode);
+                for (const f of spec.filters) {
+                  if (f.op === "is") q = q.is(f.column, f.value ?? null);
+                  else if (f.op === "not_is") q = q.not(f.column, "is", f.value ?? null);
+                  else q = (q as any)[f.op](f.column, f.value);
+                }
+                if (spec.or) q = q.or(spec.or);
+                if (effectiveShowAll) q = q.viewAll();
+                const res = await q.order(spec.order.column, { ascending: spec.order.ascending }).limit(2000);
+                if (res.error) {
+                  toast.error("Não foi possível carregar todos os registros para exportação.");
+                  return pageItems;
+                }
+                return [
+                  ...(res.data || []).map((exp) => ({ exp, origin: "erp_flow" as const })),
+                  ...sapSorted,
+                ];
               };
               return (
                 <>
@@ -1836,8 +1862,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                     variant="outline"
                     size="sm"
                     className="gap-1.5 w-full sm:w-auto justify-center"
-                    disabled={filtered.length === 0}
-                    onClick={() => { void exportListReportPdf(reportOptions); }}
+                    disabled={totalCount === 0}
+                    onClick={() => { void collectRows().then((rows) => exportListReportPdf({ ...reportOptions, rows, subtitle: `${rows.length} registro(s) · ${companyLabel}` })); }}
                     title="Exportar em PDF respeitando os filtros aplicados"
                   >
                     <FileDown className="w-4 h-4" aria-hidden="true" /> <span className="truncate">Exportar PDF</span>
@@ -1846,8 +1872,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                     variant="outline"
                     size="sm"
                     className="gap-1.5 w-full sm:w-auto justify-center"
-                    disabled={filtered.length === 0}
-                    onClick={() => { exportListReportCsv(reportOptions); }}
+                    disabled={totalCount === 0}
+                    onClick={() => { void collectRows().then((rows) => exportListReportCsv({ ...reportOptions, rows, subtitle: `${rows.length} registro(s) · ${companyLabel}` })); }}
                     title="Exportar em CSV respeitando os filtros aplicados"
                   >
                     <FileDown className="w-4 h-4" aria-hidden="true" /> <span className="truncate">Exportar CSV</span>
@@ -1870,7 +1896,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           <div className="glass-card px-4 py-3 flex items-center gap-3 min-w-0">
             <DollarSign className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
             <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">Total</p>
+              <p className="text-xs text-muted-foreground">{serverMode ? "Total (página)" : "Total"}</p>
               <p className="text-lg font-bold font-mono text-foreground truncate">{formatCurrency(totalValue)}</p>
             </div>
           </div>
@@ -1878,7 +1904,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
             <Calendar className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
             <div className="min-w-0">
               <p className="text-xs text-muted-foreground">Registros</p>
-              <p className="text-lg font-bold font-mono text-foreground">{filtered.length}</p>
+              <p className="text-lg font-bold font-mono text-foreground">{totalCount}</p>
             </div>
           </div>
         </div>
@@ -2123,7 +2149,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
             <p className="text-destructive mb-4">{error}</p>
             <Button variant="outline" onClick={refresh}>Tentar novamente</Button>
           </div>
-        ) : filtered.length === 0 ? (
+        ) : totalCount === 0 ? (
           <div className="text-center py-20">
             <DollarSign className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
             <p className="text-muted-foreground">{emptyLabel}</p>
@@ -2265,13 +2291,13 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
             </div>
 
             {/* Pagination controls (compartilhada entre cards e tabela) */}
-            {sorted.length > 0 && (
+            {totalCount > 0 && (
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-4 text-xs text-muted-foreground">
                 <div className="flex items-center gap-2">
                   <span>
                     Mostrando <span className="text-foreground font-medium">{pageStart + 1}</span>–
-                    <span className="text-foreground font-medium">{Math.min(pageStart + pageSize, sorted.length)}</span> de{" "}
-                    <span className="text-foreground font-medium">{sorted.length}</span>
+                    <span className="text-foreground font-medium">{Math.min(pageStart + pageSize, totalCount)}</span> de{" "}
+                    <span className="text-foreground font-medium">{totalCount}</span>
                   </span>
                   <div className="flex items-center gap-1">
                     <span className="hidden sm:inline">·</span>
