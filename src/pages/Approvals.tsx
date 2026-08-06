@@ -1989,8 +1989,11 @@ export default function ApprovalsPage() {
   const { isAdmin: isLovableAdmin } = useAuth();
   const navigate = useNavigate();
   const { approvals, isLoading, isRefreshing, error, lastUpdatedAt, refresh, refreshCache, removeLocal: removeApprovalLocal } = useApprovals();
-  const { expenses: purchaseExpenses, refresh: refreshPurchase, approveExpense, rejectExpense, isLoading: isLoadingPurchase, removeLocal: removePurchaseLocal } = useExpenses("purchase");
-  const { expenses: salesExpenses, refresh: refreshSales, isLoading: isLoadingSales, removeLocal: removeSalesLocal } = useExpenses("sales");
+  // Esta tela só usa documentos internos pendentes de aprovação — buscar todo
+  // o histórico (com itens e anexos) era o principal custo do carregamento.
+  const PENDING_ONLY = useMemo(() => ["pendente_aprovacao"], []);
+  const { expenses: purchaseExpenses, refresh: refreshPurchase, approveExpense, rejectExpense, isLoading: isLoadingPurchase, removeLocal: removePurchaseLocal } = useExpenses("purchase", { statuses: PENDING_ONLY });
+  const { expenses: salesExpenses, refresh: refreshSales, isLoading: isLoadingSales, removeLocal: removeSalesLocal } = useExpenses("sales", { statuses: PENDING_ONLY });
   const expenses = [...purchaseExpenses, ...salesExpenses];
   const refreshExpenses = () => Promise.all([refreshPurchase(), refreshSales()]);
   const removeExpenseLocal = (internalId: string) => {
