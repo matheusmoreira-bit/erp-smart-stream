@@ -255,13 +255,21 @@ export function normalizeCriteria(criteria: RuleCriterion[] | undefined | null):
 
 
 
+// Cache em memória da matriz por empresa (stale-while-revalidate).
+// A matriz muda pouco e é grande (centenas de regras + níveis); telas de
+// leitura passam a renderizar imediatamente enquanto revalidam em segundo plano.
+const rulesCache = new Map<string, { rules: ApprovalRule[]; at: number }>();
+const RULES_TTL_MS = 5 * 60 * 1000;
+
 export function useApprovalRules(options?: { backfill?: boolean }) {
   const backfillEnabled = options?.backfill !== false;
   const { session } = useSap();
   const activeCompanyDb = session?.companyDB || null;
-  const [rules, setRules] = useState<ApprovalRule[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const cached = activeCompanyDb ? rulesCache.get(activeCompanyDb) : undefined;
+  const [rules, setRules] = useState<ApprovalRule[]>(cached?.rules || []);
+  const [isLoading, setIsLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
+
 
   const fetchRules = useCallback(async () => {
     setIsLoading(true);
