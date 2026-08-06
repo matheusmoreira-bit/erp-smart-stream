@@ -286,9 +286,11 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   let fallbackUsed = false;
   let escalatedTo: string | null = null;
   let matrixGap = false;
-  // RATEIO entre alçadas diferentes: mescla as cadeias das ramificações.
-  const rateioChain = status === "pendente_aprovacao"
-    ? await buildRateioChain(admin, items as any, {
+  // RATEIO entre alçadas diferentes: cada segmento (CC + projeto) tem o seu
+  // PRÓPRIO fluxo, independente. Persistimos os segmentos após criar a despesa;
+  // aqui só resolvemos os aprovadores iniciais (um por segmento).
+  const rateioSegments = status === "pendente_aprovacao"
+    ? await buildRateioSegments(admin, items as any, {
         companyDb,
         docType: String(input.doc_type || "purchase"),
         currency: input.currency || "BRL",
@@ -299,13 +301,17 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
         headerProject: input.project || null,
       })
     : null;
-  if (rateioChain && rateioChain.length > 0) {
-    const picked = pickApproverSkippingRequester(rateioChain, requesterName, requesterEmail, 1);
-    resolvedApprover = picked.approver_name || resolvedApprover;
-    resolvedApproverEmail = picked.approver_email;
-    resolvedLevel = picked.level_order;
-    fallbackUsed = picked.fallback_used;
+  if (rateioSegments && rateioSegments.length > 0) {
+    const picks = rateioSegments.map((s) =>
+      pickApproverSkippingRequester(s.chain, requesterName, requesterEmail, 1),
+    );
+    const names = Array.from(new Set(picks.map((p) => p.approver_name).filter(Boolean)));
+    resolvedApprover = names.join(" / ") || resolvedApprover;
+    resolvedApproverEmail = picks[0]?.approver_email || null;
+    resolvedLevel = Math.min(...picks.map((p) => p.level_order));
+    fallbackUsed = picks.some((p) => p.fallback_used);
   } else if (status === "pendente_aprovacao" && ruleId) {
+
     const picked = await resolveApproverWithEscalation(admin, ruleId, {
       companyDb,
       docType: String(input.doc_type || "purchase"),
