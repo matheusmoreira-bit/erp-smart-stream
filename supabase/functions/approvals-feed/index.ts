@@ -164,7 +164,8 @@ Deno.serve(async (req) => {
     // recorte de visibilidade é aplicado depois, em memória. O tempo total
     // passa a ser o do mais lento, e não a soma dos dois.
     const tAuth = Date.now();
-    const bundlePromise = admin.rpc("approvals_feed_bundle", { _company_db: companyDb });
+    // `.then()` força o início imediato: os builders do supabase-js são lazy.
+    const bundlePromise = admin.rpc("approvals_feed_bundle", { _company_db: companyDb }).then((r) => r);
     const caller = await identifyCallerCached(req, admin);
     const authMs = Date.now() - tAuth;
     if (!caller.identity) {
