@@ -255,7 +255,8 @@ export function normalizeCriteria(criteria: RuleCriterion[] | undefined | null):
 
 
 
-export function useApprovalRules() {
+export function useApprovalRules(options?: { backfill?: boolean }) {
+  const backfillEnabled = options?.backfill !== false;
   const { session } = useSap();
   const activeCompanyDb = session?.companyDB || null;
   const [rules, setRules] = useState<ApprovalRule[]>([]);
