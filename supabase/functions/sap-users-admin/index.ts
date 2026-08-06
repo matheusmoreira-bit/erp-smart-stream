@@ -527,6 +527,50 @@ Deno.serve(withEdgeMetrics("sap-users-admin", async (req, _mctx) => {
         });
       }
 
+      if (action === "create_user") {
+        const userCode = String(body.user_code || "").trim();
+        const userName = String(body.user_name || "").trim();
+        const email = String(body.email || "").trim();
+        const password = String(body.password || "");
+        if (!/^[A-Za-z0-9._@-]{1,128}$/.test(userCode) || !userName || !email.includes("@") || password.length < 12) {
+          return new Response(JSON.stringify({ error: "user_code, user_name, email válidos e password (>=12) são obrigatórios" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const payload: Record<string, unknown> = {
+          UserCode: userCode,
+          UserName: userName,
+          eMail: email,
+          UserPassword: password,
+          Locked: "tNO",
+          Superuser: "tNO",
+        };
+        if (body.user_permission) payload.UserPermission = String(body.user_permission);
+        const result = await sapRequest(session, "Users", "POST", payload);
+        if (!result.ok) throw new Error(extractSapError(result.data, `Falha ao criar usuário (${result.status})`));
+        const created = result.data as { InternalKey?: number } | null;
+        if (created?.InternalKey) {
+          await ensurePasswordNeverExpires(
+            (path, method, b) => sapRequest(session, path, method, b),
+            created.InternalKey,
+            { companyDb, internalKey: created.InternalKey },
+          );
+        }
+        await admin.rpc("insert_audit_log", {
+          p_action: "sap_user_create",
+          p_entity_type: "sap_user",
+          p_entity_id: String(created?.InternalKey ?? userCode),
+          p_actor_email: caller.email,
+          p_company_db: companyDb,
+          p_details: { user_code: userCode, user_name: userName, email },
+        });
+        return new Response(JSON.stringify({ ok: true, internal_key: created?.InternalKey ?? null }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+
       return new Response(JSON.stringify({ error: "Ação desconhecida" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
