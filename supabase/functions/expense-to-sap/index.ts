@@ -365,6 +365,61 @@ async function postSapDocument(
   return { docEntry: body.DocEntry, docNum: body.DocNum, response: body };
 }
 
+/**
+ * Atualiza (patch completo) um documento já existente no SAP.
+ * O Service Layer substitui a coleção DocumentLines inteira quando ela é
+ * enviada no corpo, então mandamos todas as linhas com LineNum sequencial —
+ * garantindo que itens, valores, centros de custo e projetos fiquem idênticos
+ * ao que foi aprovado no ERP Flow (sem divergência).
+ */
+async function patchSapDocument(
+  sapBaseUrl: string,
+  cookies: string,
+  endpoint: string,
+  docEntry: number,
+  payload: Record<string, unknown>,
+): Promise<any> {
+  const res = await fetch(`${sapBaseUrl}/${endpoint}(${docEntry})`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: cookies, Prefer: "return=representation" },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 204) return {};
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = body?.error?.message?.value || JSON.stringify(body);
+    throw new Error(`SAP ${endpoint}(${docEntry}) update failed [${res.status}]: ${msg}`);
+  }
+  return body;
+}
+
+/** Só é seguro atualizar documentos abertos e sem documento de destino. */
+async function assertSapDocumentEditable(
+  sapBaseUrl: string,
+  cookies: string,
+  endpoint: string,
+  docEntry: number,
+): Promise<void> {
+  const res = await fetch(
+    `${sapBaseUrl}/${endpoint}(${docEntry})?$select=DocumentStatus,Cancelled,DocNum`,
+    { headers: { Cookie: cookies } },
+  );
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = body?.error?.message?.value || JSON.stringify(body);
+    throw new Error(`Não foi possível ler o documento no SAP [${res.status}]: ${msg}`);
+  }
+  if (String(body?.Cancelled || "") === "tYES") {
+    throw new Error("Documento cancelado no SAP — não é possível atualizar.");
+  }
+  if (String(body?.DocumentStatus || "") !== "bost_Open") {
+    throw new Error(
+      "Documento já encerrado/copiado no SAP (NF de entrada ou recebimento lançado) — atualização não permitida.",
+    );
+  }
+}
+
+
 async function getSapDocumentAttachmentEntry(
   sapBaseUrl: string,
   cookies: string,
@@ -993,7 +1048,14 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       }
     }
 
-    if (expense.sap_doc_entry) {
+    // Documento já existe no SAP. Se ele voltou para "aprovado" (foi editado no
+    // ERP Flow e reaprovado) e ainda não tem NF de entrada lançada, fazemos o
+    // PATCH completo do documento — itens, valores, centros de custo, projeto,
+    // datas e observação — para não gerar divergência entre Flow e ERP.
+    const isPatchMode = !!expense.sap_doc_entry
+      && (body.patch_document === true || String((expense as any).status || "") === "aprovado");
+
+    if (expense.sap_doc_entry && !isPatchMode) {
       const existingAttachmentEntry = Number(expense.sap_attachment_entry || 0);
       if (existingAttachmentEntry > 0) {
         attachmentStatus = "success";
@@ -1026,6 +1088,22 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
+    if (isPatchMode) {
+      // Guard-rails: NF de entrada lançada no Flow ou documento fechado no SAP.
+      const { data: nfRows } = await supabase
+        .from("nf_entrada_imports")
+        .select("status, sap_invoice_draft_id")
+        .eq("expense_id", expenseId);
+      const nfPosted = (nfRows || []).some((r: any) =>
+        r.sap_invoice_draft_id || ["awaiting_invoice", "completed"].includes(String(r.status))
+      );
+      if (nfPosted) {
+        throw new Error("NF de entrada já lançada para este pedido — atualização no ERP não permitida.");
+      }
+      await assertSapDocumentEditable(sap.baseUrl, sap.cookies, sapEndpoint, Number(expense.sap_doc_entry));
+    }
+
 
     // 3. Build Purchase Order payload
     const today = new Date().toISOString().slice(0, 10);
@@ -1268,13 +1346,34 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     };
     lastSapPayload = sapPayload;
 
-    // 4. Post to PurchaseOrders. The link stage succeeds in the same call as
-    // the PO creation because SAP B1 binds AttachmentEntry into the document
-    // header at insert time.
+    // 4. Cria (POST) ou atualiza (PATCH) o documento no SAP.
+    // No patch, campos imutáveis do cabeçalho (filial, data de lançamento e
+    // moeda) são preservados; todo o resto — inclusive a coleção completa de
+    // linhas com LineNum — é reenviado para espelhar o documento aprovado.
+    const patchDocEntry = isPatchMode ? Number(expense.sap_doc_entry) : 0;
+    const sendDocument = async (): Promise<{ docEntry: number; docNum: number; response: any }> => {
+      if (!isPatchMode) {
+        return await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, sapEndpoint);
+      }
+      const patchPayload: Record<string, unknown> = { ...sapPayload };
+      delete patchPayload.BPL_IDAssignedToInvoice;
+      delete patchPayload.DocDate;
+      delete patchPayload.DocCurrency;
+      patchPayload.DocumentLines = ((sapPayload as any).DocumentLines as Array<Record<string, unknown>>)
+        .map((l, i) => ({ LineNum: i, ...l }));
+      lastSapPayload = patchPayload;
+      const resp = await patchSapDocument(sap.baseUrl, sap.cookies, sapEndpoint, patchDocEntry, patchPayload);
+      return {
+        docEntry: patchDocEntry,
+        docNum: Number(resp?.DocNum) || Number(expense.sap_doc_num) || 0,
+        response: resp,
+      };
+    };
+
     let sapResult;
     try {
       try {
-        sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, sapEndpoint);
+        sapResult = await sendDocument();
       } catch (e1) {
         const msg1 = e1 instanceof Error ? e1.message : String(e1);
         // Fallback: SAP FGR validation "EXISTEM LINHAS MARCA/BRAND (PROJETO)"
@@ -1299,7 +1398,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
           console.log("[expense-to-sap] Retrying PO with ProjectCode=ANA GAMING fallback due to:", msg1.slice(0, 200));
         }
         lastSapPayload = sapPayload;
-        sapResult = await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, sapEndpoint);
+        sapResult = await sendDocument();
       }
       lastSapResponse = sapResult.response;
       purchaseOrderStatus = "success";
@@ -1314,9 +1413,12 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       // "pending" forever.
       if (attachmentEntry !== null) attachmentLinkStatus = "failed";
       const msg = e instanceof Error ? e.message : String(e);
-      await persistStatus({ sap_integration_error: `Falha ao criar Pedido de Compra: ${msg}` });
+      await persistStatus({
+        sap_integration_error: `${isPatchMode ? "Falha ao atualizar o documento no ERP" : "Falha ao criar Pedido de Compra"}: ${msg}`,
+      });
       throw e;
     }
+
 
     // 5. Update expense record (clear error + flush all stage statuses)
     await supabase
@@ -1335,7 +1437,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
 
     // 6. Audit
     await supabase.rpc("insert_audit_log", {
-      p_action: "sap_document_created",
+      p_action: isPatchMode ? "sap_document_updated" : "sap_document_created",
       p_entity_type: "expense",
       p_entity_id: expenseId,
       p_company_db: expense.company_db || null,
@@ -1344,6 +1446,8 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         sap_doc_entry: sapResult.docEntry,
         sap_doc_num: sapResult.docNum,
         sap_attachment_entry: attachmentEntry,
+        patched: isPatchMode,
+
         stage_status: {
           attachment: attachmentStatus,
           purchase_order: purchaseOrderStatus,
