@@ -112,16 +112,21 @@ export async function getCapabilities(
         .filter(Boolean),
     ),
   );
-  if (!groupIds.length) return new Set();
+  if (!groupIds.length) {
+    capsCache.set(cacheKey, { expiresAt: Date.now() + CAPS_TTL_MS, value: new Set() });
+    return new Set();
+  }
   const { data: rows } = await admin
     .from("permission_group_modules")
     .select("module_key, can_view")
     .in("group_id", groupIds);
-  return new Set(
+  const caps = new Set(
     ((rows as any[] | null) || [])
       .filter((r) => r.can_view !== false)
       .map((r) => String(r.module_key)),
   );
+  capsCache.set(cacheKey, { expiresAt: Date.now() + CAPS_TTL_MS, value: new Set(caps) });
+  return caps;
 }
 
 export async function hasCapability(
