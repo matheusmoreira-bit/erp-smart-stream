@@ -35,6 +35,7 @@ import { Badge } from "@/components/ui/badge";
 import { useApprovals, type ApprovalDoc, type DocumentLine } from "@/hooks/useApprovals";
 import { FilterMultiSelect } from "@/components/FilterMultiSelect";
 import { useExpenses, type Expense } from "@/hooks/useExpenses";
+import { useApprovalsFeed } from "@/hooks/useApprovalsFeed";
 import { expenseRead } from "@/lib/expense-read";
 import { useMyRequests, type MyRequestDoc, type ApprovalHistoryEntry } from "@/hooks/useMyRequests";
 import { useLazyList } from "@/hooks/useLazyList";
@@ -2075,7 +2076,9 @@ export default function ApprovalsPage() {
   const { officials: activeOfficials } = useActiveOfficialsForMe();
   const { grants: substituteGrants, refresh: refreshSubstituteGrants } = useSubstituteGrantsForMe();
   // Somente leitura nesta tela — evita centenas de writes de backfill no load.
-  const { rules } = useApprovalRules({ backfill: false });
+  // A matriz só é necessária quando o usuário abre um documento (raio-x /
+  // segmentação). Carregar no mount custava centenas de regras + níveis.
+  const { rules } = useApprovalRules({ backfill: false, enabled: !!selectedDoc });
 
 
   // Merge SAP approvals with internal pending expenses.
@@ -2850,11 +2853,7 @@ export default function ApprovalsPage() {
         try {
           await new Promise((r) => setTimeout(r, 1500));
           if (internalDoc) {
-            if ((selectedDoc as any)?.docType === "sales") {
-              await refreshSales();
-            } else {
-              await refreshPurchase();
-            }
+            await refreshFeed();
           } else {
             // Dispara sync do histórico em paralelo — não bloqueia o refresh.
             try {
