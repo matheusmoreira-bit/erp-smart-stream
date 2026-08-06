@@ -7633,6 +7633,42 @@ export type Database = {
           total: number
         }[]
       }
+      get_edge_metrics_timeseries: {
+        Args: { _bucket_minutes?: number; _function?: string; _hours?: number }
+        Returns: {
+          avg_ms: number
+          bucket: string
+          errors: number
+          p95_ms: number
+          total: number
+        }[]
+      }
+      get_expense_read_metrics: {
+        Args: { _hours?: number }
+        Returns: {
+          avg_ms: number
+          avg_rows: number
+          errors: number
+          last_at: string
+          max_ms: number
+          p50_ms: number
+          p95_ms: number
+          screen: string
+          total: number
+        }[]
+      }
+      get_flow_stage_metrics: {
+        Args: { _days?: number }
+        Returns: {
+          avg_hours: number
+          docs: number
+          max_hours: number
+          p50_hours: number
+          p95_hours: number
+          stage: string
+          stage_order: number
+        }[]
+      }
       get_integration_health: {
         Args: { _hours?: number }
         Returns: {
