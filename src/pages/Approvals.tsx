@@ -603,25 +603,24 @@ function ApprovalDetailModal({
     };
   }, [doc, explainMeta.docType, explainMeta.requesterName]);
 
-  // Mapeia CostingCode → segmento (para saber a qual aprovador cada linha
-  // pertence quando exibimos com blur).
+  // Mapeia (centro de custo + projeto) → segmento (para saber a qual aprovador
+  // cada linha pertence quando exibimos com blur).
   const segmentByCC = useMemo(() => {
     const m = new Map<string, ApprovalSegment>();
     for (const s of segments) {
-      if (s.costCenter === "__all__") continue;
-      m.set(s.costCenter, s);
+      if (s.segmentKey === "__all__") continue;
+      m.set(s.segmentKey, s);
     }
     return m;
   }, [segments]);
   const myCCs = useMemo(
-    () => new Set(mySegments.map((s) => s.costCenter)),
+    () => new Set(mySegments.map((s) => s.segmentKey)),
     [mySegments],
   );
   const isLineMine = useCallback(
     (line: DocumentLine): boolean => {
       if (!maskOtherSegments) return true;
-      const key = (line.CostingCode || "").trim() || "__no_cc__";
-      return myCCs.has(key);
+      return myCCs.has(lineSegmentKey(line));
     },
     [maskOtherSegments, myCCs],
   );
