@@ -138,6 +138,31 @@ Deno.serve(async (req) => {
     }
 
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    // Cache server-side (service role) — o client não tem permissão de escrita
+    // em sap_cache, então a gravação precisa acontecer aqui.
+    const CACHE_KEY = "suppliers_hana_v1";
+    const CACHE_TTL_MS = 30 * 60 * 1000;
+    const force = Boolean(body?.force);
+    if (!force) {
+      const { data: cached } = await sb
+        .from("sap_cache")
+        .select("data, expires_at")
+        .eq("cache_key", CACHE_KEY)
+        .eq("company_db", companyDb)
+        .maybeSingle();
+      const cachedRows = cached?.data as unknown[] | undefined;
+      if (
+        Array.isArray(cachedRows) && cachedRows.length > 0 &&
+        cached?.expires_at && new Date(cached.expires_at as string) > new Date()
+      ) {
+        return new Response(
+          JSON.stringify({ rows: cachedRows, total: cachedRows.length, cached: true }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
     const creds = await loadCreds(sb, companyDb);
     if (!creds) {
       return new Response(JSON.stringify({
@@ -176,7 +201,19 @@ Deno.serve(async (req) => {
       deduped.push(r);
     }
 
-    return new Response(JSON.stringify({ rows: deduped, view, schema, total: deduped.length }),
+    if (deduped.length > 0) {
+      await sb.from("sap_cache").upsert(
+        {
+          cache_key: CACHE_KEY,
+          company_db: companyDb,
+          data: deduped,
+          expires_at: new Date(Date.now() + CACHE_TTL_MS).toISOString(),
+        },
+        { onConflict: "cache_key,company_db" },
+      );
+    }
+
+    return new Response(JSON.stringify({ rows: deduped, view, schema, total: deduped.length, cached: false }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: (e as Error).message }),
