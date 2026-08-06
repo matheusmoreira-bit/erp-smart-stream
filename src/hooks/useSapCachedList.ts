@@ -171,15 +171,17 @@ export function useSapCachedList({
             cachedData = filterActiveRows(endpoint, cachedData);
             setOptions(cachedData.map(mapRowRef.current));
 
-
-            // If cache is still valid or no SAP session to refresh, stop here
+            // Cache válido (ou sem sessão para revalidar): encerra aqui.
             if (!isExpired || !session) {
               setIsLoading(false);
               return;
             }
+            // Stale-while-revalidate: a tela já renderiza com o cache antigo e
+            // a atualização no ERP (que pode levar dezenas de segundos)
+            // acontece em segundo plano, sem travar o combobox.
+            setIsLoading(false);
           }
         }
-      }
 
       // 2. If no cache hit (or expired/forced) and we have a SAP session, fetch from SAP.
       //    Prefer the server-side Apiuser route (edge function sap-list-service)
