@@ -129,16 +129,23 @@ export const BeComplianceAdapter: KYPProviderAdapter = {
     if (status < 200 || status >= 300) {
       throw new Error(`BeCompliance consulta ${tipoPessoa} falhou (HTTP ${status})`);
     }
-    let rows = asArray(body);
-    rows = rows.filter((r) => {
+    const todas = asArray(body);
+    // Linhas que confirmam o mesmo documento.
+    const comDoc = todas.filter((r) => {
       const campos = [r.cnpj, r.cpf, r.document_number, r.document, r.documento]
         .map((v) => onlyDigits(v));
-      // Sem nenhum documento na linha não dá para afirmar que é o mesmo parceiro.
-      if (!campos.some(Boolean)) return false;
-      return campos.includes(digits);
+      return campos.some(Boolean) && campos.includes(digits);
     });
+    // Fallback: a consulta PJ já é filtrada por CNPJ no servidor. Quando o
+    // provedor não devolve o documento na listagem, descartar as linhas fazia o
+    // fluxo concluir "sem diligência" e abrir uma nova (duplicidade).
+    const semDoc = todas.filter((r) =>
+      ![r.cnpj, r.cpf, r.document_number, r.document, r.documento].some((v) => onlyDigits(v))
+    );
+    const rows = comDoc.length ? comDoc : (tipoPessoa === "PJ" ? semDoc : []);
     if (!rows.length) return null;
-    return normalize(maisRecente(rows));
+    return normalize(selecionarDiligencia(rows));
+
   },
 
   async criarDiligencia(
