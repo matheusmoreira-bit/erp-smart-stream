@@ -1989,16 +1989,31 @@ export default function ApprovalsPage() {
   const { isAdmin: isLovableAdmin } = useAuth();
   const navigate = useNavigate();
   const { approvals, isLoading, isRefreshing, error, lastUpdatedAt, refresh, refreshCache, removeLocal: removeApprovalLocal } = useApprovals();
-  // Esta tela só usa documentos internos pendentes de aprovação — buscar todo
-  // o histórico (com itens e anexos) era o principal custo do carregamento.
-  const PENDING_ONLY = useMemo(() => ["pendente_aprovacao"], []);
-  const { expenses: purchaseExpenses, refresh: refreshPurchase, approveExpense, rejectExpense, isLoading: isLoadingPurchase, removeLocal: removePurchaseLocal } = useExpenses("purchase", { statuses: PENDING_ONLY });
-  const { expenses: salesExpenses, refresh: refreshSales, isLoading: isLoadingSales, removeLocal: removeSalesLocal } = useExpenses("sales", { statuses: PENDING_ONLY });
-  const expenses = [...purchaseExpenses, ...salesExpenses];
-  const refreshExpenses = () => Promise.all([refreshPurchase(), refreshSales()]);
+  // Documentos internos pendentes vêm de UM único feed servidor-side
+  // (`approvals-feed`): escopo de visibilidade, itens, anexos e aprovadores do
+  // nível atual já resolvidos, com pintura imediata a partir do cache local.
+  const {
+    docs: feedDocs,
+    isLoading: isLoadingFeed,
+    refresh: refreshFeed,
+    removeLocal: removeFeedLocal,
+  } = useApprovalsFeed();
+  const purchaseExpenses = useMemo(
+    () => feedDocs.filter((d) => (d as { doc_type?: string }).doc_type !== "sales"),
+    [feedDocs],
+  );
+  const salesExpenses = useMemo(
+    () => feedDocs.filter((d) => (d as { doc_type?: string }).doc_type === "sales"),
+    [feedDocs],
+  );
+  const isLoadingPurchase = isLoadingFeed;
+  const isLoadingSales = isLoadingFeed;
+  // `useExpenses` fica apenas para as mutações — sem nenhuma leitura no mount.
+  const { approveExpense, rejectExpense } = useExpenses("purchase", { enabled: false });
+  const expenses = feedDocs;
+  const refreshExpenses = () => refreshFeed();
   const removeExpenseLocal = (internalId: string) => {
-    removePurchaseLocal(internalId);
-    removeSalesLocal(internalId);
+    removeFeedLocal(internalId);
   };
   const { getLabel } = useCompanies(true);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
