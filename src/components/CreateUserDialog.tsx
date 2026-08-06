@@ -10,8 +10,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import { PasswordPolicyChecklist } from "@/components/PasswordPolicyChecklist";
-import { checkPasswordPolicy } from "@/lib/password-policy";
-import { generateUniquePassword } from "@/lib/generate-password";
+import { checkPasswordPolicy, generateStrongPassword } from "@/lib/password-policy";
 
 const DEFAULT_PASSWORD = "Sap@2025";
 type PasswordMode = "default" | "auto" | "manual";
@@ -94,7 +93,7 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
   const applyMode = (mode: PasswordMode) => {
     setPasswordMode(mode);
     if (mode === "default") setPassword(DEFAULT_PASSWORD);
-    else if (mode === "auto") setPassword(generateUniquePassword());
+    else if (mode === "auto") setPassword(generateStrongPassword(16, userCode));
     else setPassword("");
     setShowPassword(mode !== "manual");
   };
@@ -121,6 +120,10 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
   const handleSubmit = async () => {
     if (!userCode.trim() || !userName.trim() || !password.trim()) {
       toast.error("Preencha código, nome e senha");
+      return;
+    }
+    if (!policy.valid) {
+      toast.error(`Senha inválida: ${policy.failed[0]?.label ?? "não atende à política"}`);
       return;
     }
     if (selectedDbs.size === 0) {
@@ -241,7 +244,7 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
                 <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={copyPassword} disabled={!password} aria-label="Copiar senha">
                   <Copy className="w-4 h-4" />
                 </Button>
-                <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => { setPassword(generateUniquePassword()); setPasswordMode("auto"); setShowPassword(true); }} disabled={submitting} aria-label="Gerar nova senha">
+                <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => { setPassword(generateStrongPassword(16, userCode)); setPasswordMode("auto"); setShowPassword(true); }} disabled={submitting} aria-label="Gerar nova senha">
                   <RefreshCw className="w-4 h-4" />
                 </Button>
               </div>
@@ -344,7 +347,7 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
               <Button variant="outline" onClick={() => handleClose(false)} disabled={submitting}>
                 Cancelar
               </Button>
-              <Button onClick={handleSubmit} disabled={submitting || isLoading || selectedDbs.size === 0}>
+              <Button onClick={handleSubmit} disabled={submitting || isLoading || selectedDbs.size === 0 || !policy.valid}>
                 {submitting ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
