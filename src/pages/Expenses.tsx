@@ -84,6 +84,7 @@ import { savePostLoginPath } from "@/lib/post-login-redirect";
 import { useNavigate } from "react-router-dom";
 import { ExpenseEventHistory } from "@/components/ExpenseEventHistory";
 import { SapPoDetails } from "@/components/SapPoDetails";
+import { SapPullbackDialog } from "@/components/SapPullbackDialog";
 
 import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
@@ -185,6 +186,9 @@ function ExpenseDetailModal({
   mode,
   originBadge,
   erpLabel,
+  canSyncFromErp,
+  onSynced,
+
 }: {
   expense: Expense | null;
   open: boolean;
@@ -212,9 +216,12 @@ function ExpenseDetailModal({
   mode?: "purchase" | "sales";
   originBadge?: "erp_flow" | "erp";
   erpLabel?: string;
+  canSyncFromErp?: boolean;
+  onSynced?: () => void;
 }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showPullback, setShowPullback] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const statusLabel = useStatusLabel();
   const isSalesDoc = mode === "sales";
@@ -531,17 +538,31 @@ function ExpenseDetailModal({
                       Integração com ERP
                     </span>
                   </div>
-                  {!isErpNative && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2 text-xs"
-                      onClick={onViewIntegration}
-                    >
-                      Ver detalhes
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-1">
+                    {canSyncFromErp && !isErpNative && !!expense.sap_doc_entry && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs gap-1.5"
+                        onClick={() => setShowPullback(true)}
+                        title={`Trazer para o Flow as alterações feitas no ${erpLabel || "ERP"} (sem reabrir aprovação)`}
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" /> Sincronizar do {erpLabel || "ERP"}
+                      </Button>
+                    )}
+                    {!isErpNative && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs"
+                        onClick={onViewIntegration}
+                      >
+                        Ver detalhes
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-xs">
                   {expense.sap_doc_num != null && (
@@ -705,6 +726,16 @@ function ExpenseDetailModal({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {showPullback && (
+        <SapPullbackDialog
+          open={showPullback}
+          onOpenChange={setShowPullback}
+          expenseId={expense.id}
+          erpLabel={erpLabel || "ERP"}
+          onApplied={() => onSynced?.()}
+        />
+      )}
     </>
   );
 }
@@ -2446,6 +2477,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         isRetrying={isRetrying}
         isActioning={isActioning}
         mode={mode}
+        canSyncFromErp={isAdmin}
+        onSynced={() => { void refresh(); setSelectedExpense(null); }}
       />
 
 
