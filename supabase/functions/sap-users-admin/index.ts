@@ -278,6 +278,16 @@ Deno.serve(withEdgeMetrics("sap-users-admin", async (req, _mctx) => {
       const userCodesFilter = Array.isArray(body.user_codes) ? new Set((body.user_codes as string[]).map((c) => c.toUpperCase())) : null;
       const includeSuperusers = body.include_superusers === true;
       const overwriteExisting = body.overwrite_existing === true;
+      // Senhas individuais opcionais (mapa UserCode -> senha). Quando presente
+      // para o usuário, tem prioridade sobre a senha padrão do lote.
+      const rawUserPasswords = (body.user_passwords && typeof body.user_passwords === "object")
+        ? body.user_passwords as Record<string, unknown>
+        : {};
+      const userPasswords = new Map<string, string>();
+      for (const [k, v] of Object.entries(rawUserPasswords)) {
+        const pwd = String(v ?? "").trim();
+        if (k && pwd.length >= 8) userPasswords.set(k.toUpperCase(), pwd);
+      }
 
       if (sourceDbs.length === 0 || !targetDb) {
         return new Response(JSON.stringify({ error: "source_company_dbs e target_company_db são obrigatórios" }), {
@@ -325,6 +335,7 @@ Deno.serve(withEdgeMetrics("sap-users-admin", async (req, _mctx) => {
 
       // 2. Connect to target, fetch existing user codes, then create missing
       const created: string[] = [];
+      const createdDetails: { code: string; name: string; email?: string; password: string }[] = [];
       const skipped: { code: string; reason: string }[] = [];
       const failed: { code: string; error: string }[] = [];
 
@@ -364,10 +375,11 @@ Deno.serve(withEdgeMetrics("sap-users-admin", async (req, _mctx) => {
             skipped.push({ code, reason: "já existe no destino" });
             continue;
           }
+          const password = userPasswords.get(code.toUpperCase()) || defaultPassword;
           const payload: Record<string, unknown> = {
             UserCode: code,
             UserName: u.UserName || code,
-            UserPassword: defaultPassword,
+            UserPassword: password,
           };
           if (u.eMail) payload.eMail = u.eMail;
           if (u.Department != null) payload.Department = u.Department;
@@ -377,6 +389,12 @@ Deno.serve(withEdgeMetrics("sap-users-admin", async (req, _mctx) => {
           const r = await sapRequest(tSession, "Users", "POST", payload);
           if (r.ok) {
             created.push(code);
+            createdDetails.push({
+              code,
+              name: String(u.UserName || code),
+              email: u.eMail ? String(u.eMail) : undefined,
+              password,
+            });
             const key = (r.data as { InternalKey?: number } | null)?.InternalKey;
             if (key != null) {
               await ensurePasswordNeverExpires((path, method, b) => sapRequest(tSession, path, method, b), key, { code });
@@ -406,7 +424,7 @@ Deno.serve(withEdgeMetrics("sap-users-admin", async (req, _mctx) => {
       return new Response(JSON.stringify({
         ok: true,
         total_source_users: sourceUsers.size,
-        created, skipped, failed, source_errors: sourceErrors,
+        created, created_details: createdDetails, skipped, failed, source_errors: sourceErrors,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
