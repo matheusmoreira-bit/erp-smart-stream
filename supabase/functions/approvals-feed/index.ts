@@ -119,14 +119,79 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
   return { identity, privileged, directorateBranch, aliases };
 }
 
+/**
+ * Cache em dois níveis:
+ *  1. memória do isolate (5 min) — custo zero;
+ *  2. `public.auth_caller_cache` (10 min) — compartilhado entre isolates, o
+ *     que evita que todo cold start pague ~1,2 s de resolução de permissões.
+ * A identidade em si (JWT/sessão SAP) continua sendo validada a cada chamada.
+ */
+const SHARED_TTL_MS = 600_000;
+
 async function identifyCallerCached(req: Request, admin: SupabaseClient): Promise<Caller> {
   const key = callerCacheKey(req);
   const hit = callerCache.get(key);
-  if (hit && hit.expiresAt > Date.now()) return hit.value;
+  if (hit && hit.expiresAt > Date.now()) {
+    authPhaseTimings = { cache: 1 };
+    return hit.value;
+  }
+
+  const memoize = (value: Caller) => {
+    if (callerCache.size > 500) callerCache.clear();
+    callerCache.set(key, { expiresAt: Date.now() + CALLER_TTL_MS, value });
+    return value;
+  };
+
+  // Identidade primeiro (barata, ~50 ms) — o cache compartilhado é indexado
+  // por ela, nunca pelo token bruto.
+  const tIdent = Date.now();
+  const [cloudUser, sap] = await Promise.all([
+    requireUser(req).catch((e) => {
+      if (!(e instanceof AuthError)) throw e;
+      return null;
+    }),
+    validateSapSession(req),
+  ]);
+  const identity = cloudUser?.email || sap?.userName || null;
+  const identMs = Date.now() - tIdent;
+  if (!identity) return { identity: null, privileged: false, directorateBranch: null, aliases: new Set() };
+
+  const sharedKey = `approvals-feed|${identity.toLowerCase()}`;
+  const tShared = Date.now();
+  const { data: cached } = await admin
+    .from("auth_caller_cache")
+    .select("payload, expires_at")
+    .eq("cache_key", sharedKey)
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+  if (cached?.payload) {
+    const p = cached.payload as { privileged?: boolean; directorateBranch?: string | null; aliases?: string[] };
+    authPhaseTimings = { identify_ms: identMs, shared_cache_ms: Date.now() - tShared };
+    return memoize({
+      identity,
+      privileged: !!p.privileged,
+      directorateBranch: p.directorateBranch ?? null,
+      aliases: new Set(p.aliases || []),
+    });
+  }
+
   const value = await identifyCaller(req, admin);
-  if (callerCache.size > 500) callerCache.clear();
-  callerCache.set(key, { expiresAt: Date.now() + CALLER_TTL_MS, value });
-  return value;
+  authPhaseTimings = { ...authPhaseTimings, identify_ms: identMs };
+  if (value.identity) {
+    admin
+      .from("auth_caller_cache")
+      .upsert({
+        cache_key: sharedKey,
+        payload: {
+          privileged: value.privileged,
+          directorateBranch: value.directorateBranch,
+          aliases: Array.from(value.aliases),
+        },
+        expires_at: new Date(Date.now() + SHARED_TTL_MS).toISOString(),
+      })
+      .then(() => {}, () => {});
+  }
+  return memoize(value);
 }
 
 function ownsExpense(
