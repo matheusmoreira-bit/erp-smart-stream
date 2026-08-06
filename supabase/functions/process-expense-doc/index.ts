@@ -10,9 +10,19 @@ const corsHeaders = {
 // Static fallback aliases (used only if DB lookup fails)
 const FALLBACK_COMPANY_NAMES: Record<string, string[]> = {
   SBO_ANAGAMING: ["ana gaming", "anagaming"],
-  SBO_CACTUS: ["cactus", "instituto cactus"],
-  SBO_INSTITUTO_ANA: ["instituto ana", "instituto cactus"],
+  SBO_CACTUS: ["cactus", "cactus tecnologia"],
+  // Instituto: razão social "Instituto Social e Esportivo ANA", também
+  // referenciado como Instituto ANA Gaming / Instituto Conecta Cactus.
+  SBO_INSTITUTO_ANA: [
+    "instituto social e esportivo ana",
+    "instituto ana",
+    "instituto ana gaming",
+    "instituto conecta cactus",
+    "instituto cactus",
+    "conecta cactus",
+  ],
 };
+
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
