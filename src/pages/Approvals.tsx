@@ -2060,7 +2060,8 @@ export default function ApprovalsPage() {
   const { getCostCentersForEmail } = useApproverCostCenters(session?.companyDB);
   const { officials: activeOfficials } = useActiveOfficialsForMe();
   const { grants: substituteGrants, refresh: refreshSubstituteGrants } = useSubstituteGrantsForMe();
-  const { rules } = useApprovalRules();
+  // Somente leitura nesta tela — evita centenas de writes de backfill no load.
+  const { rules } = useApprovalRules({ backfill: false });
 
 
   // Merge SAP approvals with internal pending expenses.
