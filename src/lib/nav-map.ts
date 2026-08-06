@@ -113,6 +113,7 @@ export const NAV_MODULES: NavModule[] = [
     match: ["/usuarios"],
     items: [
       { label: "Gestão de usuários", path: "/usuarios/lista", moduleKey: "users" },
+      { label: "Permissões e grupos", path: "/usuarios/permissoes", moduleKey: "users" },
       { label: "Usuários SAP", path: "/usuarios/sap", moduleKey: "users" },
       { label: "Administradores", path: "/usuarios/administradores", moduleKey: "users" },
       { label: "Sincronização IdP", path: "/usuarios/sincronizacao-idp", moduleKey: "users" },
