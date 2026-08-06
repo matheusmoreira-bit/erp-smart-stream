@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import { canonicalUserKey } from "@/lib/user-identity";
 import {
+  clearAuthCache,
+
   getIsCloudAdmin,
   getIsSapUserAdmin,
   getGroupAssignments,
