@@ -12,8 +12,7 @@ import { useSap } from "@/contexts/SapContext";
 import { PasswordPolicyChecklist } from "@/components/PasswordPolicyChecklist";
 import { checkPasswordPolicy, generateStrongPassword } from "@/lib/password-policy";
 
-const DEFAULT_PASSWORD = "Sap@2025";
-type PasswordMode = "default" | "auto" | "manual";
+type PasswordMode = "auto" | "manual";
 
 
 interface ReplicationResult {
@@ -43,8 +42,8 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
   const [userCode, setUserCode] = useState("");
   const [userName, setUserName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState(DEFAULT_PASSWORD);
-  const [passwordMode, setPasswordMode] = useState<PasswordMode>("default");
+  const [password, setPassword] = useState(() => generateStrongPassword(16));
+  const [passwordMode, setPasswordMode] = useState<PasswordMode>("auto");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<ReplicationResult[] | null>(null);
@@ -84,16 +83,15 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
     setUserCode("");
     setUserName("");
     setEmail("");
-    setPassword(DEFAULT_PASSWORD);
-    setPasswordMode("default");
+    setPassword(generateStrongPassword(16));
+    setPasswordMode("auto");
     setShowPassword(false);
     setResults(null);
   };
 
   const applyMode = (mode: PasswordMode) => {
     setPasswordMode(mode);
-    if (mode === "default") setPassword(DEFAULT_PASSWORD);
-    else if (mode === "auto") setPassword(generateStrongPassword(16, userCode));
+    if (mode === "auto") setPassword(generateStrongPassword(16, userCode));
     else setPassword("");
     setShowPassword(mode !== "manual");
   };
@@ -210,7 +208,6 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
               <Label className="text-sm">Senha provisionada *</Label>
               <div className="flex flex-wrap gap-1.5">
                 {([
-                  { id: "default", label: "Padrão" },
                   { id: "auto", label: "Gerar automática" },
                   { id: "manual", label: "Definir manualmente" },
                 ] as { id: PasswordMode; label: string }[]).map((m) => (
