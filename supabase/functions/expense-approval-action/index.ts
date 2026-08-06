@@ -23,6 +23,7 @@ import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
 import { pickApproverSkippingRequester, SELF_APPROVAL_FALLBACK } from "../_shared/approval-skip.ts";
+import { buildRateioChain } from "../_shared/rateio-chain.ts";
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
 import { notifySalesMilestone } from "../_shared/sales-notify.ts";
 import { notifyApprovalPending } from "../_shared/approval-notify.ts";
