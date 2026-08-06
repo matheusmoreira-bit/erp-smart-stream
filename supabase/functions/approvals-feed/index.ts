@@ -160,7 +160,11 @@ Deno.serve(async (req) => {
     const companyDb = typeof body?.company_db === "string" ? body.company_db.trim() : "";
     if (!companyDb) return json(400, { error: "company_db obrigatório" }, cors);
 
+    // Dados e identidade são independentes: buscamos os dois EM PARALELO e o
+    // recorte de visibilidade é aplicado depois, em memória. O tempo total
+    // passa a ser o do mais lento, e não a soma dos dois.
     const tAuth = Date.now();
+    const bundlePromise = admin.rpc("approvals_feed_bundle", { _company_db: companyDb });
     const caller = await identifyCallerCached(req, admin);
     const authMs = Date.now() - tAuth;
     if (!caller.identity) {
@@ -168,11 +172,7 @@ Deno.serve(async (req) => {
     }
 
     const tQuery = Date.now();
-    // Pacote completo em UMA ida ao banco: documentos pendentes + linhas +
-    // anexos + aprovadores do nível atual, montados em SQL.
-    const { data: bundle, error: bundleErr } = await admin.rpc("approvals_feed_bundle", {
-      _company_db: companyDb,
-    });
+    const { data: bundle, error: bundleErr } = await bundlePromise;
     if (bundleErr) return json(500, { error: bundleErr.message }, cors);
 
     let docs = (Array.isArray(bundle) ? bundle : []) as Array<Record<string, any>>;
