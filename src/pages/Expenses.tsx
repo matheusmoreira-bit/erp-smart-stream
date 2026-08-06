@@ -2477,6 +2477,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         isRetrying={isRetrying}
         isActioning={isActioning}
         mode={mode}
+        canSyncFromErp={isAdmin}
+        onSynced={() => { void refresh(); setSelectedExpense(null); }}
       />
 
 
