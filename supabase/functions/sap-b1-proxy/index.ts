@@ -329,31 +329,36 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
 
       const cookies = `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
       const escapedUser = userName.replace(/'/g, "''");
-      let probe = await fetchWithTimeout(
-        `${SAP_BASE_URL}/Users('${encodeURIComponent(escapedUser)}')?$select=UserCode`,
-        { headers: { Cookie: cookies } },
-        10_000,
-      );
-      if (probe.status === 401) {
+
+      // A validação da sessão é best-effort: se o SAP estiver lento/instável,
+      // não podemos derrubar o app com 504 — a sessão já foi criada no login.
+      let probe: Response | null = null;
+      try {
+        probe = await fetchWithTimeout(
+          `${SAP_BASE_URL}/Users('${encodeURIComponent(escapedUser)}')?$select=UserCode`,
+          { headers: { Cookie: cookies } },
+          8_000,
+        );
+        if (!probe.ok && probe.status !== 401 && probe.status !== 403 && probe.status !== 404) {
+          await probe.body?.cancel().catch(() => {});
+          probe = await fetchWithTimeout(`${SAP_BASE_URL}/`, { headers: { Cookie: cookies } }, 8_000);
+        }
+      } catch (probeErr) {
+        console.warn(
+          "issueSapAuthToken: probe falhou (SAP lento/indisponível), emitindo token mesmo assim:",
+          probeErr instanceof Error ? probeErr.message : probeErr,
+        );
+        probe = null;
+      }
+
+      if (probe?.status === 401) {
+        await probe.body?.cancel().catch(() => {});
         return new Response(JSON.stringify({ error: "Sessão SAP expirada", sapStatus: 401 }), {
           status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (!probe.ok && probe.status !== 403 && probe.status !== 404) {
-        await probe.body?.cancel().catch(() => {});
-        probe = await fetchWithTimeout(`${SAP_BASE_URL}/`, { headers: { Cookie: cookies } }, 10_000);
-        if (probe.status === 401) {
-          return new Response(JSON.stringify({ error: "Sessão SAP expirada", sapStatus: 401 }), {
-            status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        if (!probe.ok) {
-          return new Response(JSON.stringify({ error: "Não foi possível validar a sessão SAP", sapStatus: probe.status }), {
-            status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-      }
-      await probe.body?.cancel().catch(() => {});
+      await probe?.body?.cancel().catch(() => {});
+
 
       const expiresAt = Date.now() + 30 * 60 * 1000;
       const sapAuthToken = await signSapAuthToken({ companyDB, userName, sessionId, expiresAt });
