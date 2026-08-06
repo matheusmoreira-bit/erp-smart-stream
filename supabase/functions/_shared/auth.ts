@@ -421,47 +421,38 @@ export async function validateSapSession(req: Request) {
   if (!headers) return null;
   const { sapSession, routeId, sapUser, companyDB, sapAuthToken } = headers;
 
-  // Sessão revogada (ex.: troca de senha) morre imediatamente, mesmo que o
-  // Service Layer ainda a aceite.
-  try {
-    const revokeAdmin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      { auth: { persistSession: false } },
-    );
-    if (await isErpSessionRevoked(revokeAdmin, sapSession)) {
-      sapSessionValidationCache.delete(
-        getSapSessionValidationCacheKey(companyDB, sapUser, sapSession, routeId),
-      );
-      return null;
-    }
-  } catch { /* falha aberta: não derruba o app por indisponibilidade */ }
-
-  // Desligado no IdP (JumpCloud/Okta): a sessão morre mesmo que o bloqueio no
-  // SAP não tenha sido aplicado. Falha de leitura não derruba o app.
-  try {
-    const deprovAdmin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      { auth: { persistSession: false } },
-    );
-    const { data: deprovisioned, error } = await deprovAdmin.rpc("is_erp_user_deprovisioned", {
-      _user_key: sapUser,
-      _company_db: companyDB,
-    });
-    if (!error && deprovisioned === true) {
-      sapSessionValidationCache.delete(
-        getSapSessionValidationCacheKey(companyDB, sapUser, sapSession, routeId),
-      );
-      return null;
-    }
-  } catch { /* falha aberta */ }
-
-
   const cacheKey = getSapSessionValidationCacheKey(companyDB, sapUser, sapSession, routeId);
+
+  // Checagens de segurança (sessão revogada por troca de senha / usuário
+  // desligado no IdP). São 2 idas ao banco: rodam em paralelo e no máximo uma
+  // vez por minuto por sessão, em vez de a cada requisição.
+  const securityFreshUntil = sapSessionSecurityCache.get(cacheKey) ?? 0;
+  if (securityFreshUntil <= Date.now()) {
+    try {
+      const securityAdmin = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        { auth: { persistSession: false } },
+      );
+      const [revoked, deprovisioned] = await Promise.all([
+        isErpSessionRevoked(securityAdmin, sapSession).catch(() => false),
+        securityAdmin
+          .rpc("is_erp_user_deprovisioned", { _user_key: sapUser, _company_db: companyDB })
+          .then(({ data, error }) => (!error && data === true))
+          .catch(() => false),
+      ]);
+      if (revoked || deprovisioned) {
+        sapSessionValidationCache.delete(cacheKey);
+        sapSessionSecurityCache.delete(cacheKey);
+        return null;
+      }
+      if (sapSessionSecurityCache.size > 500) sapSessionSecurityCache.clear();
+      sapSessionSecurityCache.set(cacheKey, Date.now() + SAP_SESSION_SECURITY_TTL_MS);
+    } catch { /* falha aberta: não derruba o app por indisponibilidade */ }
+  }
+
   const cached = sapSessionValidationCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
-
 
   try {
     const signed = await verifySapAuthToken(sapAuthToken, sapSession, sapUser, companyDB);
