@@ -1,0 +1,276 @@
+// Feed único da tela de Aprovações.
+//
+// Antes, a tela montava o estado com 4+ round-trips pesados:
+//   1) expense-read (compras) — varredura em ondas + itens + anexos
+//   2) expense-read (vendas)  — idem
+//   3) approval_rules (centenas) + approval_rule_levels (milhares)
+//   4) aprovações do ERP (SAP/HANA)
+//
+// Esta função devolve TUDO que a listagem precisa em UMA chamada e já
+// resolvida no servidor: pendentes da empresa (compras + vendas) com itens,
+// anexos e os aprovadores do nível atual de cada documento — sem trazer a
+// matriz inteira para o navegador.
+
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
+import {
+  canViewAllDocuments,
+  identityMatches,
+  personMatches,
+  resolveDirectorateBranch,
+  costCenterInBranch,
+} from "../_shared/permission-groups.ts";
+import { resolveCallerAliases } from "../_shared/user-aliases.ts";
+import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+
+const PENDING = "pendente_aprovacao";
+
+function json(status: number, body: unknown, cors: Record<string, string>) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...cors, "Content-Type": "application/json" },
+  });
+}
+
+function service(): SupabaseClient {
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+}
+
+interface Caller {
+  identity: string | null;
+  privileged: boolean;
+  directorateBranch: string | null;
+  aliases: Set<string>;
+}
+
+const CALLER_TTL_MS = 300_000;
+const callerCache = new Map<string, { expiresAt: number; value: Caller }>();
+
+function callerCacheKey(req: Request): string {
+  return [
+    req.headers.get("authorization") || "",
+    req.headers.get("x-sap-session") || "",
+    req.headers.get("x-sap-user") || "",
+    req.headers.get("x-company-db") || "",
+  ].join("|");
+}
+
+async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Caller> {
+  let identity: string | null = null;
+  let email: string | null = null;
+  let userName: string | null = null;
+  let id: string | undefined;
+  let privileged = false;
+
+  const [cloudUser, sap] = await Promise.all([
+    requireUser(req).catch((e) => {
+      if (!(e instanceof AuthError)) throw e;
+      return null;
+    }),
+    validateSapSession(req),
+  ]);
+
+  if (cloudUser) {
+    email = cloudUser.email || null;
+    identity = cloudUser.email || null;
+    id = cloudUser.id;
+    const { data } = await admin.rpc("has_role", { _user_id: cloudUser.id, _role: "admin" });
+    if (data === true) privileged = true;
+  }
+
+  if (sap) {
+    userName = sap.userName;
+    if (!identity) identity = sap.userName;
+    if (!privileged) {
+      try {
+        const { data: mapped } = await admin.rpc("is_sap_user_admin", {
+          _sap_username: sap.userName.toLowerCase(),
+        });
+        if (mapped === true) privileged = true;
+      } catch { /* ignore */ }
+      if (!privileged && sap.userName.toLowerCase() === "manager") privileged = true;
+    }
+  }
+
+  let directorateBranch: string | null = null;
+  if (!privileged && (identity || email || userName)) {
+    privileged = await canViewAllDocuments(admin, [identity, email, userName]);
+    if (!privileged) {
+      directorateBranch = await resolveDirectorateBranch(admin, [identity, email, userName]);
+    }
+  }
+
+  const aliases = await resolveCallerAliases(admin, {
+    id,
+    email: email ?? undefined,
+    userName: userName ?? identity ?? undefined,
+  });
+
+  return { identity, privileged, directorateBranch, aliases };
+}
+
+async function identifyCallerCached(req: Request, admin: SupabaseClient): Promise<Caller> {
+  const key = callerCacheKey(req);
+  const hit = callerCache.get(key);
+  if (hit && hit.expiresAt > Date.now()) return hit.value;
+  const value = await identifyCaller(req, admin);
+  if (callerCache.size > 500) callerCache.clear();
+  callerCache.set(key, { expiresAt: Date.now() + CALLER_TTL_MS, value });
+  return value;
+}
+
+function ownsExpense(
+  row: Record<string, unknown>,
+  aliases: Set<string>,
+  directorateBranch: string | null,
+): boolean {
+  if (costCenterInBranch(row.cost_center, directorateBranch)) return true;
+  const candidates = [
+    row.requester_email,
+    row.requester_name,
+    row.created_by_email,
+    row.current_approver,
+    row.original_approver,
+  ];
+  for (const c of candidates) {
+    if (!c) continue;
+    for (const alias of aliases) {
+      if (identityMatches(c, alias) || personMatches(c, alias)) return true;
+    }
+  }
+  return false;
+}
+
+Deno.serve(async (req) => {
+  const cors = corsFor(req, "POST, OPTIONS");
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  const foreign = rejectForeignOrigin(req);
+  if (foreign) return foreign;
+  if (req.method !== "POST") return json(405, { error: "Método não permitido" }, cors);
+
+  const startedAt = Date.now();
+  try {
+    const admin = service();
+    const body = await req.json().catch(() => ({}));
+    const companyDb = typeof body?.company_db === "string" ? body.company_db.trim() : "";
+    if (!companyDb) return json(400, { error: "company_db obrigatório" }, cors);
+
+    const caller = await identifyCallerCached(req, admin);
+    if (!caller.identity) {
+      return json(401, { error: "Não autenticado. Faça login novamente para carregar as aprovações." }, cors);
+    }
+
+    // 1) Pendentes da empresa — consulta única e indexada (status + company_db).
+    const { data: rawExpenses, error: expErr } = await admin
+      .from("expenses")
+      .select("*")
+      .eq("company_db", companyDb)
+      .eq("status", PENDING)
+      .order("created_at", { ascending: false })
+      .limit(2000);
+    if (expErr) return json(500, { error: expErr.message }, cors);
+
+    let expenses = (rawExpenses || []) as Array<Record<string, unknown>>;
+    const allIds = expenses.map((e) => String(e.id));
+
+    // 2) Itens e anexos de TODOS os pendentes: duas consultas, em paralelo.
+    //    Os itens também alimentam o recorte por diretoria (rateio).
+    const [itemsRes, attRes] = await Promise.all([
+      allIds.length
+        ? admin.from("expense_items").select("*").in("expense_id", allIds)
+        : Promise.resolve({ data: [] as any[], error: null }),
+      allIds.length
+        ? admin
+            .from("expense_attachments")
+            .select("id, expense_id, file_name, file_path, file_size, mime_type, created_at")
+            .in("expense_id", allIds)
+        : Promise.resolve({ data: [] as any[], error: null }),
+    ]);
+    if ((itemsRes as any).error) return json(500, { error: (itemsRes as any).error.message }, cors);
+    const items = ((itemsRes as any).data || []) as Array<Record<string, unknown>>;
+    const attachments = ((attRes as any).data || []) as Array<Record<string, unknown>>;
+
+    // 3) Recorte de visibilidade (mesma semântica de `expense-read`).
+    if (!caller.privileged) {
+      const byItems = new Set<string>();
+      if (caller.directorateBranch) {
+        for (const it of items) {
+          if (costCenterInBranch(it.cost_center, caller.directorateBranch)) {
+            byItems.add(String(it.expense_id));
+          }
+        }
+      }
+      expenses = expenses.filter(
+        (e) => ownsExpense(e, caller.aliases, caller.directorateBranch) || byItems.has(String(e.id)),
+      );
+    }
+
+    const visibleIds = new Set(expenses.map((e) => String(e.id)));
+    const itemsByExpense: Record<string, Array<Record<string, unknown>>> = {};
+    for (const it of items) {
+      const key = String(it.expense_id);
+      if (!visibleIds.has(key)) continue;
+      (itemsByExpense[key] ||= []).push(it);
+    }
+    const attachmentsByExpense: Record<string, Array<Record<string, unknown>>> = {};
+    for (const a of attachments) {
+      const key = String(a.expense_id);
+      if (!visibleIds.has(key)) continue;
+      (attachmentsByExpense[key] ||= []).push(a);
+    }
+
+    // 4) Aprovadores do nível atual — só os níveis das regras REALMENTE usadas
+    //    pelos documentos visíveis (antes o cliente baixava a matriz inteira).
+    const ruleIds = Array.from(
+      new Set(expenses.map((e) => e.approval_rule_id).filter(Boolean).map(String)),
+    );
+    const levelsByRule: Record<string, Array<Record<string, unknown>>> = {};
+    if (ruleIds.length) {
+      const { data: levels } = await admin
+        .from("approval_rule_levels")
+        .select("rule_id, level_order, approver_name, approver_email")
+        .in("rule_id", ruleIds)
+        .order("level_order", { ascending: true });
+      for (const l of (levels || []) as any[]) {
+        (levelsByRule[String(l.rule_id)] ||= []).push(l);
+      }
+    }
+
+    const docs = expenses.map((e) => {
+      const ruleId = e.approval_rule_id ? String(e.approval_rule_id) : null;
+      const all = ruleId ? levelsByRule[ruleId] || [] : [];
+      const atLevel = all.filter((l) => l.level_order === e.current_level_order);
+      const current = atLevel.length ? atLevel : all.slice(0, 1);
+      return {
+        ...e,
+        items: itemsByExpense[String(e.id)] || [],
+        attachments: attachmentsByExpense[String(e.id)] || [],
+        level_approvers: current.map((l) => ({
+          name: (l.approver_name as string) || "",
+          email: (l.approver_email as string) || "",
+        })),
+      };
+    });
+
+    return json(
+      200,
+      {
+        docs,
+        privileged: caller.privileged,
+        directorate_branch: caller.directorateBranch,
+        generated_at: new Date().toISOString(),
+        took_ms: Date.now() - startedAt,
+      },
+      cors,
+    );
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return json(error.status ?? 401, { error: error.message }, cors);
+    }
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    return json(500, { error: message }, cors);
+  }
+});
