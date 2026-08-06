@@ -285,7 +285,26 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   let fallbackUsed = false;
   let escalatedTo: string | null = null;
   let matrixGap = false;
-  if (status === "pendente_aprovacao" && ruleId) {
+  // RATEIO entre alçadas diferentes: mescla as cadeias das ramificações.
+  const rateioChain = status === "pendente_aprovacao"
+    ? await buildRateioChain(admin, items as any, {
+        companyDb,
+        docType: String(input.doc_type || "purchase"),
+        currency: input.currency || "BRL",
+        requesterName,
+        supplierName: input.supplier_name || null,
+        supplierCode: input.supplier_code || null,
+        headerCostCenter: input.cost_center || null,
+        headerProject: input.project || null,
+      })
+    : null;
+  if (rateioChain && rateioChain.length > 0) {
+    const picked = pickApproverSkippingRequester(rateioChain, requesterName, requesterEmail, 1);
+    resolvedApprover = picked.approver_name || resolvedApprover;
+    resolvedApproverEmail = picked.approver_email;
+    resolvedLevel = picked.level_order;
+    fallbackUsed = picked.fallback_used;
+  } else if (status === "pendente_aprovacao" && ruleId) {
     const picked = await resolveApproverWithEscalation(admin, ruleId, {
       companyDb,
       docType: String(input.doc_type || "purchase"),
