@@ -3147,7 +3147,7 @@ export function CreateExpenseModal({
               />
               <CachedSearchCombobox
                 label="Projeto (padrão p/ itens)"
-                options={projectOptions}
+                options={headerProjectOptions}
                 isLoading={projectsLoading}
                 value={headerProject}
                 onChange={applyHeaderProject}
