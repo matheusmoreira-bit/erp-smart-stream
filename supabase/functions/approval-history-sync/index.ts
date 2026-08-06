@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { requireAdminOrSapAdmin, requireAdminOrSapSession, authErrorResponse } from "../_shared/auth.ts";
+import { requireAdminOrSapAdmin, requireAdminOrSapSession, requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { fetchHanaView as fetchHanaViewV2, resolveHanaSchema } from "../_shared/hana-views.ts";
 import { normalizeCompact } from "../_shared/text-normalize.ts";
