@@ -27,7 +27,12 @@ const getCacheTtlMs = (key: string) => CACHE_TTL_OVERRIDES[key] ?? DEFAULT_CACHE
 // um fornecedor é criado/atualizado, precisamos invalidar TODAS as chaves que
 // derivam de BusinessPartners naquele companyDB — senão o usuário vê o BP na
 // tela de fornecedores mas não no combobox do pedido.
-type Listener = () => void;
+/**
+ * "hard" = o cache foi apagado/expirado: refetch direto no ERP.
+ * "soft" = o cache foi reescrito por outro ator: basta reler a linha do banco.
+ */
+type InvalidationMode = "hard" | "soft";
+type Listener = (mode: InvalidationMode) => void;
 const listeners = new Map<string, Set<Listener>>();
 const listenerKey = (cacheKey: string, companyDb?: string | null) =>
   `${cacheKey}::${companyDb || ""}`;
