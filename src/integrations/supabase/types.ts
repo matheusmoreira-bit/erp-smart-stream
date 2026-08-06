@@ -2638,6 +2638,71 @@ export type Database = {
           },
         ]
       }
+      expense_approval_segments: {
+        Row: {
+          amount: number
+          chain: Json
+          cost_center: string | null
+          created_at: string
+          current_approver: string | null
+          current_approver_email: string | null
+          current_level: number
+          decided_at: string | null
+          decided_by: string | null
+          expense_id: string
+          id: string
+          project: string | null
+          rule_id: string | null
+          segment_key: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          chain?: Json
+          cost_center?: string | null
+          created_at?: string
+          current_approver?: string | null
+          current_approver_email?: string | null
+          current_level?: number
+          decided_at?: string | null
+          decided_by?: string | null
+          expense_id: string
+          id?: string
+          project?: string | null
+          rule_id?: string | null
+          segment_key: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          chain?: Json
+          cost_center?: string | null
+          created_at?: string
+          current_approver?: string | null
+          current_approver_email?: string | null
+          current_level?: number
+          decided_at?: string | null
+          decided_by?: string | null
+          expense_id?: string
+          id?: string
+          project?: string | null
+          rule_id?: string | null
+          segment_key?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_approval_segments_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expense_attachments: {
         Row: {
           created_at: string
