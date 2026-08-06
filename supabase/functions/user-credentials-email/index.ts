@@ -127,12 +127,12 @@ Deno.serve(async (req) => {
     }
 
     // Trilha de auditoria (sem gravar a senha).
-    await admin.from("audit_logs").insert({
+    await admin.from("audit_log").insert({
       action: "user_credentials_email_sent",
       entity_type: "sap_user",
       entity_id: userCode,
       company_db: companyDb,
-      metadata: { email, companies },
+      details: { email, companies },
     }).then(
       () => undefined,
       (e: unknown) => console.warn("[user-credentials-email] audit log falhou:", e instanceof Error ? e.message : String(e)),
