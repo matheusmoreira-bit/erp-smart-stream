@@ -45,6 +45,7 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
   const [password, setPassword] = useState(() => generateStrongPassword(16));
   const [passwordMode, setPasswordMode] = useState<PasswordMode>("auto");
   const [showPassword, setShowPassword] = useState(false);
+  const [sendCredentials, setSendCredentials] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<ReplicationResult[] | null>(null);
   const policy = checkPasswordPolicy(password, userCode);
@@ -86,6 +87,7 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
     setPassword(generateStrongPassword(16));
     setPasswordMode("auto");
     setShowPassword(false);
+    setSendCredentials(true);
     setResults(null);
   };
 
@@ -146,6 +148,35 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
       const totalCreated = (createdInCurrent ? 1 : 0) + createdElsewhere;
       if (totalCreated > 0) {
         toast.success(`Usuário ${userName} criado em ${totalCreated} empresa(s)`);
+
+        if (sendCredentials && email.trim()) {
+          const createdDbs = [
+            ...(createdInCurrent && currentDb ? [currentDb] : []),
+            ...res.replicationResults.filter((r) => r.status === "success").map((r) => r.companyDB),
+          ];
+          const { data: mail, error: mailError } = await supabase.functions.invoke(
+            "user-credentials-email",
+            {
+              body: {
+                email: email.trim(),
+                userCode: userCode.trim(),
+                userName: userName.trim(),
+                password,
+                companyDb: currentDb || null,
+                companies: createdDbs.map(
+                  (db) => companies.find((c) => c.company_db === db)?.display_name || db,
+                ),
+              },
+            },
+          );
+          if (mailError) {
+            toast.warning("Usuário criado, mas o envio das credenciais falhou");
+          } else if (mail?.sent) {
+            toast.success(`Credenciais enviadas para ${email.trim()}`);
+          } else if (mail?.reason === "disabled_by_settings") {
+            toast.info("Envio de credenciais desativado nas configurações de notificação");
+          }
+        }
       }
       if (res.replicationResults.length > 0 || (createdInCurrent && res.replicationResults.length === 0 && selectedDbs.size > 1)) {
         // Show report dialog (include current row synthesized if relevant)
@@ -249,7 +280,20 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
               <p className="text-xs text-muted-foreground">
                 O usuário deverá alterar a senha no primeiro login.
               </p>
+              <label className="flex items-start gap-2 pt-1 cursor-pointer">
+                <Checkbox
+                  checked={sendCredentials}
+                  onCheckedChange={(v) => setSendCredentials(v === true)}
+                  disabled={submitting || !email.trim()}
+                  aria-label="Enviar credenciais por e-mail"
+                />
+                <span className="text-xs text-muted-foreground leading-snug">
+                  Enviar credenciais provisórias por e-mail ao novo usuário
+                  {!email.trim() && " (informe o e-mail acima)"}
+                </span>
+              </label>
             </div>
+
 
 
             <div className="space-y-2 pt-1">
