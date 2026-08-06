@@ -510,5 +510,11 @@ export function useApprovalRules(options?: { backfill?: boolean }) {
     fetchRules();
   }, [fetchRules]);
 
-  return { rules, isLoading, error, refresh: fetchRules, createRule, updateRule, toggleRule, deleteRule };
+  // refresh() é usado como handler de clique em vários lugares — não pode
+  // aceitar parâmetros; sempre revalida ignorando o cache.
+  const refresh = useCallback(async () => {
+    await fetchRules({ force: true });
+  }, [fetchRules]);
+
+  return { rules, isLoading, error, refresh, createRule, updateRule, toggleRule, deleteRule };
 }
