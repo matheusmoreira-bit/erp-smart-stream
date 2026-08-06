@@ -169,97 +169,26 @@ Deno.serve(async (req) => {
     }
 
     const tQuery = Date.now();
-    // 1) Pendentes da empresa — consulta única e indexada (status + company_db).
-    const { data: rawExpenses, error: expErr } = await admin
-      .from("expenses")
-      .select("*")
-      .eq("company_db", companyDb)
-      .eq("status", PENDING)
-      .order("created_at", { ascending: false })
-      .limit(2000);
-    if (expErr) return json(500, { error: expErr.message }, cors);
-
-    let expenses = (rawExpenses || []) as Array<Record<string, unknown>>;
-    const allIds = expenses.map((e) => String(e.id));
-
-    // 2) Itens e anexos de TODOS os pendentes: duas consultas, em paralelo.
-    //    Os itens também alimentam o recorte por diretoria (rateio).
-    const [itemsRes, attRes] = await Promise.all([
-      allIds.length
-        ? admin.from("expense_items").select("*").in("expense_id", allIds)
-        : Promise.resolve({ data: [] as any[], error: null }),
-      allIds.length
-        ? admin
-            .from("expense_attachments")
-            .select("id, expense_id, file_name, file_path, file_size, mime_type, created_at")
-            .in("expense_id", allIds)
-        : Promise.resolve({ data: [] as any[], error: null }),
-    ]);
-    if ((itemsRes as any).error) return json(500, { error: (itemsRes as any).error.message }, cors);
-    const items = ((itemsRes as any).data || []) as Array<Record<string, unknown>>;
-    const attachments = ((attRes as any).data || []) as Array<Record<string, unknown>>;
-
-    // 3) Recorte de visibilidade (mesma semântica de `expense-read`).
-    if (!caller.privileged) {
-      const byItems = new Set<string>();
-      if (caller.directorateBranch) {
-        for (const it of items) {
-          if (costCenterInBranch(it.cost_center, caller.directorateBranch)) {
-            byItems.add(String(it.expense_id));
-          }
-        }
-      }
-      expenses = expenses.filter(
-        (e) => ownsExpense(e, caller.aliases, caller.directorateBranch) || byItems.has(String(e.id)),
-      );
-    }
-
-    const visibleIds = new Set(expenses.map((e) => String(e.id)));
-    const itemsByExpense: Record<string, Array<Record<string, unknown>>> = {};
-    for (const it of items) {
-      const key = String(it.expense_id);
-      if (!visibleIds.has(key)) continue;
-      (itemsByExpense[key] ||= []).push(it);
-    }
-    const attachmentsByExpense: Record<string, Array<Record<string, unknown>>> = {};
-    for (const a of attachments) {
-      const key = String(a.expense_id);
-      if (!visibleIds.has(key)) continue;
-      (attachmentsByExpense[key] ||= []).push(a);
-    }
-
-    // 4) Aprovadores do nível atual — só os níveis das regras REALMENTE usadas
-    //    pelos documentos visíveis (antes o cliente baixava a matriz inteira).
-    const ruleIds = Array.from(
-      new Set(expenses.map((e) => e.approval_rule_id).filter(Boolean).map(String)),
-    );
-    const levelsByRule: Record<string, Array<Record<string, unknown>>> = {};
-    if (ruleIds.length) {
-      const { data: levels } = await admin
-        .from("approval_rule_levels")
-        .select("rule_id, level_order, approver_name, approver_email")
-        .in("rule_id", ruleIds)
-        .order("level_order", { ascending: true });
-      for (const l of (levels || []) as any[]) {
-        (levelsByRule[String(l.rule_id)] ||= []).push(l);
-      }
-    }
-
-    const docs = expenses.map((e) => {
-      const ruleId = e.approval_rule_id ? String(e.approval_rule_id) : null;
-      const all = ruleId ? levelsByRule[ruleId] || [] : [];
-      const atLevel = all.filter((l) => l.level_order === e.current_level_order);
-      const current = atLevel.length ? atLevel : all.slice(0, 1);
-      return {
-        ...e,
-        items: itemsByExpense[String(e.id)] || [],
-        attachments: attachmentsByExpense[String(e.id)] || [],
-        level_approvers: current.map((l) => ({
-          name: (l.approver_name as string) || "",
-          email: (l.approver_email as string) || "",
-        })),
-      };
+    // Pacote completo em UMA ida ao banco: documentos pendentes + linhas +
+    // anexos + aprovadores do nível atual, montados em SQL.
+    const { data: bundle, error: bundleErr } = await admin.rpc("approvals_feed_bundle", {
+      _company_db: companyDb,
     });
+    if (bundleErr) return json(500, { error: bundleErr.message }, cors);
+
+    let docs = (Array.isArray(bundle) ? bundle : []) as Array<Record<string, any>>;
+
+    // Recorte de visibilidade (mesma semântica de `expense-read`), em memória.
+    if (!caller.privileged) {
+      docs = docs.filter((d) => {
+        if (ownsExpense(d, caller.aliases, caller.directorateBranch)) return true;
+        if (!caller.directorateBranch) return false;
+        return (d.items || []).some((it: Record<string, unknown>) =>
+          costCenterInBranch(it.cost_center, caller.directorateBranch),
+        );
+      });
+    }
+
 
     return json(
       200,
