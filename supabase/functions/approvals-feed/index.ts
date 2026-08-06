@@ -158,11 +158,14 @@ Deno.serve(async (req) => {
     const companyDb = typeof body?.company_db === "string" ? body.company_db.trim() : "";
     if (!companyDb) return json(400, { error: "company_db obrigatório" }, cors);
 
+    const tAuth = Date.now();
     const caller = await identifyCallerCached(req, admin);
+    const authMs = Date.now() - tAuth;
     if (!caller.identity) {
       return json(401, { error: "Não autenticado. Faça login novamente para carregar as aprovações." }, cors);
     }
 
+    const tQuery = Date.now();
     // 1) Pendentes da empresa — consulta única e indexada (status + company_db).
     const { data: rawExpenses, error: expErr } = await admin
       .from("expenses")
@@ -263,6 +266,7 @@ Deno.serve(async (req) => {
         directorate_branch: caller.directorateBranch,
         generated_at: new Date().toISOString(),
         took_ms: Date.now() - startedAt,
+        timings: { auth_ms: authMs, data_ms: Date.now() - tQuery },
       },
       cors,
     );
