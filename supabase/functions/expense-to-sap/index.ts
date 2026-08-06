@@ -1437,7 +1437,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
 
     // 6. Audit
     await supabase.rpc("insert_audit_log", {
-      p_action: "sap_document_created",
+      p_action: isPatchMode ? "sap_document_updated" : "sap_document_created",
       p_entity_type: "expense",
       p_entity_id: expenseId,
       p_company_db: expense.company_db || null,
@@ -1446,6 +1446,8 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         sap_doc_entry: sapResult.docEntry,
         sap_doc_num: sapResult.docNum,
         sap_attachment_entry: attachmentEntry,
+        patched: isPatchMode,
+
         stage_status: {
           attachment: attachmentStatus,
           purchase_order: purchaseOrderStatus,
