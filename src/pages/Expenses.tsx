@@ -185,6 +185,9 @@ function ExpenseDetailModal({
   mode,
   originBadge,
   erpLabel,
+  canSyncFromErp,
+  onSynced,
+
 }: {
   expense: Expense | null;
   open: boolean;
