@@ -28,6 +28,7 @@ import {
   Sun,
   Moon,
   Database,
+  Gauge,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
