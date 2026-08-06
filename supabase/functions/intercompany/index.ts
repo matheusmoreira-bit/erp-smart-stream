@@ -5,6 +5,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { requireAdminOrSapAdmin, authErrorResponse } from "../_shared/auth.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { purgeSapListCache } from "../_shared/sap-list-cache.ts";
 
 
 const corsHeaders = {
@@ -665,6 +666,8 @@ Deno.serve(async (req) => {
         if (!r.ok) throw new Error(r.error);
         return { code };
       });
+      // Cadastro mestre replicado: invalida as listas cacheadas da base destino.
+      await purgeSapListCache(sb as any, String(target_company_db), isBP ? "business_partners" : "items");
       return json({ results });
     }
 

@@ -27,7 +27,12 @@ const getCacheTtlMs = (key: string) => CACHE_TTL_OVERRIDES[key] ?? DEFAULT_CACHE
 // um fornecedor é criado/atualizado, precisamos invalidar TODAS as chaves que
 // derivam de BusinessPartners naquele companyDB — senão o usuário vê o BP na
 // tela de fornecedores mas não no combobox do pedido.
-type Listener = () => void;
+/**
+ * "hard" = o cache foi apagado/expirado: refetch direto no ERP.
+ * "soft" = o cache foi reescrito por outro ator: basta reler a linha do banco.
+ */
+type InvalidationMode = "hard" | "soft";
+type Listener = (mode: InvalidationMode) => void;
 const listeners = new Map<string, Set<Listener>>();
 const listenerKey = (cacheKey: string, companyDb?: string | null) =>
   `${cacheKey}::${companyDb || ""}`;
@@ -65,16 +70,75 @@ export async function invalidateSapCache(
     console.warn("invalidateSapCache: failed to purge sap_cache rows", e);
   }
   // Fire in-memory listeners so mounted hooks reload immediately.
-  for (const k of keys) {
-    const set = listeners.get(listenerKey(k, companyDb));
-    if (set) for (const cb of set) cb();
-    // Also broadcast to listeners that didn't scope by companyDb (rare).
-    if (companyDb) {
-      const globalSet = listeners.get(listenerKey(k, null));
-      if (globalSet) for (const cb of globalSet) cb();
-    }
+  for (const k of keys) notifyKey(k, companyDb, "hard");
+}
+
+/** Dispara os listeners montados de uma cacheKey (escopo por companyDb). */
+function notifyKey(cacheKey: string, companyDb: string | null | undefined, mode: InvalidationMode) {
+  const set = listeners.get(listenerKey(cacheKey, companyDb));
+  if (set) for (const cb of set) cb(mode);
+  // Também avisa listeners que não escoparam por companyDb (raro).
+  if (companyDb) {
+    const globalSet = listeners.get(listenerKey(cacheKey, null));
+    if (globalSet) for (const cb of globalSet) cb(mode);
   }
 }
+
+// -----------------------------------------------------------------------------
+// Invalidação automática (Realtime)
+// -----------------------------------------------------------------------------
+// Quando o cache do ERP é atualizado ou limpo por OUTRO ator — outra aba, outro
+// usuário ou uma edge function após uma escrita no SAP (criação de fornecedor,
+// item, etc.) — as telas abertas precisam saber disso sem depender do TTL.
+// Escutamos as mudanças da tabela `sap_cache` via Realtime e re-carregamos
+// apenas as listas afetadas (cacheKey + company_db).
+let realtimeStarted = false;
+// Ecos das próprias escritas deste cliente: ignoramos por alguns segundos para
+// não gerar refetch redundante logo após um upsert local.
+const selfWrites = new Map<string, number>();
+const SELF_ECHO_MS = 5000;
+
+export function markSelfCacheWrite(cacheKey: string, companyDb?: string | null) {
+  selfWrites.set(listenerKey(cacheKey, companyDb), Date.now());
+}
+
+function isSelfEcho(cacheKey: string, companyDb?: string | null) {
+  const k = listenerKey(cacheKey, companyDb);
+  const at = selfWrites.get(k);
+  if (!at) return false;
+  if (Date.now() - at > SELF_ECHO_MS) {
+    selfWrites.delete(k);
+    return false;
+  }
+  return true;
+}
+
+function ensureRealtimeInvalidation() {
+  if (realtimeStarted || typeof window === "undefined") return;
+  realtimeStarted = true;
+  supabase
+    .channel("sap-cache-invalidation")
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "sap_cache" },
+      (payload: any) => {
+        const rec = (payload?.new ?? payload?.old ?? {}) as {
+          cache_key?: string;
+          company_db?: string | null;
+        };
+        const cacheKey = rec?.cache_key;
+        if (!cacheKey) return;
+        const companyDb = rec?.company_db ?? null;
+        if (isSelfEcho(cacheKey, companyDb)) return;
+        // DELETE = cache invalidado → refetch no ERP.
+        // INSERT/UPDATE = alguém já buscou dados novos → basta reler do banco.
+        const mode: InvalidationMode = payload?.eventType === "DELETE" ? "hard" : "soft";
+        notifyKey(cacheKey, companyDb, mode);
+      },
+    )
+    .subscribe();
+}
+
 
 // -----------------------------------------------------------------------------
 // Entidades que só devem exibir registros ATIVOS (todas as empresas/bases)
@@ -133,6 +197,7 @@ export function useSapCachedList({
   const [options, setOptions] = useState<SapSearchOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const loadedRef = useRef(false);
+  const lastLoadedAtRef = useRef(0);
   const mapRowRef = useRef(mapRow);
   mapRowRef.current = mapRow;
   const paramsRef = useRef(params);
@@ -173,6 +238,7 @@ export function useSapCachedList({
 
             // Cache válido (ou sem sessão para revalidar): encerra aqui.
             if (!isExpired || !session) {
+              lastLoadedAtRef.current = Date.now();
               setIsLoading(false);
               return;
             }
@@ -230,6 +296,7 @@ export function useSapCachedList({
       // 3. Only cache non-empty results
       if (rows.length > 0) {
         const expiresAt = new Date(Date.now() + getCacheTtlMs(cacheKey)).toISOString();
+        markSelfCacheWrite(cacheKey, companyDB);
         await supabase
           .from("sap_cache")
           .upsert(
@@ -242,6 +309,8 @@ export function useSapCachedList({
             { onConflict: "cache_key,company_db" }
           );
       }
+      lastLoadedAtRef.current = Date.now();
+
 
 
       setOptions(rows.map(mapRowRef.current));
@@ -266,15 +335,40 @@ export function useSapCachedList({
     load(true);
   }, [load]);
 
-  // Subscribe to invalidation events broadcast via invalidateSapCache().
+  // Invalidação: eventos locais (invalidateSapCache) + Realtime da tabela
+  // `sap_cache` (outra aba, outro usuário ou edge function após escrever no SAP).
   useEffect(() => {
     if (!enabled) return;
-    const unsub = subscribe(cacheKey, session?.companyDB, () => {
+    ensureRealtimeInvalidation();
+    const unsub = subscribe(cacheKey, session?.companyDB, (mode) => {
       loadedRef.current = false;
-      load(true);
+      // "soft": outro cliente já gravou dados novos — relê do banco (barato).
+      // "hard": cache apagado — busca no ERP.
+      load(mode === "hard");
     });
     return unsub;
   }, [cacheKey, session?.companyDB, enabled, load]);
+
+  // Revalidação ao voltar para a aba: se os dados em tela já passaram do TTL,
+  // busca a versão atual em segundo plano (mantém a tela rápida e atualizada).
+  useEffect(() => {
+    if (!enabled || typeof window === "undefined") return;
+    const onFocus = () => {
+      if (document.visibilityState === "hidden") return;
+      const age = Date.now() - lastLoadedAtRef.current;
+      if (lastLoadedAtRef.current && age > getCacheTtlMs(cacheKey)) {
+        loadedRef.current = false;
+        void load(true);
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [enabled, cacheKey, load]);
+
 
   return { options, isLoading, reload };
 }
