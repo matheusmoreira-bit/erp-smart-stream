@@ -1292,7 +1292,9 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   // e também por (company_db + DocNum) — cobre casos onde apenas um dos dois foi persistido.
   const sessionCompany = (session?.companyDB || "").toLowerCase();
   const flowSapKeys = new Set<string>();
-  for (const e of expenses) {
+  // Em modo paginado, o servidor devolve as chaves de TODO o conjunto filtrado
+  // (não só da página) para que a deduplicação continue correta.
+  for (const e of (serverSapKeys as any[]) || expenses) {
     const comp = (e.company_db || sessionCompany || "").toLowerCase();
     const entry = e.sap_doc_entry != null ? Number(e.sap_doc_entry) : null;
     const num = e.sap_doc_num != null ? Number(e.sap_doc_num) : null;
@@ -1385,7 +1387,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     );
   };
 
-  const flowFiltered = expenses.filter((e) => applyFilters(e, true, "erp_flow"));
+  // Em modo paginado, filtros e escopo já foram aplicados no banco.
+  const flowFiltered = serverMode ? expenses : expenses.filter((e) => applyFilters(e, true, "erp_flow"));
   // Registros vindos do ERP (HanaAPI/Service Layer) também respeitam o escopo:
   // sem "Ver todos", o usuário só vê o que solicitou ou aprova.
   const sapFiltered = sapOnly.filter((e) => applyFilters(e, true, "erp"));
