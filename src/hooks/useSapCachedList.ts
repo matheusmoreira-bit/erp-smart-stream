@@ -168,7 +168,9 @@ export function useSapCachedList({
                 (r: any) => !String(r?.CenterCode || "").startsWith("Centr_"),
               );
             }
+            cachedData = filterActiveRows(endpoint, cachedData);
             setOptions(cachedData.map(mapRowRef.current));
+
 
             // If cache is still valid or no SAP session to refresh, stop here
             if (!isExpired || !session) {
