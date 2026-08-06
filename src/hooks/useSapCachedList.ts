@@ -130,7 +130,10 @@ function ensureRealtimeInvalidation() {
         if (!cacheKey) return;
         const companyDb = rec?.company_db ?? null;
         if (isSelfEcho(cacheKey, companyDb)) return;
-        notifyKey(cacheKey, companyDb);
+        // DELETE = cache invalidado → refetch no ERP.
+        // INSERT/UPDATE = alguém já buscou dados novos → basta reler do banco.
+        const mode: InvalidationMode = payload?.eventType === "DELETE" ? "hard" : "soft";
+        notifyKey(cacheKey, companyDb, mode);
       },
     )
     .subscribe();
