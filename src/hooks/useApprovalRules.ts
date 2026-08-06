@@ -271,16 +271,27 @@ export function useApprovalRules(options?: { backfill?: boolean }) {
   const [error, setError] = useState<string | null>(null);
 
 
-  const fetchRules = useCallback(async () => {
-    setIsLoading(true);
+  const fetchRules = useCallback(async (opts?: { force?: boolean }) => {
     setError(null);
     try {
       // Scope rules to the active company. If there is no session, return nothing
       // instead of leaking other companies' rules.
       if (!activeCompanyDb) {
         setRules([]);
+        setIsLoading(false);
         return;
       }
+
+      const hit = rulesCache.get(activeCompanyDb);
+      if (hit) {
+        setRules(hit.rules);
+        setIsLoading(false);
+        // Cache fresco e sem force: nada a revalidar.
+        if (!opts?.force && Date.now() - hit.at < RULES_TTL_MS) return;
+      } else {
+        setIsLoading(true);
+      }
+
 
       const { data, error: err } = await supabase
         .from("approval_rules")
