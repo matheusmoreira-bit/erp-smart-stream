@@ -44,9 +44,13 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
   const [userCode, setUserCode] = useState("");
   const [userName, setUserName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("Sap@2025");
+  const [password, setPassword] = useState(DEFAULT_PASSWORD);
+  const [passwordMode, setPasswordMode] = useState<PasswordMode>("default");
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<ReplicationResult[] | null>(null);
+  const policy = checkPasswordPolicy(password, userCode);
+
 
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [selectedDbs, setSelectedDbs] = useState<Set<string>>(new Set());
