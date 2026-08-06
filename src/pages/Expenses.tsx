@@ -1493,18 +1493,120 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   })();
 
   const [page, setPage] = useState(1);
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+
+  /* ─── Filtros server-side ───────────────────────────────────────
+     Traduz busca, status e filtros avançados em predicados aplicados
+     diretamente no banco, para que apenas a página exibida trafegue. */
+  const buildServerSpec = useCallback((): { filters: ServerFilter[]; or?: string; order: { column: string; ascending: boolean } } => {
+    const f = advFilters;
+    const filters: ServerFilter[] = [];
+    const like = (column: string, v: string) => {
+      const t = v.trim();
+      if (t) filters.push({ op: "ilike", column, value: `%${t}%` });
+    };
+    if (statusFilter !== "all") filters.push({ op: "eq", column: "status", value: statusFilter });
+    like("supplier_name", f.supplier);
+    like("supplier_code", f.supplier_code);
+    like("requester_name", f.requester);
+    like("requester_email", f.requester_email);
+    like("current_approver", f.approver);
+    like("cost_center", f.cost_center);
+    like("project", f.project);
+    like("remarks", f.remarks);
+    if (f.currency.trim()) filters.push({ op: "ilike", column: "currency", value: f.currency.trim() });
+    if (f.branch_id.trim()) filters.push({ op: "eq", column: "branch_id", value: Number(f.branch_id.trim()) });
+    const minV = f.min_amount ? Number(f.min_amount.replace(",", ".")) : null;
+    const maxV = f.max_amount ? Number(f.max_amount.replace(",", ".")) : null;
+    if (minV != null && Number.isFinite(minV)) filters.push({ op: "gte", column: "total_amount", value: minV });
+    if (maxV != null && Number.isFinite(maxV)) filters.push({ op: "lte", column: "total_amount", value: maxV });
+    const range = (column: string, from: string, to: string) => {
+      if (from) filters.push({ op: "gte", column, value: from });
+      if (to) filters.push({ op: "lte", column, value: `${to}T23:59:59.999Z` });
+    };
+    range("doc_date", f.doc_date_from, f.doc_date_to);
+    range("due_date", f.due_date_from, f.due_date_to);
+    range("created_at", f.created_from, f.created_to);
+    if (f.only_missing_due) filters.push({ op: "is", column: "due_date", value: null });
+    if (f.only_overdue) {
+      filters.push({ op: "not_is", column: "due_date", value: null });
+      filters.push({ op: "lt", column: "due_date", value: new Date().toISOString().slice(0, 10) });
+    }
+    if (f.only_sap_error) filters.push({ op: "not_is", column: "sap_integration_error", value: null });
+
+    // Busca textual → cláusula `or` (sem vírgulas/parênteses, que são
+    // separadores no PostgREST).
+    let or: string | undefined;
+    const term = searchDebounced.trim().replace(/[(),*%]/g, " ").replace(/\s+/g, " ").trim();
+    if (term) {
+      const pattern = `*${term.replace(/ /g, "*")}*`;
+      const parts = [
+        `supplier_name.ilike.${pattern}`,
+        `requester_name.ilike.${pattern}`,
+        `remarks.ilike.${pattern}`,
+        `supplier_code.ilike.${pattern}`,
+        `project.ilike.${pattern}`,
+      ];
+      if (/^\d+$/.test(term)) {
+        parts.push(`sap_doc_num.eq.${term}`, `sap_doc_entry.eq.${term}`);
+      }
+      or = parts.join(",");
+    }
+
+    const orderColumn = ({
+      status: "status",
+      supplier: "supplier_name",
+      requester: "requester_name",
+      created: "created_at",
+      doc: "doc_date",
+      due: "due_date",
+      amount: "total_amount",
+      origin: "created_at",
+    } as const)[sortKey];
+
+    return { filters, or, order: { column: orderColumn, ascending: sortDir === "asc" } };
+  }, [advFilters, statusFilter, searchDebounced, sortKey, sortDir]);
+
+  useEffect(() => {
+    const spec = buildServerSpec();
+    const next: ServerQuery = {
+      page,
+      pageSize,
+      order: spec.order,
+      filters: spec.filters,
+      or: spec.or,
+      viewAll: effectiveShowAll,
+      withKeys: showSourceToggle && sourceMode === "both",
+    };
+    setServerQuery((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+  }, [buildServerSpec, page, pageSize, effectiveShowAll, showSourceToggle, sourceMode]);
+
+  // Contagens: o total das linhas do ERP Flow vem do servidor; as linhas que
+  // existem apenas no ERP são anexadas depois da última página do Flow.
+  const flowCount = serverMode ? (flowTotal ?? flowFiltered.length) : flowFiltered.length;
+  const sapSorted = serverMode
+    ? [...sapFiltered.map((exp) => ({ exp, origin: "erp" as const }))].sort(compareRows)
+    : [];
+  const totalCount = serverMode ? flowCount + sapSorted.length : filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   // Reset apenas para mudanças que alteram fortemente a listagem (busca, ordenação, tamanho de página, modo compra/venda).
   // Toggles de status / fonte ERP / "ver todos" preservam a página atual (e a rolagem — ver preserveScroll abaixo).
   useEffect(() => {
     setPage(1);
-  }, [search, mode, sortKey, sortDir, pageSize]);
+  }, [searchDebounced, mode, sortKey, sortDir, pageSize, statusFilter, advanced]);
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
   const pageStart = (page - 1) * pageSize;
-  const pageItems = sorted.slice(pageStart, pageStart + pageSize);
+  const pageItems = serverMode
+    ? (() => {
+        const flowRows = flowFiltered.map((exp) => ({ exp, origin: "erp_flow" as const }));
+        const sapStart = Math.max(0, pageStart - flowCount);
+        const sapTake = Math.max(0, pageSize - flowRows.length);
+        return [...flowRows, ...sapSorted.slice(sapStart, sapStart + sapTake)];
+      })()
+    : sorted.slice(pageStart, pageStart + pageSize);
   const visibleItems = pageItems; // compat com blocos existentes
+
 
   const handleSubmitForApproval = async (id: string) => {
     setIsSubmitting(true);
