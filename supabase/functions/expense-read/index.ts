@@ -63,6 +63,22 @@ interface Caller {
   companyDB: string | null;
 }
 
+/**
+ * Cache por instância (60s) da identificação do caller: uma única tela dispara
+ * várias chamadas seguidas e cada uma refazia JWT + sessão SAP + grupos.
+ */
+const CALLER_TTL_MS = 60_000;
+const callerCache = new Map<string, { expiresAt: number; value: Caller }>();
+
+function callerCacheKey(req: Request): string {
+  return [
+    req.headers.get("authorization") || "",
+    req.headers.get("x-sap-session") || "",
+    req.headers.get("x-sap-user") || "",
+    req.headers.get("x-company-db") || "",
+  ].join("|");
+}
+
 async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Caller> {
   let identity: string | null = null;
   let email: string | null = null;
@@ -107,6 +123,16 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
   }
 
   return { identity, email, userName, id, privileged, directorateBranch, companyDB };
+}
+
+async function identifyCallerCached(req: Request, admin: SupabaseClient): Promise<Caller> {
+  const key = callerCacheKey(req);
+  const hit = callerCache.get(key);
+  if (hit && hit.expiresAt > Date.now()) return hit.value;
+  const value = await identifyCaller(req, admin);
+  if (callerCache.size > 500) callerCache.clear();
+  callerCache.set(key, { expiresAt: Date.now() + CALLER_TTL_MS, value });
+  return value;
 }
 
 /** Uma despesa pertence ao caller quando ele é solicitante, criador ou aprovador. */
@@ -198,7 +224,7 @@ Deno.serve(async (req) => {
 
   try {
     const admin = service();
-    const caller = await identifyCaller(req, admin);
+    const caller = await identifyCallerCached(req, admin);
     if (!caller.identity) {
       console.warn("[expense-read] sem identidade", {
         hasAuthorization: !!req.headers.get("authorization"),
@@ -330,9 +356,38 @@ Deno.serve(async (req) => {
       rows = rows.slice(0, limit);
     }
 
+    // Filhos na mesma chamada (evita 2 round-trips extras por tela).
+    let children: Record<string, any[]> | undefined;
+    if (table === "expenses" && Array.isArray(body?.include) && body.include.length) {
+      const ids = rows.map((r: any) => r.id).filter(Boolean).slice(0, 5000);
+      const want = new Set(body.include.map((v: unknown) => String(v)));
+      children = {};
+      if (ids.length) {
+        const [items, atts] = await Promise.all([
+          want.has("items")
+            ? admin.from("expense_items").select("*").in("expense_id", ids)
+            : Promise.resolve({ data: null }),
+          want.has("attachments")
+            ? admin.from("expense_attachments").select("*").in("expense_id", ids)
+            : Promise.resolve({ data: null }),
+        ]);
+        if (want.has("items")) children.items = (items as any).data || [];
+        if (want.has("attachments")) children.attachments = (atts as any).data || [];
+      } else {
+        if (want.has("items")) children.items = [];
+        if (want.has("attachments")) children.attachments = [];
+      }
+    }
+
     return json(
       200,
-      { data: rows, scoped, privileged: caller.privileged, directorate: caller.directorateBranch },
+      {
+        data: rows,
+        ...(children || {}),
+        scoped,
+        privileged: caller.privileged,
+        directorate: caller.directorateBranch,
+      },
       cors,
     );
   } catch (e) {

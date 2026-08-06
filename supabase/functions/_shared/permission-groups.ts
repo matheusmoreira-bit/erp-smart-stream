@@ -81,6 +81,13 @@ export async function getPermissionGroups(
     .filter(Boolean);
 }
 
+/**
+ * Cache por instância (60s): a mesma tela dispara várias chamadas seguidas e
+ * cada uma refazia duas consultas de grupos/capacidades.
+ */
+const CAPS_TTL_MS = 60_000;
+const capsCache = new Map<string, { expiresAt: number; value: Set<string> }>();
+
 /** Capacidades ligadas em algum grupo da identidade. */
 export async function getCapabilities(
   admin: SupabaseClient,
@@ -88,6 +95,12 @@ export async function getCapabilities(
 ): Promise<Set<string>> {
   const wanted = identities.map(canonicalIdentity).filter(Boolean);
   if (!wanted.length) return new Set();
+
+  const cacheKey = [...wanted].sort().join("|");
+  const hit = capsCache.get(cacheKey);
+  if (hit && hit.expiresAt > Date.now()) return new Set(hit.value);
+  if (capsCache.size > 500) capsCache.clear();
+
   const { data } = await admin
     .from("user_group_assignments")
     .select("sap_email, group_id");
@@ -99,16 +112,21 @@ export async function getCapabilities(
         .filter(Boolean),
     ),
   );
-  if (!groupIds.length) return new Set();
+  if (!groupIds.length) {
+    capsCache.set(cacheKey, { expiresAt: Date.now() + CAPS_TTL_MS, value: new Set() });
+    return new Set();
+  }
   const { data: rows } = await admin
     .from("permission_group_modules")
     .select("module_key, can_view")
     .in("group_id", groupIds);
-  return new Set(
+  const caps = new Set(
     ((rows as any[] | null) || [])
       .filter((r) => r.can_view !== false)
       .map((r) => String(r.module_key)),
   );
+  capsCache.set(cacheKey, { expiresAt: Date.now() + CAPS_TTL_MS, value: new Set(caps) });
+  return caps;
 }
 
 export async function hasCapability(

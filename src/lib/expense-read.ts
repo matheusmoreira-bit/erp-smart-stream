@@ -26,6 +26,8 @@ interface Spec {
   limit?: number;
   range?: [number, number];
   scope?: "auto" | "all";
+  /** Tabelas filhas retornadas na mesma resposta (evita round-trips). */
+  include?: Array<"items" | "attachments">;
 }
 
 export interface ExpenseReadResult<T = any> {
@@ -33,6 +35,8 @@ export interface ExpenseReadResult<T = any> {
   error: { message: string } | null;
   scoped?: boolean;
   privileged?: boolean;
+  items?: any[];
+  attachments?: any[];
 }
 
 class ExpenseReadBuilder<T = any> implements PromiseLike<ExpenseReadResult<T>> {
@@ -68,6 +72,8 @@ class ExpenseReadBuilder<T = any> implements PromiseLike<ExpenseReadResult<T>> {
   }
   limit(n: number) { this.spec.limit = n; return this; }
   range(from: number, to: number) { this.spec.range = [from, to]; return this; }
+  /** Traz itens/anexos das despesas na mesma resposta. */
+  include(...tables: Array<"items" | "attachments">) { this.spec.include = tables; return this; }
   /** Solicita a visão global — só é honrada pelo servidor para privilegiados. */
   viewAll(enabled = true) { this.spec.scope = enabled ? "all" : "auto"; return this; }
 
@@ -92,6 +98,8 @@ class ExpenseReadBuilder<T = any> implements PromiseLike<ExpenseReadResult<T>> {
         error: null,
         scoped: body?.scoped,
         privileged: body?.privileged,
+        items: body?.items,
+        attachments: body?.attachments,
       };
     } catch (e) {
       return { data: null, error: { message: e instanceof Error ? e.message : String(e) } };
