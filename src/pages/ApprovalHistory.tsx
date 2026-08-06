@@ -18,6 +18,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Checkbox } from "@/components/ui/checkbox";
 import { RelationsMap } from "@/components/RelationsMap";
 import { PageTitle } from "@/components/PageTitle";
+import { PageHeader } from "@/components/PageHeader";
+
 import { displayUserName } from "@/lib/user-display";
 import { ChevronDown } from "lucide-react";
 
@@ -37,7 +39,7 @@ function formatDate(iso?: string | null) {
 
 export default function ApprovalHistory() {
   const navigate = useNavigate();
-  const { session } = useSap();
+  const { session, logout } = useSap();
   const { isAdmin: isLovableAdmin } = useAuth();
   const isAdmin = isLovableAdmin || (session?.isSuperUser ?? false);
   const { hasAccess: canViewAllApprovals } = useModuleAccess("approvals_view_all");
@@ -186,24 +188,21 @@ export default function ApprovalHistory() {
 
   return (
     <div className="min-h-screen bg-background">
-      <PageTitle title="Histórico de Aprovações" />
-      <header className="border-b border-border px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/menu")}>
-              <ArrowLeft className="w-4 h-4 mr-1" /> Voltar
-            </Button>
-            <div>
-              <h1 className="text-xl font-bold">Histórico de Aprovações</h1>
-              <p className="text-xs text-muted-foreground">
-                {getLabel(session?.companyDB || "")} ·{" "}
-                {syncState?.last_sync_at
-                  ? `Sincronizado em ${formatDate(syncState.last_sync_at)}`
-                  : "Nunca sincronizado"}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
+      <PageHeader
+        icon={<FileText className="w-5 h-5 text-primary" />}
+        title="Histórico de Aprovações"
+        documentTitle="Histórico de Aprovações"
+        subtitle={
+          syncState?.last_sync_at
+            ? `Sincronizado em ${formatDate(syncState.last_sync_at)}`
+            : "Nunca sincronizado"
+        }
+        backTo="/menu"
+        companyLabel={getLabel(session?.companyDB || "")}
+        userName={session?.userName}
+        onLogout={logout}
+        actions={
+          <>
             {(() => {
               const reportOptions = {
                 title: "Relatório — Histórico de Aprovações",
@@ -256,9 +255,10 @@ export default function ApprovalHistory() {
               <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
               {isSyncing ? "Sincronizando..." : "Sincronizar agora"}
             </Button>
-          </div>
-        </div>
-      </header>
+          </>
+        }
+      />
+
 
       <main className="max-w-7xl mx-auto px-6 py-6">
         <div className="glass-card p-4 mb-4 flex flex-wrap items-center gap-3">
