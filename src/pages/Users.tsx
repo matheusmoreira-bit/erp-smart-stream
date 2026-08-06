@@ -21,7 +21,7 @@ import { ProvisionSapAccessDialog } from "@/components/ProvisionSapAccessDialog"
 import UserGroupDialog from "@/components/UserGroupDialog";
 import { useUserGroupAdmin } from "@/hooks/useUserGroupAdmin";
 import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
-import { useManagementSegments, MANAGEMENT_SEGMENT_LABEL, MANAGEMENT_SEGMENTS, type ManagementSegment } from "@/hooks/useManagementSegments";
+import { useManagementSegments, MANAGEMENT_SEGMENT_LABEL, segmentsForCompany, type ManagementSegment } from "@/hooks/useManagementSegments";
 
 
 
