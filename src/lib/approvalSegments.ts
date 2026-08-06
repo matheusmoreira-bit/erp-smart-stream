@@ -185,15 +185,19 @@ export function segmentDocByRules(
 
   const docType = inferDocTypeFromName(doc.docTypeName);
   const totalAll = lines.reduce((s, l) => s + Number(l.LineTotal || 0), 0);
+  // Agrupa por CENTRO DE CUSTO + PROJETO: um mesmo CC pode ter alçadas
+  // diferentes por projeto (rateio entre projetos).
   const groups = new Map<string, DocumentLine[]>();
   for (const l of lines) {
-    const key = (l.CostingCode || "").trim() || "__no_cc__";
+    const key = lineSegmentKey(l);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(l);
   }
 
   const segments: ApprovalSegment[] = [];
-  for (const [cc, groupLines] of groups.entries()) {
+  for (const [segmentKey, groupLines] of groups.entries()) {
+    const cc = segmentKey.split("||")[0];
+    const project = (groupLines.find((l) => l.Project)?.Project || "").trim();
     const amount = groupLines.reduce((s, l) => s + Number(l.LineTotal || 0), 0);
     const amountFC = groupLines.reduce(
       (s, l) => s + Number(l.LineTotalFC ?? l.LineTotal ?? 0),
@@ -205,7 +209,7 @@ export function segmentDocByRules(
     const ctx: Record<string, unknown> = {
       total_amount: doc.currency !== "BRL" ? amountFC : amount,
       cost_center: cc === "__no_cc__" ? "" : cc,
-      project: (groupLines.find((l) => l.Project)?.Project || "").trim(),
+      project,
       requester_name: doc.requester || "",
       // Legado: combinação nome + código.
       supplier_name: `${doc.cardName || ""} ${doc.cardCode || ""}`.trim(),
@@ -225,7 +229,9 @@ export function segmentDocByRules(
     const rule = findMatchingRule(rules, ctx, docType);
     const levels = rule ? [...rule.levels].sort((a, b) => a.level_order - b.level_order) : [];
     segments.push({
+      segmentKey,
       costCenter: cc,
+      project,
       lines: groupLines,
       amount,
       amountFC,
@@ -248,7 +254,9 @@ export function segmentDocByRules(
     const first = segments[0];
     return [
       {
+        segmentKey: "__all__",
         costCenter: "__all__",
+        project: first?.project || "",
         lines,
         amount: total,
         amountFC: totalFC,
