@@ -197,7 +197,7 @@ export default function ApprovalHistory() {
             ? `Sincronizado em ${formatDate(syncState.last_sync_at)}`
             : "Nunca sincronizado"
         }
-        backTo="/menu"
+        backTo="/"
         companyLabel={getLabel(session?.companyDB || "")}
         userName={session?.userName}
         onLogout={logout}
