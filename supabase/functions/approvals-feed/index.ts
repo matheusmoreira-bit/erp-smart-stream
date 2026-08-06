@@ -77,37 +77,40 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
     email = cloudUser.email || null;
     identity = cloudUser.email || null;
     id = cloudUser.id;
-    const { data } = await admin.rpc("has_role", { _user_id: cloudUser.id, _role: "admin" });
-    if (data === true) privileged = true;
   }
-
   if (sap) {
     userName = sap.userName;
     if (!identity) identity = sap.userName;
-    if (!privileged) {
-      try {
-        const { data: mapped } = await admin.rpc("is_sap_user_admin", {
-          _sap_username: sap.userName.toLowerCase(),
-        });
-        if (mapped === true) privileged = true;
-      } catch { /* ignore */ }
-      if (!privileged && sap.userName.toLowerCase() === "manager") privileged = true;
-    }
+    if (sap.userName.toLowerCase() === "manager") privileged = true;
   }
 
-  let directorateBranch: string | null = null;
-  if (!privileged && (identity || email || userName)) {
-    privileged = await canViewAllDocuments(admin, [identity, email, userName]);
-    if (!privileged) {
-      directorateBranch = await resolveDirectorateBranch(admin, [identity, email, userName]);
-    }
-  }
+  // Todas as consultas de identidade/permissão em UMA rodada paralela.
+  // (Antes eram até 5 idas sequenciais ao banco — ~1,3 s só de autenticação.)
+  const [adminRole, sapAdmin, viewAll, branch, aliases] = await Promise.all([
+    cloudUser
+      ? admin.rpc("has_role", { _user_id: cloudUser.id, _role: "admin" }).then(({ data }) => data === true).catch(() => false)
+      : Promise.resolve(false),
+    sap
+      ? admin
+          .rpc("is_sap_user_admin", { _sap_username: sap.userName.toLowerCase() })
+          .then(({ data }) => data === true)
+          .catch(() => false)
+      : Promise.resolve(false),
+    identity || email || userName
+      ? canViewAllDocuments(admin, [identity, email, userName]).catch(() => false)
+      : Promise.resolve(false),
+    identity || email || userName
+      ? resolveDirectorateBranch(admin, [identity, email, userName]).catch(() => null)
+      : Promise.resolve(null),
+    resolveCallerAliases(admin, {
+      id,
+      email: email ?? undefined,
+      userName: userName ?? identity ?? undefined,
+    }),
+  ]);
 
-  const aliases = await resolveCallerAliases(admin, {
-    id,
-    email: email ?? undefined,
-    userName: userName ?? identity ?? undefined,
-  });
+  privileged = privileged || adminRole || sapAdmin || viewAll;
+  const directorateBranch = privileged ? null : branch;
 
   return { identity, privileged, directorateBranch, aliases };
 }
