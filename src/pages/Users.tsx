@@ -65,7 +65,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
   const [groupUser, setGroupUser] = useState<SapUser | null>(null);
   const { isPrivileged } = useMyPermissionGroups();
   const { groups: permissionGroups, groupOf, setGroup } = useUserGroupAdmin();
-  const { segmentOf, setSegment } = useManagementSegments();
+  const { segmentOf, setSegment } = useManagementSegments(session?.companyDB);
 
 
 
