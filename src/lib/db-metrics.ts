@@ -78,7 +78,7 @@ export function currentScreen(): string {
       /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(seg) || /^\d+$/.test(seg) ? ":id" : seg,
     )
     .join("/");
-  return nav[normalized] ?? EXTRA_SCREEN_LABELS[normalized] ?? normalized || "/";
+  return nav[normalized] ?? EXTRA_SCREEN_LABELS[normalized] ?? (normalized || "/");
 }
 
 /* --------------------------------------------------------------- ingestão */
