@@ -50,6 +50,7 @@ import { exportListReportPdf, exportListReportCsv, exportExpenseDetailPdf } from
 import { getErpShortLabel } from "@/lib/erp-labels";
 import { isPendingApproval } from "@/lib/approval-authz";
 import { buildDuplicateDraftPayload } from "@/lib/expense-duplicate";
+import { expenseRead } from "@/lib/expense-read";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
