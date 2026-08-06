@@ -3276,7 +3276,14 @@ export function CreateExpenseModal({
                       onChange={(val) => {
                         setItems((prev) => {
                           const updated = [...prev];
-                          updated[i] = { ...updated[i], sapCostCenter: val, cost_center: val?.code || "" };
+                          const next = { ...updated[i], sapCostCenter: val, cost_center: val?.code || "" };
+                          // CC operacional: limpa projeto institucional selecionado (não-CSC)
+                          const allowed = projectOptionsForCc(val?.code ?? null);
+                          if (next.sapProject && !allowed.some((o) => o.code === next.sapProject?.code)) {
+                            next.sapProject = null;
+                            next.project = "";
+                          }
+                          updated[i] = next;
                           return updated;
                         });
                         maybeTriggerCcAlert(i, val, item.sapProject || null);
