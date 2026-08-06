@@ -203,10 +203,54 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
               <Label htmlFor="email">E-mail</Label>
               <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="joao@empresa.com" disabled={submitting} />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Senha *</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} disabled={submitting} />
+            <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3">
+              <Label className="text-sm">Senha provisionada *</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  { id: "default", label: "Padrão" },
+                  { id: "auto", label: "Gerar automática" },
+                  { id: "manual", label: "Definir manualmente" },
+                ] as { id: PasswordMode; label: string }[]).map((m) => (
+                  <Button
+                    key={m.id}
+                    type="button"
+                    size="sm"
+                    variant={passwordMode === m.id ? "default" : "outline"}
+                    className="h-7 text-xs"
+                    disabled={submitting}
+                    onClick={() => applyMode(m.id)}
+                  >
+                    {m.label}
+                  </Button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => { setPassword(e.target.value); setPasswordMode("manual"); }}
+                  disabled={submitting}
+                  autoComplete="new-password"
+                  className="font-mono"
+                  placeholder="Digite a senha"
+                />
+                <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}>
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </Button>
+                <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={copyPassword} disabled={!password} aria-label="Copiar senha">
+                  <Copy className="w-4 h-4" />
+                </Button>
+                <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => { setPassword(generateUniquePassword()); setPasswordMode("auto"); setShowPassword(true); }} disabled={submitting} aria-label="Gerar nova senha">
+                  <RefreshCw className="w-4 h-4" />
+                </Button>
+              </div>
+              <PasswordPolicyChecklist password={password} userCode={userCode} />
+              <p className="text-xs text-muted-foreground">
+                O usuário deverá alterar a senha no primeiro login.
+              </p>
             </div>
+
 
             <div className="space-y-2 pt-1">
               <div className="flex items-center justify-between">
