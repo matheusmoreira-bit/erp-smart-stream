@@ -88,7 +88,7 @@ export const CAPABILITY_CATALOG: CapabilityDef[] = [
   {
     key: "projects_scope_by_segment",
     label: "Restringir projetos pelo segmento de gestão",
-    hint: "Gestão 1 enxerga ANA GAMING e 7K; Gestão 2 enxerga VERA e CASSINO (bases ANA Gaming).",
+    hint: "ANA Gaming enxerga ANA GAMING e 7K; Lótus enxerga VERA e CASSINO; CSC enxerga todos (bases ANA Gaming).",
     category: "data_scope",
   },
 
