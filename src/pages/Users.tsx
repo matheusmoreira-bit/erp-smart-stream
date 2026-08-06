@@ -354,7 +354,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
                               }
                             }}
                           >
-                            {MANAGEMENT_SEGMENTS.map((s) => (
+                            {segmentsForCompany(session?.companyDB).map((s) => (
                               <option key={s} value={s}>
                                 {MANAGEMENT_SEGMENT_LABEL[s]}
                               </option>
