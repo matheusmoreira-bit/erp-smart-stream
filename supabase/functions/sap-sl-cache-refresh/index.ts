@@ -55,10 +55,19 @@ async function refreshCompany(
   const cookie = await login(baseUrl, sapCompanyDb, creds.username, creds.password);
 
   try {
-    const usersResp = await slGet<{ value: SLUser[] }>(
-      baseUrl, cookie,
-      "Users?$select=InternalKey,UserCode,UserName,eMail&$top=500",
-    );
+    // O Service Layer pagina em 20 registros por página: é obrigatório seguir
+    // com $skip até esgotar, senão o cache de usuários fica incompleto e os
+    // campos de Solicitante/Aprovador aparecem vazios na tela.
+    const users: SLUser[] = [];
+    for (let skip = 0; skip < 2000; skip += 20) {
+      const page = await slGet<{ value: SLUser[] }>(
+        baseUrl, cookie,
+        `Users?$select=InternalKey,UserCode,UserName,eMail&$top=20&$skip=${skip}`,
+      );
+      const rows = page.value || [];
+      users.push(...rows);
+      if (rows.length < 20) break;
+    }
     const tplResp = await slGet<{ value: SLTemplate[] }>(
       baseUrl, cookie,
       "ApprovalTemplates?$select=Code,Name&$top=200",
@@ -68,7 +77,6 @@ async function refreshCompany(
       "ApprovalStages?$select=Code,Name&$top=200",
     );
 
-    const users = usersResp.value || [];
     const templates = tplResp.value || [];
     const stages = stagesResp.value || [];
 
@@ -76,17 +84,22 @@ async function refreshCompany(
     for (const s of stages) {
       if (typeof s.Code !== "number") continue;
       try {
-        const detail = await slGet<{ StageApprovers?: Array<{ UserCode?: number }> }>(
-          baseUrl, cookie,
-          `ApprovalStages(${s.Code})?$select=Code,StageApprovers`,
-        );
-        stageApprovers[String(s.Code)] = (detail.StageApprovers || [])
-          .map((a) => Number(a.UserCode))
-          .filter((n) => Number.isFinite(n) && n > 0);
+        // A coleção correta é ApprovalStageApprovers[].UserID (não StageApprovers/UserCode),
+        // e ela não pode ser recuperada via $select.
+        const detail = await slGet<{
+          ApprovalStageApprovers?: Array<{ UserID?: number }>;
+          StageApprovers?: Array<{ UserCode?: number }>;
+        }>(baseUrl, cookie, `ApprovalStages(${s.Code})`);
+        const ids = [
+          ...(detail.ApprovalStageApprovers || []).map((a) => Number(a.UserID)),
+          ...(detail.StageApprovers || []).map((a) => Number(a.UserCode)),
+        ].filter((n) => Number.isFinite(n) && n > 0);
+        stageApprovers[String(s.Code)] = Array.from(new Set(ids));
       } catch (e) {
         console.warn(`StageApprovers ${s.Code} falhou:`, (e as Error).message);
       }
     }
+
 
     const expiresAt = new Date(Date.now() + TTL_MS).toISOString();
     const rows = [
@@ -110,6 +123,8 @@ Deno.serve(async (req) => {
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
   try {
+
+
     // 1) Empresas SAP sem middleware HANA
     const { data: flags, error: flagErr } = await sb
       .from("system_credentials")

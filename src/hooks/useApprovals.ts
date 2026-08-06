@@ -262,15 +262,20 @@ async function getUsers(session: SapSession): Promise<Map<number, SLUser>> {
   const cached = await readDbCache<SLUser[]>(session.companyDB, "sl_users");
   let list: SLUser[] = cached || [];
   if (!cached) {
+    // O Service Layer devolve no máximo 20 registros por página — é preciso paginar.
     try {
-      const res = await sapQuery(
-        session,
-        "Users?$select=InternalKey,UserCode,UserName,eMail&$top=500",
-        undefined,
-        true,
-      );
-      const data = res.data as { value?: SLUser[] } | SLUser[];
-      list = Array.isArray(data) ? data : (data?.value || []);
+      for (let skip = 0; skip < 2000; skip += 20) {
+        const res = await sapQuery(
+          session,
+          `Users?$select=InternalKey,UserCode,UserName,eMail&$top=20&$skip=${skip}`,
+          undefined,
+          true,
+        );
+        const data = res.data as { value?: SLUser[] } | SLUser[];
+        const page = Array.isArray(data) ? data : (data?.value || []);
+        list = list.concat(page);
+        if (page.length < 20) break;
+      }
     } catch (e) { console.warn("Users SL falhou:", e); }
   }
   const map = new Map<number, SLUser>();
@@ -278,6 +283,7 @@ async function getUsers(session: SapSession): Promise<Map<number, SLUser>> {
   slUsersMem.set(session.companyDB, map);
   return map;
 }
+
 
 async function fetchUsersByIds(session: SapSession, ids: number[]): Promise<void> {
   const map = slUsersMem.get(session.companyDB) || new Map<number, SLUser>();
@@ -359,22 +365,29 @@ async function getStageApprovers(session: SapSession, stageCode: number): Promis
   }
 
   try {
+    // A coleção de aprovadores da etapa é ApprovalStageApprovers[].UserID e
+    // não é retornada quando se usa $select — por isso buscamos a entidade inteira.
     const res = await sapQuery(
       session,
-      `ApprovalStages(${stageCode})?$select=Code,StageApprovers`,
+      `ApprovalStages(${stageCode})`,
       undefined,
       true,
     );
-    const raw = res.data as { StageApprovers?: Array<{ UserCode?: number }> };
-    const ids = (raw?.StageApprovers || [])
-      .map((a) => Number(a.UserCode))
-      .filter((n) => Number.isFinite(n) && n > 0);
+    const raw = res.data as {
+      ApprovalStageApprovers?: Array<{ UserID?: number }>;
+      StageApprovers?: Array<{ UserCode?: number }>;
+    };
+    const ids = Array.from(new Set([
+      ...(raw?.ApprovalStageApprovers || []).map((a) => Number(a.UserID)),
+      ...(raw?.StageApprovers || []).map((a) => Number(a.UserCode)),
+    ].filter((n) => Number.isFinite(n) && n > 0)));
     bucket.set(stageCode, ids);
     return ids;
   } catch {
     return [];
   }
 }
+
 
 async function fetchDraftsByEntries(session: SapSession, entries: number[]): Promise<Map<number, SLDraft>> {
   const map = new Map<number, SLDraft>();
