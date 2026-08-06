@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { KeyRound } from "lucide-react";
+import { KeyRound, RefreshCw, Eye, EyeOff } from "lucide-react";
+import { generateStrongPassword, checkPasswordPolicy } from "@/lib/password-policy";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { SapCompanyOption } from "@/hooks/useSapUsersAdmin";
@@ -24,9 +25,12 @@ interface SourceUser {
   sources: string[];
 }
 
+type PasswordMode = "shared-auto" | "shared-manual" | "individual";
+
 interface ReplicateResult {
   total_source_users: number;
   created: string[];
+  created_details?: { code: string; name: string; email?: string; password: string }[];
   skipped: { code: string; reason: string }[];
   failed: { code: string; error: string }[];
   source_errors: { db: string; error: string }[];
@@ -44,7 +48,10 @@ export default function SapUsersReplicate() {
   const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [sourceDbs, setSourceDbs] = useState<string[]>([]);
   const [targetDbs, setTargetDbs] = useState<string[]>([]);
-  const [defaultPassword, setDefaultPassword] = useState("");
+  const [defaultPassword, setDefaultPassword] = useState(() => generateStrongPassword(16));
+  const [passwordMode, setPasswordMode] = useState<PasswordMode>("shared-auto");
+  const [showPassword, setShowPassword] = useState(false);
+  const [sendCredentials, setSendCredentials] = useState(true);
   const [sourceUsers, setSourceUsers] = useState<SourceUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
@@ -156,13 +163,21 @@ export default function SapUsersReplicate() {
   const handleRun = async () => {
     if (sourceDbs.length === 0) return toast.error("Selecione ao menos uma base de origem");
     if (targetDbs.length === 0) return toast.error("Selecione ao menos uma base de destino");
-    if (!defaultPassword || defaultPassword.length < 8) return toast.error("Senha padrão precisa ter no mínimo 8 caracteres");
+    if (passwordMode !== "individual") {
+      const policy = checkPasswordPolicy(defaultPassword);
+      if (!policy.valid) return toast.error("A senha provisionada não atende à política (mín. 12 caracteres, maiúscula, minúscula, número e especial)");
+    }
     if (targetDbs.some((d) => sourceDbs.includes(d))) return toast.error("As bases de destino não podem estar nas origens");
     if (selectedCodes.length === 0) return toast.error("Selecione ao menos um usuário");
 
     setRunning(true);
     setResults(null);
     const aggregated: TargetResult[] = [];
+    // Provisionamento de senha: compartilhada (auto/manual) ou individual por usuário.
+    const individualPasswords: Record<string, string> = {};
+    if (passwordMode === "individual") {
+      for (const code of selectedCodes) individualPasswords[code] = generateStrongPassword(16, code);
+    }
     try {
       for (const target of targetDbs) {
         try {
@@ -171,7 +186,8 @@ export default function SapUsersReplicate() {
               action: "replicate_users",
               source_company_dbs: sourceDbs,
               target_company_db: target,
-              default_password: defaultPassword,
+              default_password: passwordMode === "individual" ? generateStrongPassword(16) : defaultPassword,
+              ...(passwordMode === "individual" ? { user_passwords: individualPasswords } : {}),
               user_codes: selectedCodes,
               include_superusers: includeSuperusers,
               overwrite_existing: overwrite,
@@ -188,6 +204,41 @@ export default function SapUsersReplicate() {
       }
       setResults(aggregated);
       setResultsOpen(true);
+
+      // Envio das credenciais provisórias por e-mail (quando houver e-mail no usuário).
+      if (sendCredentials) {
+        const byEmail = new Map<string, { code: string; name: string; email: string; password: string; companies: string[] }>();
+        for (const tr of aggregated) {
+          for (const d of tr.result?.created_details || []) {
+            if (!d.email) continue;
+            const key = `${d.code}|${d.password}`;
+            const displayName = companies.find((c) => c.company_db === tr.target_db)?.display_name || tr.target_db;
+            const existing = byEmail.get(key);
+            if (existing) existing.companies.push(displayName);
+            else byEmail.set(key, { code: d.code, name: d.name, email: d.email, password: d.password, companies: [displayName] });
+          }
+        }
+        let sent = 0;
+        for (const entry of byEmail.values()) {
+          try {
+            const { data: mail } = await supabase.functions.invoke("user-credentials-email", {
+              body: {
+                email: entry.email,
+                userCode: entry.code,
+                userName: entry.name,
+                password: entry.password,
+                companyDb: targetDbs[0] || null,
+                companies: entry.companies,
+              },
+            });
+            if ((mail as { sent?: boolean })?.sent) sent++;
+          } catch { /* ignora falha individual */ }
+        }
+        if (byEmail.size > 0) {
+          if (sent > 0) toast.success(`Credenciais enviadas para ${sent} usuário(s)`);
+          else toast.warning("Não foi possível enviar as credenciais por e-mail");
+        }
+      }
       const okTargets = aggregated.filter((r) => r.result).length;
       const totalCreated = aggregated.reduce((s, r) => s + (r.result?.created.length || 0), 0);
       toast.success(`Replicação concluída em ${okTargets}/${targetDbs.length} bases — ${totalCreated} criados no total`);
@@ -269,16 +320,61 @@ export default function SapUsersReplicate() {
             )}
           </div>
 
-          <div>
-            <Label className="text-sm font-medium">Senha padrão para novos usuários</Label>
-            <Input
-              type="password"
-              value={defaultPassword}
-              onChange={(e) => setDefaultPassword(e.target.value)}
-              placeholder="Mínimo 8 caracteres"
-              className="mt-1 bg-card max-w-md"
-            />
-            <p className="text-xs text-muted-foreground mt-1">Será aplicada a todos os usuários criados. Eles podem alterar depois.</p>
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Provisionamento de senha</Label>
+            <div className="flex flex-wrap gap-2">
+              {([
+                { id: "shared-auto", label: "Gerar senha automática (única)" },
+                { id: "shared-manual", label: "Definir senha manualmente" },
+                { id: "individual", label: "Senha individual por usuário" },
+              ] as { id: PasswordMode; label: string }[]).map((m) => (
+                <Button
+                  key={m.id}
+                  type="button"
+                  size="sm"
+                  variant={passwordMode === m.id ? "default" : "outline"}
+                  onClick={() => {
+                    setPasswordMode(m.id);
+                    if (m.id === "shared-auto") { setDefaultPassword(generateStrongPassword(16)); setShowPassword(true); }
+                  }}
+                >
+                  {m.label}
+                </Button>
+              ))}
+            </div>
+
+            {passwordMode === "individual" ? (
+              <p className="text-xs text-muted-foreground">
+                Cada usuário receberá uma senha forte exclusiva, gerada no momento da replicação.
+                Ative o envio por e-mail abaixo para que cada um receba a própria credencial.
+              </p>
+            ) : (
+              <div className="max-w-md">
+                <div className="flex gap-2">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    value={defaultPassword}
+                    onChange={(e) => { setDefaultPassword(e.target.value); setPasswordMode("shared-manual"); }}
+                    placeholder="Mínimo 12 caracteres"
+                    className="bg-card"
+                  />
+                  <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}>
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </Button>
+                  <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => { setDefaultPassword(generateStrongPassword(16)); setPasswordMode("shared-auto"); setShowPassword(true); }} aria-label="Gerar nova senha">
+                    <RefreshCw className="w-4 h-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Será aplicada a todos os usuários criados. Eles podem alterar depois.
+                </p>
+              </div>
+            )}
+
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={sendCredentials} onCheckedChange={(v) => setSendCredentials(!!v)} />
+              Enviar credenciais provisórias por e-mail aos usuários replicados
+            </label>
           </div>
 
           <div>
