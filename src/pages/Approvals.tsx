@@ -2427,7 +2427,16 @@ export default function ApprovalsPage() {
           codeEq(a.requesterCode, a) ||
           approverMatches(a.currentApprover, session.userName) ||
           approverMatches(a.requester, session.userName) ||
+          // Aprovadores paralelos do nível atual (mesmo `level_order`).
+          ((a as unknown as { __levelApprovers?: Array<{ name: string; email: string }> }).__levelApprovers || []).some(
+            (l) =>
+              approverMatches(l.name, session.userName) ||
+              (!!l.email &&
+                (identifiersForDoc(a).includes(l.email.toLowerCase()) ||
+                  approverMatches(l.email, session.userName))),
+          ) ||
           matchesSubstitutedOfficial(a.currentApprover, a) ||
+
           (a.approverEmail && identifiersForDoc(a).includes(a.approverEmail.toLowerCase())) ||
           // Aprovador original ainda vê o documento que delegou (mesmo sem "Ver todas").
           (a.delegatedFrom && approverMatches(a.delegatedFrom, session.userName)) ||
