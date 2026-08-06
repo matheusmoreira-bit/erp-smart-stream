@@ -23,7 +23,6 @@ import {
 import { resolveCallerAliases } from "../_shared/user-aliases.ts";
 import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
-const PENDING = "pendente_aprovacao";
 
 function json(status: number, body: unknown, cors: Record<string, string>) {
   return new Response(JSON.stringify(body), {
