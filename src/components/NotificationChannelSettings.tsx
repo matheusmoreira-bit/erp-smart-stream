@@ -17,6 +17,7 @@ export const NOTIFICATION_EVENTS = [
   { key: "approval_pending", label: "Aprovação pendente" },
   { key: "overdue_reminder", label: "Lembrete de vencimento" },
   { key: "sla_escalation", label: "Escalonamento por SLA" },
+  { key: "user_credentials", label: "Credenciais de novo usuário" },
 ] as const;
 
 const CHANNELS = [
