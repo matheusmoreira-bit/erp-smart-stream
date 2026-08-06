@@ -120,7 +120,7 @@ export async function flushDbMetrics(): Promise<void> {
 
 function companyDb(): string | null {
   try {
-    const raw = localStorage.getItem("sap_session");
+    const raw = sessionStorage.getItem("erp_session_v1");
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { companyDB?: string };
     return parsed?.companyDB ?? null;
