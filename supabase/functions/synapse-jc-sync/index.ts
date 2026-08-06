@@ -110,6 +110,16 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
+  // KILL SWITCH: fluxo de offboarding (desligar usuário no SAP quando desligado no IdP)
+  // está desativado por decisão de negócio. Para reativar, defina o secret
+  // IDP_OFFBOARDING_ENABLED=true e reative a integração em synapse_integrations.
+  if ((Deno.env.get("IDP_OFFBOARDING_ENABLED") || "").toLowerCase() !== "true") {
+    return new Response(
+      JSON.stringify({ message: "IdP offboarding desativado", disabled: true, results: [] }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
   try {
     // Get company_db from request body
     let bodyCompanyDB = "";
