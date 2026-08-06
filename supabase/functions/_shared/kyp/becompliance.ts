@@ -2,9 +2,9 @@
 // Credenciais nunca ficam em código: chegam via KYPProviderConfig, montado a
 // partir de secrets do backend (BECOMPLIANCE_*) e de empresa_kyp_config.config.
 
+import { selecionarDiligencia } from "./dedupe.ts";
 import {
   formatCPF,
-  maisRecente,
   onlyDigits,
   type KYPDiligenciaResult,
   type KYPFornecedorInput,
@@ -13,6 +13,7 @@ import {
   type KYPSession,
   type TipoPessoa,
 } from "./types.ts";
+
 
 
 /**
