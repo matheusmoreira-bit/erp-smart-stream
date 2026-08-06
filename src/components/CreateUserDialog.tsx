@@ -148,6 +148,35 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
       const totalCreated = (createdInCurrent ? 1 : 0) + createdElsewhere;
       if (totalCreated > 0) {
         toast.success(`Usuário ${userName} criado em ${totalCreated} empresa(s)`);
+
+        if (sendCredentials && email.trim()) {
+          const createdDbs = [
+            ...(createdInCurrent && currentDb ? [currentDb] : []),
+            ...res.replicationResults.filter((r) => r.status === "success").map((r) => r.companyDB),
+          ];
+          const { data: mail, error: mailError } = await supabase.functions.invoke(
+            "user-credentials-email",
+            {
+              body: {
+                email: email.trim(),
+                userCode: userCode.trim(),
+                userName: userName.trim(),
+                password,
+                companyDb: currentDb || null,
+                companies: createdDbs.map(
+                  (db) => companies.find((c) => c.company_db === db)?.display_name || db,
+                ),
+              },
+            },
+          );
+          if (mailError) {
+            toast.warning("Usuário criado, mas o envio das credenciais falhou");
+          } else if (mail?.sent) {
+            toast.success(`Credenciais enviadas para ${email.trim()}`);
+          } else if (mail?.reason === "disabled_by_settings") {
+            toast.info("Envio de credenciais desativado nas configurações de notificação");
+          }
+        }
       }
       if (res.replicationResults.length > 0 || (createdInCurrent && res.replicationResults.length === 0 && selectedDbs.size > 1)) {
         // Show report dialog (include current row synthesized if relevant)
