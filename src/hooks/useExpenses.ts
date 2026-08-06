@@ -575,7 +575,7 @@ export interface SapKey {
 
 export function useExpenses(
   docType: ExpenseDocType = "purchase",
-  options?: { statuses?: string[]; server?: ServerQuery | null },
+  options?: { statuses?: string[]; server?: ServerQuery | null; waitForServer?: boolean },
 ) {
   const { session } = useSap();
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -586,12 +586,16 @@ export function useExpenses(
   const [error, setError] = useState<string | null>(null);
   // Serializa a consulta server-side para manter `fetchExpenses` estável.
   const serverKey = options?.server ? JSON.stringify(options.server) : "";
+  // Telas paginadas montam a consulta em um efeito: sem ela, não busca nada
+  // (evita um primeiro fetch da lista inteira antes dos filtros existirem).
+  const waitForServer = Boolean(options?.waitForServer) && !serverKey;
   // Escopo opcional por status — telas que só precisam de um subconjunto
   // (ex.: Aprovações, que usa apenas "pendente_aprovacao") evitam trazer todo
   // o histórico da empresa com itens e anexos.
   const statusScope = options?.statuses?.length ? [...options.statuses].sort().join(",") : "";
 
   const fetchExpenses = useCallback(async () => {
+    if (waitForServer) return;
     setIsLoading(true);
     setError(null);
     try {
@@ -685,7 +689,7 @@ export function useExpenses(
     } finally {
       setIsLoading(false);
     }
-  }, [session?.companyDB, docType, statusScope, serverKey]);
+  }, [session?.companyDB, docType, statusScope, serverKey, waitForServer]);
 
   const createExpenseCore = useCallback(
     async (input: CreateExpenseInput) => {
