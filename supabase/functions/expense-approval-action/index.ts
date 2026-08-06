@@ -872,6 +872,17 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
       action_role: actionRole,
     } as any);
     await writeAuditLog("rejected", currentLevel);
+    if (segmentRows.length > 0) {
+      // Reprovação encerra o documento inteiro — todos os segmentos param.
+      await admin.from("expense_approval_segments").update({
+        status: "rejeitado",
+        current_approver: null,
+        current_approver_email: null,
+        decided_by: actor,
+        decided_at: new Date().toISOString(),
+      }).eq("expense_id", expenseId).eq("status", "pendente");
+    }
+
 
     // Fluxo paralelo: avisa o solicitante do desfecho da ação pedida.
     await notifyActionCompleted(admin, {
