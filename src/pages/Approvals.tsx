@@ -62,7 +62,7 @@ import { useApproverCostCenters } from "@/hooks/useApproverCostCenters";
 import { useActiveOfficialsForMe, useSubstituteGrantsForMe } from "@/hooks/useApproverSubstitutes";
 import { useCostCenterNames } from "@/hooks/useCostCenterNames";
 import { shouldShowRateio, sumSelectedShare, type RateioInfo } from "@/lib/rateio";
-import { segmentDocByRules, segmentsForApprover, isTrulySegmented, type ApprovalSegment } from "@/lib/approvalSegments";
+import { segmentDocByRules, segmentsForApprover, isTrulySegmented, lineSegmentKey, type ApprovalSegment } from "@/lib/approvalSegments";
 import { useApprovalRules, type ApprovalRule } from "@/hooks/useApprovalRules";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RelationsMap } from "@/components/RelationsMap";
@@ -1144,7 +1144,7 @@ function ApprovalDetailModal({
                     <tbody>
                       {visibleLines.map((line, i) => {
                         const mine = isLineMine(line);
-                        const key = (line.CostingCode || "").trim() || "__no_cc__";
+                        const key = lineSegmentKey(line);
                         const seg = segmentByCC.get(key);
                         const otherApprover = !mine
                           ? (seg?.approverNames?.[0] || seg?.approverEmails?.[0] || "outro aprovador")
