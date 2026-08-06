@@ -262,15 +262,20 @@ async function getUsers(session: SapSession): Promise<Map<number, SLUser>> {
   const cached = await readDbCache<SLUser[]>(session.companyDB, "sl_users");
   let list: SLUser[] = cached || [];
   if (!cached) {
+    // O Service Layer devolve no máximo 20 registros por página — é preciso paginar.
     try {
-      const res = await sapQuery(
-        session,
-        "Users?$select=InternalKey,UserCode,UserName,eMail&$top=500",
-        undefined,
-        true,
-      );
-      const data = res.data as { value?: SLUser[] } | SLUser[];
-      list = Array.isArray(data) ? data : (data?.value || []);
+      for (let skip = 0; skip < 2000; skip += 20) {
+        const res = await sapQuery(
+          session,
+          `Users?$select=InternalKey,UserCode,UserName,eMail&$top=20&$skip=${skip}`,
+          undefined,
+          true,
+        );
+        const data = res.data as { value?: SLUser[] } | SLUser[];
+        const page = Array.isArray(data) ? data : (data?.value || []);
+        list = list.concat(page);
+        if (page.length < 20) break;
+      }
     } catch (e) { console.warn("Users SL falhou:", e); }
   }
   const map = new Map<number, SLUser>();
@@ -278,6 +283,7 @@ async function getUsers(session: SapSession): Promise<Map<number, SLUser>> {
   slUsersMem.set(session.companyDB, map);
   return map;
 }
+
 
 async function fetchUsersByIds(session: SapSession, ids: number[]): Promise<void> {
   const map = slUsersMem.get(session.companyDB) || new Map<number, SLUser>();
