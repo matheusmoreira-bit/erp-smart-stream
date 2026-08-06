@@ -293,6 +293,8 @@ async function getSapBaseUrl(admin: any, companyDB: string): Promise<string> {
   let url = rawUrl.replace(/\/+$/, "");
   if (url.includes("/b1s/v1")) url = url.replace("/b1s/v1", "/b1s/v2");
   else if (!url.includes("/b1s/v2")) url = `${url}/b1s/v2`;
+  if (sapBaseUrlCache.size > 100) sapBaseUrlCache.clear();
+  sapBaseUrlCache.set(companyDB, { expiresAt: Date.now() + 600_000, url });
   return url;
 }
 
