@@ -220,6 +220,8 @@ export function SapProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
+  }, [setSession]);
+
 
   // ------------------------------------------------------------------
   // Login "por identidade": entra na empresa sem abrir sessão no Service
