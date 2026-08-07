@@ -235,6 +235,21 @@ export function useNotifications() {
     return () => { supabase.removeChannel(channel); };
   }, [identifier, identityKeys, fetchNotifications]);
 
+  // `expenses` não é replicada por Realtime (RLS restrita), então a sessão
+  // ativa faz um polling leve para detectar novas pendências/aprovações.
+  useEffect(() => {
+    if (!identifier) return;
+    const tick = () => {
+      if (document.visibilityState === "visible") void fetchNotifications();
+    };
+    const id = setInterval(tick, 60_000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, [identifier, fetchNotifications]);
+
   // Pede permissão de notificação nativa uma única vez por sessão ativa.
   useEffect(() => {
     if (!identifier) return;
