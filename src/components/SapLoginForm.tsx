@@ -86,7 +86,11 @@ export function SapLoginForm() {
   const erpType = selectedCompany?.erp_type || "sap";
   const isOmie = erpType === "omie";
   const isManagedSap = erpType === "sap" && !!cloudEmail && managedCompanyDbs.has(companyDB);
-  const needsCredentials = erpType === "sap" && !isManagedSap; // Only SAP B1 without managed creds requires user/pass at login
+  // Com a identidade do Google validada, o SAP B1 nunca pede usuário/senha na
+  // tela de login: a autenticação no Service Layer é adiada para o momento da
+  // ação (login invisível com senha provisionada ou modal sob demanda).
+  const needsCredentials = erpType === "sap" && !cloudEmail;
+
   const isStateless = (erpType === "omie" || erpType.startsWith("s4hana") || erpType.startsWith("totvs") || erpType === "netsuite");
   const [googleLoading, setGoogleLoading] = useState(false);
   const postRedirectHandledRef = useRef(false);
