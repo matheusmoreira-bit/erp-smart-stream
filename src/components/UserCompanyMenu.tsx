@@ -292,6 +292,26 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
 
           <DropdownMenuSeparator />
           <DropdownMenuItem
+            onSelect={(e) => {
+              e.preventDefault();
+              const next = !keepAlive;
+              setKeepAliveState(next);
+              setKeepSessionAlive(next);
+              toast.success(
+                next
+                  ? "Sessão do Google será mantida ativa neste dispositivo."
+                  : "Sessão do Google voltará a expirar normalmente."
+              );
+            }}
+          >
+            <Infinity className="w-4 h-4 mr-2" />
+            <span className="flex-1">Manter sessão do Google ativa</span>
+            <Switch checked={keepAlive} className="pointer-events-none" aria-hidden="true" />
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuItem
             onSelect={() =>
               window.dispatchEvent(new CustomEvent(ONBOARDING_REPLAY_EVENT))
             }
