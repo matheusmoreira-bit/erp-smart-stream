@@ -304,7 +304,7 @@ export function SapLoginForm() {
         toast.success(`Conectado ao ${erpInfo.label}!`);
       } catch (err) {
         toast.error("Não foi possível entrar", {
-          description: err instanceof Error ? err.message : "Falha no login gerenciado.",
+          description: err instanceof Error ? err.message : "Falha ao entrar na empresa.",
         });
       }
       return;
