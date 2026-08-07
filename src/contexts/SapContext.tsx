@@ -421,22 +421,26 @@ export function SapProvider({ children }: { children: ReactNode }) {
   }, []);
 
 
-  // Listen for SAP Service Layer session-expired events emitted by sap-client.
-  // Don't try to silently relogin with cached credentials — clear state so the
-  // user is sent back to the login screen.
+  // Sessão do Service Layer expirou/ficou inválida: NÃO derruba a sessão do
+  // app. Como o login agora é por identidade (Google), basta descartar a
+  // sessão técnica do ERP — a próxima ação recria uma (senha provisionada =
+  // invisível; senão, modal). Isso evita que um erro de sessão do ERP
+  // atrapalhe outras rotinas do sistema.
   useEffect(() => {
     const handler = () => {
       clearClientCache();
-      setSession(null);
-      try { queryClient.clear(); } catch { /* ignore */ }
-      clearErpLocalState();
-      setError("Sua sessão com o ERP expirou. Faça login na empresa novamente.");
-      // A sessão Google permanece — o usuário só precisa reconectar à empresa.
-
+      setSession((prev) => (
+        prev ? { ...prev, sessionId: undefined, routeId: undefined, sapAuthToken: undefined, expiresAt: undefined } : prev
+      ));
     };
     window.addEventListener("erp:session-expired", handler);
-    return () => window.removeEventListener("erp:session-expired", handler);
-  }, [setSession, queryClient]);
+    window.addEventListener("erp:sap-session-invalid", handler);
+    return () => {
+      window.removeEventListener("erp:session-expired", handler);
+      window.removeEventListener("erp:sap-session-invalid", handler);
+    };
+  }, [setSession]);
+
 
   // Circuit breaker por empresa: avisa o usuário quando uma base entra em
   // cooldown (e quando volta), sem derrubar a sessão nem outras rotinas.
