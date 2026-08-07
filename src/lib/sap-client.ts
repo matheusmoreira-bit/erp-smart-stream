@@ -225,9 +225,25 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
     if (action !== "login" && looksLikeSessionExpired(data)) {
       // Sessão expirada não é indisponibilidade da base: não abre o circuito.
       recordCircuitSuccess(companyDB);
+
+      // Reautenticação transparente: descarta a sessão morta e tenta uma única
+      // vez obter uma nova (senha provisionada → invisível; senão, modal).
+      if (NEEDS_SAP_SESSION.has(action) && !reauthTried) {
+        reauthTried = true;
+        const broker = await import("@/lib/sap-session-broker");
+        window.dispatchEvent(new CustomEvent("erp:sap-session-invalid", { detail: { companyDB } }));
+        const resolved = await broker.resolveSapSession(companyDB);
+        if (resolved?.sessionId) {
+          body = { ...body, sessionId: resolved.sessionId, routeId: resolved.routeId };
+          attempt--; // não consome tentativa da política de retry
+          continue;
+        }
+      }
+
       if (!opts.silentSessionExpired) notifySessionExpired();
       throw new SapSessionExpiredError();
     }
+
 
     const httpErr = !resp.ok;
     const bodyErr = !!data?.error;
