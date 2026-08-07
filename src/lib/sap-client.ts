@@ -125,6 +125,18 @@ export interface SapCallOptions {
   silentSessionExpired?: boolean;
 }
 
+// Ações que exigem uma sessão válida do Service Layer. Quando o app está em
+// modo "identidade" (login via Google, sem sessão SAP), a sessão é criada
+// sob demanda — silenciosamente com a senha provisionada ou via modal.
+const NEEDS_SAP_SESSION = new Set([
+  "query",
+  "queryAll",
+  "queryView",
+  "sapAction",
+  "downloadAttachment",
+  "issueSapAuthToken",
+]);
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {}): Promise<any> {
   const action = typeof body?.action === "string" ? body.action : "";
@@ -139,6 +151,20 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
   // para não travar filas e telas que dependem de outras bases.
   // O login é sempre permitido (é a forma do usuário sondar a base manualmente).
   if (action !== "login") assertCircuitClosed(companyDB);
+
+  // Autenticação preguiçosa: só agora, no momento da ação, garantimos sessão.
+  if (NEEDS_SAP_SESSION.has(action) && !body.sessionId) {
+    const { resolveSapSession } = await import("@/lib/sap-session-broker");
+    const resolved = await resolveSapSession(companyDB);
+    if (!resolved?.sessionId) {
+      throw new SapSessionExpiredError(
+        "É necessário autenticar no ERP para executar esta ação.",
+      );
+    }
+    body = { ...body, sessionId: resolved.sessionId, routeId: resolved.routeId };
+  }
+
+
 
 
   let slowToastId: string | number | undefined;
@@ -159,6 +185,8 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
   };
 
   let lastError: unknown = null;
+  let reauthTried = false;
+
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const slowTimer = scheduleSlowToast();
@@ -199,9 +227,25 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
     if (action !== "login" && looksLikeSessionExpired(data)) {
       // Sessão expirada não é indisponibilidade da base: não abre o circuito.
       recordCircuitSuccess(companyDB);
+
+      // Reautenticação transparente: descarta a sessão morta e tenta uma única
+      // vez obter uma nova (senha provisionada → invisível; senão, modal).
+      if (NEEDS_SAP_SESSION.has(action) && !reauthTried) {
+        reauthTried = true;
+        const broker = await import("@/lib/sap-session-broker");
+        window.dispatchEvent(new CustomEvent("erp:sap-session-invalid", { detail: { companyDB } }));
+        const resolved = await broker.resolveSapSession(companyDB);
+        if (resolved?.sessionId) {
+          body = { ...body, sessionId: resolved.sessionId, routeId: resolved.routeId };
+          attempt--; // não consome tentativa da política de retry
+          continue;
+        }
+      }
+
       if (!opts.silentSessionExpired) notifySessionExpired();
       throw new SapSessionExpiredError();
     }
+
 
     const httpErr = !resp.ok;
     const bodyErr = !!data?.error;

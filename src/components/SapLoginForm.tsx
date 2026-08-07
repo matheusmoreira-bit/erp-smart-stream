@@ -63,7 +63,7 @@ function getErpBadge(erpType: string): string {
 }
 
 export function SapLoginForm() {
-  const { login, loginManaged, isLoading } = useSap();
+  const { login, loginManaged, loginIdentity, isLoading } = useSap();
   const navigate = useNavigate();
   const { enabledNames, isLoading: erpLoading } = useEnabledErpTypes();
   const [userName, setUserName] = useState("");
@@ -86,7 +86,11 @@ export function SapLoginForm() {
   const erpType = selectedCompany?.erp_type || "sap";
   const isOmie = erpType === "omie";
   const isManagedSap = erpType === "sap" && !!cloudEmail && managedCompanyDbs.has(companyDB);
-  const needsCredentials = erpType === "sap" && !isManagedSap; // Only SAP B1 without managed creds requires user/pass at login
+  // Com a identidade do Google validada, o SAP B1 nunca pede usuário/senha na
+  // tela de login: a autenticação no Service Layer é adiada para o momento da
+  // ação (login invisível com senha provisionada ou modal sob demanda).
+  const needsCredentials = erpType === "sap" && !cloudEmail;
+
   const isStateless = (erpType === "omie" || erpType.startsWith("s4hana") || erpType.startsWith("totvs") || erpType === "netsuite");
   const [googleLoading, setGoogleLoading] = useState(false);
   const postRedirectHandledRef = useRef(false);
@@ -289,13 +293,18 @@ export function SapLoginForm() {
       toast.error("Selecione a empresa");
       return;
     }
-    if (isManagedSap) {
+    // SAP B1: a identidade já foi validada pelo Google. Entramos direto na
+    // empresa, sem abrir sessão no Service Layer — ela é criada sob demanda,
+    // apenas quando alguma ação precisar (invisível se houver senha
+    // provisionada; senão, o modal de credenciais aparece na hora da ação).
+    if (erpType === "sap" && cloudEmail) {
       try {
-        await loginManaged(companyDB);
+        await loginIdentity(companyDB, "sap");
+
         toast.success(`Conectado ao ${erpInfo.label}!`);
       } catch (err) {
         toast.error("Não foi possível entrar", {
-          description: err instanceof Error ? err.message : "Falha no login gerenciado.",
+          description: err instanceof Error ? err.message : "Falha ao entrar na empresa.",
         });
       }
       return;
@@ -519,18 +528,21 @@ export function SapLoginForm() {
             </>
           )}
 
-          {/* Managed SAP login — password stored & rotated by ERP Flow */}
-          {isManagedSap && companyDB && (
+          {/* SAP por identidade — sessão do Service Layer criada sob demanda */}
+          {erpType === "sap" && !!cloudEmail && companyDB && (
             <div className="text-xs text-muted-foreground p-3 rounded-lg bg-primary/5 border border-primary/30 space-y-1">
               <div className="text-sm font-medium text-foreground flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-primary" /> Login gerenciado pelo ERP Flow
+                <ShieldCheck className="w-4 h-4 text-primary" /> Entrada pela sua identidade Google
               </div>
               <div>
-                Sua senha SAP é armazenada de forma criptografada e rotacionada pelo ERP Flow.
-                {cloudEmail ? <> Autenticado como <span className="font-medium text-foreground">{cloudEmail}</span>.</> : null}
+                Autenticado como <span className="font-medium text-foreground">{cloudEmail}</span>.{" "}
+                {isManagedSap
+                  ? "A conexão com o ERP é feita automaticamente quando alguma ação precisar."
+                  : "Suas credenciais do ERP só serão pedidas se você executar uma ação que dependa dele."}
               </div>
             </div>
           )}
+
 
           {/* Stateless ERP info */}
           {isStateless && companyDB && !isOmie && (
