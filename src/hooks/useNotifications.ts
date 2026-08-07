@@ -53,8 +53,33 @@ export function useNotifications() {
     } catch { return new Set(); }
   });
   const [loading, setLoading] = useState(true);
+  const [cloudEmail, setCloudEmail] = useState("");
   const identifier = session?.userName?.toLowerCase() || "";
   const companyDB = session?.companyDB || "";
+
+  // Identidade da sessão ativa (Google/Cloud) — as notificações podem ter sido
+  // gravadas com o e-mail, com o prefixo do e-mail ou com o login do ERP.
+  useEffect(() => {
+    let alive = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (alive) setCloudEmail((data.user?.email || "").toLowerCase());
+    });
+    return () => { alive = false; };
+  }, []);
+
+  const identityKeys = useMemo(() => {
+    const keys = new Set<string>();
+    const add = (v?: string | null) => {
+      const s = (v || "").trim().toLowerCase();
+      if (s) keys.add(s);
+    };
+    add(identifier);
+    add(cloudEmail);
+    if (cloudEmail.includes("@")) add(cloudEmail.split("@")[0]);
+    if (identifier.includes("@")) add(identifier.split("@")[0]);
+    return Array.from(keys);
+  }, [identifier, cloudEmail]);
+
 
   const approverVariants = useCallback((): string[] => {
     const id = identifier.trim();
