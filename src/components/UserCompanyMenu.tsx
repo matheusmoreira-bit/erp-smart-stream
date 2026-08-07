@@ -49,6 +49,8 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
   const [google, setGoogle] = useState<{ name: string; email: string; avatar: string } | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [impersonateOpen, setImpersonateOpen] = useState(false);
+  const [keepAlive, setKeepAliveState] = useState(() => isKeepSessionAlive());
+
   const { isAdmin } = useAuth();
 
   const companyLabel = getLabel(session?.companyDB || "");
