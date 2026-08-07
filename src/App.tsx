@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { SapProvider } from "@/contexts/SapContext";
+import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { PermissionsV2Provider } from "@/contexts/PermissionsV2Context";
 import Index from "./pages/Index.tsx";
 import ApprovalLink from "./pages/ApprovalLink.tsx";
@@ -206,6 +207,7 @@ const App = () => (
           <DefaultPasswordWarning />
           <WhatsNewWizard />
           <OnboardingTour />
+          <ImpersonationBanner />
           <GlobalAiChat />
 
           </PermissionsV2Provider>

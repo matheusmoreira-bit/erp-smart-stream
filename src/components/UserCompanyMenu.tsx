@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Building2, ChevronDown, Compass, Loader2, LogOut, ShieldCheck, KeyRound, Check } from "lucide-react";
+import { Building2, ChevronDown, Compass, Loader2, LogOut, ShieldCheck, KeyRound, Check, UserCog } from "lucide-react";
 import { ONBOARDING_REPLAY_EVENT } from "@/components/OnboardingTour";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,8 @@ import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
 import { supabase } from "@/integrations/supabase/client";
 import { displayUserName } from "@/lib/user-display";
+import { useAuth } from "@/hooks/useAuth";
+import { ImpersonationDialog } from "@/components/ImpersonationDialog";
 
 /**
  * Bloco padrão do canto direito do cabeçalho: empresa + usuário como dropdown,
@@ -43,6 +45,8 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
   const [password, setPassword] = useState("");
   const [google, setGoogle] = useState<{ name: string; email: string; avatar: string } | null>(null);
   const [signingOut, setSigningOut] = useState(false);
+  const [impersonateOpen, setImpersonateOpen] = useState(false);
+  const { isAdmin } = useAuth();
 
   const companyLabel = getLabel(session?.companyDB || "");
 
@@ -271,6 +275,21 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
             </div>
           )}
 
+          {isAdmin && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setOpen(false);
+                  setImpersonateOpen(true);
+                }}
+              >
+                <UserCog className="w-4 h-4 mr-2" /> Atuar como outro usuário
+              </DropdownMenuItem>
+            </>
+          )}
+
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onSelect={() =>
@@ -343,6 +362,10 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
           </form>
         </DialogContent>
       </Dialog>
+
+      {isAdmin && (
+        <ImpersonationDialog open={impersonateOpen} onOpenChange={setImpersonateOpen} />
+      )}
     </>
   );
 }

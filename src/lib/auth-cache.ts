@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { isImpersonating } from "@/lib/impersonation";
 
 /**
  * Cache compartilhado das consultas de identidade/permissão.
@@ -43,8 +44,14 @@ try {
   /* ambiente sem auth (testes) */
 }
 
-/** `true` quando o usuário logado tem papel admin no Cloud. */
+/**
+ * `true` quando o usuário logado tem papel admin no Cloud.
+ *
+ * Durante uma impersonação os privilégios de admin ficam suspensos: o app
+ * precisa enxergar exatamente o que o usuário alvo enxerga.
+ */
 export function getIsCloudAdmin(): Promise<boolean> {
+  if (isImpersonating()) return Promise.resolve(false);
   return memo("cloud-admin", async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return false;
