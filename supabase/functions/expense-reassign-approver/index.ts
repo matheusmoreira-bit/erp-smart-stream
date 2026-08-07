@@ -19,6 +19,11 @@ import {
   pickHierarchicalFallbackRule,
   type RuleRow,
 } from "../_shared/rule-match.ts";
+import {
+  buildRateioSegments,
+  persistRateioSegments,
+  pendingApproverLabel,
+} from "../_shared/rateio-segments.ts";
 
 const norm = (v: unknown) => String(v ?? "").toLowerCase().trim();
 
@@ -110,7 +115,7 @@ Deno.serve(async (req) => {
     const ids = docs.map((d) => d.id);
     const { data: itemsRaw } = await admin
       .from("expense_items")
-      .select("expense_id, cost_center, project")
+      .select("expense_id, cost_center, project, line_total")
       .in("expense_id", ids);
     const itemsByDoc = new Map<string, Record<string, any>[]>();
     for (const it of (itemsRaw || []) as Record<string, any>[]) {
