@@ -549,8 +549,18 @@ export function SapProvider({ children }: { children: ReactNode }) {
   }, [session?.erpType, session?.sessionId, session?.sapAuthToken, session?.routeId, session?.companyDB, session?.userName, session?.isSuperUser, session?.expiresAt, setSession]);
 
   return (
-    <ErpContext.Provider value={{ session, isLoading, error, login, loginManaged, logout }}>
+    <ErpContext.Provider value={{ session, isLoading, error, login, loginManaged, loginIdentity, logout }}>
       {children}
+      <SapCredentialsDialog
+        open={!!credPrompt}
+        companyDB={credPrompt?.companyDB || ""}
+        defaultUser={credPrompt?.defaultUser}
+        loading={credLoading}
+        error={credError}
+        onCancel={handleCredCancel}
+        onSubmit={handleCredSubmit}
+      />
+
       <AlertDialog open={confirmLogoutOpen} onOpenChange={(open) => { if (!loggingOut) setConfirmLogoutOpen(open); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
