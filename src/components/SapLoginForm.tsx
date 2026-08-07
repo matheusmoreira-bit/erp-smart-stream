@@ -528,18 +528,21 @@ export function SapLoginForm() {
             </>
           )}
 
-          {/* Managed SAP login — password stored & rotated by ERP Flow */}
-          {isManagedSap && companyDB && (
+          {/* SAP por identidade — sessão do Service Layer criada sob demanda */}
+          {erpType === "sap" && !!cloudEmail && companyDB && (
             <div className="text-xs text-muted-foreground p-3 rounded-lg bg-primary/5 border border-primary/30 space-y-1">
               <div className="text-sm font-medium text-foreground flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-primary" /> Login gerenciado pelo ERP Flow
+                <ShieldCheck className="w-4 h-4 text-primary" /> Entrada pela sua identidade Google
               </div>
               <div>
-                Sua senha SAP é armazenada de forma criptografada e rotacionada pelo ERP Flow.
-                {cloudEmail ? <> Autenticado como <span className="font-medium text-foreground">{cloudEmail}</span>.</> : null}
+                Autenticado como <span className="font-medium text-foreground">{cloudEmail}</span>.{" "}
+                {isManagedSap
+                  ? "A conexão com o ERP é feita automaticamente quando alguma ação precisar."
+                  : "Suas credenciais do ERP só serão pedidas se você executar uma ação que dependa dele."}
               </div>
             </div>
           )}
+
 
           {/* Stateless ERP info */}
           {isStateless && companyDB && !isOmie && (
