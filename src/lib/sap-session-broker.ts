@@ -1,0 +1,51 @@
+/**
+ * Broker de sessão do SAP Service Layer.
+ *
+ * O login do app é feito pelo Google (identidade Lovable Cloud). A sessão do
+ * Service Layer deixou de ser um pré-requisito da entrada no sistema: ela é
+ * criada sob demanda, apenas quando alguma rotina precisa realmente falar com
+ * o Service Layer.
+ *
+ * O provider (SapContext) registra aqui um "resolver" que sabe:
+ *  1. reaproveitar a sessão já ativa;
+ *  2. logar de forma invisível quando o usuário tem senha provisionada;
+ *  3. abrir o modal de login da empresa quando não há senha provisionada.
+ */
+
+export interface ResolvedSapSession {
+  sessionId: string;
+  routeId: string;
+  companyDB: string;
+  userName: string;
+  isSuperUser?: boolean;
+}
+
+type Resolver = (companyDB: string) => Promise<ResolvedSapSession | null>;
+
+let resolver: Resolver | null = null;
+const inFlight = new Map<string, Promise<ResolvedSapSession | null>>();
+
+export function registerSapSessionResolver(fn: Resolver | null) {
+  resolver = fn;
+}
+
+/**
+ * Garante uma sessão válida do Service Layer para a base informada.
+ * Chamadas concorrentes para a mesma base compartilham a mesma promise,
+ * evitando múltiplos /Login (e múltiplos modais) simultâneos.
+ */
+export function resolveSapSession(companyDB: string): Promise<ResolvedSapSession | null> {
+  if (!resolver) return Promise.resolve(null);
+  const key = companyDB || "__default__";
+  const existing = inFlight.get(key);
+  if (existing) return existing;
+  const p = resolver(companyDB)
+    .catch(() => null)
+    .finally(() => { inFlight.delete(key); });
+  inFlight.set(key, p);
+  return p;
+}
+
+export function hasSapSessionResolver(): boolean {
+  return resolver !== null;
+}
