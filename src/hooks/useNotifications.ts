@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import { expenseRead } from "@/lib/expense-read";
+import { showRealtimeAlert, requestBrowserNotificationPermission } from "@/lib/realtime-alerts";
 
 export interface Notification {
   id: string;
