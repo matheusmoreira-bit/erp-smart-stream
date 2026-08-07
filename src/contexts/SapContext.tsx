@@ -1,9 +1,11 @@
-import { createContext, useContext, useEffect, useState, useCallback, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sapLogin, sapLogout, ensureSapAuthToken, sapKeepAlive, type SapSession, clearClientCache } from "@/lib/sap-client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { clearErpLocalState } from "@/lib/clear-erp-local-state";
+import { registerSapSessionResolver, type ResolvedSapSession } from "@/lib/sap-session-broker";
+import { SapCredentialsDialog } from "@/components/SapCredentialsDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,10 +41,17 @@ interface ErpContextType {
   error: string | null;
   login: (userName: string, password: string, companyDB: string, erpType?: ErpType) => Promise<void>;
   loginManaged: (companyDB: string) => Promise<void>;
+  /**
+   * Entra na empresa apenas com a identidade já autenticada (Google/Cloud),
+   * sem abrir sessão no Service Layer. A sessão do ERP é criada sob demanda,
+   * no momento em que alguma ação precisar dela.
+   */
+  loginIdentity: (companyDB: string, erpType?: ErpType) => Promise<void>;
   logout: () => Promise<void>;
 }
 
 const ErpContext = createContext<ErpContextType | null>(null); // stable ref
+
 
 const ERP_SESSION_STORAGE_KEY = "erp_session_v1";
 
