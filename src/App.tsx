@@ -206,6 +206,7 @@ const App = () => (
           <DefaultPasswordWarning />
           <WhatsNewWizard />
           <OnboardingTour />
+          <ImpersonationBanner />
           <GlobalAiChat />
 
           </PermissionsV2Provider>
