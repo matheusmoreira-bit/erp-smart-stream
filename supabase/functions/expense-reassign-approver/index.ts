@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
     let q = admin
       .from("expenses")
       .select(
-        "id, company_db, doc_type, cost_center, project, supplier_name, supplier_code, currency, total_amount, requester_name, requester_email, current_approver, original_approver, current_level_order, approval_rule_id, status",
+        "id, company_db, doc_type, cost_center, project, supplier_name, supplier_code, currency, total_amount, requester_name, requester_email, current_approver, original_approver, current_level_order, approval_rule_id, rateio_type, status",
       )
       .eq("status", "pendente_aprovacao")
       .limit(500);
