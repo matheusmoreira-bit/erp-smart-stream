@@ -271,6 +271,21 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
             </div>
           )}
 
+          {isAdmin && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setOpen(false);
+                  setImpersonateOpen(true);
+                }}
+              >
+                <UserCog className="w-4 h-4 mr-2" /> Atuar como outro usuário
+              </DropdownMenuItem>
+            </>
+          )}
+
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onSelect={() =>
