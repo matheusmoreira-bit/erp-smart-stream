@@ -17,6 +17,8 @@ import { findMatchingRule, pickHierarchicalFallbackRule, type RuleRow } from "./
 import { pickApproverSkippingRequester, type ApprovalLevel } from "./approval-skip.ts";
 import type { RateioItem, RateioChainContext } from "./rateio-chain.ts";
 
+export type SegmentResolution = "direct" | "branch_fallback" | "rule_without_levels";
+
 export interface RateioSegment {
   segment_key: string;
   cost_center: string;
@@ -24,7 +26,17 @@ export interface RateioSegment {
   amount: number;
   rule_id: string;
   chain: ApprovalLevel[];
+  /** Como a alçada foi resolvida: regra direta ou fallback hierárquico do ramo. */
+  resolution: SegmentResolution;
+  rule_name: string | null;
+  /** Ramo do CC usado no fallback (ex.: "1.8" para o CC 1.8.1.8). */
+  fallback_branch: string | null;
+  /** Regra que casou originalmente mas não tinha níveis (CC bloqueado). */
+  fallback_from_rule_id: string | null;
+  fallback_from_rule_name: string | null;
+  resolution_note: string | null;
 }
+
 
 export interface SegmentRow {
   id: string;
