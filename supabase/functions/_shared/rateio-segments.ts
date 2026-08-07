@@ -17,6 +17,8 @@ import { findMatchingRule, pickHierarchicalFallbackRule, type RuleRow } from "./
 import { pickApproverSkippingRequester, type ApprovalLevel } from "./approval-skip.ts";
 import type { RateioItem, RateioChainContext } from "./rateio-chain.ts";
 
+export type SegmentResolution = "direct" | "branch_fallback" | "rule_without_levels";
+
 export interface RateioSegment {
   segment_key: string;
   cost_center: string;
@@ -24,7 +26,17 @@ export interface RateioSegment {
   amount: number;
   rule_id: string;
   chain: ApprovalLevel[];
+  /** Como a alçada foi resolvida: regra direta ou fallback hierárquico do ramo. */
+  resolution: SegmentResolution;
+  rule_name: string | null;
+  /** Ramo do CC usado no fallback (ex.: "1.8" para o CC 1.8.1.8). */
+  fallback_branch: string | null;
+  /** Regra que casou originalmente mas não tinha níveis (CC bloqueado). */
+  fallback_from_rule_id: string | null;
+  fallback_from_rule_name: string | null;
+  resolution_note: string | null;
 }
+
 
 export interface SegmentRow {
   id: string;
@@ -98,17 +110,34 @@ export async function buildRateioSegments(
       doc_type: ctx.docType,
     };
     const direct = findMatchingRule(rules, evalCtx, ctx.docType);
-    const hier = pickHierarchicalFallbackRule(rules, evalCtx, ctx.docType)?.rule || null;
+    const hierMatch = pickHierarchicalFallbackRule(rules, evalCtx, ctx.docType);
+    const hier = hierMatch?.rule || null;
     const match = direct || hier;
     if (!match) return null; // segmento sem alçada → fluxo padrão trata
     let ruleId = match.id;
+    let ruleName = (match.name || "").trim() || null;
     let chain = await levelsOf(admin, ruleId);
+    let resolution: SegmentResolution = direct ? "direct" : "branch_fallback";
+    let fallbackFromRuleId: string | null = null;
+    let fallbackFromRuleName: string | null = null;
     // Regra casada sem níveis (ex.: CC bloqueado): usa a alçada do ramo.
     if (chain.length === 0 && hier && hier.id !== ruleId) {
+      fallbackFromRuleId = ruleId;
+      fallbackFromRuleName = ruleName;
       ruleId = hier.id;
+      ruleName = (hier.name || "").trim() || null;
       chain = await levelsOf(admin, ruleId);
+      resolution = "rule_without_levels";
     }
     if (chain.length === 0) return null;
+
+    const branch = resolution === "direct" ? null : (hierMatch?.matchedBranch || null);
+    let note: string | null = null;
+    if (resolution === "branch_fallback") {
+      note = `O centro de custo ${g.cc || "(sem CC)"} não possui alçada própria cadastrada. Foi aplicada a alçada do ramo ${branch} (regra "${ruleName}"${hierMatch?.siblingCostCenter ? `, cadastrada no CC ${hierMatch.siblingCostCenter}` : ""}), compatível com o valor do segmento.`;
+    } else if (resolution === "rule_without_levels") {
+      note = `A regra "${fallbackFromRuleName}" casou com o centro de custo ${g.cc || "(sem CC)"}, mas não tem nenhum aprovador cadastrado (ex.: CC bloqueado). Para não travar o documento, foi aplicada a alçada do ramo ${branch} (regra "${ruleName}").`;
+    }
 
     segments.push({
       segment_key: key,
@@ -117,7 +146,14 @@ export async function buildRateioSegments(
       amount: g.amount,
       rule_id: ruleId,
       chain,
+      resolution,
+      rule_name: ruleName,
+      fallback_branch: branch,
+      fallback_from_rule_id: fallbackFromRuleId,
+      fallback_from_rule_name: fallbackFromRuleName,
+      resolution_note: note,
     });
+
   }
 
   // Todos os segmentos na mesma regra → não é rateio de alçada.
@@ -160,12 +196,37 @@ export async function persistRateioSegments(
       status: "pendente",
       current_approver: picked.approver_name || null,
       current_approver_email: picked.approver_email,
+      resolution: s.resolution || "direct",
+      rule_name: s.rule_name || null,
+      fallback_branch: s.fallback_branch || null,
+      fallback_from_rule_id: s.fallback_from_rule_id || null,
+      fallback_from_rule_name: s.fallback_from_rule_name || null,
+      resolution_note: s.resolution_note || null,
     };
   });
 
   const { data } = await admin.from("expense_approval_segments").insert(payload).select("*");
+
+  // Registra no histórico do documento cada segmento resolvido por fallback.
+  const fallbacks = segments.filter((s) => s.resolution && s.resolution !== "direct");
+  if (fallbacks.length > 0) {
+    await admin.from("expense_approval_log").insert(
+      fallbacks.map((s) => ({
+        expense_id: expenseId,
+        decision: "routing_fallback",
+        approver_name: pickApproverSkippingRequester(s.chain, requesterName, requesterEmail, 1).approver_name || null,
+        approver_email: pickApproverSkippingRequester(s.chain, requesterName, requesterEmail, 1).approver_email,
+        remarks: [
+          `Segmento ${s.cost_center || "sem CC"}${s.project ? ` | ${s.project}` : ""}`,
+          s.resolution_note,
+        ].filter(Boolean).join(" — "),
+      })),
+    );
+  }
+
   return ((data || []) as unknown as SegmentRow[]);
 }
+
 
 /** Carrega os segmentos de um documento. */
 export async function loadRateioSegments(

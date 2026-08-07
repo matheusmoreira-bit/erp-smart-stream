@@ -67,6 +67,8 @@ import { segmentDocByRules, segmentsForApprover, isTrulySegmented, lineSegmentKe
 import { useApprovalRules, type ApprovalRule } from "@/hooks/useApprovalRules";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RelationsMap } from "@/components/RelationsMap";
+import { SegmentFallbackAlert } from "@/components/SegmentFallbackAlert";
+
 import SubstituteApproversTab from "@/components/SubstituteApproversTab";
 
 
@@ -1002,7 +1004,14 @@ function ApprovalDetailModal({
               </div>
             )}
 
+            {/* Alerta de alçada resolvida por fallback (segmentos sem regra própria) */}
+            <SegmentFallbackAlert
+              expenseId={(doc as unknown as { __internalId?: string }).__internalId}
+              formatCostCenter={formatCostCenter}
+            />
+
             {/* Painel de segmentação por regra */}
+
             {segmented && (
               <div className="border border-primary/30 bg-primary/5 rounded-xl p-4 space-y-3">
                 <div className="flex items-center gap-2 flex-wrap">
