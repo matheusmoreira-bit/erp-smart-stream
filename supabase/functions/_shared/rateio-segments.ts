@@ -97,18 +97,25 @@ export async function buildRateioSegments(
       currency: ctx.currency || "BRL",
       doc_type: ctx.docType,
     };
-    const match = findMatchingRule(rules, evalCtx, ctx.docType)
-      || pickHierarchicalFallbackRule(rules, evalCtx, ctx.docType)?.rule
-      || null;
+    const direct = findMatchingRule(rules, evalCtx, ctx.docType);
+    const hier = pickHierarchicalFallbackRule(rules, evalCtx, ctx.docType)?.rule || null;
+    const match = direct || hier;
     if (!match) return null; // segmento sem alçada → fluxo padrão trata
-    const chain = await levelsOf(admin, match.id);
+    let ruleId = match.id;
+    let chain = await levelsOf(admin, ruleId);
+    // Regra casada sem níveis (ex.: CC bloqueado): usa a alçada do ramo.
+    if (chain.length === 0 && hier && hier.id !== ruleId) {
+      ruleId = hier.id;
+      chain = await levelsOf(admin, ruleId);
+    }
     if (chain.length === 0) return null;
+
     segments.push({
       segment_key: key,
       cost_center: g.cc,
       project: g.project,
       amount: g.amount,
-      rule_id: match.id,
+      rule_id: ruleId,
       chain,
     });
   }

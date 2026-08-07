@@ -19,6 +19,11 @@ import {
   pickHierarchicalFallbackRule,
   type RuleRow,
 } from "../_shared/rule-match.ts";
+import {
+  buildRateioSegments,
+  persistRateioSegments,
+  pendingApproverLabel,
+} from "../_shared/rateio-segments.ts";
 
 const norm = (v: unknown) => String(v ?? "").toLowerCase().trim();
 
@@ -110,7 +115,7 @@ Deno.serve(async (req) => {
     const ids = docs.map((d) => d.id);
     const { data: itemsRaw } = await admin
       .from("expense_items")
-      .select("expense_id, cost_center, project")
+      .select("expense_id, cost_center, project, line_total")
       .in("expense_id", ids);
     const itemsByDoc = new Map<string, Record<string, any>[]>();
     for (const it of (itemsRaw || []) as Record<string, any>[]) {
@@ -159,6 +164,121 @@ Deno.serve(async (req) => {
       ].filter(Boolean);
       const candidateCcs = Array.from(new Set(ccs));
       const docType = String(doc.doc_type || "purchase");
+
+      // ── Rateio: reconstrói trilhas independentes por (CC + projeto) ────
+      // Documentos criados antes do motor de segmentos ficaram com cadeia
+      // única (regra do primeiro item). Aqui geramos um fluxo por segmento.
+      const { data: segExisting } = await admin
+        .from("expense_approval_segments")
+        .select("id")
+        .eq("expense_id", doc.id)
+        .limit(1);
+      if (!segExisting || segExisting.length === 0) {
+        const segments = await buildRateioSegments(admin, items as any, {
+          companyDb: doc.company_db,
+          docType,
+          currency: doc.currency || "BRL",
+          requesterName: doc.requester_name || null,
+          supplierName: doc.supplier_name || null,
+          supplierCode: doc.supplier_code || null,
+          headerCostCenter: doc.cost_center || null,
+          headerProject: doc.project || null,
+        } as any);
+        if (segments && segments.length > 1) {
+          if (dryRun) {
+            results.push({
+              expense_id: doc.id,
+              action: "rateio_segments",
+              dry_run: true,
+              segments: segments.map((s) => ({
+                cost_center: s.cost_center,
+                project: s.project,
+                amount: s.amount,
+                rule_id: s.rule_id,
+                first_approver: s.chain[0]?.approver_name || null,
+              })),
+            });
+            reassigned += 1;
+            continue;
+          }
+          const rows = await persistRateioSegments(
+            admin,
+            doc.id,
+            segments,
+            doc.requester_name || null,
+            doc.requester_email || null,
+          );
+          const label = pendingApproverLabel(rows as any);
+          await admin
+            .from("expenses")
+            .update({
+              current_approver: label,
+              current_level_order: Math.min(...rows.map((r) => r.current_level || 1)),
+              original_approver: doc.original_approver || doc.current_approver,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", doc.id)
+            .eq("status", "pendente_aprovacao");
+
+          await admin.from("audit_log").insert({
+            actor_email: actorLabel,
+            action: "approval_segments_rebuild",
+            entity_type: "expense",
+            entity_id: doc.id,
+            company_db: doc.company_db,
+            details: {
+              from_approver: doc.current_approver,
+              to_approvers: label,
+              segments: rows.map((r) => ({
+                cost_center: r.cost_center,
+                project: r.project,
+                amount: r.amount,
+                approver: r.current_approver,
+              })),
+            },
+          });
+
+          for (const r of rows) {
+            await notifyApprovalPending(admin, {
+              expenseId: doc.id,
+              companyDb: doc.company_db,
+              approverEmail: r.current_approver_email || null,
+              approverName: r.current_approver || null,
+              levelOrder: r.current_level || 1,
+              requesterName: doc.requester_name,
+              supplierName: doc.supplier_name,
+              totalAmount: r.amount,
+              currency: doc.currency,
+              docType,
+              resolution: {
+                source: "manual_reassign",
+                reason: `Trilha por rateio recriada: CC ${r.cost_center || "—"} / projeto ${r.project || "—"}`,
+                ruleId: r.rule_id,
+                ruleName: null,
+                costCenter: r.cost_center,
+                project: r.project,
+                metadata: { from_approver: doc.current_approver },
+              },
+            } as any);
+          }
+
+          reassigned += 1;
+          results.push({
+            expense_id: doc.id,
+            action: "rateio_segments",
+            from_approver: doc.current_approver,
+            to_approvers: label,
+            segments: rows.map((r) => ({
+              cost_center: r.cost_center,
+              project: r.project,
+              amount: r.amount,
+              approver: r.current_approver,
+            })),
+          });
+          continue;
+        }
+      }
+
 
       let matched: RuleRow | null = null;
       let fallbackInfo: { branch: string; sibling: string } | null = null;
