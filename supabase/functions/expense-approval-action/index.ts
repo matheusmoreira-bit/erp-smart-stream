@@ -1069,11 +1069,45 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     // Todos os segmentos aprovados → segue para a finalização normal abaixo.
   }
 
+  // ── CASCATA: mesmo aprovador em níveis seguintes da mesma cadeia ───────
+  // Se o próximo nível (ou os seguintes) tem o MESMO aprovador que acabou de
+  // decidir, registramos a aprovação dele automaticamente — ninguém precisa
+  // aprovar o mesmo documento duas vezes.
+  let effectiveLevel = currentLevel;
+  let cascadeFinal = isFinalLevel;
   if (!segmentMode && !isFinalLevel) {
+    for (let hop = 0; hop < 20; hop++) {
+      const nd = distinctLevels.find((lo) => lo > effectiveLevel);
+      if (nd === undefined) { cascadeFinal = true; break; }
+      const p = pickApproverSkippingRequester(
+        levels as any, (exp as any).requester_name, (exp as any).requester_email, nd,
+      );
+      if (!callerIsApprover(p.approver_name, p.approver_email)) break;
+      await admin.from("expense_approval_log").insert({
+        expense_id: expenseId,
+        decision: "approved",
+        approver_name: actor,
+        approver_email: actorEmail,
+        level_order: p.level_order,
+        remarks: `${mergedRemarks ? `${mergedRemarks} — ` : ""}Aprovação replicada automaticamente (mesmo aprovador no nível ${p.level_order})`,
+        substitution_id: substitution?.id ?? null,
+        substituted_for_email: substitution?.official_email ?? null,
+        substituted_for_name: substitution?.official_name ?? null,
+        action_role: actionRole,
+      } as any);
+      await writeAuditLog("approved", p.level_order);
+      effectiveLevel = p.level_order;
+      stageLog("cascade_same_approver", "info", { requestId, expenseId, level: p.level_order });
+      if (effectiveLevel >= maxLevelOrder) { cascadeFinal = true; break; }
+    }
+  }
+
+  if (!segmentMode && !cascadeFinal) {
 
     // Próximo nível DISTINTO (paralelo: várias linhas com o mesmo level_order
     // contam como 1 só nível). Self-approval guard continua valendo.
-    const nextDistinct = distinctLevels.find((lo) => lo > currentLevel) || (currentLevel + 1);
+    const nextDistinct = distinctLevels.find((lo) => lo > effectiveLevel) || (effectiveLevel + 1);
+
     const picked = pickApproverSkippingRequester(
       levels as any,
       (exp as any).requester_name,
