@@ -196,12 +196,37 @@ export async function persistRateioSegments(
       status: "pendente",
       current_approver: picked.approver_name || null,
       current_approver_email: picked.approver_email,
+      resolution: s.resolution || "direct",
+      rule_name: s.rule_name || null,
+      fallback_branch: s.fallback_branch || null,
+      fallback_from_rule_id: s.fallback_from_rule_id || null,
+      fallback_from_rule_name: s.fallback_from_rule_name || null,
+      resolution_note: s.resolution_note || null,
     };
   });
 
   const { data } = await admin.from("expense_approval_segments").insert(payload).select("*");
+
+  // Registra no histórico do documento cada segmento resolvido por fallback.
+  const fallbacks = segments.filter((s) => s.resolution && s.resolution !== "direct");
+  if (fallbacks.length > 0) {
+    await admin.from("expense_approval_log").insert(
+      fallbacks.map((s) => ({
+        expense_id: expenseId,
+        decision: "routing_fallback",
+        approver_name: pickApproverSkippingRequester(s.chain, requesterName, requesterEmail, 1).approver_name || null,
+        approver_email: pickApproverSkippingRequester(s.chain, requesterName, requesterEmail, 1).approver_email,
+        remarks: [
+          `Segmento ${s.cost_center || "sem CC"}${s.project ? ` | ${s.project}` : ""}`,
+          s.resolution_note,
+        ].filter(Boolean).join(" — "),
+      })),
+    );
+  }
+
   return ((data || []) as unknown as SegmentRow[]);
 }
+
 
 /** Carrega os segmentos de um documento. */
 export async function loadRateioSegments(
