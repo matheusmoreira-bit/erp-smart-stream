@@ -220,7 +220,167 @@ export function SapProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
+
+  // ------------------------------------------------------------------
+  // Login "por identidade": entra na empresa sem abrir sessão no Service
+  // Layer. A identidade já foi validada pelo Google (Lovable Cloud).
+  // ------------------------------------------------------------------
+  const loginIdentity = useCallback(async (companyDB: string, erpType: ErpType = "sap") => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const email = authSession?.user?.email || "";
+      if (!email) throw new Error("Sessão de identidade não encontrada. Entre com sua conta Google.");
+
+      // Nome de usuário no ERP: usa o mapeamento provisionado quando existir.
+      let sapUser = email.split("@")[0].toLowerCase();
+      try {
+        const { listUserSapCredentials } = await import("@/lib/user-sap-credentials");
+        const creds = await listUserSapCredentials(companyDB);
+        const match = creds.find((c) => c.company_db === companyDB);
+        if (match?.sap_user) sapUser = match.sap_user;
+      } catch { /* mantém o fallback pelo e-mail */ }
+
+      setSession({
+        erpType,
+        companyDB,
+        userName: sapUser,
+        // sem sessionId: será criado sob demanda pela primeira ação no ERP
+      });
+
+      const { logAuditAction } = await import("@/hooks/useAuditLog");
+      await logAuditAction({
+        action: "erp_identity_login",
+        entity_type: "erp_session",
+        actor_email: email,
+        company_db: companyDB,
+        details: { companyDB, erpType, sapUser },
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao entrar na empresa");
+      throw e;
+    } finally {
+      setIsLoading(false);
+    }
   }, [setSession]);
+
+  // ------------------------------------------------------------------
+  // Broker: cria a sessão do Service Layer somente quando uma ação precisa.
+  // ------------------------------------------------------------------
+  const sessionRef = useRef<ErpSession | null>(session);
+  useEffect(() => { sessionRef.current = session; }, [session]);
+
+  const [credPrompt, setCredPrompt] = useState<{ companyDB: string; defaultUser: string } | null>(null);
+  const [credLoading, setCredLoading] = useState(false);
+  const [credError, setCredError] = useState<string | null>(null);
+  const credResolveRef = useRef<((s: ResolvedSapSession | null) => void) | null>(null);
+
+  const resolveSapSessionForAction = useCallback(async (companyDB: string): Promise<ResolvedSapSession | null> => {
+    const current = sessionRef.current;
+    const db = companyDB || current?.companyDB || "";
+    if (!db) return null;
+
+    // 1) Sessão viva reutilizável.
+    if (
+      current?.erpType === "sap" &&
+      current.sessionId &&
+      current.companyDB === db &&
+      (!current.expiresAt || Date.now() < current.expiresAt)
+    ) {
+      return {
+        sessionId: current.sessionId,
+        routeId: current.routeId || "",
+        companyDB: db,
+        userName: current.userName,
+        isSuperUser: current.isSuperUser,
+      };
+    }
+
+    // 2) Senha provisionada → login invisível.
+    try {
+      const { sapAutoLogin } = await import("@/lib/user-sap-credentials");
+      const result = await sapAutoLogin(db);
+      const timeoutMin = Math.min(Math.max(result.sessionTimeout || 30, 1), 30);
+      setSession((prev) => ({
+        erpType: "sap",
+        companyDB: db,
+        userName: result.sapUser,
+        sessionId: result.sessionId,
+        routeId: result.routeId,
+        isSuperUser: prev?.companyDB === db ? prev?.isSuperUser : undefined,
+        expiresAt: Date.now() + timeoutMin * 60 * 1000,
+      }));
+      return {
+        sessionId: result.sessionId,
+        routeId: result.routeId || "",
+        companyDB: db,
+        userName: result.sapUser,
+      };
+    } catch {
+      /* sem senha provisionada (ou credencial inválida) → pede ao usuário */
+    }
+
+    // 3) Modal de login da empresa.
+    if (credResolveRef.current) credResolveRef.current(null);
+    return await new Promise<ResolvedSapSession | null>((resolve) => {
+      credResolveRef.current = resolve;
+      setCredError(null);
+      setCredPrompt({ companyDB: db, defaultUser: current?.userName || "" });
+    });
+  }, [setSession]);
+
+  useEffect(() => {
+    registerSapSessionResolver(resolveSapSessionForAction);
+    return () => registerSapSessionResolver(null);
+  }, [resolveSapSessionForAction]);
+
+  const handleCredSubmit = useCallback(async (userName: string, password: string, remember: boolean) => {
+    if (!credPrompt) return;
+    setCredLoading(true);
+    setCredError(null);
+    try {
+      const sapSess = await sapLogin(userName, password, credPrompt.companyDB);
+      setSession({
+        erpType: "sap",
+        companyDB: credPrompt.companyDB,
+        userName,
+        sessionId: sapSess.sessionId,
+        routeId: sapSess.routeId,
+        sapAuthToken: sapSess.sapAuthToken,
+        isSuperUser: sapSess.isSuperUser,
+        expiresAt: sapSess.expiresAt ?? Date.now() + 30 * 60 * 1000,
+      });
+      if (remember) {
+        try {
+          const { saveUserSapCredential } = await import("@/lib/user-sap-credentials");
+          await saveUserSapCredential(credPrompt.companyDB, userName, password);
+        } catch { /* opcional — não bloqueia a ação */ }
+      }
+      credResolveRef.current?.({
+        sessionId: sapSess.sessionId,
+        routeId: sapSess.routeId || "",
+        companyDB: credPrompt.companyDB,
+        userName,
+        isSuperUser: sapSess.isSuperUser,
+      });
+      credResolveRef.current = null;
+      setCredPrompt(null);
+    } catch (e) {
+      setCredError(e instanceof Error ? e.message : "Falha ao autenticar no ERP");
+    } finally {
+      setCredLoading(false);
+    }
+  }, [credPrompt, setSession]);
+
+  const handleCredCancel = useCallback(() => {
+    credResolveRef.current?.(null);
+    credResolveRef.current = null;
+    setCredPrompt(null);
+    setCredError(null);
+  }, []);
+
+
 
   const performLogout = useCallback(async () => {
     if (session?.erpType === "sap" && session.sessionId) {
