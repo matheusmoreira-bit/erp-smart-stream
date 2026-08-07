@@ -235,6 +235,35 @@ export function useNotifications() {
     return () => { supabase.removeChannel(channel); };
   }, [identifier, identityKeys, fetchNotifications]);
 
+  // Pede permissão de notificação nativa uma única vez por sessão ativa.
+  useEffect(() => {
+    if (!identifier) return;
+    void requestBrowserNotificationPermission();
+  }, [identifier]);
+
+  // Alerta imediato para itens derivados de `expenses` (aprovações pendentes
+  // como aprovador e documentos aprovados como solicitante) que chegam depois
+  // do carregamento inicial.
+  const baselineRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (loading) return;
+    const current = new Set<string>([
+      ...pendingApprovals.map((n) => n.id),
+      ...approvedForRequester.map((n) => n.id),
+    ]);
+    if (baselineRef.current === null) {
+      baselineRef.current = current;
+      return;
+    }
+    const seen = baselineRef.current;
+    for (const n of [...pendingApprovals, ...approvedForRequester]) {
+      if (!seen.has(n.id)) {
+        showRealtimeAlert({ id: n.id, title: n.title, body: n.body, link: n.link, category: n.category });
+      }
+    }
+    baselineRef.current = current;
+  }, [loading, pendingApprovals, approvedForRequester]);
+
 
   // Merge: pendentes virtuais no topo, deduplicadas contra notificações reais
   // que já referenciam o mesmo expense_id (evita duplo-badge).
