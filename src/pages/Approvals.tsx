@@ -67,6 +67,8 @@ import { segmentDocByRules, segmentsForApprover, isTrulySegmented, lineSegmentKe
 import { useApprovalRules, type ApprovalRule } from "@/hooks/useApprovalRules";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RelationsMap } from "@/components/RelationsMap";
+import { SegmentFallbackAlert } from "@/components/SegmentFallbackAlert";
+
 import SubstituteApproversTab from "@/components/SubstituteApproversTab";
 
 
