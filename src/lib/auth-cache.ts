@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { isImpersonating } from "@/lib/impersonation";
 
 /**
  * Cache compartilhado das consultas de identidade/permissão.
