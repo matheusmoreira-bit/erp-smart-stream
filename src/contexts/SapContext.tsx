@@ -616,6 +616,19 @@ export function useSap() {
       };
     }
 
+    // SAP em modo identidade: sem sessionId. O sap-client cria a sessão do
+    // Service Layer sob demanda (senha provisionada ou modal de login).
+    if (ctx.session.erpType === "sap") {
+      return {
+        sessionId: "",
+        routeId: "",
+        companyDB: ctx.session.companyDB,
+        userName: ctx.session.userName,
+        isSuperUser: ctx.session.isSuperUser || false,
+        erpType: "sap",
+      };
+    }
+
     return {
       sessionId: `__${ctx.session.erpType}__`,
       routeId: "",
@@ -633,9 +646,11 @@ export function useSap() {
     error: ctx.error,
     login: ctx.login,
     loginManaged: ctx.loginManaged,
+    loginIdentity: ctx.loginIdentity,
     logout: ctx.logout,
   };
 }
+
 
 export function useErp() {
   const ctx = useContext(ErpContext);
