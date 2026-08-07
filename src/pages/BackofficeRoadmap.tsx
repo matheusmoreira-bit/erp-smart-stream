@@ -105,6 +105,8 @@ const CHANGELOG: RoadmapItem[] = [
       "Novo feed consolidado de aprovações: uma única chamada ao banco traz documentos, regras, segmentos e identidades, com cache de permissões, pintura imediata a partir do cache local e carregamento em ondas paralelas. Tempo médio de abertura caiu de ~2,7s para menos de 0,5s.",
   },
   // ---- Fase 7 — Continuidade e caixa (ago/2026)
+  {
+
 
     date: "2026-08-03",
     title: "Previsão de caixa por vencimento",
