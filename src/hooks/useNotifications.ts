@@ -114,7 +114,8 @@ export function useNotifications() {
       supabase
         .from("notifications")
         .select("*")
-        .eq("user_identifier", identifier)
+        .in("user_identifier", identityKeys.length > 0 ? identityKeys : [identifier])
+
         .order("created_at", { ascending: false })
         .limit(50),
       (async () => {
