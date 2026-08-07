@@ -71,9 +71,12 @@ export async function buildRateioSegments(
   admin: SupabaseClient,
   items: RateioItem[],
   ctx: RateioChainContext,
+  opts?: { allowSingle?: boolean },
 ): Promise<RateioSegment[] | null> {
+  const allowSingle = opts?.allowSingle === true;
   const rows = (items || []).filter(Boolean);
-  if (rows.length < 2 || !ctx.companyDb) return null;
+  if (!ctx.companyDb) return null;
+  if (!allowSingle && rows.length < 2) return null;
 
   const groups = new Map<string, { cc: string; project: string; amount: number }>();
   for (const it of rows) {
@@ -85,7 +88,7 @@ export async function buildRateioSegments(
     if (prev) prev.amount += amount;
     else groups.set(key, { cc, project, amount });
   }
-  if (groups.size < 2) return null;
+  if (!allowSingle && groups.size < 2) return null;
 
   const { data: rulesRaw } = await admin
     .from("approval_rules")
@@ -157,7 +160,7 @@ export async function buildRateioSegments(
   }
 
   // Todos os segmentos na mesma regra → não é rateio de alçada.
-  if (new Set(segments.map((s) => s.rule_id)).size < 2) return null;
+  if (!allowSingle && new Set(segments.map((s) => s.rule_id)).size < 2) return null;
   return segments;
 }
 
@@ -271,4 +274,66 @@ export function advanceSegment(
     current_approver_email: picked.approver_email,
     finished: false,
   };
+}
+
+/**
+ * Regenera APENAS os segmentos informados (ex.: um único centro de custo),
+ * preservando as demais trilhas do documento e seus históricos de aprovação.
+ */
+export async function persistSegmentSubset(
+  admin: SupabaseClient,
+  expenseId: string,
+  segments: RateioSegment[],
+  requesterName: string | null,
+  requesterEmail: string | null,
+): Promise<SegmentRow[]> {
+  if (segments.length === 0) return [];
+  const keys = segments.map((s) => s.segment_key);
+  await admin
+    .from("expense_approval_segments")
+    .delete()
+    .eq("expense_id", expenseId)
+    .in("segment_key", keys);
+
+  const payload = segments.map((s) => {
+    const picked = pickApproverSkippingRequester(s.chain, requesterName, requesterEmail, 1);
+    return {
+      expense_id: expenseId,
+      segment_key: s.segment_key,
+      cost_center: s.cost_center || null,
+      project: s.project || null,
+      amount: s.amount,
+      rule_id: s.rule_id,
+      chain: s.chain,
+      current_level: picked.level_order,
+      status: "pendente",
+      current_approver: picked.approver_name || null,
+      current_approver_email: picked.approver_email,
+      resolution: s.resolution || "direct",
+      rule_name: s.rule_name || null,
+      fallback_branch: s.fallback_branch || null,
+      fallback_from_rule_id: s.fallback_from_rule_id || null,
+      fallback_from_rule_name: s.fallback_from_rule_name || null,
+      resolution_note: s.resolution_note || null,
+    };
+  });
+
+  const { data } = await admin.from("expense_approval_segments").insert(payload).select("*");
+
+  const logs = segments.map((s) => {
+    const picked = pickApproverSkippingRequester(s.chain, requesterName, requesterEmail, 1);
+    return {
+      expense_id: expenseId,
+      decision: s.resolution && s.resolution !== "direct" ? "routing_fallback" : "reassigned",
+      approver_name: picked.approver_name || null,
+      approver_email: picked.approver_email,
+      remarks: [
+        `Trilha reprocessada — segmento ${s.cost_center || "sem CC"}${s.project ? ` | ${s.project}` : ""}`,
+        s.resolution_note,
+      ].filter(Boolean).join(" — "),
+    };
+  });
+  if (logs.length > 0) await admin.from("expense_approval_log").insert(logs);
+
+  return ((data || []) as unknown as SegmentRow[]);
 }
