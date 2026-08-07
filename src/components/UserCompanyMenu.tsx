@@ -362,6 +362,10 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
           </form>
         </DialogContent>
       </Dialog>
+
+      {isAdmin && (
+        <ImpersonationDialog open={impersonateOpen} onOpenChange={setImpersonateOpen} />
+      )}
     </>
   );
 }
