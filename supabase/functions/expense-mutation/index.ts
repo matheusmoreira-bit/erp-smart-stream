@@ -291,7 +291,12 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   // RATEIO entre alçadas diferentes: cada segmento (CC + projeto) tem o seu
   // PRÓPRIO fluxo, independente. Persistimos os segmentos após criar a despesa;
   // aqui só resolvemos os aprovadores iniciais (um por segmento).
-  const rateioSegments = status === "pendente_aprovacao"
+  // Tipo de rateio no cabeçalho (folha/imposto/reembolso/viagens) força uma
+  // regra única — nesse caso NÃO há trilhas independentes por CC.
+  const rateioOverride = ["folha", "imposto", "reembolso", "viagens"].includes(
+    String(input.rateio_type || "").toLowerCase(),
+  );
+  const rateioSegments = status === "pendente_aprovacao" && !rateioOverride
     ? await buildRateioSegments(admin, items as any, {
         companyDb,
         docType: String(input.doc_type || "purchase"),

@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
     let q = admin
       .from("expenses")
       .select(
-        "id, company_db, doc_type, cost_center, project, supplier_name, supplier_code, currency, total_amount, requester_name, requester_email, current_approver, original_approver, current_level_order, approval_rule_id, status",
+        "id, company_db, doc_type, cost_center, project, supplier_name, supplier_code, currency, total_amount, requester_name, requester_email, current_approver, original_approver, current_level_order, approval_rule_id, rateio_type, status",
       )
       .eq("status", "pendente_aprovacao")
       .limit(500);
@@ -168,12 +168,16 @@ Deno.serve(async (req) => {
       // ── Rateio: reconstrói trilhas independentes por (CC + projeto) ────
       // Documentos criados antes do motor de segmentos ficaram com cadeia
       // única (regra do primeiro item). Aqui geramos um fluxo por segmento.
+      // Tipo de rateio no cabeçalho força regra única → sem trilhas por CC.
+      const rateioOverride = ["folha", "imposto", "reembolso", "viagens"].includes(
+        String(doc.rateio_type || "").toLowerCase(),
+      );
       const { data: segExisting } = await admin
         .from("expense_approval_segments")
         .select("id")
         .eq("expense_id", doc.id)
         .limit(1);
-      if (!segExisting || segExisting.length === 0) {
+      if (!rateioOverride && (!segExisting || segExisting.length === 0)) {
         const segments = await buildRateioSegments(admin, items as any, {
           companyDb: doc.company_db,
           docType,
