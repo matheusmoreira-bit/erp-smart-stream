@@ -44,7 +44,9 @@ export function useCostCenterNames(requestedCodes?: Iterable<string | null | und
   }, [options, lookupByCode]);
 
   useEffect(() => {
-    if (!session || session.erpType !== "sap" || !requestedKey) return;
+    // A resolução de nomes é apenas decorativa e roda em segundo plano. Não
+    // deve abrir o modal de credenciais do ERP ao entrar em Aprovações.
+    if (!session || session.erpType !== "sap" || !session.sessionId || !requestedKey) return;
 
     const missing = requestedKey
       .split("|")

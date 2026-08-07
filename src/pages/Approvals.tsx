@@ -3618,13 +3618,15 @@ export default function ApprovalsPage() {
         title="Mapa de Relações"
       />
 
-      <DelegationDialog
-        open={!!delegationDoc}
-        onClose={() => setDelegationDoc(null)}
-        doc={delegationDoc}
-        onConfirm={handleDelegate}
-        isSubmitting={isDelegating}
-      />
+      {delegationDoc ? (
+        <DelegationDialog
+          open
+          onClose={() => setDelegationDoc(null)}
+          doc={delegationDoc}
+          onConfirm={handleDelegate}
+          isSubmitting={isDelegating}
+        />
+      ) : null}
 
       <Dialog open={showSubstitutes} onOpenChange={(o) => {
         setShowSubstitutes(o);
