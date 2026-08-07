@@ -191,17 +191,19 @@ export function useNotifications() {
       }));
     setApprovedForRequester(approved);
     setLoading(false);
-  }, [identifier, companyDB, approverVariants, dismissedPendingIds, dismissedApprovedIds, session?.userName]);
+  }, [identifier, identityKeys, companyDB, approverVariants, dismissedPendingIds, dismissedApprovedIds, session?.userName]);
 
 
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
 
-  // Realtime — notificações reais + mudanças em expenses (para refletir novos
-  // pendentes ou aprovações resolvidas).
+  // Realtime — notificações reais (aprovador e solicitante) + mudanças em
+  // expenses. Enquanto a sessão estiver ativa, cada novo evento aparece no
+  // sininho e dispara um alerta imediato.
   useEffect(() => {
-    if (!identifier) return;
+    if (!identifier && identityKeys.length === 0) return;
+    const keys = new Set(identityKeys.length > 0 ? identityKeys : [identifier]);
     const channel = supabase
       .channel(`notifications-realtime-${Math.random().toString(36).slice(2, 10)}`)
 
@@ -210,9 +212,17 @@ export function useNotifications() {
         { event: "INSERT", schema: "public", table: "notifications" },
         (payload) => {
           const newNotif = payload.new as Notification;
-          if (newNotif.user_identifier === identifier) {
-            setNotifications((prev) => [newNotif, ...prev].slice(0, 50));
-          }
+          if (!keys.has((newNotif.user_identifier || "").toLowerCase())) return;
+          setNotifications((prev) =>
+            prev.some((n) => n.id === newNotif.id) ? prev : [newNotif, ...prev].slice(0, 50),
+          );
+          showRealtimeAlert({
+            id: newNotif.id,
+            title: newNotif.title,
+            body: newNotif.body,
+            link: newNotif.link,
+            category: newNotif.category,
+          });
         }
       )
       .on(
@@ -222,7 +232,8 @@ export function useNotifications() {
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [identifier, fetchNotifications]);
+  }, [identifier, identityKeys, fetchNotifications]);
+
 
   // Merge: pendentes virtuais no topo, deduplicadas contra notificações reais
   // que já referenciam o mesmo expense_id (evita duplo-badge).
