@@ -952,16 +952,39 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
   if (segmentMode) {
     const reqName = (exp as any).requester_name || null;
     const reqEmail = (exp as any).requester_email || null;
-    const mine = pendingSegments.filter((s) =>
-      !!callerIdentity && isDesignatedApprover(callerIdentity as string, s.current_approver, s.current_approver_email),
-    );
+    // Todos os fluxos pendentes em que o caller é o aprovador atual — mesmo
+    // que a identidade só case por alias. Uma única ação aprova TODOS eles.
+    const mine = pendingSegments.filter((s) => callerIsApprover(s.current_approver, s.current_approver_email));
     // Admin/superusuário/substituto sem casar textualmente → aprova todos os
     // segmentos pendentes (override explícito).
     const targets = mine.length > 0 ? mine : pendingSegments;
 
     const advancedNotifications: Array<{ name: string | null; email: string | null; level: number; seg: SegmentRow }> = [];
+    const autoApproved: string[] = [];
     for (const seg of targets) {
-      const next = advanceSegment(seg, reqName, reqEmail);
+      let cursor: SegmentRow = seg;
+      let next = advanceSegment(cursor, reqName, reqEmail);
+      // CASCATA: se o próximo nível do MESMO fluxo também é o caller, já
+      // registramos a aprovação dele — ninguém aprova o mesmo documento duas
+      // vezes. Limite defensivo para cadeias mal formadas.
+      for (let hop = 0; hop < 20 && !next.finished && callerIsApprover(next.current_approver, next.current_approver_email); hop++) {
+        await admin.from("expense_approval_log").insert({
+          expense_id: expenseId,
+          decision: "approved",
+          approver_name: actor,
+          approver_email: actorEmail,
+          level_order: next.current_level,
+          remarks: `${mergedRemarks ? `${mergedRemarks} — ` : ""}Aprovação replicada automaticamente (mesmo aprovador no nível ${next.current_level} do fluxo ${cursor.cost_center || "—"} / ${cursor.project || "—"})`,
+          substitution_id: substitution?.id ?? null,
+          substituted_for_email: substitution?.official_email ?? null,
+          substituted_for_name: substitution?.official_name ?? null,
+          action_role: actionRole,
+        } as any);
+        await writeAuditLog("approved", next.current_level);
+        autoApproved.push(`${cursor.segment_key}@${next.current_level}`);
+        cursor = { ...cursor, current_level: next.current_level } as SegmentRow;
+        next = advanceSegment(cursor, reqName, reqEmail);
+      }
       await admin.from("expense_approval_segments").update({
         status: next.status,
         current_level: next.current_level,
@@ -976,6 +999,10 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
         });
       }
     }
+    if (autoApproved.length > 0) {
+      stageLog("rateio_segments", "info", { requestId, expenseId, autoApprovedSameApprover: autoApproved });
+    }
+
 
     const after = await loadRateioSegments(admin, expenseId);
     const stillPending = after.filter((s) => s.status === "pendente");
