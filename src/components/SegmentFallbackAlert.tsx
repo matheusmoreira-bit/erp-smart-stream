@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { formatCostCenter } from "@/lib/cost-center";
+
 
 export interface FallbackSegmentRow {
   id: string;
