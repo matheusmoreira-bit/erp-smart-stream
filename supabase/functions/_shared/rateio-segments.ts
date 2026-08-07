@@ -115,7 +115,7 @@ export async function buildRateioSegments(
       cost_center: g.cc,
       project: g.project,
       amount: g.amount,
-      rule_id: match.id,
+      rule_id: ruleId,
       chain,
     });
   }
