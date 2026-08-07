@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import { expenseRead } from "@/lib/expense-read";
+import { showRealtimeAlert, requestBrowserNotificationPermission } from "@/lib/realtime-alerts";
 
 export interface Notification {
   id: string;
@@ -53,8 +54,33 @@ export function useNotifications() {
     } catch { return new Set(); }
   });
   const [loading, setLoading] = useState(true);
+  const [cloudEmail, setCloudEmail] = useState("");
   const identifier = session?.userName?.toLowerCase() || "";
   const companyDB = session?.companyDB || "";
+
+  // Identidade da sessão ativa (Google/Cloud) — as notificações podem ter sido
+  // gravadas com o e-mail, com o prefixo do e-mail ou com o login do ERP.
+  useEffect(() => {
+    let alive = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (alive) setCloudEmail((data.user?.email || "").toLowerCase());
+    });
+    return () => { alive = false; };
+  }, []);
+
+  const identityKeys = useMemo(() => {
+    const keys = new Set<string>();
+    const add = (v?: string | null) => {
+      const s = (v || "").trim().toLowerCase();
+      if (s) keys.add(s);
+    };
+    add(identifier);
+    add(cloudEmail);
+    if (cloudEmail.includes("@")) add(cloudEmail.split("@")[0]);
+    if (identifier.includes("@")) add(identifier.split("@")[0]);
+    return Array.from(keys);
+  }, [identifier, cloudEmail]);
+
 
   const approverVariants = useCallback((): string[] => {
     const id = identifier.trim();
@@ -89,7 +115,8 @@ export function useNotifications() {
       supabase
         .from("notifications")
         .select("*")
-        .eq("user_identifier", identifier)
+        .in("user_identifier", identityKeys.length > 0 ? identityKeys : [identifier])
+
         .order("created_at", { ascending: false })
         .limit(50),
       (async () => {
@@ -165,17 +192,19 @@ export function useNotifications() {
       }));
     setApprovedForRequester(approved);
     setLoading(false);
-  }, [identifier, companyDB, approverVariants, dismissedPendingIds, dismissedApprovedIds, session?.userName]);
+  }, [identifier, identityKeys, companyDB, approverVariants, dismissedPendingIds, dismissedApprovedIds, session?.userName]);
 
 
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
 
-  // Realtime — notificações reais + mudanças em expenses (para refletir novos
-  // pendentes ou aprovações resolvidas).
+  // Realtime — notificações reais (aprovador e solicitante) + mudanças em
+  // expenses. Enquanto a sessão estiver ativa, cada novo evento aparece no
+  // sininho e dispara um alerta imediato.
   useEffect(() => {
-    if (!identifier) return;
+    if (!identifier && identityKeys.length === 0) return;
+    const keys = new Set(identityKeys.length > 0 ? identityKeys : [identifier]);
     const channel = supabase
       .channel(`notifications-realtime-${Math.random().toString(36).slice(2, 10)}`)
 
@@ -184,9 +213,17 @@ export function useNotifications() {
         { event: "INSERT", schema: "public", table: "notifications" },
         (payload) => {
           const newNotif = payload.new as Notification;
-          if (newNotif.user_identifier === identifier) {
-            setNotifications((prev) => [newNotif, ...prev].slice(0, 50));
-          }
+          if (!keys.has((newNotif.user_identifier || "").toLowerCase())) return;
+          setNotifications((prev) =>
+            prev.some((n) => n.id === newNotif.id) ? prev : [newNotif, ...prev].slice(0, 50),
+          );
+          showRealtimeAlert({
+            id: newNotif.id,
+            title: newNotif.title,
+            body: newNotif.body,
+            link: newNotif.link,
+            category: newNotif.category,
+          });
         }
       )
       .on(
@@ -196,7 +233,52 @@ export function useNotifications() {
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
+  }, [identifier, identityKeys, fetchNotifications]);
+
+  // `expenses` não é replicada por Realtime (RLS restrita), então a sessão
+  // ativa faz um polling leve para detectar novas pendências/aprovações.
+  useEffect(() => {
+    if (!identifier) return;
+    const tick = () => {
+      if (document.visibilityState === "visible") void fetchNotifications();
+    };
+    const id = setInterval(tick, 60_000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", tick);
+    };
   }, [identifier, fetchNotifications]);
+
+  // Pede permissão de notificação nativa uma única vez por sessão ativa.
+  useEffect(() => {
+    if (!identifier) return;
+    void requestBrowserNotificationPermission();
+  }, [identifier]);
+
+  // Alerta imediato para itens derivados de `expenses` (aprovações pendentes
+  // como aprovador e documentos aprovados como solicitante) que chegam depois
+  // do carregamento inicial.
+  const baselineRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (loading) return;
+    const current = new Set<string>([
+      ...pendingApprovals.map((n) => n.id),
+      ...approvedForRequester.map((n) => n.id),
+    ]);
+    if (baselineRef.current === null) {
+      baselineRef.current = current;
+      return;
+    }
+    const seen = baselineRef.current;
+    for (const n of [...pendingApprovals, ...approvedForRequester]) {
+      if (!seen.has(n.id)) {
+        showRealtimeAlert({ id: n.id, title: n.title, body: n.body, link: n.link, category: n.category });
+      }
+    }
+    baselineRef.current = current;
+  }, [loading, pendingApprovals, approvedForRequester]);
+
 
   // Merge: pendentes virtuais no topo, deduplicadas contra notificações reais
   // que já referenciam o mesmo expense_id (evita duplo-badge).
