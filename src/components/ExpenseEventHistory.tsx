@@ -15,6 +15,7 @@ import {
   Clock,
   XOctagon,
   RefreshCw,
+  GitBranch,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -33,7 +34,8 @@ type LogDecision =
   | "cancelled"
   | "reactivated"
   | "integrated"
-  | "integration_failed";
+  | "integration_failed"
+  | "routing_fallback";
 
 interface ApprovalLogRow {
   id: string;
@@ -65,6 +67,7 @@ const DECISION_META: Record<LogDecision, { label: string; icon: React.ComponentT
   reactivated: { label: "Reativado pelo autor", icon: RotateCw, color: "text-primary" },
   integrated: { label: "Integrado ao ERP", icon: Cable, color: "text-success" },
   integration_failed: { label: "Falha na integração", icon: AlertTriangle, color: "text-destructive" },
+  routing_fallback: { label: "Alçada resolvida por fallback", icon: GitBranch, color: "text-amber-600 dark:text-amber-400" },
 };
 
 function formatDateTime(iso?: string | null): string {
