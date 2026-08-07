@@ -22,6 +22,7 @@ import {
 import {
   buildRateioSegments,
   persistRateioSegments,
+  persistSegmentSubset,
   pendingApproverLabel,
 } from "../_shared/rateio-segments.ts";
 
@@ -45,6 +46,10 @@ Deno.serve(async (req) => {
     expense_ids?: string[];
     dry_run?: boolean;
     only_unmatched?: boolean;
+    /** Reprocessa apenas as trilhas deste centro de custo (ex.: "1.8.1.8"). */
+    segment_cost_center?: string | null;
+    /** Opcional: restringe também pelo projeto do segmento. */
+    segment_project?: string | null;
   } = {};
   try {
     body = await req.json();
@@ -85,7 +90,10 @@ Deno.serve(async (req) => {
   }
 
   const dryRun = body.dry_run === true;
-  const onlyUnmatched = body.only_unmatched !== false; // padrão: só os sem regra
+  const segmentCc = String(body.segment_cost_center || "").trim();
+  const segmentProject = body.segment_project == null ? null : String(body.segment_project).trim();
+
+  const onlyUnmatched = segmentCc ? false : body.only_unmatched !== false; // padrão: só os sem regra
   const companyDb = body.company_db ? String(body.company_db) : null;
 
   try {
@@ -109,6 +117,146 @@ Deno.serve(async (req) => {
     const docs = (docsRaw || []) as Record<string, any>[];
     if (docs.length === 0) {
       return json(200, { ok: true, scanned: 0, reassigned: 0, results: [], dry_run: dryRun });
+    }
+
+    // ── Modo "reprocessar apenas um CC" ────────────────────────────────
+    // Regenera somente as trilhas do segmento informado, preservando as
+    // demais (inclusive aprovações já registradas em outros segmentos).
+    if (segmentCc) {
+      const segResults: Record<string, unknown>[] = [];
+      let changed = 0;
+      for (const doc of docs) {
+        const { data: itemsSeg } = await admin
+          .from("expense_items")
+          .select("expense_id, cost_center, project, line_total")
+          .eq("expense_id", doc.id);
+        const allItems = (itemsSeg || []) as Record<string, any>[];
+        const built = await buildRateioSegments(admin, allItems as any, {
+          companyDb: doc.company_db,
+          docType: String(doc.doc_type || "purchase"),
+          currency: doc.currency || "BRL",
+          requesterName: doc.requester_name || null,
+          supplierName: doc.supplier_name || null,
+          supplierCode: doc.supplier_code || null,
+          headerCostCenter: doc.cost_center || null,
+          headerProject: doc.project || null,
+        } as any, { allowSingle: true });
+        const target = (built || []).filter((sg) =>
+          norm(sg.cost_center) === norm(segmentCc) &&
+          (segmentProject === null || segmentProject === "" || norm(sg.project) === norm(segmentProject))
+        );
+        if (target.length === 0) {
+          segResults.push({ expense_id: doc.id, skipped: "segmento_nao_encontrado", cost_center: segmentCc });
+          continue;
+        }
+        if (dryRun) {
+          segResults.push({
+            expense_id: doc.id,
+            action: "segment_rebuild",
+            dry_run: true,
+            segments: target.map((sg) => ({
+              cost_center: sg.cost_center,
+              project: sg.project,
+              amount: sg.amount,
+              rule_id: sg.rule_id,
+              rule_name: sg.rule_name,
+              resolution: sg.resolution,
+              first_approver: sg.chain[0]?.approver_name || null,
+            })),
+          });
+          changed += 1;
+          continue;
+        }
+
+        const before = await admin
+          .from("expense_approval_segments")
+          .select("segment_key, cost_center, project, current_approver, status")
+          .eq("expense_id", doc.id);
+        const rows = await persistSegmentSubset(
+          admin,
+          doc.id,
+          target,
+          doc.requester_name || null,
+          doc.requester_email || null,
+        );
+
+        // Recalcula o rótulo do documento com TODAS as trilhas (as preservadas + as novas).
+        const { data: allSegs } = await admin
+          .from("expense_approval_segments")
+          .select("status, current_approver, current_level")
+          .eq("expense_id", doc.id);
+        const segsAll = (allSegs || []) as Record<string, any>[];
+        const label = pendingApproverLabel(segsAll as any);
+        const pendingLevels = segsAll.filter((r) => r.status === "pendente").map((r) => Number(r.current_level || 1));
+        await admin
+          .from("expenses")
+          .update({
+            current_approver: label,
+            current_level_order: pendingLevels.length ? Math.min(...pendingLevels) : doc.current_level_order,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", doc.id)
+          .eq("status", "pendente_aprovacao");
+
+        await admin.from("audit_log").insert({
+          actor_email: actorLabel,
+          action: "approval_segment_rebuild",
+          entity_type: "expense",
+          entity_id: doc.id,
+          company_db: doc.company_db,
+          details: {
+            cost_center: segmentCc,
+            project: segmentProject,
+            before: (before.data || []).filter((r: any) => norm(r.cost_center) === norm(segmentCc)),
+            after: rows.map((r) => ({
+              cost_center: r.cost_center,
+              project: r.project,
+              amount: r.amount,
+              approver: r.current_approver,
+            })),
+            document_approver: label,
+          },
+        });
+
+        for (const r of rows) {
+          await notifyApprovalPending(admin, {
+            expenseId: doc.id,
+            companyDb: doc.company_db,
+            approverEmail: r.current_approver_email || null,
+            approverName: r.current_approver || null,
+            levelOrder: r.current_level || 1,
+            requesterName: doc.requester_name,
+            supplierName: doc.supplier_name,
+            totalAmount: r.amount,
+            currency: doc.currency,
+            docType: String(doc.doc_type || "purchase"),
+            resolution: {
+              source: "manual_reassign",
+              reason: `Trilha reprocessada: CC ${r.cost_center || "—"} / projeto ${r.project || "—"}`,
+              ruleId: r.rule_id,
+              ruleName: null,
+              costCenter: r.cost_center,
+              project: r.project,
+              metadata: { scope: "segment_only" },
+            },
+          } as any);
+        }
+
+        changed += 1;
+        segResults.push({
+          expense_id: doc.id,
+          action: "segment_rebuild",
+          cost_center: segmentCc,
+          document_approver: label,
+          segments: rows.map((r) => ({
+            cost_center: r.cost_center,
+            project: r.project,
+            amount: r.amount,
+            approver: r.current_approver,
+          })),
+        });
+      }
+      return json(200, { ok: true, scanned: docs.length, reassigned: changed, results: segResults, dry_run: dryRun, scope: "segment" });
     }
 
     // ── Itens (para CC quando o cabeçalho está vazio) ───────────────────
