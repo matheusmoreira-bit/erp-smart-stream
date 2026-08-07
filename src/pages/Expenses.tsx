@@ -604,6 +604,8 @@ function ExpenseDetailModal({
               </div>
             )}
 
+            <SegmentFallbackAlert expenseId={expense.id} />
+
             <ExpenseEventHistory expense={expense} refreshKey={expense.updated_at} />
 
             {isErpNative && (
