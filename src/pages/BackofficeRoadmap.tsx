@@ -47,8 +47,67 @@ interface RoadmapItem {
 
 /** Changelog: uma lista única, em ordem cronológica (mais recente primeiro). */
 const CHANGELOG: RoadmapItem[] = [
+  // ---- Fase 8 — Login desacoplado e tempo real (ago/2026)
+  {
+    date: "2026-08-07",
+    title: "Novo fluxo de login (Google + ERP sob demanda)",
+    kind: "funcao",
+    track: "Governança e segurança",
+    description:
+      "A identidade do sistema passa a ser a conta Google corporativa: o acesso ao ERP Flow não exige mais usuário e senha do ERP. A sessão do Service Layer é resolvida somente no momento da ação (aprovar documento do SAP, integrar pedido, dar baixa) — de forma invisível quando há senha provisionada, ou por um modal rápido da empresa quando não há. Inclui tour de boas-vindas explicando a mudança.",
+  },
+  {
+    date: "2026-08-07",
+    title: "Sessão Google persistente e alertas em tempo real",
+    kind: "funcao",
+    track: "Experiência e inteligência",
+    description:
+      "Botão “Manter sessão do Google ativa” no menu da conta renova o token automaticamente (a cada 10 min e ao voltar o foco da aba). Com a sessão viva, aprovações e decisões chegam em tempo real por Realtime, com toast clicável, notificação nativa do navegador e atualização imediata do sino.",
+  },
+  {
+    date: "2026-08-06",
+    title: "Impersonação de usuário para suporte",
+    kind: "seguranca",
+    track: "Governança e segurança",
+    description:
+      "Administradores podem atuar como outro usuário para validar acessos, senha provisionada e visibilidade de documentos, com faixa permanente de aviso na tela e registro de quem impersonou em todos os eventos de auditoria.",
+  },
+  {
+    date: "2026-08-06",
+    title: "Aprovação replicada entre trilhas do mesmo documento",
+    kind: "automacao",
+    track: "Aprovações",
+    description:
+      "Quando o mesmo aprovador aparece em mais de uma trilha (rateio) ou em níveis subsequentes do mesmo documento, a decisão é propagada automaticamente, evitando aprovar o mesmo pedido várias vezes. Cada replicação fica registrada no histórico.",
+  },
+  {
+    date: "2026-08-05",
+    title: "Transparência de roteamento e reprocessamento por CC",
+    kind: "funcao",
+    track: "Aprovações",
+    description:
+      "Segmentos resolvidos por fallback (regra do ramo ou alçada sem níveis) exibem alerta no card e no histórico explicando qual regra foi aplicada e por quê, com ação de administrador para reprocessar apenas aquele centro de custo, preservando as demais trilhas.",
+  },
+  {
+    date: "2026-08-04",
+    title: "Paridade com edições feitas dentro do SAP (pullback)",
+    kind: "integracao",
+    track: "Integrações ERP",
+    description:
+      "Pedidos criados no ERP Flow e alterados diretamente no SAP podem ser sincronizados de volta (itens, valores, datas e anexos) sem disparar nova aprovação, mantendo os dois sistemas alinhados e registrando a origem da alteração no histórico.",
+  },
+  {
+    date: "2026-08-04",
+    title: "Tela de aprovações até 5x mais rápida",
+    kind: "melhoria",
+    track: "Aprovações",
+    description:
+      "Novo feed consolidado de aprovações: uma única chamada ao banco traz documentos, regras, segmentos e identidades, com cache de permissões, pintura imediata a partir do cache local e carregamento em ondas paralelas. Tempo médio de abertura caiu de ~2,7s para menos de 0,5s.",
+  },
   // ---- Fase 7 — Continuidade e caixa (ago/2026)
   {
+
+
     date: "2026-08-03",
     title: "Previsão de caixa por vencimento",
     kind: "modulo",
