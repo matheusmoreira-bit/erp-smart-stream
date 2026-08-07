@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Building2, LogOut, ChevronRight, ChevronLeft, Sparkles } from "lucide-react";
+import { KeyRound, ShieldCheck, Building2, ChevronRight, ChevronLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,7 +11,7 @@ import {
 import { useSap } from "@/contexts/SapContext";
 
 /** Versão do tour. Incremente para exibir novamente a todos os usuários. */
-const TOUR_VERSION = "2026-07-30-company-switch";
+const TOUR_VERSION = "2026-08-07-novo-login";
 export const whatsNewStorageKey = (user: string) =>
   `erp-whatsnew:${TOUR_VERSION}:${user.toLowerCase()}`;
 const storageKey = whatsNewStorageKey;
@@ -19,23 +19,30 @@ const storageKey = whatsNewStorageKey;
 const steps = [
   {
     icon: Sparkles,
-    title: "Novidades na barra superior",
+    title: "Novo fluxo de login",
     description:
-      "Padronizamos o cabeçalho de todas as telas: a logo fica sempre à esquerda e as informações da sua conta à direita.",
+      "Agora você entra no ERP Flow apenas com a sua conta Google corporativa. Não é mais necessário informar usuário e senha do ERP para abrir o sistema.",
   },
   {
     icon: Building2,
-    title: "Troca de empresa em um clique",
+    title: "Escolha da empresa",
     description:
-      "Clique no bloco com o nome da empresa e do usuário (canto superior direito) e escolha “Trocar de empresa”. A lista abre ali mesmo: empresas com escudo já têm senha provisionada e entram direto; as com chave pedem seu usuário e senha do ERP.",
+      "Depois de entrar, selecione a empresa que deseja acessar. Você pode trocar de empresa a qualquer momento pelo menu da sua conta, no canto superior direito.",
   },
   {
-    icon: LogOut,
-    title: "O botão Sair mudou de lugar",
+    icon: KeyRound,
+    title: "Senha do ERP só quando necessário",
     description:
-      "O “Sair” agora fica dentro desse mesmo menu da conta, logo abaixo da troca de empresa. Ao sair, você volta para a tela de login.",
+      "A conexão com o ERP acontece somente quando a ação exige (aprovar documentos do SAP, integrar pedidos, dar baixas). Se a sua senha já estiver provisionada, isso ocorre de forma invisível; caso contrário, aparece um modal rápido pedindo o acesso daquela empresa.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Sessão sempre ativa",
+    description:
+      "No menu da sua conta há o botão “Manter sessão do Google ativa”, que evita que você seja desconectado. Com ele ligado, você também recebe avisos em tempo real das suas aprovações.",
   },
 ];
+
 
 export function WhatsNewWizard() {
   const { session } = useSap();
