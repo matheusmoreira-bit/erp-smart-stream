@@ -57,13 +57,26 @@ export async function logAuditAction(params: {
   details?: Record<string, unknown>;
 }) {
   try {
+    // Durante uma impersonação toda ação registra quem está por trás dela.
+    const { getImpersonation } = await import("@/lib/impersonation");
+    const imp = getImpersonation();
+    const details = {
+      ...(params.details || {}),
+      ...(imp
+        ? {
+            impersonated_by: imp.adminEmail,
+            impersonating_user: imp.targetUser,
+            impersonation_started_at: new Date(imp.startedAt).toISOString(),
+          }
+        : {}),
+    };
     await supabase.rpc("insert_audit_log", {
-      p_action: params.action,
+      p_action: imp ? `${params.action}__impersonated` : params.action,
       p_entity_type: params.entity_type,
       p_entity_id: params.entity_id || null,
       p_actor_email: params.actor_email || null,
       p_company_db: params.company_db || null,
-      p_details: (params.details || {}) as any,
+      p_details: details as any,
     });
   } catch {
     // silent – audit should never block main flow
