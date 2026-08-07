@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 
 export interface FallbackSegmentRow {
@@ -34,11 +37,16 @@ function formatCurrency(value: number) {
 export function SegmentFallbackAlert({
   expenseId,
   formatCostCenter = (c?: string | null) => c || "",
+  onReprocessed,
 }: {
   expenseId?: string | null;
   formatCostCenter?: (code?: string | null) => string;
+  onReprocessed?: () => void;
 }) {
   const [rows, setRows] = useState<FallbackSegmentRow[]>([]);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [busyCc, setBusyCc] = useState<string | null>(null);
+  const { isAdmin } = useAuth();
 
   useEffect(() => {
     if (!expenseId) {
@@ -59,7 +67,36 @@ export function SegmentFallbackAlert({
     return () => {
       cancelled = true;
     };
-  }, [expenseId]);
+  }, [expenseId, reloadKey]);
+
+  /** Regenera as trilhas apenas do centro de custo indicado. */
+  const reprocessSegment = useCallback(async (row: FallbackSegmentRow) => {
+    if (!expenseId || !row.cost_center) return;
+    setBusyCc(row.cost_center);
+    try {
+      const { data, error } = await supabase.functions.invoke("expense-reassign-approver", {
+        body: {
+          expense_ids: [expenseId],
+          segment_cost_center: row.cost_center,
+          segment_project: row.project || null,
+        },
+      });
+      if (error) throw error;
+      const result = (data as any)?.results?.[0];
+      if (result?.skipped) {
+        toast.warning(`Nada a reprocessar no CC ${row.cost_center} (${result.skipped}).`);
+      } else {
+        const approver = result?.segments?.[0]?.approver || "—";
+        toast.success(`Trilha do CC ${row.cost_center} reprocessada. Aprovador: ${approver}`);
+      }
+      setReloadKey((k) => k + 1);
+      onReprocessed?.();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao reprocessar o segmento.");
+    } finally {
+      setBusyCc(null);
+    }
+  }, [expenseId, onReprocessed]);
 
   if (rows.length === 0) return null;
 
@@ -101,6 +138,23 @@ export function SegmentFallbackAlert({
             </div>
             {r.resolution_note && (
               <p className="text-[11px] text-muted-foreground leading-relaxed">{r.resolution_note}</p>
+            )}
+            {isAdmin && r.cost_center && (
+              <div className="pt-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-[11px] gap-1.5"
+                  disabled={busyCc === r.cost_center}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void reprocessSegment(r);
+                  }}
+                >
+                  <RefreshCw className={`w-3 h-3 ${busyCc === r.cost_center ? "animate-spin" : ""}`} />
+                  Reprocessar apenas este CC
+                </Button>
+              </div>
             )}
           </div>
         ))}
