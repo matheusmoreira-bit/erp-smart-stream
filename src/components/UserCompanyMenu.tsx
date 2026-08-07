@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Building2, ChevronDown, Compass, Loader2, LogOut, ShieldCheck, KeyRound, Check, UserCog } from "lucide-react";
+import { Building2, ChevronDown, Compass, Loader2, LogOut, ShieldCheck, KeyRound, Check, UserCog, Infinity as InfinityIcon } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { isKeepSessionAlive, setKeepSessionAlive } from "@/lib/session-keepalive";
+
 import { ONBOARDING_REPLAY_EVENT } from "@/components/OnboardingTour";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -46,6 +49,8 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
   const [google, setGoogle] = useState<{ name: string; email: string; avatar: string } | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [impersonateOpen, setImpersonateOpen] = useState(false);
+  const [keepAlive, setKeepAliveState] = useState(() => isKeepSessionAlive());
+
   const { isAdmin } = useAuth();
 
   const companyLabel = getLabel(session?.companyDB || "");
@@ -291,6 +296,26 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
           )}
 
           <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onSelect={(e) => {
+              e.preventDefault();
+              const next = !keepAlive;
+              setKeepAliveState(next);
+              setKeepSessionAlive(next);
+              toast.success(
+                next
+                  ? "Sessão do Google será mantida ativa neste dispositivo."
+                  : "Sessão do Google voltará a expirar normalmente."
+              );
+            }}
+          >
+            <InfinityIcon className="w-4 h-4 mr-2" />
+            <span className="flex-1">Manter sessão do Google ativa</span>
+            <Switch checked={keepAlive} className="pointer-events-none" aria-hidden="true" />
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator />
+
           <DropdownMenuItem
             onSelect={() =>
               window.dispatchEvent(new CustomEvent(ONBOARDING_REPLAY_EVENT))

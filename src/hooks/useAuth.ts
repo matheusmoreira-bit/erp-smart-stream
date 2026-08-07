@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getIsCloudAdmin } from "@/lib/auth-cache";
+import { syncKeepAlive } from "@/lib/session-keepalive";
 
 import type { User, Session } from "@supabase/supabase-js";
+
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -11,7 +13,11 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Mantém a sessão renovando quando o usuário optou por "manter conectado".
+    syncKeepAlive();
+
     // Returns false ONLY when we could decode the JWT payload and it truly
+
     // has no `sub`. Any decode failure is treated as "assume valid" so we never
     // destroy a working session because of encoding quirks (accents, etc).
     const tokenHasSub = (token?: string | null) => {
