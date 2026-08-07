@@ -2716,9 +2716,15 @@ export type Database = {
           decided_at: string | null
           decided_by: string | null
           expense_id: string
+          fallback_branch: string | null
+          fallback_from_rule_id: string | null
+          fallback_from_rule_name: string | null
           id: string
           project: string | null
+          resolution: string
+          resolution_note: string | null
           rule_id: string | null
+          rule_name: string | null
           segment_key: string
           status: string
           updated_at: string
@@ -2734,9 +2740,15 @@ export type Database = {
           decided_at?: string | null
           decided_by?: string | null
           expense_id: string
+          fallback_branch?: string | null
+          fallback_from_rule_id?: string | null
+          fallback_from_rule_name?: string | null
           id?: string
           project?: string | null
+          resolution?: string
+          resolution_note?: string | null
           rule_id?: string | null
+          rule_name?: string | null
           segment_key: string
           status?: string
           updated_at?: string
@@ -2752,9 +2764,15 @@ export type Database = {
           decided_at?: string | null
           decided_by?: string | null
           expense_id?: string
+          fallback_branch?: string | null
+          fallback_from_rule_id?: string | null
+          fallback_from_rule_name?: string | null
           id?: string
           project?: string | null
+          resolution?: string
+          resolution_note?: string | null
           rule_id?: string | null
+          rule_name?: string | null
           segment_key?: string
           status?: string
           updated_at?: string
