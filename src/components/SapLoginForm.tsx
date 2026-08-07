@@ -289,9 +289,14 @@ export function SapLoginForm() {
       toast.error("Selecione a empresa");
       return;
     }
-    if (isManagedSap) {
+    // SAP B1: a identidade já foi validada pelo Google. Entramos direto na
+    // empresa, sem abrir sessão no Service Layer — ela é criada sob demanda,
+    // apenas quando alguma ação precisar (invisível se houver senha
+    // provisionada; senão, o modal de credenciais aparece na hora da ação).
+    if (erpType === "sap" && cloudEmail) {
       try {
-        await loginManaged(companyDB);
+        await loginIdentity(companyDB, "sap");
+
         toast.success(`Conectado ao ${erpInfo.label}!`);
       } catch (err) {
         toast.error("Não foi possível entrar", {
