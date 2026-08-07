@@ -219,7 +219,17 @@ Deno.serve(async (req) => {
     if (!targetUserId && targetEmailInput) {
       const { data: list, error: listErr } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
       if (listErr) return json({ error: `Falha ao listar usuários: ${listErr.message}` }, 500);
-      const match = (list?.users || []).find((u) => (u.email || "").toLowerCase() === targetEmailInput);
+      const users = list?.users || [];
+      const exactMatch = users.find((u) => (u.email || "").toLowerCase() === targetEmailInput);
+      const targetLocal = targetEmailInput.split("@")[0];
+      // Migrações de domínio podem deixar duas identidades para o mesmo
+      // colaborador. Se o e-mail exato nunca entrou, prefira a identidade de
+      // mesmo prefixo que efetivamente está em uso; caso contrário a senha fica
+      // provisionada em uma conta órfã e o usuário continua vendo o modal.
+      const activeAlias = users
+        .filter((u) => (u.email || "").toLowerCase().split("@")[0] === targetLocal && u.last_sign_in_at)
+        .sort((a, b) => new Date(b.last_sign_in_at || 0).getTime() - new Date(a.last_sign_in_at || 0).getTime())[0];
+      const match = exactMatch?.last_sign_in_at ? exactMatch : (activeAlias || exactMatch);
       if (match) {
         targetUserId = match.id;
         targetEmail = match.email || targetEmailInput;
