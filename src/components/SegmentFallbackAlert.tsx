@@ -31,7 +31,13 @@ function formatCurrency(value: number) {
  * regra própria, mas de um fallback hierárquico — ex.: CC 1.8.1.8 sem regra
  * (ou com regra "BLOQUEADO" sem níveis) roteado pela alçada do ramo 1.8.
  */
-export function SegmentFallbackAlert({ expenseId }: { expenseId?: string | null }) {
+export function SegmentFallbackAlert({
+  expenseId,
+  formatCostCenter = (c?: string | null) => c || "",
+}: {
+  expenseId?: string | null;
+  formatCostCenter?: (code?: string | null) => string;
+}) {
   const [rows, setRows] = useState<FallbackSegmentRow[]>([]);
 
   useEffect(() => {
