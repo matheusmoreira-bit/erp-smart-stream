@@ -584,7 +584,10 @@ export function useApprovals() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
 
   const fetchFromSap = useCallback(async (): Promise<ApprovalDoc[]> => {
-    if (!session || session.erpType !== "sap") return [];
+    // Aprovações originadas no SAP só devem ser consultadas quando já existe
+    // uma sessão técnica ativa. Abrir a tela nunca pode disparar o login ERP:
+    // a autenticação é solicitada apenas ao executar uma ação no Service Layer.
+    if (!session || session.erpType !== "sap" || !session.sessionId) return [];
     const companyDb = session.companyDB;
 
     // Empresas sem HANA: consulta direto no Service Layer.
@@ -657,7 +660,12 @@ export function useApprovals() {
 
 
   const fetchApprovals = useCallback(async (opts?: { force?: boolean }) => {
-    if (!session || session.erpType !== "sap") return;
+    if (!session || session.erpType !== "sap" || !session.sessionId) {
+      setApprovals([]);
+      setIsLoading(false);
+      setIsRefreshing(false);
+      return;
+    }
     const force = !!opts?.force;
     setError(null);
 
@@ -707,11 +715,11 @@ export function useApprovals() {
   useEffect(() => {
     fetchApprovals();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.companyDB, session?.erpType]);
+  }, [session?.companyDB, session?.erpType, session?.sessionId]);
 
   // Auto-refresh every 5 minutes while the page is open
   useEffect(() => {
-    if (!session || session.erpType !== "sap") return;
+    if (!session || session.erpType !== "sap" || !session.sessionId) return;
     const id = setInterval(() => {
       fetchApprovals({ force: true });
     }, APPROVALS_CACHE_TTL_MS);

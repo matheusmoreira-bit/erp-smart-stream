@@ -280,8 +280,15 @@ export function useSapCachedList({
       }
 
       if (rows === null) {
-        const { data } = await sapQueryAll(session, endpoint, effectiveParams, false);
-        rows = data?.value || [];
+        // Listas carregadas no mount são auxiliares. Sem uma sessão já ativa,
+        // não acionamos o broker (e, portanto, não abrimos login ERP). A ação
+        // explícita do usuário continuará autenticando sob demanda.
+        if (!session.sessionId) {
+          rows = [];
+        } else {
+          const { data } = await sapQueryAll(session, endpoint, effectiveParams, false);
+          rows = data?.value || [];
+        }
       }
 
 

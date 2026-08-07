@@ -319,6 +319,25 @@ Deno.serve(async (req) => {
           rows[0].InternalKey!,
           { companyDb, sapUser },
         );
+
+        // Não considere o provisionamento concluído apenas porque o PATCH foi
+        // aceito. Valide a credencial exatamente como o auto-login fará; assim
+        // nunca gravamos uma senha que o usuário não consegue utilizar.
+        let verifiedSession: Session | null = null;
+        try {
+          verifiedSession = await sapLogin(baseUrl, creds.sapCompanyDb, sapUser, newPassword);
+        } catch (verifyError) {
+          results.push({
+            companyDB: companyDb,
+            displayName,
+            status: "error",
+            message: `Senha alterada, mas o login de validação falhou: ${verifyError instanceof Error ? verifyError.message : "erro desconhecido"}`,
+          });
+          continue;
+        } finally {
+          if (verifiedSession) await sapLogout(verifiedSession);
+        }
+
         const encrypted = await encryptSecret(newPassword);
         const { error: upsertErr } = await admin.from("user_sap_credentials").upsert({
           user_id: targetUserId,
