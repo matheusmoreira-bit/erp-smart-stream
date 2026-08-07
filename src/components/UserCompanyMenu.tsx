@@ -307,7 +307,7 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
               );
             }}
           >
-            <Infinity className="w-4 h-4 mr-2" />
+            <InfinityIcon className="w-4 h-4 mr-2" />
             <span className="flex-1">Manter sessão do Google ativa</span>
             <Switch checked={keepAlive} className="pointer-events-none" aria-hidden="true" />
           </DropdownMenuItem>
