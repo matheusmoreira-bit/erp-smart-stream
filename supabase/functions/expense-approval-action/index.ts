@@ -648,29 +648,43 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     isDesignatedApprover(callerIdentity as string, t.name, t.email),
   );
 
+  // Aliases do caller (idp_user_mapping, sap_user_emails, credenciais SAP,
+  // collaborator_profiles). Resolvemos SEMPRE porque também são usados para
+  // detectar que o mesmo aprovador aparece em mais de um fluxo do documento.
+  let callerAliases = new Set<string>();
+  try {
+    callerAliases = await resolveCallerAliases(admin, {
+      email: callerEmail || undefined,
+      userName: sapValidated?.userName || (callerIdentity && !callerIdentity.includes("@") ? callerIdentity : undefined),
+    });
+  } catch (e) {
+    stageLog("authorize", "warn", { requestId, phase: "alias_resolution", error: (e as Error).message });
+  }
+
+  /**
+   * O caller é a pessoa designada em `name`/`email`?
+   * Usado tanto na autorização quanto na propagação da aprovação para os
+   * demais fluxos do mesmo documento (evita aprovar duas vezes).
+   */
+  const callerIsApprover = (name: string | null, email: string | null): boolean => {
+    if (!!callerIdentity && isDesignatedApprover(callerIdentity as string, name, email)) return true;
+    const cands = [normalizeIdentity(email), normalizeIdentity(name)].filter(Boolean);
+    return cands.some((c) => callerAliases.has(c as string));
+  };
+
   // Fallback por ALIASES: o e-mail de login pode não ter relação textual com
-  // o nome do aprovador (ex.: k@banana.games ↔ "Kainnan Pitano"). Resolvemos
-  // todas as identidades conhecidas do caller (idp_user_mapping,
-  // sap_user_emails, credenciais SAP, collaborator_profiles) e comparamos com
-  // a forma canônica do nome/e-mail designado.
-  if (!isMatch && (callerEmail || callerIdentity)) {
-    try {
-      const aliases = await resolveCallerAliases(admin, {
-        email: callerEmail || undefined,
-        userName: sapValidated?.userName || (callerIdentity && !callerIdentity.includes("@") ? callerIdentity : undefined),
-      });
-      const aliasHit = designatedTargets.some((t) => {
-        const cands = [normalizeIdentity(t.email), normalizeIdentity(t.name)].filter(Boolean);
-        return cands.some((c) => aliases.has(c));
-      });
-      if (aliasHit) {
-        isMatch = true;
-        stageLog("authorize", "info", { requestId, expenseId, reason: "matched_by_alias" });
-      }
-    } catch (e) {
-      stageLog("authorize", "warn", { requestId, phase: "alias_resolution", error: (e as Error).message });
+  // o nome do aprovador (ex.: k@banana.games ↔ "Kainnan Pitano").
+  if (!isMatch && callerAliases.size > 0) {
+    const aliasHit = designatedTargets.some((t) => {
+      const cands = [normalizeIdentity(t.email), normalizeIdentity(t.name)].filter(Boolean);
+      return cands.some((c) => callerAliases.has(c as string));
+    });
+    if (aliasHit) {
+      isMatch = true;
+      stageLog("authorize", "info", { requestId, expenseId, reason: "matched_by_alias" });
     }
   }
+
 
 
   // Lazy SAP superuser check — só faz a chamada cara ao SAP quando o
