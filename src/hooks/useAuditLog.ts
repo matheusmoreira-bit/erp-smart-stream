@@ -71,7 +71,7 @@ export async function logAuditAction(params: {
         : {}),
     };
     await supabase.rpc("insert_audit_log", {
-      p_action: imp ? `${params.action}__impersonated` : params.action,
+      p_action: params.action,
       p_entity_type: params.entity_type,
       p_entity_id: params.entity_id || null,
       p_actor_email: params.actor_email || null,
