@@ -324,7 +324,7 @@ export async function persistSegmentSubset(
     const picked = pickApproverSkippingRequester(s.chain, requesterName, requesterEmail, 1);
     return {
       expense_id: expenseId,
-      decision: s.resolution && s.resolution !== "direct" ? "routing_fallback" : "reassigned",
+      decision: "routing_fallback",
       approver_name: picked.approver_name || null,
       approver_email: picked.approver_email,
       remarks: [
