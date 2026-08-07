@@ -185,6 +185,8 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
   };
 
   let lastError: unknown = null;
+  let reauthTried = false;
+
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const slowTimer = scheduleSlowToast();
