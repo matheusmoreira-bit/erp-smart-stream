@@ -61,11 +61,18 @@ async function callBaixaFunction(body: Record<string, unknown>): Promise<SyncBai
   }
 }
 
+async function ensureServiceLayerSession(session: SapSession): Promise<boolean> {
+  if (session?.sessionId) return true;
+  const { resolveSapSession } = await import("@/lib/sap-session-broker");
+  const resolved = await resolveSapSession(session?.companyDB || "");
+  return !!resolved?.sessionId;
+}
+
 export async function createBaixaRecebimentoAndSync(
   session: SapSession,
   input: CreateBaixaInput,
 ): Promise<SyncBaixaResult> {
-  if (!session?.sessionId) {
+  if (!(await ensureServiceLayerSession(session))) {
     return { ok: false, sapDocEntry: null, errorMessage: "Sessão SAP indisponível." };
   }
   return callBaixaFunction({ action: "createAndSync", input });
@@ -75,8 +82,9 @@ export async function syncBaixaRecebimentoToSap(
   session: SapSession,
   baixaId: string,
 ): Promise<SyncBaixaResult> {
-  if (!session?.sessionId) {
+  if (!(await ensureServiceLayerSession(session))) {
     return { ok: false, sapDocEntry: null, errorMessage: "Sessão SAP indisponível.", baixaId };
   }
   return callBaixaFunction({ action: "syncExisting", baixaId });
 }
+
