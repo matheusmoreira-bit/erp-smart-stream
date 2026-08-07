@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
   const segmentCc = String(body.segment_cost_center || "").trim();
   const segmentProject = body.segment_project == null ? null : String(body.segment_project).trim();
 
-  const onlyUnmatched = body.only_unmatched !== false; // padrão: só os sem regra
+  const onlyUnmatched = segmentCc ? false : body.only_unmatched !== false; // padrão: só os sem regra
   const companyDb = body.company_db ? String(body.company_db) : null;
 
   try {
