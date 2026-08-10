@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Loader2, Search, Users, LogIn, ShieldAlert, Activity, Clock, Monitor, Timer } from "lucide-react";
+import { ArrowLeft, RefreshCw, Loader2, Search, Users, LogIn, ShieldAlert, Activity, Clock, Monitor, Timer, Workflow } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
@@ -14,11 +14,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from "recharts";
-import { useUserActivity, getActionLabel, getSourceLabel, isFailedLogin, formatDuration } from "@/hooks/useUserActivity";
-import type { Usr5Record } from "@/hooks/useUserActivity";
+import { useUserActivity, getActionLabel, isFailedLogin, formatDuration } from "@/hooks/useUserActivity";
+import { useFlowActivity } from "@/hooks/useFlowActivity";
+import { mergeActivity, formatEventDateTime, type ActivitySystem } from "@/lib/activity-events";
 import MonthlyLoginChart from "@/components/MonthlyLoginChart";
 import UserActivityRankings from "@/components/UserActivityRankings";
 import { PageTitle } from "@/components/PageTitle";
+
 
 const PIE_COLORS = [
   "hsl(var(--primary))",
@@ -56,6 +58,21 @@ export default function UserActivityPage() {
   const [actionFilter, setActionFilter] = useState("all");
   const [daysFilter, setDaysFilter] = useState("7");
   const [userTypeFilter, setUserTypeFilter] = useState("no_api");
+  const [systemFilter, setSystemFilter] = useState<"all" | ActivitySystem>("all");
+
+  const {
+    records: flowRecords,
+    isLoading: flowLoading,
+    error: flowError,
+    refresh: refreshFlow,
+  } = useFlowActivity(parseInt(daysFilter) || 0);
+
+  const refreshAll = () => {
+    refresh();
+    refreshFlow();
+  };
+
+
 
   const filtered = useMemo(() => {
     let list = records;
@@ -128,6 +145,35 @@ export default function UserActivityPage() {
     return Array.from(map, ([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [filtered]);
 
+  // ERP Flow: filtro por busca/ação e período (o período já vem aplicado no servidor)
+  const flowFiltered = useMemo(() => {
+    let list = flowRecords;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (r) =>
+          r.actor_email?.toLowerCase().includes(q) ||
+          r.actor_name?.toLowerCase().includes(q) ||
+          r.action?.toLowerCase().includes(q) ||
+          r.detail?.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [flowRecords, search]);
+
+  // Log unificado (SAP + ERP Flow)
+  const unified = useMemo(() => {
+    const sap = systemFilter === "flow" ? [] : filtered;
+    const flow = systemFilter === "sap" ? [] : flowFiltered;
+    return mergeActivity(sap, flow);
+  }, [filtered, flowFiltered, systemFilter]);
+
+  const flowMetrics = useMemo(() => {
+    const users = new Set(flowFiltered.map((r) => r.actor_email).filter(Boolean)).size;
+    return { events: flowFiltered.length, users };
+  }, [flowFiltered]);
+
+
   return (
     <div className="min-h-screen bg-background">
       <PageTitle title="Atividade de Usuários" />
@@ -139,14 +185,15 @@ export default function UserActivityPage() {
             </Button>
             <div className="min-w-0">
               <h1 className="text-2xl font-bold text-foreground">Atividade de Usuários</h1>
-              <p className="text-sm text-muted-foreground">Dashboard de logins e ações — tabela USR5</p>
+              <p className="text-sm text-muted-foreground">Logins e ações — SAP (USR5) + ERP Flow</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Button variant="outline" size="sm" onClick={refresh} disabled={isLoading}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            <Button variant="outline" size="sm" onClick={refreshAll} disabled={isLoading || flowLoading}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading || flowLoading ? "animate-spin" : ""}`} />
               Atualizar
+
             </Button>
           </div>
         </div>
@@ -154,8 +201,12 @@ export default function UserActivityPage() {
 
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         {error && (
-          <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">{error}</div>
+          <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">SAP: {error}</div>
         )}
+        {flowError && (
+          <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">ERP Flow: {flowError}</div>
+        )}
+
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">
@@ -203,7 +254,18 @@ export default function UserActivityPage() {
               <SelectItem value="0">Todos</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={systemFilter} onValueChange={(v) => setSystemFilter(v as "all" | ActivitySystem)}>
+            <SelectTrigger className="w-[150px] bg-card">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">SAP + ERP Flow</SelectItem>
+              <SelectItem value="sap">Somente SAP</SelectItem>
+              <SelectItem value="flow">Somente ERP Flow</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
+
 
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
@@ -213,7 +275,7 @@ export default function UserActivityPage() {
         ) : (
           <>
             {/* Metric Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
               <MetricCard title="Usuários Únicos" value={String(metrics.uniqueUsers)} icon={Users} delay={0} />
               <MetricCard title="Logins" value={String(metrics.logins)} icon={LogIn} delay={0.05} />
               <MetricCard
@@ -225,7 +287,15 @@ export default function UserActivityPage() {
               />
               <MetricCard title="IPs Únicos" value={String(metrics.uniqueIPs)} icon={Activity} delay={0.15} />
               <MetricCard title="Duração Média" value={formatDuration(metrics.avgDuration)} icon={Timer} delay={0.2} />
+              <MetricCard
+                title="Ações no ERP Flow"
+                value={String(flowMetrics.events)}
+                icon={Workflow}
+                delay={0.25}
+                trend={{ value: `${flowMetrics.users} usuários`, positive: true }}
+              />
             </div>
+
 
             {/* Monthly Login Chart + Pie */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -256,61 +326,70 @@ export default function UserActivityPage() {
             <div className="rounded-xl border border-border bg-card overflow-hidden">
               <div className="px-6 py-3 border-b border-border bg-muted/30">
                 <h3 className="text-sm font-semibold text-foreground">Log de Atividade Recente</h3>
-                <p className="text-xs text-muted-foreground">{filtered.length} registros</p>
+                <p className="text-xs text-muted-foreground">
+                  {unified.length} registros · {filtered.length} SAP · {flowFiltered.length} ERP Flow
+                </p>
+
               </div>
               <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-card z-10">
                     <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
                       <th className="px-4 py-3 text-left">Data/Hora</th>
+                      <th className="px-4 py-3 text-left">Sistema</th>
                       <th className="px-4 py-3 text-left">Usuário</th>
                       <th className="px-4 py-3 text-left">Ação</th>
                       <th className="px-4 py-3 text-left">Origem</th>
                       <th className="px-4 py-3 text-left">IP</th>
-                      <th className="px-4 py-3 text-left">Máquina</th>
+                      <th className="px-4 py-3 text-left">Máquina / Detalhe</th>
                       <th className="px-4 py-3 text-left">Duração</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.slice(0, 200).map((r, i) => (
-                      <tr key={`${r.UserCode}-${r.Date}-${r.Time}-${i}`} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
+                    {unified.slice(0, 300).map((e) => (
+                      <tr key={e.id} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
                         <td className="px-4 py-2 text-muted-foreground whitespace-nowrap">
                           <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3" />
-                            {formatDate(r.Date)} {formatTime(r.Time)}
+                            {formatEventDateTime(e)}
                           </span>
                         </td>
-                        <td className="px-4 py-2 font-medium text-foreground">{r.UserCode}</td>
                         <td className="px-4 py-2">
                           <Badge
-                            variant={isFailedLogin(r) || r.Action === "K" ? "destructive" : "secondary"}
-                            className={
-                              r.Action === "I" || r.Action === "W"
-                                ? isFailedLogin(r) ? "" : "bg-primary/15 text-primary"
-                                : r.Action === "O"
-                                ? "bg-muted text-muted-foreground"
-                                : ""
-                            }
+                            variant="outline"
+                            className={e.system === "flow" ? "border-primary/40 text-primary" : "text-muted-foreground"}
                           >
-                            {isFailedLogin(r) ? "Falha de Login" : getActionLabel(r.Action)}
+                            {e.system === "flow" ? "ERP Flow" : "SAP"}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-2 font-medium text-foreground">{e.user}</td>
+                        <td className="px-4 py-2">
+                          <Badge
+                            variant={e.negative ? "destructive" : "secondary"}
+                            className={!e.negative && e.system === "flow" ? "bg-primary/15 text-primary" : ""}
+                          >
+                            {e.actionLabel}
                           </Badge>
                         </td>
                         <td className="px-4 py-2 text-muted-foreground text-xs">
                           <span className="flex items-center gap-1">
-                            <Monitor className="w-3 h-3" />
-                            {getSourceLabel(r.Source)}
+                            {e.system === "flow" ? <Workflow className="w-3 h-3" /> : <Monitor className="w-3 h-3" />}
+                            {e.sourceLabel}
                           </span>
                         </td>
-                        <td className="px-4 py-2 text-muted-foreground font-mono text-xs">{r.ClientIP || "—"}</td>
-                        <td className="px-4 py-2 text-muted-foreground text-xs truncate max-w-[150px]">{r.ClientName || "—"}</td>
-                        <td className="px-4 py-2 text-muted-foreground text-xs">{formatDuration(r.AliveDurtn)}</td>
+                        <td className="px-4 py-2 text-muted-foreground font-mono text-xs">{e.ip || "—"}</td>
+                        <td className="px-4 py-2 text-muted-foreground text-xs truncate max-w-[220px]">
+                          {e.machine || e.detail || "—"}
+                        </td>
+                        <td className="px-4 py-2 text-muted-foreground text-xs">{formatDuration(e.durationMinutes)}</td>
                       </tr>
                     ))}
-                    {filtered.length === 0 && (
+                    {unified.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="text-center text-muted-foreground py-8">Nenhum registro encontrado</td>
+                        <td colSpan={8} className="text-center text-muted-foreground py-8">Nenhum registro encontrado</td>
                       </tr>
                     )}
+
                   </tbody>
                 </table>
               </div>

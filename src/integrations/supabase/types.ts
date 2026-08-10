@@ -7870,6 +7870,19 @@ export type Database = {
           stage_order: number
         }[]
       }
+      get_flow_user_activity: {
+        Args: { _company_db?: string; _days?: number; _limit?: number }
+        Returns: {
+          action: string
+          actor_email: string
+          actor_name: string
+          company_db: string
+          detail: string
+          entity_id: string
+          entity_type: string
+          ts: string
+        }[]
+      }
       get_integration_health: {
         Args: { _hours?: number }
         Returns: {
