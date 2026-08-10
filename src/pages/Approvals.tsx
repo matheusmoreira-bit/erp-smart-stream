@@ -2597,7 +2597,7 @@ export default function ApprovalsPage() {
     useLazyList(filtered, {
       initial: 30,
       step: 10,
-      resetDeps: [search, typeFilter, minValue, maxValue, createdFrom, createdTo, dueFrom, dueTo, showAll, viewMode, onlyOverdue, sortKey, sortDir, ccFilter.join(","), projectFilter.join(",")],
+      resetDeps: [search, typeFilter, originFilter, minValue, maxValue, createdFrom, createdTo, dueFrom, dueTo, showAll, viewMode, onlyOverdue, sortKey, sortDir, ccFilter.join(","), projectFilter.join(",")],
     });
 
   const handleApprovalAction = async (
@@ -3227,6 +3227,7 @@ export default function ApprovalsPage() {
                 {(() => {
                   const active = [
                     typeFilter !== "all",
+                    originFilter !== "all",
                     !!minValue,
                     !!maxValue,
                     !!createdFrom,
@@ -3245,12 +3246,13 @@ export default function ApprovalsPage() {
             <PopoverContent align="end" className="w-[calc(100vw-2rem)] sm:w-[420px] max-w-[420px] p-4 space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-foreground">Filtros</p>
-                {(typeFilter !== "all" || minValue || maxValue || createdFrom || createdTo || dueFrom || dueTo || ccFilter.length > 0 || projectFilter.length > 0) && (
+                {(typeFilter !== "all" || originFilter !== "all" || minValue || maxValue || createdFrom || createdTo || dueFrom || dueTo || ccFilter.length > 0 || projectFilter.length > 0) && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => {
                       setTypeFilter("all");
+                      setOriginFilter("all");
                       setMinValue("");
                       setMaxValue("");
                       setCreatedFrom("");
