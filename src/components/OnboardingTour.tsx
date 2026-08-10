@@ -203,14 +203,18 @@ export function OnboardingTour() {
   /* Primeiro acesso — só depois que o "novidades" já foi visto. */
   useEffect(() => {
     if (!user || loading) return;
-    try {
-      if (localStorage.getItem(onboardingKey(user))) return;
-      if (!localStorage.getItem(whatsNewStorageKey(user))) return;
-    } catch {
-      return;
-    }
-    setStep(0);
-    setOpen(true);
+    let cancelled = false;
+    (async () => {
+      if (await hasSeenTour(onboardingTourKey)) return;
+      /* só depois que o "novidades" já foi visto */
+      if (!(await hasSeenTour(whatsNewTourKey))) return;
+      if (cancelled) return;
+      setStep(0);
+      setOpen(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [user, loading]);
 
   /* Replay pelo menu da conta. */
@@ -224,11 +228,7 @@ export function OnboardingTour() {
   }, []);
 
   const close = () => {
-    try {
-      if (user) localStorage.setItem(onboardingKey(user), new Date().toISOString());
-    } catch {
-      /* ignore */
-    }
+    void markTourSeen(onboardingTourKey);
     setOpen(false);
   };
 
