@@ -908,6 +908,7 @@ function ExpenseCard({
         <div className="flex items-center gap-2 text-muted-foreground">
           <Building2 className="w-3.5 h-3.5 text-primary/70" />
           <span className="truncate">{expense.supplier_name}</span>
+          <DocCodeLink id={expense.id} docNum={expense.sap_doc_num} onOpen={onOpen} className="shrink-0" />
         </div>
         {primaryProject && (
           <div className="flex items-center gap-2 text-muted-foreground min-w-0">
