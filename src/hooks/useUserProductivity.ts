@@ -24,7 +24,11 @@ type ProductivityDocSource = {
   endpoint: string;
 };
 
+export type ProductivitySystem = "sap" | "flow";
+
 export interface UserProductivityRow {
+  /** Origem do dado: SAP B1 (Service Layer) ou ERP Flow (banco da plataforma). */
+  system: ProductivitySystem;
   userCode: string;
   userName: string;
   department: string;
@@ -40,6 +44,11 @@ export interface UserProductivityRow {
   score: number;
 }
 
+export const SYSTEM_LABEL: Record<ProductivitySystem, string> = {
+  sap: "SAP B1",
+  flow: "ERP Flow",
+};
+
 export const DOC_TYPE_LABEL: Record<string, string> = {
   PC: "Pedido de Compra",
   PV: "Pedido de Venda",
@@ -49,6 +58,10 @@ export const DOC_TYPE_LABEL: Record<string, string> = {
   REC: "Recebimento",
   REQ: "Requisição",
   COT: "Cotação",
+  F_PC: "Pedido de Compra (Flow)",
+  F_PV: "Pedido de Venda (Flow)",
+  F_INT: "Despesa interna (Flow)",
+  F_OUT: "Outros (Flow)",
   OPOR: "Pedido de Compra",
   ORDR: "Pedido de Venda",
   OPCH: "NF Entrada",
