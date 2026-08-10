@@ -7416,6 +7416,24 @@ export type Database = {
         }
         Relationships: []
       }
+      user_tour_state: {
+        Row: {
+          completed_at: string
+          tour_key: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string
+          tour_key: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string
+          tour_key?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       watcher_runs: {
         Row: {
           last_finished_at: string | null

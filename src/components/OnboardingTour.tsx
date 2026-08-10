@@ -25,7 +25,8 @@ import { useSap } from "@/contexts/SapContext";
 import { useModuleAccess } from "@/hooks/usePermissions";
 import { supabase } from "@/integrations/supabase/client";
 import { canonicalUserKey } from "@/lib/user-identity";
-import { whatsNewStorageKey } from "@/components/WhatsNewWizard";
+import { whatsNewTourKey } from "@/components/WhatsNewWizard";
+import { hasSeenTour, markTourSeen } from "@/lib/tour-state";
 
 /**
  * Onboarding guiado por perfil.
@@ -34,13 +35,16 @@ import { whatsNewStorageKey } from "@/components/WhatsNewWizard";
  * módulos que o grupo de permissão do usuário realmente enxerga. Sem passos
  * para telas que a pessoa não pode abrir.
  *
- * Persistência: localStorage por usuário + versão. Pode ser reaberto via
+ * Persistência: tabela `user_tour_state` (perfil do usuário, vale em qualquer
+ * dispositivo), com cache local. Pode ser reaberto via
+
  * evento global `erp:onboarding-replay` (item do menu da conta).
  */
 
 const ONBOARDING_VERSION = "v1";
-const onboardingKey = (user: string) =>
-  `erp-onboarding:${ONBOARDING_VERSION}:${user.toLowerCase()}`;
+/** Chave do tour — persistida no perfil do usuário (vale em qualquer dispositivo). */
+export const onboardingTourKey = `onboarding:${ONBOARDING_VERSION}`;
+
 
 export const ONBOARDING_REPLAY_EVENT = "erp:onboarding-replay";
 
@@ -202,14 +206,18 @@ export function OnboardingTour() {
   /* Primeiro acesso — só depois que o "novidades" já foi visto. */
   useEffect(() => {
     if (!user || loading) return;
-    try {
-      if (localStorage.getItem(onboardingKey(user))) return;
-      if (!localStorage.getItem(whatsNewStorageKey(user))) return;
-    } catch {
-      return;
-    }
-    setStep(0);
-    setOpen(true);
+    let cancelled = false;
+    (async () => {
+      if (await hasSeenTour(onboardingTourKey)) return;
+      /* só depois que o "novidades" já foi visto */
+      if (!(await hasSeenTour(whatsNewTourKey))) return;
+      if (cancelled) return;
+      setStep(0);
+      setOpen(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [user, loading]);
 
   /* Replay pelo menu da conta. */
@@ -223,11 +231,7 @@ export function OnboardingTour() {
   }, []);
 
   const close = () => {
-    try {
-      if (user) localStorage.setItem(onboardingKey(user), new Date().toISOString());
-    } catch {
-      /* ignore */
-    }
+    void markTourSeen(onboardingTourKey);
     setOpen(false);
   };
 

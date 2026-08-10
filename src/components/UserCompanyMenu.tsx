@@ -3,8 +3,9 @@ import { Building2, ChevronDown, Compass, Loader2, LogOut, ShieldCheck, KeyRound
 import { Switch } from "@/components/ui/switch";
 import { isKeepSessionAlive, setKeepSessionAlive } from "@/lib/session-keepalive";
 
-import { ONBOARDING_REPLAY_EVENT } from "@/components/OnboardingTour";
-import { WHATSNEW_REPLAY_EVENT } from "@/components/WhatsNewWizard";
+import { ONBOARDING_REPLAY_EVENT, onboardingTourKey } from "@/components/OnboardingTour";
+import { WHATSNEW_REPLAY_EVENT, whatsNewTourKey } from "@/components/WhatsNewWizard";
+import { resetTour } from "@/lib/tour-state";
 
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -340,15 +341,17 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
           <DropdownMenuItem
             onSelect={() => {
               setOpen(false);
+              void resetTour(whatsNewTourKey);
               window.dispatchEvent(new CustomEvent(WHATSNEW_REPLAY_EVENT));
             }}
           >
             <Sparkles className="w-4 h-4 mr-2" /> Reiniciar tour inicial
           </DropdownMenuItem>
           <DropdownMenuItem
-            onSelect={() =>
-              window.dispatchEvent(new CustomEvent(ONBOARDING_REPLAY_EVENT))
-            }
+            onSelect={() => {
+              void resetTour(onboardingTourKey);
+              window.dispatchEvent(new CustomEvent(ONBOARDING_REPLAY_EVENT));
+            }}
           >
             <Compass className="w-4 h-4 mr-2" /> Rever tour de boas-vindas
           </DropdownMenuItem>

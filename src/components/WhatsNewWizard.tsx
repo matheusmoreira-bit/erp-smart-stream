@@ -9,12 +9,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useSap } from "@/contexts/SapContext";
+import { hasSeenTour, markTourSeen } from "@/lib/tour-state";
 
 /** Versão do tour. Incremente para exibir novamente a todos os usuários. */
 const TOUR_VERSION = "2026-08-07-novo-login";
-export const whatsNewStorageKey = (user: string) =>
-  `erp-whatsnew:${TOUR_VERSION}:${user.toLowerCase()}`;
-const storageKey = whatsNewStorageKey;
+/** Chave do tour — persistida no perfil do usuário (vale em qualquer dispositivo). */
+export const whatsNewTourKey = `whatsnew:${TOUR_VERSION}`;
 
 const steps = [
   {
@@ -55,13 +55,16 @@ export function WhatsNewWizard() {
 
   useEffect(() => {
     if (!user) return;
-    try {
-      if (localStorage.getItem(storageKey(user))) return;
-    } catch {
-      return;
-    }
-    setStep(0);
-    setOpen(true);
+    let cancelled = false;
+    (async () => {
+      const seen = await hasSeenTour(whatsNewTourKey);
+      if (cancelled || seen) return;
+      setStep(0);
+      setOpen(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   /* Reinício manual pelo menu da conta. */
@@ -76,11 +79,7 @@ export function WhatsNewWizard() {
 
 
   const close = () => {
-    try {
-      if (user) localStorage.setItem(storageKey(user), new Date().toISOString());
-    } catch {
-      /* ignore */
-    }
+    void markTourSeen(whatsNewTourKey);
     setOpen(false);
   };
 
