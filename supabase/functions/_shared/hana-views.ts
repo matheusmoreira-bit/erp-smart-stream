@@ -77,6 +77,46 @@ export interface FetchHanaViewParams {
   filters?: Record<string, string | number | boolean | Array<string | number>>;
 }
 
+/**
+ * Registra cada chamada real ao HanaAPI V2 em public.hana_health_probes,
+ * alimentando o monitor de saúde/alertas. Fire-and-forget: nunca quebra a
+ * consulta de negócio.
+ */
+async function recordHanaCall(
+  baseUrl: string,
+  view: string,
+  ok: boolean,
+  httpStatus: number | null,
+  durationMs: number,
+  errorMessage: string | null,
+): Promise<void> {
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) return;
+  try {
+    await fetch(`${url}/rest/v1/hana_health_probes`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({
+        base_url: baseUrl,
+        view_name: view,
+        ok,
+        http_status: httpStatus,
+        duration_ms: durationMs,
+        error_message: errorMessage ? errorMessage.slice(0, 500) : null,
+      }),
+    });
+  } catch {
+    // monitoramento nunca deve derrubar a chamada principal
+  }
+}
+
+
 
 function parsePayload(text: string): Record<string, unknown>[] {
   if (!text) return [];
