@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { normalizeText as baseNormalizeText, emailLocalPart } from "@/lib/text-normalize";
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
 import { useMyCapabilities } from "@/hooks/useMyCapabilities";
@@ -1601,14 +1600,6 @@ function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string }
       requesterName: e.requester_name || "",
     },
   } as ApprovalDoc & { __internalId?: string };
-}
-
-function normalizeIdentity(value?: string | null): string {
-  return baseNormalizeText(value);
-}
-
-function identityPrefix(value?: string | null): string {
-  return emailLocalPart(value);
 }
 
 function escapeSapString(value: string): string {
