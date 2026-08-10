@@ -25,7 +25,8 @@ import { useSap } from "@/contexts/SapContext";
 import { useModuleAccess } from "@/hooks/usePermissions";
 import { supabase } from "@/integrations/supabase/client";
 import { canonicalUserKey } from "@/lib/user-identity";
-import { whatsNewStorageKey } from "@/components/WhatsNewWizard";
+import { whatsNewTourKey } from "@/components/WhatsNewWizard";
+import { hasSeenTour, markTourSeen } from "@/lib/tour-state";
 
 /**
  * Onboarding guiado por perfil.
