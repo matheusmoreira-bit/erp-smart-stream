@@ -3695,7 +3695,7 @@ export function CreateExpenseModal({
                     e.status === "pending" ? { icon: "▶️", label: "Em andamento", color: "text-primary" } :
                     { icon: "⏳", label: "Na fila", color: "text-muted-foreground" };
                   const totalStr = e.estimatedTotal > 0
-                    ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: e.currency }).format(e.estimatedTotal)
+                    ? formatCurrency(e.estimatedTotal, e.currency)
                     : "—";
                   const lowConf = isLowConfidence(e.aiConfidence);
                   return (
