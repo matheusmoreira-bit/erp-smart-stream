@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { PageTitle } from "@/components/PageTitle";
 import { IdpBindingFlagCard } from "@/components/IdpBindingFlagCard";
 import { IdpDeprovisionLogCard } from "@/components/IdpDeprovisionLogCard";
+import IdpDivergencePanel from "@/components/users/IdpDivergencePanel";
 
 
 function jcToOption(jc: JumpCloudUser): SapSearchOption {
