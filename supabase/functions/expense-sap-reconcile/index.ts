@@ -214,7 +214,7 @@ Deno.serve(async (req) => {
     const limit = Math.min(Math.max(Number(body.limit) || 100, 1), 300);
     if (!companyDb && !expenseId) return json({ error: "Informe company_db ou expense_id" }, 400, cors);
 
-    // Execução automática (cron): varre todas as empresas ativas, uma a uma.
+    // Execução automática (cron diário): varre todas as empresas ativas, uma a uma.
     if (companyDb === "all") {
       const { data: companies } = await supabase
         .from("companies")
