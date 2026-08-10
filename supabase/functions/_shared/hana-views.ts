@@ -153,6 +153,7 @@ export async function fetchHanaView(
   let lastErr: unknown = null;
   for (const base of bases) {
     const url = `${base}/data/${encodeURIComponent(schema)}.${encodeURIComponent(view)}${queryString ? `?${queryString}` : ""}`;
+    const started = Date.now();
     try {
       const r = await fetch(url, {
         headers: {
@@ -161,6 +162,7 @@ export async function fetchHanaView(
         },
       });
       if (r.ok) {
+        void recordHanaCall(base, view, true, r.status, Date.now() - started, null);
         resp = r;
         break;
       }
@@ -168,12 +170,22 @@ export async function fetchHanaView(
       if (r.status >= 500) {
         const bodyText = await r.text().catch(() => "");
         console.log(`[hana-views] ${r.status} on ${url} body=${bodyText.slice(0, 300)}`);
+        void recordHanaCall(base, view, false, r.status, Date.now() - started, bodyText.slice(0, 200));
         lastErr = new Error(`HTTP ${r.status} em ${base}: ${bodyText.slice(0, 200)}`);
         continue;
       }
+      void recordHanaCall(base, view, false, r.status, Date.now() - started, `HTTP ${r.status}`);
       resp = r;
       break;
     } catch (e) {
+      void recordHanaCall(
+        base,
+        view,
+        false,
+        null,
+        Date.now() - started,
+        `sem comunicação: ${e instanceof Error ? e.message : String(e)}`,
+      );
       lastErr = e;
       continue;
     }
