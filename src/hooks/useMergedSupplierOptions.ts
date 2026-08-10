@@ -18,7 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSapCachedList, invalidateSapCache } from "@/hooks/useSapCachedList";
 import { useSap } from "@/contexts/SapContext";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
-import { normalizeText, onlyDigits } from "@/lib/supplier-search";
+import { normalizeText, onlyDigits, formatCnpjCpf } from "@/lib/supplier-search";
 
 export interface EnrichedSupplierOption extends SapSearchOption {
   /** Congelado no SAP (Frozen='tYES') — pode ser selecionado, mas exige reativação. */
