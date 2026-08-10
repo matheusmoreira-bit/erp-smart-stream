@@ -126,9 +126,10 @@ export function WhatsNewWizard() {
             )}
             {!isLast && (
               <Button variant="ghost" size="sm" onClick={close}>
-                Pular
+                Pular tour
               </Button>
             )}
+
             <Button size="sm" onClick={() => (isLast ? close() : setStep((s) => s + 1))}>
               {isLast ? "Entendi" : "Próximo"}
               {!isLast && <ChevronRight className="w-4 h-4 ml-1" />}
