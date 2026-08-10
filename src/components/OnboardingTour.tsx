@@ -40,8 +40,9 @@ import { hasSeenTour, markTourSeen } from "@/lib/tour-state";
  */
 
 const ONBOARDING_VERSION = "v1";
-const onboardingKey = (user: string) =>
-  `erp-onboarding:${ONBOARDING_VERSION}:${user.toLowerCase()}`;
+/** Chave do tour — persistida no perfil do usuário (vale em qualquer dispositivo). */
+export const onboardingTourKey = `onboarding:${ONBOARDING_VERSION}`;
+
 
 export const ONBOARDING_REPLAY_EVENT = "erp:onboarding-replay";
 
