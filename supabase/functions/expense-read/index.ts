@@ -91,12 +91,18 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
   let companyDB: string | null = null;
 
   // JWT do Cloud e sessão SAP são independentes: valida os dois em paralelo.
+  // A validação SAP tem teto de 8s — com o ERP degradado, a leitura não pode
+  // ficar pendurada até o idle timeout (150s) da edge function.
+  const sapWithCap = Promise.race([
+    validateSapSession(req).catch(() => null),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+  ]);
   const [cloudUser, sap] = await Promise.all([
     requireUser(req).catch((e) => {
       if (!(e instanceof AuthError)) throw e;
       return null;
     }),
-    validateSapSession(req),
+    sapWithCap,
   ]);
 
   if (cloudUser) {
@@ -145,7 +151,13 @@ async function identifyCallerCached(req: Request, admin: SupabaseClient): Promis
   if (hit && hit.expiresAt > Date.now()) return hit.value;
   const value = await identifyCaller(req, admin);
   if (callerCache.size > 500) callerCache.clear();
-  callerCache.set(key, { expiresAt: Date.now() + CALLER_TTL_MS, value });
+  // Se a sessão SAP não pôde ser comprovada (ERP fora do ar), guarda por pouco
+  // tempo para não congelar uma identidade incompleta por 5 minutos.
+  const degraded = !!req.headers.get("x-sap-session") && !value.userName;
+  callerCache.set(key, {
+    expiresAt: Date.now() + (degraded ? 20_000 : CALLER_TTL_MS),
+    value,
+  });
   return value;
 }
 

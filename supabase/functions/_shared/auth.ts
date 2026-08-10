@@ -490,9 +490,15 @@ export async function validateSapSession(req: Request) {
   // to the service-document root which any valid B1SESSION can read.
   const cookie = `B1SESSION=${sapSession}${routeId ? `; ROUTEID=${routeId}` : ""}`;
   const escaped = sapUser.replace(/'/g, "''");
-  let resp = await fetch(`${baseUrl}/Users('${encodeURIComponent(escaped)}')?$select=UserCode`, {
-    headers: { Cookie: cookie },
-  });
+  // SAP degradado não pode travar a requisição: o probe tem teto de tempo e,
+  // se estourar, a sessão fica "não comprovada" (o caller cai no JWT do Cloud).
+  const PROBE_TIMEOUT_MS = 6000;
+  const probe = (url: string) =>
+    fetch(url, { headers: { Cookie: cookie }, signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) })
+      .catch(() => null);
+
+  let resp = await probe(`${baseUrl}/Users('${encodeURIComponent(escaped)}')?$select=UserCode`);
+  if (!resp) return null;
   // 401 = bad session. 403/404 = session is fine, permission/lookup issue.
   if (resp.status === 401) {
     sapSessionValidationCache.delete(cacheKey);
@@ -501,7 +507,9 @@ export async function validateSapSession(req: Request) {
   if (!resp.ok && resp.status !== 403 && resp.status !== 404) {
     // Fallback: service-document root requires only a valid session.
     await resp.body?.cancel().catch(() => {});
-    resp = await fetch(`${baseUrl}/`, { headers: { Cookie: cookie } });
+    const fallback = await probe(`${baseUrl}/`);
+    if (!fallback) return null;
+    resp = fallback;
     if (resp.status === 401) {
       sapSessionValidationCache.delete(cacheKey);
       return null;
