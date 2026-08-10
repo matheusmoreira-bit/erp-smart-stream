@@ -114,8 +114,15 @@ import { CurrencyField } from "@/components/CurrencyField";
 const DEDUP_LOG = "[expense-dedupe]";
 
 function formatCurrency(value: number, currency: string = "BRL") {
-  const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: validCode }).format(value);
+  const code = String(currency || "").trim().toUpperCase();
+  const validCode = /^[A-Z]{3}$/.test(code) ? code : "BRL";
+  const amount = Number.isFinite(value) ? value : 0;
+  try {
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: validCode }).format(amount);
+  } catch {
+    // Código ISO inexistente (ex.: "XXX" vindo da IA) — nunca deixar quebrar a tela.
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(amount);
+  }
 }
 
 export interface PagCorpPrefill {
@@ -1101,10 +1108,13 @@ export function CreateExpenseModal({
     const { valid, errors } = validateAttachments(newFiles);
     for (const msg of errors) toast.error(msg);
     if (valid.length === 0) return;
-    setFiles((prev) => [...prev, ...valid]);
-    if (aiEnabled) {
-      processWithAI([...files, ...valid]);
-    }
+    // Usa o estado atualizado (evita perder anexos quando o usuário adiciona
+    // vários arquivos em sequência rápida, antes do re-render).
+    setFiles((prev) => {
+      const next = [...prev, ...valid];
+      if (aiEnabled) queueMicrotask(() => processWithAI(next));
+      return next;
+    });
   };
 
   const removeFile = (index: number) => {
@@ -3549,11 +3559,7 @@ export function CreateExpenseModal({
                   );
                   const currency = currencies[0] || "BRL";
                   const totalStr = estimatedTotal > 0
-                    ? new Intl.NumberFormat("pt-BR", {
-                        style: "currency",
-                        currency,
-                        maximumFractionDigits: 2,
-                      }).format(estimatedTotal)
+                    ? formatCurrency(estimatedTotal, currency)
                     : "—";
                   return (
                     <button
@@ -3699,7 +3705,7 @@ export function CreateExpenseModal({
                     e.status === "pending" ? { icon: "▶️", label: "Em andamento", color: "text-primary" } :
                     { icon: "⏳", label: "Na fila", color: "text-muted-foreground" };
                   const totalStr = e.estimatedTotal > 0
-                    ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: e.currency }).format(e.estimatedTotal)
+                    ? formatCurrency(e.estimatedTotal, e.currency)
                     : "—";
                   const lowConf = isLowConfidence(e.aiConfidence);
                   return (
@@ -4423,8 +4429,7 @@ export function CreateExpenseModal({
         </DialogHeader>
         {detailsView && (() => {
           const { entry, group } = detailsView;
-          const currencyFmt = (v: number) =>
-            new Intl.NumberFormat("pt-BR", { style: "currency", currency: entry.currency || "BRL" }).format(v);
+          const currencyFmt = (v: number) => formatCurrency(v, entry.currency || "BRL");
 
           // Normalização do termo de busca para comparação case-insensitive
           // e sem sensibilidade a espaços nas bordas.
