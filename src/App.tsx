@@ -71,6 +71,8 @@ import { TestCompanyBanner } from "./components/TestCompanyBanner.tsx";
 import { TestCompanyVisibilityGate } from "./components/TestCompanyVisibilityGate.tsx";
 import { DefaultPasswordWarning } from "./components/DefaultPasswordWarning.tsx";
 import { MobileBottomNav } from "./components/MobileBottomNav.tsx";
+import { RequireAuth } from "./components/RequireAuth.tsx";
+import Login from "./pages/Login.tsx";
 
 
 const queryClient = new QueryClient();
@@ -87,8 +89,12 @@ const App = () => (
           <BrowserRouter>
             <StickyHeaderMeasure />
             <ModuleSubmenu />
+            <RequireAuth>
             <Routes>
               <Route path="/" element={<Index />} />
+
+              {/* Login — público */}
+              <Route path="/login" element={<Login />} />
 
               {/* Aprovação por link assinado (e-mail / Slack) — público */}
               <Route path="/aprovar/:token" element={<ApprovalLink />} />
@@ -202,6 +208,7 @@ const App = () => (
 
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </RequireAuth>
             <MobileBottomNav />
           </BrowserRouter>
           <TestCompanyBanner />
