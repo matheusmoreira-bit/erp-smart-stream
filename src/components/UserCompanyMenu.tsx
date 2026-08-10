@@ -317,12 +317,21 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
           <DropdownMenuSeparator />
 
           <DropdownMenuItem
+            onSelect={() => {
+              setOpen(false);
+              window.dispatchEvent(new CustomEvent(WHATSNEW_REPLAY_EVENT));
+            }}
+          >
+            <Sparkles className="w-4 h-4 mr-2" /> Reiniciar tour inicial
+          </DropdownMenuItem>
+          <DropdownMenuItem
             onSelect={() =>
               window.dispatchEvent(new CustomEvent(ONBOARDING_REPLAY_EVENT))
             }
           >
             <Compass className="w-4 h-4 mr-2" /> Rever tour de boas-vindas
           </DropdownMenuItem>
+
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => logout()}>
             <LogOut className="w-4 h-4 mr-2" /> Sair da empresa
