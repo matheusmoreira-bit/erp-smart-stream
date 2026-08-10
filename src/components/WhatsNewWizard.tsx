@@ -43,6 +43,8 @@ const steps = [
   },
 ];
 
+/** Evento global para reabrir o tour a partir das configurações do usuário. */
+export const WHATSNEW_REPLAY_EVENT = "erp:whatsnew-replay";
 
 export function WhatsNewWizard() {
   const { session } = useSap();
@@ -61,6 +63,17 @@ export function WhatsNewWizard() {
     setStep(0);
     setOpen(true);
   }, [user]);
+
+  /* Reinício manual pelo menu da conta. */
+  useEffect(() => {
+    const handler = () => {
+      setStep(0);
+      setOpen(true);
+    };
+    window.addEventListener(WHATSNEW_REPLAY_EVENT, handler);
+    return () => window.removeEventListener(WHATSNEW_REPLAY_EVENT, handler);
+  }, []);
+
 
   const close = () => {
     try {
