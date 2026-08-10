@@ -18,7 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSapCachedList, invalidateSapCache } from "@/hooks/useSapCachedList";
 import { useSap } from "@/contexts/SapContext";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
-import { normalizeText, onlyDigits } from "@/lib/supplier-search";
+import { normalizeText, onlyDigits, formatCnpjCpf } from "@/lib/supplier-search";
 
 export interface EnrichedSupplierOption extends SapSearchOption {
   /** Congelado no SAP (Frozen='tYES') — pode ser selecionado, mas exige reativação. */
@@ -63,7 +63,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
   //    mais rápida (e completa) do que paginar BusinessPartners via Service
   //    Layer. Em caso de falha ou empresa sem HanaAPI, o hook `useSapCachedList`
   //    abaixo faz o fallback natural para BusinessPartners.
-  const cacheKey = isSales ? "customers_active_v6" : "suppliers_active_v6";
+  const cacheKey = isSales ? "customers_active_v7" : "suppliers_active_v7";
   const cardType = isSales ? "cCustomer" : "cSupplier";
 
   const [hanaLoaded, setHanaLoaded] = useState(false);
@@ -78,18 +78,22 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
   const HANA_TTL_MS = 30 * 60 * 1000;
 
   const mapHanaRows = (rows: any[]): EnrichedSupplierOption[] =>
-    rows.map((r) => ({
-      code: r.code,
-      name: r.name,
-      extra: r.extra,
-      currency: r.currency || "BRL",
-      frozen: !!r.frozen,
-      syncStatus: "synced",
-      details: {
-        fantasyName: r.details?.fantasyName,
-        taxId: r.details?.taxId,
-      },
-    }));
+    rows.map((r) => {
+      const rawTax = r.details?.taxId || r.extra || null;
+      const taxId = rawTax ? formatCnpjCpf(rawTax) : undefined;
+      return {
+        code: r.code,
+        name: r.name,
+        extra: taxId ?? r.extra,
+        currency: r.currency || "BRL",
+        frozen: !!r.frozen,
+        syncStatus: "synced",
+        details: {
+          fantasyName: r.details?.fantasyName,
+          taxId,
+        },
+      };
+    });
 
   useEffect(() => {
     let cancelled = false;
@@ -181,7 +185,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     cacheKey,
     endpoint: "BusinessPartners",
     params: {
-      $select: "CardCode,CardName,AliasName,Currency,Frozen",
+      $select: "CardCode,CardName,AliasName,FederalTaxID,UnifiedFederalTaxID,U_FGR_TaxId0,Currency,Frozen",
       $filter: `CardType eq '${cardType}'`,
     },
     // Ativa o fallback via Service Layer assim que sabemos que o HANA não tem
@@ -191,21 +195,25 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
       (hanaOptions === null || hanaOptions.length === 0) &&
       (hanaLoaded || hanaMemory.get(`${hanaCacheKey}:${companyDb}`)?.rows.length === 0),
 
-    mapRow: (row: any) =>
-      ({
+    mapRow: (row: any) => {
+      const rawTax =
+        row.UnifiedFederalTaxID || row.FederalTaxID || row.U_FGR_TaxId0 || row.U_FGR_TAXID0 || null;
+      const taxId = rawTax ? formatCnpjCpf(rawTax) : undefined;
+      return {
         code: row.CardCode,
         name: row.CardName,
-        // Sem CNPJ para empresas fora do HanaAPI — só exibimos o documento
-        // fiscal quando vem da view VW_FORNECEDORES (coluna "CNPJ / CPF").
-        extra: undefined,
+        // CNPJ/CPF vindo do Service Layer (empresas sem HanaAPI).
+        extra: taxId,
         currency: row.Currency || "",
         frozen: row.Frozen === "tYES",
         syncStatus: "synced",
         details: {
           fantasyName: row.AliasName || undefined,
-          taxId: undefined,
+          taxId,
         },
-      } as EnrichedSupplierOption),
+      } as EnrichedSupplierOption;
+    },
+
   });
 
   const effectiveSapOptions = hanaOptions && hanaOptions.length > 0
@@ -272,7 +280,8 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
 
       if (existingSap) {
         // Já veio do SAP — apenas anexa o id local para permitir retry se erro.
-        const localTaxId = r.federal_tax_id || r.u_fgr_taxid0 || undefined;
+        const rawLocalTax = r.federal_tax_id || r.u_fgr_taxid0 || null;
+        const localTaxId = rawLocalTax ? formatCnpjCpf(rawLocalTax) : undefined;
         if (localTaxId && !existingSap.extra) existingSap.extra = localTaxId;
         if (localTaxId && !existingSap.details?.taxId) {
           existingSap.details = { ...(existingSap.details || {}), taxId: localTaxId };
@@ -286,17 +295,19 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
 
       // Não veio do SAP → adiciona como opção local (invisível no SAP).
       if (!isSynced || !r.card_code) {
+        const rawLocalTax = r.federal_tax_id || r.u_fgr_taxid0 || null;
+        const localTaxId = rawLocalTax ? formatCnpjCpf(rawLocalTax) : undefined;
         localOnly.push({
           code: r.card_code || `LOCAL:${r.id}`,
           name: r.card_name || "(sem nome)",
-          extra: r.federal_tax_id || r.u_fgr_taxid0 || undefined,
+          extra: localTaxId,
           currency: r.currency || "BRL",
           notSynced: true,
           syncStatus: status,
           localId: r.id,
           details: {
             fantasyName: undefined,
-            taxId: r.federal_tax_id || r.u_fgr_taxid0 || undefined,
+            taxId: localTaxId,
           },
         });
       }
