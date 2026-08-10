@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { docNumberLabel } from "@/lib/doc-number";
+import { docNumberLabel, isInternalDoc, matchesDocQuery } from "@/lib/doc-number";
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
 import { useMyCapabilities } from "@/hooks/useMyCapabilities";
@@ -2052,6 +2052,7 @@ export default function ApprovalsPage() {
   const [isDelegating, setIsDelegating] = useState(false);
   const [isRevokingDelegation, setIsRevokingDelegation] = useState(false);
   const [typeFilter, setTypeFilter] = useState<"all" | "purchase" | "sales">("all");
+  const [originFilter, setOriginFilter] = useState<"all" | "erp" | "internal">("all");
   const [minValue, setMinValue] = useState<string>("");
   const [maxValue, setMaxValue] = useState<string>("");
   const [createdFrom, setCreatedFrom] = useState<string>("");
