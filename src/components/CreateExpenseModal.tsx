@@ -2890,6 +2890,28 @@ export function CreateExpenseModal({
                 />
               )}
             />
+            {supplier && (
+              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                <span className="font-mono text-foreground">{supplier.code}</span>
+                <span>·</span>
+                <span className="font-mono">
+                  {formatCnpjCpf(
+                    (supplier as EnrichedSupplierOption).details?.taxId ||
+                      (supplier as EnrichedSupplierOption).extra ||
+                      "",
+                  ) || "CNPJ não informado"}
+                </span>
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs"
+                  onClick={() => setSupplierDetailsOpen(true)}
+                >
+                  Ver cadastro (banco/PIX)
+                </Button>
+              </div>
+            )}
             {!supplier && !isSales && (suggestedSupplierName || aiSupplierData?.federal_tax_id) && (
                 <div className="mt-2 flex min-w-0 flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 sm:flex-row sm:items-start">
                 <span className="text-amber-600 dark:text-amber-400 text-sm">⚠️</span>
