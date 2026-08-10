@@ -729,8 +729,11 @@ function ExpenseDetailModal({
           <AlertDialogHeader>
             <AlertDialogTitle>Cancelar despesa?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação marcará a despesa como cancelada e removerá da fila de aprovações. Não é possível desfazer.
+              {cancelPropagatesToErp
+                ? `Este pedido já está integrado ao ERP (PC ${expense.sap_doc_num || expense.sap_doc_entry}) e ainda não teve NF de entrada. O cancelamento será propagado ao ERP. Não é possível desfazer.`
+                : "Esta ação marcará a despesa como cancelada e removerá da fila de aprovações. Não é possível desfazer."}
             </AlertDialogDescription>
+
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Voltar</AlertDialogCancel>
