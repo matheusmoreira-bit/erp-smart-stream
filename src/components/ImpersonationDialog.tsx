@@ -69,8 +69,8 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
 
   const start = async () => {
     if (!session?.companyDB) return;
-    if (!target || !password) {
-      toast.error("Selecione o usuário e informe a senha dele");
+    if (!target) {
+      toast.error("Selecione o usuário");
       return;
     }
     setBusy(true);
@@ -90,7 +90,21 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
       });
       clearAuthCache();
 
-      await login(target, password, session.companyDB, "sap");
+      if (password) {
+        // Com senha: valida a credencial provisionada abrindo sessão real no ERP.
+        await login(target, password, session.companyDB, "sap");
+      } else {
+        // Sem senha: entra apenas por identidade — a sessão do Service Layer,
+        // quando necessária, é resolvida sob demanda pelo broker.
+        sessionStorage.setItem(
+          "erp_session_v1",
+          JSON.stringify({
+            erpType: session.erpType || "sap",
+            companyDB: session.companyDB,
+            userName: target,
+          }),
+        );
+      }
 
       await logAuditAction({
         action: "impersonation_start",
@@ -101,6 +115,7 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
           target_user: target,
           target_email: selected?.eMail || null,
           company: getLabel(session.companyDB),
+          with_password: !!password,
         },
       });
 
@@ -118,6 +133,7 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
       setBusy(false);
     }
   };
+
 
   return (
     <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
