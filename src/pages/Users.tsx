@@ -364,14 +364,33 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
                             ))}
                           </select>
                         </div>
-                        <p className="text-sm text-muted-foreground truncate flex items-center gap-1">
-
+                        <div className="text-sm text-muted-foreground flex items-center gap-1">
                           <UsersRound className="w-3 h-3" />
                           Grupo:{" "}
-                          <span className="font-medium text-foreground/80">
-                            {userGroup?.name || "Sem grupo"}
-                          </span>
-                        </p>
+                          <select
+                            aria-label={`Grupo de ${user.UserName || user.UserCode}`}
+                            className="bg-transparent border border-border rounded px-1 py-0.5 text-xs font-medium text-foreground/80"
+                            value={userGroup?.id ?? ""}
+                            onChange={async (e) => {
+                              const groupId = e.target.value || null;
+                              try {
+                                await setGroup({ userCode: user.UserCode, email: user.eMail, groupId });
+                                toast.success(`Grupo de ${user.UserName || user.UserCode} atualizado em todas as empresas`);
+                              } catch (err) {
+                                toast.error(err instanceof Error ? err.message : "Não foi possível alterar o grupo");
+                              }
+                            }}
+                          >
+                            <option value="">Sem grupo</option>
+                            {permissionGroups.map((g) => (
+                              <option key={g.id} value={g.id}>
+                                {g.name}
+                                {g.company_db ? ` · ${g.company_db}` : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
                       </div>
                     </div>
 
