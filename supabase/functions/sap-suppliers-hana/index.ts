@@ -209,7 +209,14 @@ Deno.serve(async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const rows = rawRows.map(mapRow).filter((r): r is NonNullable<ReturnType<typeof mapRow>> => !!r);
+    const wanted = isSales ? "customer" : "supplier";
+    const rows = rawRows
+      .filter((raw) => {
+        const t = cardType(raw);
+        return t === null || t === wanted;
+      })
+      .map(mapRow)
+      .filter((r): r is NonNullable<ReturnType<typeof mapRow>> => !!r);
 
     // Dedup por code — mantém a primeira ocorrência
     const seen = new Set<string>();
