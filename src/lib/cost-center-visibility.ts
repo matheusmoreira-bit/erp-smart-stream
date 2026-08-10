@@ -34,7 +34,9 @@ export function canViewLotusCostCenters(
   if (isPrivileged) return true;
   return (groups || []).some((g) => {
     const n = normalizeText(g);
-    return ALLOWED_GROUP_TOKENS.some((t) => n === t || n.includes(t));
+    return ALLOWED_GROUP_TOKENS.some(
+      (t) => n === t || new RegExp(`(^|[^a-z0-9])${t}([^a-z0-9]|$)`).test(n),
+    );
   });
 }
 
