@@ -42,10 +42,15 @@ import {
   aggregateByDepartment,
   aggregateByUser,
   aggregateByDocType,
+  aggregateBySystem,
   docTypeLabel,
   formatBRL,
   useProductivityFilters,
+  SYSTEM_LABEL,
+  type ProductivitySystem,
+  type UserProductivityRow,
 } from "@/hooks/useUserProductivity";
+import { useFlowProductivity } from "@/hooks/useFlowProductivity";
 import { PageTitle } from "@/components/PageTitle";
 
 const CHART_COLORS = [
