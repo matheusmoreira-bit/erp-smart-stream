@@ -29,7 +29,6 @@ import { useSap } from "@/contexts/SapContext";
 import { useModuleAccess } from "@/hooks/usePermissions";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useTheme } from "next-themes";
-import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { cn } from "@/lib/utils";
 
 interface Entry {
