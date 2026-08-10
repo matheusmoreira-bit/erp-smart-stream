@@ -373,6 +373,8 @@ export function aggregateByUser(rows: UserProductivityRow[]) {
   const map = new Map<
     string,
     {
+      key: string;
+      system: ProductivitySystem;
       userCode: string;
       userName: string;
       department: string;
@@ -384,8 +386,13 @@ export function aggregateByUser(rows: UserProductivityRow[]) {
     }
   >();
   for (const r of rows) {
+    // Mesma pessoa pode aparecer nos dois sistemas com códigos distintos;
+    // por isso a chave inclui a origem para não somar maçãs com laranjas.
+    const key = `${r.system}|${r.userCode}`;
     const cur =
-      map.get(r.userCode) ?? {
+      map.get(key) ?? {
+        key,
+        system: r.system,
         userCode: r.userCode,
         userName: r.userName,
         department: r.department,
@@ -400,7 +407,7 @@ export function aggregateByUser(rows: UserProductivityRow[]) {
     cur.docsCancelados += r.docsCancelados;
     cur.edicoesFeitas += r.edicoesFeitas;
     cur.score += r.score;
-    map.set(r.userCode, cur);
+    map.set(key, cur);
   }
   return Array.from(map.values())
     .map((u) => ({
@@ -409,6 +416,30 @@ export function aggregateByUser(rows: UserProductivityRow[]) {
       ticketMedio: u.docsCriados > 0 ? u.valorTotalBRL / u.docsCriados : 0,
     }))
     .sort((a, b) => b.score - a.score);
+}
+
+/** Totais por origem (SAP x ERP Flow) para o comparativo da visão híbrida. */
+export function aggregateBySystem(rows: UserProductivityRow[]) {
+  const map = new Map<
+    ProductivitySystem,
+    { system: ProductivitySystem; docsCriados: number; valorTotalBRL: number; docsCancelados: number; users: Set<string> }
+  >();
+  for (const r of rows) {
+    const cur =
+      map.get(r.system) ?? {
+        system: r.system,
+        docsCriados: 0,
+        valorTotalBRL: 0,
+        docsCancelados: 0,
+        users: new Set<string>(),
+      };
+    cur.docsCriados += r.docsCriados;
+    cur.valorTotalBRL += r.valorTotalBRL;
+    cur.docsCancelados += r.docsCancelados;
+    cur.users.add(r.userCode);
+    map.set(r.system, cur);
+  }
+  return Array.from(map.values()).map((s) => ({ ...s, usersCount: s.users.size }));
 }
 
 export function aggregateByDocType(rows: UserProductivityRow[]) {
