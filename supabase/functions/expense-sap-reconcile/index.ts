@@ -193,12 +193,15 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceKey);
 
   try {
+    const cronKey = Deno.env.get("RECONCILE_CRON_KEY") || "";
+    const isCron = !!cronKey && req.headers.get("x-cron-key") === cronKey;
+
     const authHeader = req.headers.get("Authorization") || "";
     const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-    if (!token) return json({ error: "UNAUTHORIZED" }, 401, cors);
+    if (!token && !isCron) return json({ error: "UNAUTHORIZED" }, 401, cors);
 
-    let actorEmail = "service_role";
-    if (token !== serviceKey) {
+    let actorEmail = isCron ? "cron" : "service_role";
+    if (!isCron && token !== serviceKey) {
       const asCaller = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
         global: { headers: { Authorization: `Bearer ${token}` } },
       });
