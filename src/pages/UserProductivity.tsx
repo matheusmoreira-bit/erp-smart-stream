@@ -225,7 +225,7 @@ export default function UserProductivityPage() {
             <div className="min-w-0">
               <h1 className="text-2xl font-bold text-foreground">Produtividade de Usuários</h1>
               <p className="text-sm text-muted-foreground">
-                Entregas por departamento SAP — documentos, valor movimentado e retrabalho
+                Entregas por departamento — SAP + ERP Flow: documentos, valor movimentado e retrabalho
               </p>
             </div>
           </div>
