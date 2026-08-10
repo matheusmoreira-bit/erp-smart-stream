@@ -175,10 +175,11 @@ const App = () => (
               <Route path="/usuarios" element={<Navigate to="/usuarios/lista" replace />} />
               <Route path="/usuarios/lista" element={<UsersHub tab="list" />} />
               <Route path="/usuarios/permissoes" element={<UsersHub tab="permissions" />} />
-              <Route path="/usuarios/administradores" element={<UsersHub tab="admins" />} />
-              <Route path="/usuarios/sap" element={<UsersHub tab="sap" />} />
+              <Route path="/usuarios/administradores" element={<Navigate to="/usuarios/lista?seg=admins" replace />} />
+              <Route path="/usuarios/sap" element={<Navigate to="/usuarios/lista?seg=sap" replace />} />
               <Route path="/usuarios/atividade" element={<UsersHub tab="activity" />} />
-              <Route path="/usuarios/produtividade" element={<UsersHub tab="productivity" />} />
+              <Route path="/usuarios/produtividade" element={<Navigate to="/analytics/produtividade" replace />} />
+              <Route path="/analytics/produtividade" element={<UserProductivity />} />
               <Route path="/usuarios/sincronizacao-idp" element={<UsersHub tab="idp" />} />
               <Route path="/usuarios/licencas" element={<UsersHub tab="licenses" />} />
               <Route path="/usuarios/importar-licencas" element={<UsersHub tab="licenses-import" />} />
