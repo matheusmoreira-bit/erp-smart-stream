@@ -69,8 +69,8 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
 
   const start = async () => {
     if (!session?.companyDB) return;
-    if (!target || !password) {
-      toast.error("Selecione o usuário e informe a senha dele");
+    if (!target) {
+      toast.error("Selecione o usuário");
       return;
     }
     setBusy(true);
@@ -90,7 +90,21 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
       });
       clearAuthCache();
 
-      await login(target, password, session.companyDB, "sap");
+      if (password) {
+        // Com senha: valida a credencial provisionada abrindo sessão real no ERP.
+        await login(target, password, session.companyDB, "sap");
+      } else {
+        // Sem senha: entra apenas por identidade — a sessão do Service Layer,
+        // quando necessária, é resolvida sob demanda pelo broker.
+        sessionStorage.setItem(
+          "erp_session_v1",
+          JSON.stringify({
+            erpType: session.erpType || "sap",
+            companyDB: session.companyDB,
+            userName: target,
+          }),
+        );
+      }
 
       await logAuditAction({
         action: "impersonation_start",
@@ -101,6 +115,7 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
           target_user: target,
           target_email: selected?.eMail || null,
           company: getLabel(session.companyDB),
+          with_password: !!password,
         },
       });
 
@@ -118,6 +133,7 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
       setBusy(false);
     }
   };
+
 
   return (
     <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
@@ -176,15 +192,19 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="imp-pass">Senha do usuário (provisionada)</Label>
+            <Label htmlFor="imp-pass">Senha do usuário (opcional)</Label>
             <Input
               id="imp-pass"
               type="password"
               autoComplete="off"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Senha do usuário no ERP"
+              placeholder="Deixe em branco para entrar sem senha"
             />
+            <p className="text-xs text-muted-foreground">
+              Sem senha você entra pela identidade do usuário; informe a senha apenas se quiser
+              validar a credencial provisionada no ERP.
+            </p>
           </div>
         </div>
 
@@ -192,7 +212,8 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
             Cancelar
           </Button>
-          <Button onClick={start} disabled={busy || !target || !password}>
+          <Button onClick={start} disabled={busy || !target}>
+
             {busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
             Atuar como este usuário
           </Button>
