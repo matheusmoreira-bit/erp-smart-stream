@@ -20,3 +20,32 @@ export function docNumberLabel(
   const code = internalDocCode((doc as { __internalId?: string | null } | null | undefined)?.__internalId);
   return code ? `#${code}` : "#—";
 }
+
+/** Verdadeiro quando o documento é interno (sem nº do ERP). */
+export function isInternalDoc(
+  doc?: { docNum?: number | null } | null,
+): boolean {
+  return !(Number(doc?.docNum || 0) > 0);
+}
+
+/** Normaliza uma busca por número de documento (remove #, espaços e hífens). */
+export function normalizeDocQuery(q: string): string {
+  return String(q || "").replace(/[#\s-]/g, "").toLowerCase();
+}
+
+/**
+ * Casa uma busca livre com o nº do ERP OU o código interno do documento.
+ * Aceita "#A38F5BF9", "a38f5bf9", "a38f5bf9-ed6d-..." e "208".
+ */
+export function matchesDocQuery(
+  doc: { docNum?: number | null; __internalId?: string | null } | null | undefined,
+  query: string,
+): boolean {
+  const q = normalizeDocQuery(query);
+  if (!q) return true;
+  const num = String(Number(doc?.docNum || 0) || "");
+  if (num && num.includes(q)) return true;
+  const id = String(doc?.__internalId || "").replace(/-/g, "").toLowerCase();
+  if (!id) return false;
+  return id.startsWith(q) || internalDocCode(id).toLowerCase().includes(q);
+}

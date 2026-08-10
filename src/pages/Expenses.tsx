@@ -1,4 +1,5 @@
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
+import { internalDocCode, normalizeDocQuery } from "@/lib/doc-number";
 import { useState, useEffect, useCallback, useRef } from "react";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 import { Helmet } from "react-helmet-async";
@@ -566,7 +567,7 @@ function ExpenseDetailModal({
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-xs">
-                  {expense.sap_doc_num != null && (
+                  {expense.sap_doc_num != null ? (
                     <div className="space-y-0.5">
                       <p className="text-muted-foreground">Documento ERP</p>
                       <p className="text-foreground font-mono font-medium">
@@ -574,7 +575,12 @@ function ExpenseDetailModal({
                         {expense.sap_doc_entry ? ` (entry ${expense.sap_doc_entry})` : ""}
                       </p>
                     </div>
-                  )}
+                  ) : internalDocCode(expense.id) ? (
+                    <div className="space-y-0.5">
+                      <p className="text-muted-foreground">Código interno</p>
+                      <p className="text-foreground font-mono font-medium">#{internalDocCode(expense.id)}</p>
+                    </div>
+                  ) : null}
                   {expense.sap_purchase_order_status && (
                     <div className="space-y-0.5">
                       <p className="text-muted-foreground">{isSalesDoc ? "Status PV" : "Status PC"}</p>
@@ -1418,7 +1424,10 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       const q = f.sap_doc_num.trim();
       const num = e.sap_doc_num?.toString() || "";
       const entry = e.sap_doc_entry?.toString() || "";
-      if (!num.includes(q) && !entry.includes(q)) return false;
+      const dq = normalizeDocQuery(q);
+      const iid = String(e.id || "").replace(/-/g, "").toLowerCase();
+      const matchesInternal = !!dq && !!iid && (iid.startsWith(dq) || internalDocCode(iid).toLowerCase().includes(dq));
+      if (!num.includes(q) && !entry.includes(q) && !matchesInternal) return false;
     }
     if (f.branch_id && String(e.branch_id ?? "") !== f.branch_id.trim()) return false;
     const minV = f.min_amount ? Number(f.min_amount.replace(",", ".")) : null;
@@ -1445,6 +1454,11 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
     if (!search) return true;
     const q = search.toLowerCase();
+    const docQ = normalizeDocQuery(search);
+    const internalId = String(e.id || "").replace(/-/g, "").toLowerCase();
+    if (docQ && internalId && (internalId.startsWith(docQ) || internalDocCode(internalId).toLowerCase().includes(docQ))) {
+      return true;
+    }
     return (
       e.supplier_name.toLowerCase().includes(q) ||
       e.requester_name.toLowerCase().includes(q) ||
@@ -1893,7 +1907,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   { header: "Data doc.", cell: (r: typeof filtered[number]) => r.exp.doc_date ? new Date(r.exp.doc_date).toLocaleDateString("pt-BR") : "—" },
                   { header: "Vencimento", cell: (r: typeof filtered[number]) => r.exp.due_date ? new Date(r.exp.due_date).toLocaleDateString("pt-BR") : "—" },
                   { header: "Total", align: "right" as const, cell: (r: typeof filtered[number]) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: /^[A-Z]{3}$/.test(r.exp.currency) ? r.exp.currency : "BRL" }).format(r.exp.total_amount) },
-                  { header: "ERP #", cell: (r: typeof filtered[number]) => r.exp.sap_doc_num ? `#${r.exp.sap_doc_num}` : "—" },
+                  { header: "ERP #", cell: (r: typeof filtered[number]) => r.exp.sap_doc_num ? `#${r.exp.sap_doc_num}` : (internalDocCode(r.exp.id) ? `#${internalDocCode(r.exp.id)}` : "—") },
                   { header: "Origem", cell: (r: typeof filtered[number]) => r.origin === "erp_flow" ? "ERP Flow" : erpLabel },
                 ],
                 rows: pageItems,
@@ -2593,7 +2607,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               </div>
               <div className="space-y-1.5">
                 <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Nº do documento (SAP)</Label>
-                <Input value={advDraft.sap_doc_num} onChange={(e) => setAdvDraft({ ...advDraft, sap_doc_num: e.target.value })} placeholder="DocNum ou DocEntry" />
+                <Input value={advDraft.sap_doc_num} onChange={(e) => setAdvDraft({ ...advDraft, sap_doc_num: e.target.value })} placeholder="DocNum, DocEntry ou código interno" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Filial (branch)</Label>

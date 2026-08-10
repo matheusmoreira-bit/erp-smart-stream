@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { docNumberLabel } from "@/lib/doc-number";
+import { docNumberLabel, isInternalDoc, matchesDocQuery } from "@/lib/doc-number";
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
 import { useMyCapabilities } from "@/hooks/useMyCapabilities";
@@ -1864,7 +1864,13 @@ function MyRequestsTab() {
     if (!search) return true;
     const q = search.toLowerCase();
     const has = (v: unknown) => String(v ?? "").toLowerCase().includes(q);
-    return has(r.docNum) || has(r.cardName) || has(r.docTypeName) || has(r.approvalModel);
+    return (
+      has(r.docNum) ||
+      matchesDocQuery(r as never, search) ||
+      has(r.cardName) ||
+      has(r.docTypeName) ||
+      has(r.approvalModel)
+    );
   });
 
 
@@ -1884,7 +1890,7 @@ function MyRequestsTab() {
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar por nº, fornecedor, tipo..."
+            placeholder="Buscar por nº ou código interno, fornecedor, tipo..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 bg-muted/30 border-border"
@@ -2052,6 +2058,7 @@ export default function ApprovalsPage() {
   const [isDelegating, setIsDelegating] = useState(false);
   const [isRevokingDelegation, setIsRevokingDelegation] = useState(false);
   const [typeFilter, setTypeFilter] = useState<"all" | "purchase" | "sales">("all");
+  const [originFilter, setOriginFilter] = useState<"all" | "erp" | "internal">("all");
   const [minValue, setMinValue] = useState<string>("");
   const [maxValue, setMaxValue] = useState<string>("");
   const [createdFrom, setCreatedFrom] = useState<string>("");
@@ -2505,11 +2512,18 @@ export default function ApprovalsPage() {
       if (!projs.some((p) => projectFilter.includes(p))) return false;
     }
 
+    if (originFilter !== "all") {
+      const internal = isInternalDoc(a as never);
+      if (originFilter === "internal" && !internal) return false;
+      if (originFilter === "erp" && internal) return false;
+    }
+
     if (!search) return true;
     const q = search.toLowerCase();
     const has = (v: unknown) => String(v ?? "").toLowerCase().includes(q);
     return (
       has(a.docNum) ||
+      matchesDocQuery(a as never, search) ||
       has(a.cardName) ||
       has(a.requester) ||
       has(a.currentApprover) ||
@@ -2589,7 +2603,7 @@ export default function ApprovalsPage() {
     useLazyList(filtered, {
       initial: 30,
       step: 10,
-      resetDeps: [search, typeFilter, minValue, maxValue, createdFrom, createdTo, dueFrom, dueTo, showAll, viewMode, onlyOverdue, sortKey, sortDir, ccFilter.join(","), projectFilter.join(",")],
+      resetDeps: [search, typeFilter, originFilter, minValue, maxValue, createdFrom, createdTo, dueFrom, dueTo, showAll, viewMode, onlyOverdue, sortKey, sortDir, ccFilter.join(","), projectFilter.join(",")],
     });
 
   const handleApprovalAction = async (
@@ -3195,7 +3209,7 @@ export default function ApprovalsPage() {
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Buscar por nº, fornecedor, aprovador, projeto..."
+              placeholder="Buscar por nº ou código interno, fornecedor, aprovador, projeto..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 bg-muted/30 border-border"
@@ -3219,6 +3233,7 @@ export default function ApprovalsPage() {
                 {(() => {
                   const active = [
                     typeFilter !== "all",
+                    originFilter !== "all",
                     !!minValue,
                     !!maxValue,
                     !!createdFrom,
@@ -3237,12 +3252,13 @@ export default function ApprovalsPage() {
             <PopoverContent align="end" className="w-[calc(100vw-2rem)] sm:w-[420px] max-w-[420px] p-4 space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-foreground">Filtros</p>
-                {(typeFilter !== "all" || minValue || maxValue || createdFrom || createdTo || dueFrom || dueTo || ccFilter.length > 0 || projectFilter.length > 0) && (
+                {(typeFilter !== "all" || originFilter !== "all" || minValue || maxValue || createdFrom || createdTo || dueFrom || dueTo || ccFilter.length > 0 || projectFilter.length > 0) && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => {
                       setTypeFilter("all");
+                      setOriginFilter("all");
                       setMinValue("");
                       setMaxValue("");
                       setCreatedFrom("");
@@ -3310,6 +3326,29 @@ export default function ApprovalsPage() {
                   ))}
                 </div>
               </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Origem</Label>
+                <div className="flex items-center gap-1">
+                  {([
+                    ["all", "Todas"],
+                    ["erp", "Nº do ERP"],
+                    ["internal", "Despesa interna"],
+                  ] as const).map(([key, lbl]) => (
+                    <button
+                      key={key}
+                      onClick={() => setOriginFilter(key)}
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                        originFilter === key
+                          ? "bg-primary/10 text-primary border-primary/30"
+                          : "border-border text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
