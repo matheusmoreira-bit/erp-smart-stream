@@ -2,17 +2,21 @@
  * Regra de visibilidade de centros de custo LOTUS.
  *
  * Centros de custo cujo código ou nome contenham "LOTUS" só podem ser
- * visualizados/selecionados por usuários dos grupos Contábil e
- * RH/DP/Folha (grupo "Gente e Gestão"). Admins/super-usuário seguem vendo tudo.
+ * visualizados/selecionados por usuários dos grupos Contábil, RH/DP/Folha
+ * (grupo "Gente e Gestão"), CFO e Admin. Admins/super-usuário do sistema
+ * seguem vendo tudo.
  */
 
 import { normalizeText } from "@/lib/text-normalize";
 
 /** Grupos autorizados (comparação normalizada, sem acento/caixa). */
-export const LOTUS_ALLOWED_GROUPS = ["Contábil", "Gente e Gestão"];
+export const LOTUS_ALLOWED_GROUPS = ["Admin", "CFO", "Contábil", "Gente e Gestão"];
 
 /** Aliases aceitos para os grupos autorizados (nomes variam por base). */
 const ALLOWED_GROUP_TOKENS = [
+  "admin",
+  "administrador",
+  "cfo",
   "contabil",
   "contabilidade",
   "gente e gestao",
