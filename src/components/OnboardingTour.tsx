@@ -273,9 +273,10 @@ export function OnboardingTour() {
             )}
             {!isLast && (
               <Button variant="ghost" size="sm" onClick={close}>
-                Pular
+                Pular tour
               </Button>
             )}
+
             {current.route && (
               <Button
                 variant="outline"
