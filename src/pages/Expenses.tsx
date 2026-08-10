@@ -1912,7 +1912,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   { header: "Data doc.", cell: (r: typeof filtered[number]) => r.exp.doc_date ? new Date(r.exp.doc_date).toLocaleDateString("pt-BR") : "—" },
                   { header: "Vencimento", cell: (r: typeof filtered[number]) => r.exp.due_date ? new Date(r.exp.due_date).toLocaleDateString("pt-BR") : "—" },
                   { header: "Total", align: "right" as const, cell: (r: typeof filtered[number]) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: /^[A-Z]{3}$/.test(r.exp.currency) ? r.exp.currency : "BRL" }).format(r.exp.total_amount) },
-                  { header: "ERP #", cell: (r: typeof filtered[number]) => r.exp.sap_doc_num ? `#${r.exp.sap_doc_num}` : (internalDocCode(r.exp.id) ? `#${internalDocCode(r.exp.id)}` : "—") },
+                  { header: "Nº Doc", cell: (r: typeof filtered[number]) => exportDocLabel(r.exp) },
                   { header: "Origem", cell: (r: typeof filtered[number]) => r.origin === "erp_flow" ? "ERP Flow" : erpLabel },
                 ],
                 rows: pageItems,
