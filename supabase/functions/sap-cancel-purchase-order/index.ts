@@ -47,10 +47,14 @@ Deno.serve(async (req) => {
   if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
-    const { companyDb, docEntries, reason } = await req.json();
+    const { companyDb, docEntries, reason, finalStatus } = await req.json();
     if (!companyDb) throw new Error("companyDb obrigatório");
     if (!Array.isArray(docEntries) || docEntries.length === 0)
       throw new Error("docEntries[] obrigatório");
+    // "cancelado": o documento é encerrado no ERP Flow junto com o cancelamento
+    // no SAP (cancelamento definitivo). Padrão: volta para aprovação (bypass).
+    const markCancelled = finalStatus === "cancelado";
+
 
     const sb = createClient(
       Deno.env.get("SUPABASE_URL")!,
