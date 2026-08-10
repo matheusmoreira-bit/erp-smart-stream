@@ -188,7 +188,15 @@ export default function Profile() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card
+          ref={securityRef}
+          id="seguranca"
+          className={
+            highlightSecurity
+              ? "scroll-mt-24 ring-2 ring-primary transition-shadow"
+              : "scroll-mt-24 transition-shadow"
+          }
+        >
           <CardHeader>
             <CardTitle className="text-base">Segurança e senha do ERP</CardTitle>
             <CardDescription>
