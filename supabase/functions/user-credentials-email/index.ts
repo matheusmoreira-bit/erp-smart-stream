@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
       entity_type: "sap_user",
       entity_id: userCode,
       company_db: companyDb,
-      details: { email, companies },
+      details: { email, companies, password_included: !!password },
     }).then(
       () => undefined,
       (e: unknown) => console.warn("[user-credentials-email] audit log falhou:", e instanceof Error ? e.message : String(e)),
