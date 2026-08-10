@@ -205,8 +205,8 @@ export default function SapUsersReplicate() {
       setResults(aggregated);
       setResultsOpen(true);
 
-      // Envio das credenciais provisórias por e-mail (quando houver e-mail no usuário).
-      if (sendCredentials) {
+      // Aviso de acesso criado por e-mail (sempre); a senha só vai se conhecida e autorizada.
+      {
         const byEmail = new Map<string, { code: string; name: string; email: string; password: string; companies: string[] }>();
         for (const tr of aggregated) {
           for (const d of tr.result?.created_details || []) {
@@ -226,7 +226,7 @@ export default function SapUsersReplicate() {
                 email: entry.email,
                 userCode: entry.code,
                 userName: entry.name,
-                password: entry.password,
+                password: sendCredentials ? entry.password : "",
                 companyDb: targetDbs[0] || null,
                 companies: entry.companies,
               },
@@ -235,10 +235,11 @@ export default function SapUsersReplicate() {
           } catch { /* ignora falha individual */ }
         }
         if (byEmail.size > 0) {
-          if (sent > 0) toast.success(`Credenciais enviadas para ${sent} usuário(s)`);
-          else toast.warning("Não foi possível enviar as credenciais por e-mail");
+          if (sent > 0) toast.success(`E-mail de acesso enviado para ${sent} usuário(s)`);
+          else toast.warning("Não foi possível enviar o e-mail de acesso");
         }
       }
+
       const okTargets = aggregated.filter((r) => r.result).length;
       const totalCreated = aggregated.reduce((s, r) => s + (r.result?.created.length || 0), 0);
       toast.success(`Replicação concluída em ${okTargets}/${targetDbs.length} bases — ${totalCreated} criados no total`);
@@ -373,8 +374,9 @@ export default function SapUsersReplicate() {
 
             <label className="flex items-center gap-2 text-sm">
               <Checkbox checked={sendCredentials} onCheckedChange={(v) => setSendCredentials(!!v)} />
-              Enviar credenciais provisórias por e-mail aos usuários replicados
+              Incluir a senha no e-mail (o aviso de acesso criado é sempre enviado)
             </label>
+
           </div>
 
           <div>

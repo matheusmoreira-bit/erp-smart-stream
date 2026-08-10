@@ -149,7 +149,7 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
       if (totalCreated > 0) {
         toast.success(`Usuário ${userName} criado em ${totalCreated} empresa(s)`);
 
-        if (sendCredentials && email.trim()) {
+        if (email.trim()) {
           const createdDbs = [
             ...(createdInCurrent && currentDb ? [currentDb] : []),
             ...res.replicationResults.filter((r) => r.status === "success").map((r) => r.companyDB),
@@ -161,7 +161,8 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
                 email: email.trim(),
                 userCode: userCode.trim(),
                 userName: userName.trim(),
-                password,
+                // Só envia a senha quando ela é conhecida e o admin autorizou o envio.
+                password: sendCredentials ? password : "",
                 companyDb: currentDb || null,
                 companies: createdDbs.map(
                   (db) => companies.find((c) => c.company_db === db)?.display_name || db,
@@ -170,13 +171,14 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
             },
           );
           if (mailError) {
-            toast.warning("Usuário criado, mas o envio das credenciais falhou");
+            toast.warning("Usuário criado, mas o envio do e-mail de acesso falhou");
           } else if (mail?.sent) {
-            toast.success(`Credenciais enviadas para ${email.trim()}`);
+            toast.success(`E-mail de acesso enviado para ${email.trim()}`);
           } else if (mail?.reason === "disabled_by_settings") {
-            toast.info("Envio de credenciais desativado nas configurações de notificação");
+            toast.info("Envio de e-mail de acesso desativado nas configurações de notificação");
           }
         }
+
       }
       if (res.replicationResults.length > 0 || (createdInCurrent && res.replicationResults.length === 0 && selectedDbs.size > 1)) {
         // Show report dialog (include current row synthesized if relevant)
@@ -285,13 +287,16 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
                   checked={sendCredentials}
                   onCheckedChange={(v) => setSendCredentials(v === true)}
                   disabled={submitting || !email.trim()}
-                  aria-label="Enviar credenciais por e-mail"
+                  aria-label="Incluir a senha no e-mail"
                 />
                 <span className="text-xs text-muted-foreground leading-snug">
-                  Enviar credenciais provisórias por e-mail ao novo usuário
-                  {!email.trim() && " (informe o e-mail acima)"}
+                  Incluir a senha no e-mail de acesso
+                  {email.trim()
+                    ? " (o aviso de acesso criado, com link e empresas, é sempre enviado)"
+                    : " (informe o e-mail acima)"}
                 </span>
               </label>
+
             </div>
 
 

@@ -46,10 +46,9 @@ function buildHtml(opts: {
   companies: string[];
 }) {
   const url = appUrl();
-  const rows: [string, string][] = [
-    ["Usuário", opts.userCode],
-    ["Senha provisória", opts.password],
-  ];
+  const hasPassword = !!opts.password;
+  const rows: [string, string][] = [["Usuário", opts.userCode]];
+  if (hasPassword) rows.push(["Senha provisória", opts.password]);
   if (opts.companies.length) rows.push(["Empresas", opts.companies.join(", ")]);
 
   const tableRows = rows
@@ -60,21 +59,33 @@ function buildHtml(opts: {
     )
     .join("");
 
+  const companiesList = opts.companies.length
+    ? `<p style="margin:0 0 16px;font-size:14px;color:#334155">Você tem acesso às seguintes empresas:</p>
+       <ul style="margin:0 0 16px;padding-left:20px;font-size:14px;color:#0f172a">
+         ${opts.companies.map((c) => `<li style="margin-bottom:4px">${esc(c)}</li>`).join("")}
+       </ul>`
+    : "";
+
+  const passwordNote = hasPassword
+    ? `Por segurança, altere a senha no primeiro acesso e não compartilhe estas credenciais com ninguém.`
+    : `Sua senha foi definida pelo administrador e não é enviada por e-mail. Caso não a tenha recebido, solicite ao administrador que criou o seu acesso.`;
+
   return `<div style="font-family:Arial,Helvetica,sans-serif;background:#ffffff;padding:24px;color:#0f172a">
     <h2 style="margin:0 0 8px;font-size:18px">Seu acesso ao ERP Flow foi criado</h2>
     <p style="margin:0 0 16px;font-size:14px;color:#334155">
-      Olá ${esc(opts.userName || opts.userCode)}, seu usuário já está disponível. Use as credenciais provisórias abaixo para o primeiro acesso.
+      Olá ${esc(opts.userName || opts.userCode)}, seu usuário já está disponível${hasPassword ? ". Use as credenciais abaixo para o primeiro acesso." : "."}
     </p>
     <table style="border-collapse:collapse;margin-bottom:16px;background:#f8fafc;border-radius:8px;padding:8px">${tableRows}</table>
+    ${companiesList}
     <p style="font-size:13px;margin:0 0 16px">
       <a href="${esc(url)}" style="background:#0ea5e9;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;display:inline-block;font-weight:600">Acessar o ERP Flow</a>
     </p>
-    <p style="font-size:13px;color:#334155;margin:0 0 8px">
-      Por segurança, altere a senha no primeiro acesso e não compartilhe estas credenciais com ninguém.
-    </p>
+    <p style="font-size:13px;color:#334155;margin:0 0 8px">${esc(url)}</p>
+    <p style="font-size:13px;color:#334155;margin:0 0 8px">${passwordNote}</p>
     <p style="margin-top:24px;font-size:12px;color:#94a3b8">Mensagem automática do ERP Flow.</p>
   </div>`;
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -96,7 +107,9 @@ Deno.serve(async (req) => {
       : [];
 
     if (!isEmail(email)) return json({ sent: false, reason: "invalid_email" }, 400);
-    if (!userCode || !password) return json({ sent: false, reason: "missing_fields" }, 400);
+    // A senha é opcional: quando não é conhecida, envia apenas o aviso de acesso criado.
+    if (!userCode) return json({ sent: false, reason: "missing_fields" }, 400);
+
 
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -132,7 +145,7 @@ Deno.serve(async (req) => {
       entity_type: "sap_user",
       entity_id: userCode,
       company_db: companyDb,
-      details: { email, companies },
+      details: { email, companies, password_included: !!password },
     }).then(
       () => undefined,
       (e: unknown) => console.warn("[user-credentials-email] audit log falhou:", e instanceof Error ? e.message : String(e)),
