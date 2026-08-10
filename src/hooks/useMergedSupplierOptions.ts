@@ -181,7 +181,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     cacheKey,
     endpoint: "BusinessPartners",
     params: {
-      $select: "CardCode,CardName,AliasName,Currency,Frozen",
+      $select: "CardCode,CardName,AliasName,FederalTaxID,UnifiedFederalTaxID,U_FGR_TaxId0,Currency,Frozen",
       $filter: `CardType eq '${cardType}'`,
     },
     // Ativa o fallback via Service Layer assim que sabemos que o HANA não tem
@@ -191,21 +191,25 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
       (hanaOptions === null || hanaOptions.length === 0) &&
       (hanaLoaded || hanaMemory.get(`${hanaCacheKey}:${companyDb}`)?.rows.length === 0),
 
-    mapRow: (row: any) =>
-      ({
+    mapRow: (row: any) => {
+      const rawTax =
+        row.UnifiedFederalTaxID || row.FederalTaxID || row.U_FGR_TaxId0 || row.U_FGR_TAXID0 || null;
+      const taxId = rawTax ? formatCnpjCpf(rawTax) : undefined;
+      return {
         code: row.CardCode,
         name: row.CardName,
-        // Sem CNPJ para empresas fora do HanaAPI — só exibimos o documento
-        // fiscal quando vem da view VW_FORNECEDORES (coluna "CNPJ / CPF").
-        extra: undefined,
+        // CNPJ/CPF vindo do Service Layer (empresas sem HanaAPI).
+        extra: taxId,
         currency: row.Currency || "",
         frozen: row.Frozen === "tYES",
         syncStatus: "synced",
         details: {
           fantasyName: row.AliasName || undefined,
-          taxId: undefined,
+          taxId,
         },
-      } as EnrichedSupplierOption),
+      } as EnrichedSupplierOption;
+    },
+
   });
 
   const effectiveSapOptions = hanaOptions && hanaOptions.length > 0
