@@ -529,6 +529,7 @@ export default function UserProductivityPage() {
                       <tr className="text-xs uppercase tracking-wider text-muted-foreground">
                         <th className="px-4 py-3 text-left w-10">#</th>
                         <th className="px-4 py-3 text-left">Usuário</th>
+                        <th className="px-4 py-3 text-left">Sistema</th>
                         <th className="px-4 py-3 text-left">Departamento</th>
                         <th className="px-4 py-3 text-right">Docs</th>
                         <th className="px-4 py-3 text-right">Valor R$</th>
@@ -542,7 +543,7 @@ export default function UserProductivityPage() {
                     <tbody>
                       {byUser.map((u, i) => (
                         <tr
-                          key={u.userCode}
+                          key={u.key}
                           className="border-t border-border hover:bg-muted/20 transition-colors"
                         >
                           <td className="px-4 py-2 text-muted-foreground">{i + 1}</td>
@@ -551,6 +552,9 @@ export default function UserProductivityPage() {
                             <span className="text-xs text-muted-foreground ml-1">
                               ({u.userCode})
                             </span>
+                          </td>
+                          <td className="px-4 py-2">
+                            <Badge variant="secondary">{SYSTEM_LABEL[u.system]}</Badge>
                           </td>
                           <td className="px-4 py-2 text-muted-foreground">{u.department}</td>
                           <td className="px-4 py-2 text-right font-mono">
