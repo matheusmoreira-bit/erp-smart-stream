@@ -32,6 +32,14 @@ export default function Profile() {
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [syncedOnce, setSyncedOnce] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const [passwordOpen, setPasswordOpen] = useState(params.get("senha") === "1");
+
+  // Deep link /perfil?senha=1 abre direto a troca de senha do ERP.
+  useEffect(() => {
+    if (params.get("senha") === "1") setPasswordOpen(true);
+  }, [params]);
+
 
   useEffect(() => {
     if (!profile) return;
