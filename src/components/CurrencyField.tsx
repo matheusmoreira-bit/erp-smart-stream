@@ -86,7 +86,11 @@ export function CurrencyField({
   id = "currency-field",
 }: CurrencyFieldProps) {
   const list = options && options.length > 0 ? options : Object.keys(CURRENCY_INFO);
-  const filled = Boolean(value);
+  // "##"/"Todas as Moedas" não é uma moeda: nunca deve travar o campo.
+  const isMulti = normalizeCurrencyCode(value) === "##";
+  const effectiveValue = isMulti ? "" : value;
+  const effectiveLocked = locked && !isMulti;
+  const filled = Boolean(effectiveValue);
 
   return (
     <div>
