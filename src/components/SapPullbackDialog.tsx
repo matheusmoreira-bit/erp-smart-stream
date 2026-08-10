@@ -71,6 +71,7 @@ export function SapPullbackDialog({
 }) {
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [pushing, setPushing] = useState(false);
   const [result, setResult] = useState<PullbackResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -107,6 +108,23 @@ export function SapPullbackDialog({
     onOpenChange(false);
   };
 
+  // Direção inversa: leva o que está no Flow para o ERP (PATCH do documento).
+  const pushToSap = async () => {
+    setPushing(true);
+    const { data, error: err } = await invokeFn<{ success?: boolean; error?: string; patched?: boolean }>(
+      "expense-to-sap",
+      { body: { expense_id: expenseId, patch_document: true, use_service_account: true } },
+    );
+    setPushing(false);
+    if (err || data?.error) {
+      toast.error(data?.error || (err as Error)?.message || `Falha ao atualizar o documento no ${erpLabel}`);
+      return;
+    }
+    toast.success(`Documento atualizado no ${erpLabel} com os dados do Flow.`);
+    onApplied?.();
+    void load();
+  };
+
   const changes = result?.header_changes ?? [];
   const hasChanges = !!result?.has_changes;
 
@@ -120,6 +138,8 @@ export function SapPullbackDialog({
           </DialogTitle>
           <DialogDescription>
             Compara este documento com a versão atual no {erpLabel} e espelha as diferenças no Flow.
+            Use <strong>Aplicar no Flow</strong> para trazer as alterações feitas no {erpLabel}, ou
+            <strong> Aplicar no {erpLabel}</strong> para reenviar o documento com os valores atuais do Flow.
             O status e a cadeia de aprovação não são alterados — a mudança fica registrada no histórico.
           </DialogDescription>
         </DialogHeader>
@@ -190,9 +210,13 @@ export function SapPullbackDialog({
           <Button size="sm" variant="outline" onClick={() => void load()} disabled={loading || applying}>
             Reconsultar
           </Button>
-          <Button size="sm" onClick={() => void apply()} disabled={!hasChanges || loading || applying}>
+          <Button size="sm" variant="outline" onClick={() => void apply()} disabled={!hasChanges || loading || applying || pushing}>
             {applying ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" aria-hidden="true" /> : null}
             Aplicar no Flow
+          </Button>
+          <Button size="sm" onClick={() => void pushToSap()} disabled={loading || applying || pushing}>
+            {pushing ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" aria-hidden="true" /> : null}
+            Aplicar no {erpLabel}
           </Button>
         </div>
       </DialogContent>
