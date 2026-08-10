@@ -671,27 +671,12 @@ export function useApprovals() {
       setIsRefreshing(false);
       return;
     }
-    // Sem sessão técnica: tenta login invisível com a senha provisionada.
-    // Nunca abre modal — se não houver credencial salva, apenas não lista
-    // as aprovações nativas do SAP.
-    if (!session.sessionId) {
-      const db = session.companyDB;
-      if (!db || silentLoginTriedRef.current === db) {
-        setApprovals([]);
-        setIsLoading(false);
-        setIsRefreshing(false);
-        return;
-      }
-      silentLoginTriedRef.current = db;
-      try {
-        setIsLoading(true);
-        await loginManaged(db); // dispara novo render com sessionId → refetch
-      } catch {
-        setApprovals([]);
-        setIsLoading(false);
-        setIsRefreshing(false);
-      }
-      return;
+    // Sem sessão técnica: dispara um login invisível (senha provisionada) em
+    // segundo plano, mas NÃO bloqueia a listagem — o servidor lê a view com a
+    // credencial técnica da empresa quando não recebe session_id.
+    if (!session.sessionId && session.companyDB && silentLoginTriedRef.current !== session.companyDB) {
+      silentLoginTriedRef.current = session.companyDB;
+      void loginManaged(session.companyDB).catch(() => {});
     }
 
     const force = !!opts?.force;
