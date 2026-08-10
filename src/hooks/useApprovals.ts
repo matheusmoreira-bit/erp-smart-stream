@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSap } from "@/contexts/SapContext";
 import { sapQuery, sapQueryView, sapReadApprovalsCache, sapWriteApprovalsCache, type SapSession } from "@/lib/sap-client";
 import { supabase } from "@/integrations/supabase/client";
