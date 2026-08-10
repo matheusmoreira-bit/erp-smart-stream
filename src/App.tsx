@@ -89,8 +89,12 @@ const App = () => (
           <BrowserRouter>
             <StickyHeaderMeasure />
             <ModuleSubmenu />
+            <RequireAuth>
             <Routes>
               <Route path="/" element={<Index />} />
+
+              {/* Login — público */}
+              <Route path="/login" element={<Login />} />
 
               {/* Aprovação por link assinado (e-mail / Slack) — público */}
               <Route path="/aprovar/:token" element={<ApprovalLink />} />
