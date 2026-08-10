@@ -192,15 +192,19 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="imp-pass">Senha do usuário (provisionada)</Label>
+            <Label htmlFor="imp-pass">Senha do usuário (opcional)</Label>
             <Input
               id="imp-pass"
               type="password"
               autoComplete="off"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Senha do usuário no ERP"
+              placeholder="Deixe em branco para entrar sem senha"
             />
+            <p className="text-xs text-muted-foreground">
+              Sem senha você entra pela identidade do usuário; informe a senha apenas se quiser
+              validar a credencial provisionada no ERP.
+            </p>
           </div>
         </div>
 
@@ -208,7 +212,8 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
             Cancelar
           </Button>
-          <Button onClick={start} disabled={busy || !target || !password}>
+          <Button onClick={start} disabled={busy || !target}>
+
             {busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
             Atuar como este usuário
           </Button>
