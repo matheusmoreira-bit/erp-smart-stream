@@ -3046,9 +3046,9 @@ export function CreateExpenseModal({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <CurrencyField
               value={currency}
-              onChange={currencyOptions ? setCurrency : undefined}
-              options={currencyOptions}
-              locked={!currencyOptions}
+              onChange={setCurrency}
+              options={currencyOptions ?? DEFAULT_MULTI_CURRENCIES}
+              locked={!currencyOptions && !!currency}
               lockedHint="Definida pelo cadastro do fornecedor"
               loading={loadingCurrencies}
             />
