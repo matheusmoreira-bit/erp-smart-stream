@@ -207,8 +207,28 @@ export default function UserActivityPage() {
           <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">ERP Flow: {flowError}</div>
         )}
 
+        <div className="flex gap-1 rounded-lg border border-border bg-card p-1 w-fit">
+          {([["activity", "Atividade"], ["audit", "Auditoria"]] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setView(key)}
+              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                view === key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {view === "audit" ? (
+          <AccessAuditTab />
+        ) : (
+          <>
 
         {/* Filters */}
+
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
