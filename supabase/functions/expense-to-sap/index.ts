@@ -1374,7 +1374,12 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       const patchPayload: Record<string, unknown> = { ...sapPayload };
       delete patchPayload.BPL_IDAssignedToInvoice;
       delete patchPayload.DocDate;
+      // TaxDate = data de lançamento contábil. Reenviá-la em um PATCH faz o
+      // add-on FGR recusar com "PERÍODO BLOQUEADO" quando o mês do documento
+      // já foi fechado — a data original permanece no SAP de qualquer forma.
+      delete patchPayload.TaxDate;
       delete patchPayload.DocCurrency;
+
       patchPayload.DocumentLines = ((sapPayload as any).DocumentLines as Array<Record<string, unknown>>)
         .map((l, i) => ({ LineNum: i, ...l }));
       lastSapPayload = patchPayload;
