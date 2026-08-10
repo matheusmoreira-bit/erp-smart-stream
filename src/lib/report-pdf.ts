@@ -14,6 +14,7 @@
 import { jsPDF } from "jspdf";
 import autoTable, { type UserOptions } from "jspdf-autotable";
 import { supabase } from "@/integrations/supabase/client";
+import { exportDocLabel } from "@/lib/doc-number";
 
 // ---- utilidades comuns ------------------------------------------------------
 
