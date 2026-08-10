@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Loader2, Search, Users, LogIn, ShieldAlert, Activity, Clock, Monitor, Timer } from "lucide-react";
+import { ArrowLeft, RefreshCw, Loader2, Search, Users, LogIn, ShieldAlert, Activity, Clock, Monitor, Timer, Workflow } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
@@ -14,11 +14,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from "recharts";
-import { useUserActivity, getActionLabel, getSourceLabel, isFailedLogin, formatDuration } from "@/hooks/useUserActivity";
-import type { Usr5Record } from "@/hooks/useUserActivity";
+import { useUserActivity, getActionLabel, isFailedLogin, formatDuration } from "@/hooks/useUserActivity";
+import { useFlowActivity } from "@/hooks/useFlowActivity";
+import { mergeActivity, formatEventDateTime, type ActivitySystem } from "@/lib/activity-events";
 import MonthlyLoginChart from "@/components/MonthlyLoginChart";
 import UserActivityRankings from "@/components/UserActivityRankings";
 import { PageTitle } from "@/components/PageTitle";
+
 
 const PIE_COLORS = [
   "hsl(var(--primary))",
