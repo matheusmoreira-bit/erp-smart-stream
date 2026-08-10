@@ -208,6 +208,10 @@ export default function IntegrationHealth() {
         })}
       </div>
 
+      <HanaHealthMonitor />
+
+
+
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Detalhe por função</CardTitle>
