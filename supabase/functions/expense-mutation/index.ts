@@ -984,10 +984,75 @@ async function actionCancel(admin: SupabaseClient, caller: Caller, body: any) {
   if (!isPrivileged && !isOwner(caller.identity || "", current)) {
     return json(403, { error: "Você não pode cancelar esta despesa" });
   }
-  // Only cancel from rascunho / pendente_aprovacao — once approved/integrated,
-  // cancellation must go through the SAP-cancel flow.
-  if (current.status !== "rascunho" && current.status !== "pendente_aprovacao") {
+  const alreadyInSap = !!(current.sap_doc_entry || current.sap_doc_num);
+  const cancellableStatuses = new Set(["rascunho", "pendente_aprovacao"]);
+  // Documento já integrado ao ERP e ainda SEM NF de entrada: o cancelamento no
+  // ERP Flow precisa ser propagado ao ERP (cancelamento do pedido de compra).
+  const integratedCancellable = alreadyInSap && (current.status === "aprovado" || current.status === "pc_lancado");
+  if (!cancellableStatuses.has(current.status) && !integratedCancellable) {
     return json(409, { error: `Despesa em status ${current.status} não pode ser cancelada aqui.` });
+  }
+
+  if (integratedCancellable) {
+    // Bloqueia se já existe NF de entrada (esboço ou lançada) para o pedido.
+    const { data: nfRows } = await admin
+      .from("nf_entrada_imports")
+      .select("status, sap_invoice_draft_id")
+      .eq("expense_id", expenseId);
+    const nfPosted = (nfRows || []).some((r: any) =>
+      r.sap_invoice_draft_id || ["awaiting_invoice", "completed"].includes(String(r.status))
+    );
+    if (nfPosted) {
+      return json(409, {
+        error: "Já existe NF de entrada lançada no ERP para este pedido — cancele a NF no ERP antes.",
+      });
+    }
+
+    const docEntry = Number(current.sap_doc_entry || 0);
+    if (!docEntry) {
+      return json(409, {
+        error: "Pedido integrado sem DocEntry no ERP — cancele manualmente no ERP antes.",
+      });
+    }
+
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    let sapOk = false;
+    let sapMsg = "";
+    try {
+      const r = await fetch(`${url}/functions/v1/sap-cancel-purchase-order`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+        body: JSON.stringify({
+          companyDb: current.company_db,
+          docEntries: [docEntry],
+          finalStatus: "cancelado",
+          reason: `Cancelado no ERP Flow por ${caller.identity || caller.email || "usuário"}`,
+        }),
+      });
+      const out = await r.json().catch(() => ({}));
+      const first = Array.isArray(out?.results) ? out.results[0] : null;
+      sapOk = !!out?.success && !!first?.ok;
+      sapMsg = String(first?.body || out?.error || "");
+    } catch (e) {
+      sapMsg = e instanceof Error ? e.message : String(e);
+    }
+
+    if (!sapOk) {
+      return json(502, {
+        error: `Não foi possível cancelar o pedido no ERP${sapMsg ? `: ${sapMsg}` : ""}. O documento segue ativo no ERP Flow.`,
+      });
+    }
+
+    await admin.from("expense_approval_log").insert({
+      expense_id: expenseId,
+      decision: "cancelled",
+      approver_name: caller.identity,
+      approver_email: caller.email || (caller.identity && caller.identity.includes("@") ? caller.identity : null),
+      remarks: `Cancelamento propagado ao ERP (PC ${current.sap_doc_num || docEntry}).`,
+    } as any);
+
+    return json(200, { ok: true, sap_cancelled: true });
   }
 
   const { error } = await admin.from("expenses").update({ status: "cancelado" }).eq("id", expenseId);
@@ -1002,6 +1067,7 @@ async function actionCancel(admin: SupabaseClient, caller: Caller, body: any) {
 
   return json(200, { ok: true });
 }
+
 
 /**
  * Reativa um documento cancelado, devolvendo-o para rascunho.
