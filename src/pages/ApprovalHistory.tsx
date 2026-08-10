@@ -214,7 +214,7 @@ export default function ApprovalHistory() {
                 columns: [
                   { header: "Data", cell: (r: typeof filtered[number]) => formatDate(r.decision_date) },
                   { header: "Decisão", cell: (r: typeof filtered[number]) => r.decision === "Y" ? "Aprovado" : r.decision === "N" ? "Rejeitado" : String(r.decision ?? "—") },
-                  { header: "Doc #", cell: (r: typeof filtered[number]) => String(r.doc_num ?? "—") },
+                  { header: "Doc #", cell: (r: typeof filtered[number]) => exportDocLabel(r) },
                   { header: "Tipo", cell: (r: typeof filtered[number]) => r.doc_type_name || "—" },
                   { header: "Parceiro", cell: (r: typeof filtered[number]) => r.card_name || "—" },
                   { header: "Solicitante", cell: (r: typeof filtered[number]) => displayUserName(r.requester_name || r.requester_code) },
