@@ -287,13 +287,16 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
                   checked={sendCredentials}
                   onCheckedChange={(v) => setSendCredentials(v === true)}
                   disabled={submitting || !email.trim()}
-                  aria-label="Enviar credenciais por e-mail"
+                  aria-label="Incluir a senha no e-mail"
                 />
                 <span className="text-xs text-muted-foreground leading-snug">
-                  Enviar credenciais provisórias por e-mail ao novo usuário
-                  {!email.trim() && " (informe o e-mail acima)"}
+                  Incluir a senha no e-mail de acesso
+                  {email.trim()
+                    ? " (o aviso de acesso criado, com link e empresas, é sempre enviado)"
+                    : " (informe o e-mail acima)"}
                 </span>
               </label>
+
             </div>
 
 
