@@ -32,6 +32,34 @@ export function currencyLabel(code?: string | null) {
   return CURRENCY_INFO[code.toUpperCase()]?.label ?? "";
 }
 
+/**
+ * Normaliza a moeda vinda do ERP. O Service Layer devolve ISO ("BRL") e "##"
+ * para PN multimoeda; a view HANA `VW_FORNECEDORES` devolve por extenso
+ * ("Real", "Todas as Moedas"). Sem isso, "Todas as Moedas" era tratada como
+ * uma moeda válida e o campo ficava travado, impedindo escolher a correta.
+ *
+ * Retorna o código ISO, "##" para multimoeda ou "" quando desconhecido.
+ */
+export function normalizeCurrencyCode(raw?: string | null): string {
+  const s = (raw ?? "").trim();
+  if (!s) return "";
+  if (s === "##") return "##";
+  const upper = s.toUpperCase();
+  if (/^[A-Z]{3}$/.test(upper) && upper !== "R$") return upper;
+  const n = upper.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (n.includes("todas")) return "##";
+  if (n.includes("real") || s === "R$") return "BRL";
+  if (n.includes("dolar canadense")) return "CAD";
+  if (n.includes("dolar")) return "USD";
+  if (n.includes("euro")) return "EUR";
+  if (n.includes("libra")) return "GBP";
+  if (n.includes("franco")) return "CHF";
+  if (n.includes("peso argentino")) return "ARS";
+  if (n.includes("peso uruguaio")) return "UYU";
+  if (n.includes("guarani")) return "PYG";
+  return "";
+}
+
 interface CurrencyFieldProps {
   value: string;
   onChange?: (value: string) => void;
