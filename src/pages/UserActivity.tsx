@@ -249,7 +249,18 @@ export default function UserActivityPage() {
               <SelectItem value="0">Todos</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={systemFilter} onValueChange={(v) => setSystemFilter(v as "all" | ActivitySystem)}>
+            <SelectTrigger className="w-[150px] bg-card">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">SAP + ERP Flow</SelectItem>
+              <SelectItem value="sap">Somente SAP</SelectItem>
+              <SelectItem value="flow">Somente ERP Flow</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
+
 
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
