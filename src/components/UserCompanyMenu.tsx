@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Building2, ChevronDown, Compass, Loader2, LogOut, ShieldCheck, KeyRound, Check, UserCog, Infinity as InfinityIcon } from "lucide-react";
+import { Building2, ChevronDown, Compass, Loader2, LogOut, ShieldCheck, KeyRound, Check, UserCog, Sparkles, Infinity as InfinityIcon } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { isKeepSessionAlive, setKeepSessionAlive } from "@/lib/session-keepalive";
 
 import { ONBOARDING_REPLAY_EVENT } from "@/components/OnboardingTour";
+import { WHATSNEW_REPLAY_EVENT } from "@/components/WhatsNewWizard";
+
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
