@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSapCachedList, invalidateSapCache } from "@/hooks/useSapCachedList";
 import { useSap } from "@/contexts/SapContext";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
+import { normalizeCurrencyCode } from "@/components/CurrencyField";
 import { normalizeText, onlyDigits, formatCnpjCpf } from "@/lib/supplier-search";
 
 export interface EnrichedSupplierOption extends SapSearchOption {
@@ -85,7 +86,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
         code: r.code,
         name: r.name,
         extra: taxId ?? r.extra,
-        currency: r.currency || "BRL",
+        currency: normalizeCurrencyCode(r.currency) || "BRL",
         frozen: !!r.frozen,
         syncStatus: "synced",
         details: {
@@ -203,7 +204,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
         name: row.CardName,
         // CNPJ/CPF vindo do Service Layer (empresas sem HanaAPI).
         extra: taxId,
-        currency: row.Currency || "",
+        currency: normalizeCurrencyCode(row.Currency),
         frozen: row.Frozen === "tYES",
         syncStatus: "synced",
         details: {
