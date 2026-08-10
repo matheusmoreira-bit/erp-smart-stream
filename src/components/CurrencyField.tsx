@@ -112,7 +112,7 @@ export function CurrencyField({
         {loading && <span className="ml-1">(carregando…)</span>}
       </label>
 
-      {locked || !onChange ? (
+      {effectiveLocked || !onChange ? (
         <div
           id={id}
           aria-readonly
@@ -121,16 +121,16 @@ export function CurrencyField({
           }`}
         >
           <span className="inline-flex items-center rounded bg-background px-1.5 py-0.5 text-xs font-semibold text-muted-foreground border">
-            {currencySymbol(value)}
+            {currencySymbol(effectiveValue)}
           </span>
-          <span className="font-medium">{value || "—"}</span>
-          {currencyLabel(value) && (
-            <span className="text-xs text-muted-foreground truncate">{currencyLabel(value)}</span>
+          <span className="font-medium">{effectiveValue || "—"}</span>
+          {currencyLabel(effectiveValue) && (
+            <span className="text-xs text-muted-foreground truncate">{currencyLabel(effectiveValue)}</span>
           )}
           <Lock className="w-3 h-3 ml-auto text-muted-foreground" aria-hidden />
         </div>
       ) : (
-        <Select value={value} onValueChange={onChange}>
+        <Select value={effectiveValue} onValueChange={onChange}>
           <SelectTrigger
             id={id}
             aria-label="Moeda do documento"
@@ -140,7 +140,7 @@ export function CurrencyField({
           >
             <div className="flex items-center gap-2 min-w-0">
               <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-xs font-semibold text-muted-foreground shrink-0">
-                {currencySymbol(value)}
+                {currencySymbol(effectiveValue)}
               </span>
               <SelectValue placeholder="Selecione a moeda" />
             </div>
@@ -159,7 +159,11 @@ export function CurrencyField({
       )}
 
       <p className="mt-1 text-[11px] leading-tight text-muted-foreground">
-        {locked ? lockedHint : "Apenas a moeda (ex.: BRL, USD). Não é o valor do documento."}
+        {effectiveLocked
+          ? lockedHint
+          : isMulti
+            ? "Fornecedor multimoeda — selecione a moeda deste documento."
+            : "Apenas a moeda (ex.: BRL, USD). Não é o valor do documento."}
       </p>
     </div>
   );
