@@ -42,10 +42,15 @@ import {
   aggregateByDepartment,
   aggregateByUser,
   aggregateByDocType,
+  aggregateBySystem,
   docTypeLabel,
   formatBRL,
   useProductivityFilters,
+  SYSTEM_LABEL,
+  type ProductivitySystem,
+  type UserProductivityRow,
 } from "@/hooks/useUserProductivity";
+import { useFlowProductivity } from "@/hooks/useFlowProductivity";
 import { PageTitle } from "@/components/PageTitle";
 
 const CHART_COLORS = [
@@ -83,26 +88,54 @@ function downloadCSV(filename: string, rows: Record<string, string | number>[]) 
 
 export default function UserProductivityPage() {
   const navigate = useNavigate();
-  const { rows, isLoading, error, hanaDisabled, refresh } = useUserProductivity();
+  const {
+    rows: sapRows,
+    isLoading: sapLoading,
+    error: sapError,
+    hanaDisabled,
+    refresh: refreshSap,
+  } = useUserProductivity();
+  const {
+    rows: flowRows,
+    isLoading: flowLoading,
+    error: flowError,
+    refresh: refreshFlow,
+  } = useFlowProductivity(180);
+
+  // Visão híbrida: SAP (Service Layer) + ERP Flow (banco da plataforma).
+  const rows: UserProductivityRow[] = useMemo(
+    () => [...sapRows, ...flowRows],
+    [sapRows, flowRows],
+  );
+  const isLoading = sapLoading || flowLoading;
+  const error = sapError || flowError;
+  const refresh = () => {
+    refreshSap();
+    refreshFlow();
+  };
+
   const { departments, docTypes, periodos } = useProductivityFilters(rows);
 
   const [periodoFilter, setPeriodoFilter] = useState<string>("all");
   const [deptFilter, setDeptFilter] = useState<string>("all");
   const [docTypeFilter, setDocTypeFilter] = useState<string>("all");
+  const [systemFilter, setSystemFilter] = useState<"all" | ProductivitySystem>("all");
   const [expandedDept, setExpandedDept] = useState<Set<string>>(new Set());
 
   const filtered = useMemo(() => {
     return rows.filter(
       (r) =>
+        (systemFilter === "all" || r.system === systemFilter) &&
         (periodoFilter === "all" || r.periodo === periodoFilter) &&
         (deptFilter === "all" || r.department === deptFilter) &&
         (docTypeFilter === "all" || r.docType === docTypeFilter),
     );
-  }, [rows, periodoFilter, deptFilter, docTypeFilter]);
+  }, [rows, systemFilter, periodoFilter, deptFilter, docTypeFilter]);
 
   const byDept = useMemo(() => aggregateByDepartment(filtered), [filtered]);
   const byUser = useMemo(() => aggregateByUser(filtered), [filtered]);
   const byDoc = useMemo(() => aggregateByDocType(filtered), [filtered]);
+  const bySystem = useMemo(() => aggregateBySystem(filtered), [filtered]);
 
   const kpis = useMemo(() => {
     const totalDocs = filtered.reduce((s, r) => s + r.docsCriados, 0);
@@ -112,7 +145,10 @@ export default function UserProductivityPage() {
     const retrabalho = totalDocs > 0 ? ((totalEdicoes + totalCanc) / totalDocs) * 100 : 0;
     const topDept = byDept[0]?.department || "—";
     const topUser = byUser[0]?.userName || "—";
-    return { totalDocs, totalValor, retrabalho, topDept, topUser };
+    const flowDocs = filtered
+      .filter((r) => r.system === "flow")
+      .reduce((s, r) => s + r.docsCriados, 0);
+    return { totalDocs, totalValor, retrabalho, topDept, topUser, flowDocs };
   }, [filtered, byDept, byUser]);
 
   // Stacked bar — docs por departamento por tipo
@@ -164,6 +200,7 @@ export default function UserProductivityPage() {
     downloadCSV(
       `produtividade_${new Date().toISOString().slice(0, 10)}.csv`,
       byUser.map((u) => ({
+        Sistema: SYSTEM_LABEL[u.system],
         Departamento: u.department,
         Usuario: u.userName,
         Codigo: u.userCode,
@@ -189,7 +226,7 @@ export default function UserProductivityPage() {
             <div className="min-w-0">
               <h1 className="text-2xl font-bold text-foreground">Produtividade de Usuários</h1>
               <p className="text-sm text-muted-foreground">
-                Entregas por departamento SAP — documentos, valor movimentado e retrabalho
+                Entregas por departamento — SAP + ERP Flow: documentos, valor movimentado e retrabalho
               </p>
             </div>
           </div>
@@ -255,7 +292,30 @@ export default function UserProductivityPage() {
               ))}
             </SelectContent>
           </Select>
+          <Select
+            value={systemFilter}
+            onValueChange={(v) => setSystemFilter(v as "all" | ProductivitySystem)}
+          >
+            <SelectTrigger className="w-[180px] bg-card">
+              <SelectValue placeholder="Origem" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">SAP + ERP Flow</SelectItem>
+              <SelectItem value="sap">{SYSTEM_LABEL.sap}</SelectItem>
+              <SelectItem value="flow">{SYSTEM_LABEL.flow}</SelectItem>
+            </SelectContent>
+          </Select>
+          {bySystem.length > 0 && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              {bySystem.map((s) => (
+                <Badge key={s.system} variant="secondary">
+                  {SYSTEM_LABEL[s.system]}: {s.docsCriados.toLocaleString("pt-BR")} docs
+                </Badge>
+              ))}
+            </div>
+          )}
         </div>
+
 
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
@@ -428,7 +488,7 @@ export default function UserProductivityPage() {
                           <div className="bg-muted/10 border-t border-border">
                             {users.map((u) => (
                               <div
-                                key={u.userCode}
+                                key={u.key}
                                 className="grid grid-cols-[1fr_repeat(5,minmax(0,1fr))] gap-2 px-4 py-2 items-center text-xs border-b border-border/50 last:border-b-0"
                               >
                                 <span className="pl-6 text-muted-foreground truncate">
@@ -470,6 +530,7 @@ export default function UserProductivityPage() {
                       <tr className="text-xs uppercase tracking-wider text-muted-foreground">
                         <th className="px-4 py-3 text-left w-10">#</th>
                         <th className="px-4 py-3 text-left">Usuário</th>
+                        <th className="px-4 py-3 text-left">Sistema</th>
                         <th className="px-4 py-3 text-left">Departamento</th>
                         <th className="px-4 py-3 text-right">Docs</th>
                         <th className="px-4 py-3 text-right">Valor R$</th>
@@ -483,7 +544,7 @@ export default function UserProductivityPage() {
                     <tbody>
                       {byUser.map((u, i) => (
                         <tr
-                          key={u.userCode}
+                          key={u.key}
                           className="border-t border-border hover:bg-muted/20 transition-colors"
                         >
                           <td className="px-4 py-2 text-muted-foreground">{i + 1}</td>
@@ -492,6 +553,9 @@ export default function UserProductivityPage() {
                             <span className="text-xs text-muted-foreground ml-1">
                               ({u.userCode})
                             </span>
+                          </td>
+                          <td className="px-4 py-2">
+                            <Badge variant="secondary">{SYSTEM_LABEL[u.system]}</Badge>
                           </td>
                           <td className="px-4 py-2 text-muted-foreground">{u.department}</td>
                           <td className="px-4 py-2 text-right font-mono">

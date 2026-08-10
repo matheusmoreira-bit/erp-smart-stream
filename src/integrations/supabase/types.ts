@@ -7883,6 +7883,21 @@ export type Database = {
           ts: string
         }[]
       }
+      get_flow_user_productivity: {
+        Args: { _company_db?: string; _days?: number }
+        Returns: {
+          department: string
+          doc_type: string
+          docs_cancelados: number
+          docs_criados: number
+          docs_editados_unicos: number
+          edicoes_feitas: number
+          periodo: string
+          user_email: string
+          user_name: string
+          valor_total: number
+        }[]
+      }
       get_integration_health: {
         Args: { _hours?: number }
         Returns: {
