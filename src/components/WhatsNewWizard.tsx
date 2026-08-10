@@ -55,13 +55,16 @@ export function WhatsNewWizard() {
 
   useEffect(() => {
     if (!user) return;
-    try {
-      if (localStorage.getItem(storageKey(user))) return;
-    } catch {
-      return;
-    }
-    setStep(0);
-    setOpen(true);
+    let cancelled = false;
+    (async () => {
+      const seen = await hasSeenTour(whatsNewTourKey);
+      if (cancelled || seen) return;
+      setStep(0);
+      setOpen(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   /* Reinício manual pelo menu da conta. */
@@ -76,11 +79,7 @@ export function WhatsNewWizard() {
 
 
   const close = () => {
-    try {
-      if (user) localStorage.setItem(storageKey(user), new Date().toISOString());
-    } catch {
-      /* ignore */
-    }
+    void markTourSeen(whatsNewTourKey);
     setOpen(false);
   };
 
