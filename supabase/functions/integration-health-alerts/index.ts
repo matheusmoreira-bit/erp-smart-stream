@@ -231,6 +231,8 @@ Deno.serve(withEdgeMetrics("integration-health-alerts", async (req) => {
       if (cfg.notify_email) {
         let to = (cfg.recipient_emails ?? []).filter(Boolean);
         if (to.length === 0) to = await resolveAdminEmails(sb);
+        to = filterHealthAlertRecipients(to);
+
 
         const html = `
           <div style="font-family:Arial,sans-serif;font-size:14px;color:#111">
