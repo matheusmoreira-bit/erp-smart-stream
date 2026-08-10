@@ -58,6 +58,21 @@ export default function UserActivityPage() {
   const [actionFilter, setActionFilter] = useState("all");
   const [daysFilter, setDaysFilter] = useState("7");
   const [userTypeFilter, setUserTypeFilter] = useState("no_api");
+  const [systemFilter, setSystemFilter] = useState<"all" | ActivitySystem>("all");
+
+  const {
+    records: flowRecords,
+    isLoading: flowLoading,
+    error: flowError,
+    refresh: refreshFlow,
+  } = useFlowActivity(parseInt(daysFilter) || 0);
+
+  const refreshAll = () => {
+    refresh();
+    refreshFlow();
+  };
+
+
 
   const filtered = useMemo(() => {
     let list = records;
