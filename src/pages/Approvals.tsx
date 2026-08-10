@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { docNumberLabel } from "@/lib/doc-number";
-import { docNumberLabel } from "@/lib/doc-number";
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
 import { useMyCapabilities } from "@/hooks/useMyCapabilities";
