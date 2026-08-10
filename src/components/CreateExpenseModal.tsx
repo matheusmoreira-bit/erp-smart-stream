@@ -57,6 +57,8 @@ import { toast } from "sonner";
 import { type ExpenseItem, type CreateExpenseInput, type RateioType, RATEIO_TYPE_LABELS } from "@/hooks/useExpenses";
 import { SupplierFormModal, type SupplierFormPrefill } from "@/components/SupplierFormModal";
 import { useMyCapabilities } from "@/hooks/useMyCapabilities";
+import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
+import { canViewLotusCostCenters, filterLotusCostCenters } from "@/lib/cost-center-visibility";
 import { useMyManagementSegment } from "@/hooks/useMyManagementSegment";
 import { filterProjectsBySegment, filterInstitutionalProjects } from "@/lib/management-segment-projects";
 
@@ -258,9 +260,19 @@ export function CreateExpenseModal({
     params: { $filter: "Active eq 'tYES'", $select: "CenterCode,CenterName" },
     mapRow: costCenterMapRow,
   });
+  // CCs LOTUS só aparecem para Contábil e RH/DP/Folha (ou admins).
+  const { groups: myGroups } = useMyPermissionGroups();
+  const canSeeLotusCcs = useMemo(
+    () => canViewLotusCostCenters(myGroups, isPrivilegedUser || !!sapSession?.isSuperUser),
+    [myGroups, isPrivilegedUser, sapSession?.isSuperUser],
+  );
   const costCenterOptions = useMemo(
-    () => rawCostCenterOptions.filter((o) => !o.name?.toLowerCase().startsWith("centro geral")),
-    [rawCostCenterOptions]
+    () =>
+      filterLotusCostCenters(
+        rawCostCenterOptions.filter((o) => !o.name?.toLowerCase().startsWith("centro geral")),
+        canSeeLotusCcs,
+      ),
+    [rawCostCenterOptions, canSeeLotusCcs]
   );
 
   const projectMapRow = useCallback((row: any) => ({ code: row.Code, name: row.Name }), []);

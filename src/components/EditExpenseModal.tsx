@@ -26,6 +26,8 @@ import { DateInputBR } from "@/components/DateInputBR";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { useSap } from "@/contexts/SapContext";
+import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
+import { canViewLotusCostCenters, filterLotusCostCenters } from "@/lib/cost-center-visibility";
 import {
   validateAttachments,
   ALLOWED_ATTACHMENT_ACCEPT,
@@ -172,9 +174,19 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
     params: { $filter: "Active eq 'tYES'", $select: "CenterCode,CenterName" },
     mapRow: costCenterMapRow,
   });
+  // CCs LOTUS só aparecem para Contábil e RH/DP/Folha (ou admins).
+  const { groups: myGroups, isPrivileged: isPrivilegedUser } = useMyPermissionGroups();
+  const canSeeLotus = useMemo(
+    () => canViewLotusCostCenters(myGroups, isPrivilegedUser),
+    [myGroups, isPrivilegedUser],
+  );
   const costCenterOptions = useMemo(
-    () => rawCostCenterOptions.filter((o) => !o.name?.toLowerCase().startsWith("centro geral")),
-    [rawCostCenterOptions],
+    () =>
+      filterLotusCostCenters(
+        rawCostCenterOptions.filter((o) => !o.name?.toLowerCase().startsWith("centro geral")),
+        canSeeLotus,
+      ),
+    [rawCostCenterOptions, canSeeLotus],
   );
 
   const projectMapRow = useCallback((row: any) => ({ code: row.Code, name: row.Name }), []);
