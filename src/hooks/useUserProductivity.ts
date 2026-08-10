@@ -275,6 +275,7 @@ export function useUserProductivity() {
           const cancelados = r.docsCancelados;
           const edicoes = 0;
           return {
+            system: "sap" as const,
             userCode: r.userCode,
             userName: info?.name || r.userCode,
             department: info?.department || "Sem departamento",
