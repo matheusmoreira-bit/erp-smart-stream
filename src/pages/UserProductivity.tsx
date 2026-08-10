@@ -200,6 +200,7 @@ export default function UserProductivityPage() {
     downloadCSV(
       `produtividade_${new Date().toISOString().slice(0, 10)}.csv`,
       byUser.map((u) => ({
+        Sistema: SYSTEM_LABEL[u.system],
         Departamento: u.department,
         Usuario: u.userName,
         Codigo: u.userCode,
