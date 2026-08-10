@@ -280,7 +280,8 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
 
       if (existingSap) {
         // Já veio do SAP — apenas anexa o id local para permitir retry se erro.
-        const localTaxId = r.federal_tax_id || r.u_fgr_taxid0 || undefined;
+        const rawLocalTax = r.federal_tax_id || r.u_fgr_taxid0 || null;
+        const localTaxId = rawLocalTax ? formatCnpjCpf(rawLocalTax) : undefined;
         if (localTaxId && !existingSap.extra) existingSap.extra = localTaxId;
         if (localTaxId && !existingSap.details?.taxId) {
           existingSap.details = { ...(existingSap.details || {}), taxId: localTaxId };
@@ -294,17 +295,19 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
 
       // Não veio do SAP → adiciona como opção local (invisível no SAP).
       if (!isSynced || !r.card_code) {
+        const rawLocalTax = r.federal_tax_id || r.u_fgr_taxid0 || null;
+        const localTaxId = rawLocalTax ? formatCnpjCpf(rawLocalTax) : undefined;
         localOnly.push({
           code: r.card_code || `LOCAL:${r.id}`,
           name: r.card_name || "(sem nome)",
-          extra: r.federal_tax_id || r.u_fgr_taxid0 || undefined,
+          extra: localTaxId,
           currency: r.currency || "BRL",
           notSynced: true,
           syncStatus: status,
           localId: r.id,
           details: {
             fantasyName: undefined,
-            taxId: r.federal_tax_id || r.u_fgr_taxid0 || undefined,
+            taxId: localTaxId,
           },
         });
       }
