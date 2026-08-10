@@ -264,8 +264,26 @@ async function actionUpload(admin: SupabaseClient, caller: Caller, req: Request)
   });
   if (upErr) return json(500, { error: `Falha no upload: ${upErr.message}` });
 
+  // Registro imediato em `expense_attachments`. Antes, a linha só era criada
+  // por uma segunda chamada (`expense-mutation/attachments_add`); quando essa
+  // chamada falhava (403 por identidade divergente, rede, status do doc), o
+  // arquivo ficava só no storage e a tela mostrava "Nenhum anexo ainda".
+  let persisted = false;
+  if (expenseId) {
+    const { error: insErr } = await admin.from("expense_attachments").insert({
+      expense_id: expenseId,
+      file_path: path,
+      file_name: file.name,
+      file_size: file.size,
+      mime_type: contentType,
+    } as any);
+    if (insErr) console.error("[expense-attachment-storage] falha ao registrar anexo", insErr.message);
+    else persisted = true;
+  }
+
   return json(200, {
     ok: true,
+    persisted,
     file_path: path,
     file_name: file.name,
     file_size: file.size,
