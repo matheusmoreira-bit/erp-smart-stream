@@ -1,4 +1,5 @@
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
+import { internalDocCode, normalizeDocQuery } from "@/lib/doc-number";
 import { useState, useEffect, useCallback, useRef } from "react";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 import { Helmet } from "react-helmet-async";
