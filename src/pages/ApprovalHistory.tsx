@@ -168,8 +168,9 @@ export default function ApprovalHistory() {
       return [
         r.card_name, r.card_code, r.requester_name, r.approver_name,
         r.substituted_for_name, r.substituted_for_email,
-        r.doc_type_name, String(r.doc_num || ""), r.remarks, r.stage_name,
-      ].some((v) => (v || "").toString().toLowerCase().includes(q));
+        r.doc_type_name, String(r.doc_num || ""), exportDocLabel(r), r.remarks, r.stage_name,
+      ].some((v) => (v || "").toString().toLowerCase().includes(q))
+        || matchesDocQuery({ docNum: Number(r.doc_num || 0), __internalId: r.expense_id }, q);
     });
   }, [rows, query, effectiveScope, myKeys]);
 
