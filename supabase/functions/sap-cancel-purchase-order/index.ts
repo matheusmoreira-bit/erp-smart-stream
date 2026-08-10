@@ -95,23 +95,34 @@ Deno.serve(async (req) => {
       if (ok) {
         await sb
           .from("expenses")
-          .update({
-            status: "pendente_aprovacao",
-            sap_doc_entry: null,
-            sap_doc_num: null,
-            sap_purchase_order_status: null,
-            sap_integration_error: `Cancelado no SAP em ${new Date().toISOString()} — ${reason || "bypass de aprovação"}`,
-            sap_integration_locked_at: null,
-          } as any)
+          .update(
+            markCancelled
+              ? ({
+                  status: "cancelado",
+                  // Mantém a referência do PC para rastreabilidade do cancelamento.
+                  sap_purchase_order_status: "Cancelled",
+                  sap_integration_error: null,
+                  sap_integration_locked_at: null,
+                } as any)
+              : ({
+                  status: "pendente_aprovacao",
+                  sap_doc_entry: null,
+                  sap_doc_num: null,
+                  sap_purchase_order_status: null,
+                  sap_integration_error: `Cancelado no SAP em ${new Date().toISOString()} — ${reason || "bypass de aprovação"}`,
+                  sap_integration_locked_at: null,
+                } as any),
+          )
           .eq("id", exp.id);
         await sb.rpc("insert_audit_log", {
           p_action: "sap_purchase_order_cancelled",
           p_entity_type: "expense",
           p_entity_id: exp.id,
           p_company_db: companyDb,
-          p_details: { docEntry: de, reason: reason || null } as any,
+          p_details: { docEntry: de, reason: reason || null, final_status: markCancelled ? "cancelado" : "pendente_aprovacao" } as any,
         });
       } else {
+
         // Libera o lock para permitir nova tentativa imediata
         await sb.from("expenses").update({ sap_integration_locked_at: null }).eq("id", exp.id);
       }
