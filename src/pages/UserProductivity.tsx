@@ -88,26 +88,54 @@ function downloadCSV(filename: string, rows: Record<string, string | number>[]) 
 
 export default function UserProductivityPage() {
   const navigate = useNavigate();
-  const { rows, isLoading, error, hanaDisabled, refresh } = useUserProductivity();
+  const {
+    rows: sapRows,
+    isLoading: sapLoading,
+    error: sapError,
+    hanaDisabled,
+    refresh: refreshSap,
+  } = useUserProductivity();
+  const {
+    rows: flowRows,
+    isLoading: flowLoading,
+    error: flowError,
+    refresh: refreshFlow,
+  } = useFlowProductivity(180);
+
+  // Visão híbrida: SAP (Service Layer) + ERP Flow (banco da plataforma).
+  const rows: UserProductivityRow[] = useMemo(
+    () => [...sapRows, ...flowRows],
+    [sapRows, flowRows],
+  );
+  const isLoading = sapLoading || flowLoading;
+  const error = sapError || flowError;
+  const refresh = () => {
+    refreshSap();
+    refreshFlow();
+  };
+
   const { departments, docTypes, periodos } = useProductivityFilters(rows);
 
   const [periodoFilter, setPeriodoFilter] = useState<string>("all");
   const [deptFilter, setDeptFilter] = useState<string>("all");
   const [docTypeFilter, setDocTypeFilter] = useState<string>("all");
+  const [systemFilter, setSystemFilter] = useState<"all" | ProductivitySystem>("all");
   const [expandedDept, setExpandedDept] = useState<Set<string>>(new Set());
 
   const filtered = useMemo(() => {
     return rows.filter(
       (r) =>
+        (systemFilter === "all" || r.system === systemFilter) &&
         (periodoFilter === "all" || r.periodo === periodoFilter) &&
         (deptFilter === "all" || r.department === deptFilter) &&
         (docTypeFilter === "all" || r.docType === docTypeFilter),
     );
-  }, [rows, periodoFilter, deptFilter, docTypeFilter]);
+  }, [rows, systemFilter, periodoFilter, deptFilter, docTypeFilter]);
 
   const byDept = useMemo(() => aggregateByDepartment(filtered), [filtered]);
   const byUser = useMemo(() => aggregateByUser(filtered), [filtered]);
   const byDoc = useMemo(() => aggregateByDocType(filtered), [filtered]);
+  const bySystem = useMemo(() => aggregateBySystem(filtered), [filtered]);
 
   const kpis = useMemo(() => {
     const totalDocs = filtered.reduce((s, r) => s + r.docsCriados, 0);
@@ -117,7 +145,10 @@ export default function UserProductivityPage() {
     const retrabalho = totalDocs > 0 ? ((totalEdicoes + totalCanc) / totalDocs) * 100 : 0;
     const topDept = byDept[0]?.department || "—";
     const topUser = byUser[0]?.userName || "—";
-    return { totalDocs, totalValor, retrabalho, topDept, topUser };
+    const flowDocs = filtered
+      .filter((r) => r.system === "flow")
+      .reduce((s, r) => s + r.docsCriados, 0);
+    return { totalDocs, totalValor, retrabalho, topDept, topUser, flowDocs };
   }, [filtered, byDept, byUser]);
 
   // Stacked bar — docs por departamento por tipo
