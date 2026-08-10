@@ -22,7 +22,7 @@ interface Props {
   onClose: () => void;
 }
 
-import { CurrencyField } from "@/components/CurrencyField";
+import { CurrencyField, normalizeCurrencyCode } from "@/components/CurrencyField";
 const CURRENCIES = ["BRL", "USD", "EUR", "ARS", "GBP"];
 
 interface SupplierOpt extends SapSearchOption {
@@ -64,7 +64,8 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
   const [files, setFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
 
-  const supplierCurrency = supplier?.details?.currency || "";
+  // Normaliza "Todas as Moedas" (view HANA) para "##" — senão o campo trava.
+  const supplierCurrency = normalizeCurrencyCode((supplier as any)?.details?.currency || (supplier as any)?.currency || "");
   const currencyLocked = !!supplierCurrency && supplierCurrency !== "##";
 
   useEffect(() => {

@@ -106,7 +106,7 @@ import {
 import { useCurrentUserCostCenter, isItemAllowedForCostCenter, isCostCenterAllowedForUser, costCenterBranch, isRateioTypeAllowedForCostCenter } from "@/hooks/useCurrentUserCostCenter";
 import { useCanSeeAllCostCenters } from "@/hooks/useCanSeeAllCostCenters";
 import { useCustomerBrandMap, filterProjectsForCustomer } from "@/hooks/useCustomerBrandMap";
-import { CurrencyField } from "@/components/CurrencyField";
+import { CurrencyField, normalizeCurrencyCode } from "@/components/CurrencyField";
 
 // Logger tagueado — usado nas verificações de dedup e nos guards de fluxo
 // (cancelar/retentar). Sempre em `console.info`/`warn` para facilitar filtro
@@ -938,7 +938,16 @@ export function CreateExpenseModal({
     setDraftId(initialDraft.id);
     setDraftHydrated(true);
     if (p.supplier) setSupplier(p.supplier);
-    if (p.currency) setCurrency(p.currency);
+    if (p.currency) {
+      const norm = normalizeCurrencyCode(p.currency);
+      // Rascunho salvo com moeda multimoeda: não trava, deixa o usuário escolher.
+      if (norm === "##") {
+        setCurrency("");
+        setCurrencyOptions(DEFAULT_MULTI_CURRENCIES);
+      } else if (norm) {
+        setCurrency(norm);
+      }
+    }
     if (p.docDate) setDocDate(p.docDate);
     if (p.dueDate) setDueDate(p.dueDate);
     if (p.remarks) setRemarks(p.remarks);
@@ -1976,7 +1985,10 @@ export function CreateExpenseModal({
     setCurrencyWarning(null);
     setCurrencyOptions(null);
     if (val) {
-      const supplierCurrency = ((val as any).currency || "").trim();
+      const rawCurrency = ((val as any).currency || "").trim();
+      // A view HANA devolve "Todas as Moedas" no lugar de "##": normalizamos
+      // para não travar o campo com um valor que não é uma moeda de verdade.
+      const supplierCurrency = normalizeCurrencyCode(rawCurrency);
       if (supplierCurrency && supplierCurrency !== "##") {
         setCurrency(supplierCurrency);
       } else if (supplierCurrency === "##") {
@@ -3034,9 +3046,9 @@ export function CreateExpenseModal({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <CurrencyField
               value={currency}
-              onChange={currencyOptions ? setCurrency : undefined}
-              options={currencyOptions}
-              locked={!currencyOptions}
+              onChange={setCurrency}
+              options={currencyOptions ?? DEFAULT_MULTI_CURRENCIES}
+              locked={!currencyOptions && !!currency}
               lockedHint="Definida pelo cadastro do fornecedor"
               loading={loadingCurrencies}
             />

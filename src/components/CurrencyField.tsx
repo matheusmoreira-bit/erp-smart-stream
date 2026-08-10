@@ -32,6 +32,34 @@ export function currencyLabel(code?: string | null) {
   return CURRENCY_INFO[code.toUpperCase()]?.label ?? "";
 }
 
+/**
+ * Normaliza a moeda vinda do ERP. O Service Layer devolve ISO ("BRL") e "##"
+ * para PN multimoeda; a view HANA `VW_FORNECEDORES` devolve por extenso
+ * ("Real", "Todas as Moedas"). Sem isso, "Todas as Moedas" era tratada como
+ * uma moeda válida e o campo ficava travado, impedindo escolher a correta.
+ *
+ * Retorna o código ISO, "##" para multimoeda ou "" quando desconhecido.
+ */
+export function normalizeCurrencyCode(raw?: string | null): string {
+  const s = (raw ?? "").trim();
+  if (!s) return "";
+  if (s === "##") return "##";
+  const upper = s.toUpperCase();
+  if (/^[A-Z]{3}$/.test(upper) && upper !== "R$") return upper;
+  const n = upper.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (n.includes("todas")) return "##";
+  if (n.includes("real") || s === "R$") return "BRL";
+  if (n.includes("dolar canadense")) return "CAD";
+  if (n.includes("dolar")) return "USD";
+  if (n.includes("euro")) return "EUR";
+  if (n.includes("libra")) return "GBP";
+  if (n.includes("franco")) return "CHF";
+  if (n.includes("peso argentino")) return "ARS";
+  if (n.includes("peso uruguaio")) return "UYU";
+  if (n.includes("guarani")) return "PYG";
+  return "";
+}
+
 interface CurrencyFieldProps {
   value: string;
   onChange?: (value: string) => void;
@@ -58,7 +86,11 @@ export function CurrencyField({
   id = "currency-field",
 }: CurrencyFieldProps) {
   const list = options && options.length > 0 ? options : Object.keys(CURRENCY_INFO);
-  const filled = Boolean(value);
+  // "##"/"Todas as Moedas" não é uma moeda: nunca deve travar o campo.
+  const isMulti = normalizeCurrencyCode(value) === "##";
+  const effectiveValue = isMulti ? "" : value;
+  const effectiveLocked = locked && !isMulti;
+  const filled = Boolean(effectiveValue);
 
   return (
     <div>
@@ -80,7 +112,7 @@ export function CurrencyField({
         {loading && <span className="ml-1">(carregando…)</span>}
       </label>
 
-      {locked || !onChange ? (
+      {effectiveLocked || !onChange ? (
         <div
           id={id}
           aria-readonly
@@ -89,16 +121,16 @@ export function CurrencyField({
           }`}
         >
           <span className="inline-flex items-center rounded bg-background px-1.5 py-0.5 text-xs font-semibold text-muted-foreground border">
-            {currencySymbol(value)}
+            {currencySymbol(effectiveValue)}
           </span>
-          <span className="font-medium">{value || "—"}</span>
-          {currencyLabel(value) && (
-            <span className="text-xs text-muted-foreground truncate">{currencyLabel(value)}</span>
+          <span className="font-medium">{effectiveValue || "—"}</span>
+          {currencyLabel(effectiveValue) && (
+            <span className="text-xs text-muted-foreground truncate">{currencyLabel(effectiveValue)}</span>
           )}
           <Lock className="w-3 h-3 ml-auto text-muted-foreground" aria-hidden />
         </div>
       ) : (
-        <Select value={value} onValueChange={onChange}>
+        <Select value={effectiveValue} onValueChange={onChange}>
           <SelectTrigger
             id={id}
             aria-label="Moeda do documento"
@@ -108,7 +140,7 @@ export function CurrencyField({
           >
             <div className="flex items-center gap-2 min-w-0">
               <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-xs font-semibold text-muted-foreground shrink-0">
-                {currencySymbol(value)}
+                {currencySymbol(effectiveValue)}
               </span>
               <SelectValue placeholder="Selecione a moeda" />
             </div>
@@ -127,7 +159,11 @@ export function CurrencyField({
       )}
 
       <p className="mt-1 text-[11px] leading-tight text-muted-foreground">
-        {locked ? lockedHint : "Apenas a moeda (ex.: BRL, USD). Não é o valor do documento."}
+        {effectiveLocked
+          ? lockedHint
+          : isMulti
+            ? "Fornecedor multimoeda — selecione a moeda deste documento."
+            : "Apenas a moeda (ex.: BRL, USD). Não é o valor do documento."}
       </p>
     </div>
   );
