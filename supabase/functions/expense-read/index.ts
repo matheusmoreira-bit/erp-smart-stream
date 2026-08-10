@@ -151,7 +151,13 @@ async function identifyCallerCached(req: Request, admin: SupabaseClient): Promis
   if (hit && hit.expiresAt > Date.now()) return hit.value;
   const value = await identifyCaller(req, admin);
   if (callerCache.size > 500) callerCache.clear();
-  callerCache.set(key, { expiresAt: Date.now() + CALLER_TTL_MS, value });
+  // Se a sessão SAP não pôde ser comprovada (ERP fora do ar), guarda por pouco
+  // tempo para não congelar uma identidade incompleta por 5 minutos.
+  const degraded = !!req.headers.get("x-sap-session") && !value.userName;
+  callerCache.set(key, {
+    expiresAt: Date.now() + (degraded ? 20_000 : CALLER_TTL_MS),
+    value,
+  });
   return value;
 }
 
