@@ -282,7 +282,26 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
             </div>
           )}
 
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onSelect={() => {
+              setOpen(false);
+              window.location.assign("/perfil");
+            }}
+          >
+            <UserCog className="w-4 h-4 mr-2" /> Meu perfil e senha
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              setOpen(false);
+              window.location.assign("/perfil?senha=1");
+            }}
+          >
+            <KeyRound className="w-4 h-4 mr-2" /> Alterar senha do ERP
+          </DropdownMenuItem>
+
           {isAdmin && (
+
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
@@ -9,8 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { toast } from "sonner";
-import { ArrowLeft, RefreshCw, Save, User } from "lucide-react";
+import { ArrowLeft, KeyRound, RefreshCw, Save, User } from "lucide-react";
+
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -30,6 +32,14 @@ export default function Profile() {
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [syncedOnce, setSyncedOnce] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const [passwordOpen, setPasswordOpen] = useState(params.get("senha") === "1");
+
+  // Deep link /perfil?senha=1 abre direto a troca de senha do ERP.
+  useEffect(() => {
+    if (params.get("senha") === "1") setPasswordOpen(true);
+  }, [params]);
+
 
   useEffect(() => {
     if (!profile) return;
@@ -163,6 +173,42 @@ export default function Profile() {
             </div>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Segurança e senha do ERP</CardTitle>
+            <CardDescription>
+              A entrada no sistema é feita pela conta Google. A senha abaixo é a do ERP, usada apenas
+              nas ações que dependem do SAP (aprovar, integrar, dar baixa) e pode ser alterada em
+              todas as empresas de uma vez.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-3">
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => setPasswordOpen(true)}
+            >
+              <KeyRound className="w-4 h-4" /> Alterar senha do ERP
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Usuário ERP: {session?.userName || "—"}
+            </span>
+          </CardContent>
+        </Card>
+
+        <ChangePasswordDialog
+          hideTrigger
+          open={passwordOpen}
+          onOpenChange={(v) => {
+            setPasswordOpen(v);
+            if (!v && params.get("senha")) {
+              params.delete("senha");
+              setParams(params, { replace: true });
+            }
+          }}
+        />
+
 
         <Card>
           <CardHeader>
