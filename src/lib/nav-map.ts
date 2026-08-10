@@ -92,6 +92,7 @@ export const NAV_MODULES: NavModule[] = [
       { label: "Auditoria SAP", path: "/auditoria/sap", moduleKey: "audit_console" },
       { label: "Auditoria Fiscal", path: "/auditoria/fiscal", moduleKey: "fiscal_audit" },
       { label: "Cruzamento Fiscal × Pagamentos", path: "/auditoria/cruzamento", moduleKey: "fiscal_audit" },
+      { label: "Reconciliação de Totais", path: "/auditoria/totais", moduleKey: "fiscal_audit" },
       { label: "KYP — Fornecedores", path: "/auditoria/kyp", moduleKey: "kyp" },
       { label: "Logs do Sistema", path: "/auditoria/logs", moduleKey: "audit_log" },
     ],

@@ -6489,6 +6489,86 @@ export type Database = {
         }
         Relationships: []
       }
+      sap_total_reconciliation: {
+        Row: {
+          abs_difference: number
+          breakdown: Json
+          cause: string | null
+          cause_detail: Json
+          cause_label: string | null
+          checked_at: string
+          company_db: string
+          created_at: string
+          difference: number
+          doc_type: string | null
+          expense_id: string
+          flow_total: number
+          id: string
+          resolved_at: string | null
+          resolved_by: string | null
+          sap_doc_entry: number | null
+          sap_doc_num: number | null
+          sap_net_total: number
+          sap_total: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          abs_difference?: number
+          breakdown?: Json
+          cause?: string | null
+          cause_detail?: Json
+          cause_label?: string | null
+          checked_at?: string
+          company_db: string
+          created_at?: string
+          difference?: number
+          doc_type?: string | null
+          expense_id: string
+          flow_total?: number
+          id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          sap_doc_entry?: number | null
+          sap_doc_num?: number | null
+          sap_net_total?: number
+          sap_total?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          abs_difference?: number
+          breakdown?: Json
+          cause?: string | null
+          cause_detail?: Json
+          cause_label?: string | null
+          checked_at?: string
+          company_db?: string
+          created_at?: string
+          difference?: number
+          doc_type?: string | null
+          expense_id?: string
+          flow_total?: number
+          id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          sap_doc_entry?: number | null
+          sap_doc_num?: number | null
+          sap_net_total?: number
+          sap_total?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sap_total_reconciliation_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: true
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sap_user_directory: {
         Row: {
           created_at: string

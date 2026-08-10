@@ -153,6 +153,7 @@ const App = () => (
               <Route path="/auditoria/sap/*" element={<AuditHub tab="sap" />} />
               <Route path="/auditoria/fiscal" element={<AuditHub tab="fiscal" />} />
               <Route path="/auditoria/cruzamento" element={<AuditHub tab="cruzamento" />} />
+              <Route path="/auditoria/totais" element={<AuditHub tab="totais" />} />
               <Route path="/auditoria/kyp" element={<AuditHub tab="kyp" />} />
 
               <Route path="/auditoria/logs" element={<AuditHub tab="logs" />} />
