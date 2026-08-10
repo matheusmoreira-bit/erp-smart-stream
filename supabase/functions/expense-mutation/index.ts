@@ -1085,9 +1085,20 @@ async function actionAttachmentsAdd(admin: SupabaseClient, caller: Caller, body:
 
   if (rows.length === 0) return json(400, { error: "Nenhum anexo válido" });
 
-  const { error } = await admin.from("expense_attachments").insert(rows as any);
+  // O gateway de upload já registra a linha; aqui só entram os que faltarem
+  // (idempotência — evita anexo duplicado na tela).
+  const { data: existing } = await admin
+    .from("expense_attachments")
+    .select("file_path")
+    .eq("expense_id", expenseId)
+    .in("file_path", rows.map((r) => r.file_path));
+  const known = new Set(((existing || []) as any[]).map((r) => String(r.file_path)));
+  const missing = rows.filter((r) => !known.has(r.file_path));
+  if (missing.length === 0) return json(200, { ok: true, inserted: 0 });
+
+  const { error } = await admin.from("expense_attachments").insert(missing as any);
   if (error) return json(500, { error: `Falha ao registrar anexos: ${error.message}` });
-  return json(200, { ok: true, inserted: rows.length });
+  return json(200, { ok: true, inserted: missing.length });
 }
 
 async function actionLogDecision(admin: SupabaseClient, caller: Caller, body: any) {
