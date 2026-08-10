@@ -18,7 +18,6 @@ interface Props {
   session: SapSession | null;
   cardCode: string | null;
   bpLabel?: string;
-  container?: HTMLElement | null;
 }
 
 function Field({ label, value }: { label: string; value: string }) {
@@ -37,7 +36,7 @@ function Field({ label, value }: { label: string; value: string }) {
  * CNPJ/CPF, endereço, contas bancárias e chaves PIX — além de permitir
  * validar uma chave PIX recebida para pagamento contra o cadastro.
  */
-export function SupplierDetailsDialog({ open, onOpenChange, session, cardCode, bpLabel = "Fornecedor", container }: Props) {
+export function SupplierDetailsDialog({ open, onOpenChange, session, cardCode, bpLabel = "Fornecedor" }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [details, setDetails] = useState<BusinessPartnerDetails | null>(null);
@@ -76,7 +75,7 @@ export function SupplierDetailsDialog({ open, onOpenChange, session, cardCode, b
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl" container={container ?? undefined}>
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Cadastro do {bpLabel.toLowerCase()} no ERP</DialogTitle>
           <DialogDescription>
