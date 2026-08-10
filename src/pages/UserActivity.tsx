@@ -259,7 +259,7 @@ export default function UserActivityPage() {
         ) : (
           <>
             {/* Metric Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
               <MetricCard title="Usuários Únicos" value={String(metrics.uniqueUsers)} icon={Users} delay={0} />
               <MetricCard title="Logins" value={String(metrics.logins)} icon={LogIn} delay={0.05} />
               <MetricCard
@@ -271,7 +271,15 @@ export default function UserActivityPage() {
               />
               <MetricCard title="IPs Únicos" value={String(metrics.uniqueIPs)} icon={Activity} delay={0.15} />
               <MetricCard title="Duração Média" value={formatDuration(metrics.avgDuration)} icon={Timer} delay={0.2} />
+              <MetricCard
+                title="Ações no ERP Flow"
+                value={String(flowMetrics.events)}
+                icon={Workflow}
+                delay={0.25}
+                trend={{ value: `${flowMetrics.users} usuários`, positive: true }}
+              />
             </div>
+
 
             {/* Monthly Login Chart + Pie */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
