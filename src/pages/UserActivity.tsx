@@ -171,7 +171,10 @@ export default function UserActivityPage() {
   const flowMetrics = useMemo(() => {
     const users = new Set(flowFiltered.map((r) => r.actor_email).filter(Boolean)).size;
     return { events: flowFiltered.length, users };
+  }, [flowFiltered]);
+
   const [view, setView] = useState<"activity" | "audit">("activity");
+
 
 
 
