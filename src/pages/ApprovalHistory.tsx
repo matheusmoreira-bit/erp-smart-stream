@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, RefreshCw, CheckCircle2, XCircle, Search, Building2, User, Calendar, FileText, Network, FileDown, UserCog } from "lucide-react";
 import { exportListReportPdf, exportListReportCsv } from "@/lib/report-pdf";
+import { exportDocLabel, matchesDocQuery } from "@/lib/doc-number";
 import { toast } from "sonner";
 import { useSap } from "@/contexts/SapContext";
 import { useAuth } from "@/hooks/useAuth";
@@ -167,8 +168,9 @@ export default function ApprovalHistory() {
       return [
         r.card_name, r.card_code, r.requester_name, r.approver_name,
         r.substituted_for_name, r.substituted_for_email,
-        r.doc_type_name, String(r.doc_num || ""), r.remarks, r.stage_name,
-      ].some((v) => (v || "").toString().toLowerCase().includes(q));
+        r.doc_type_name, String(r.doc_num || ""), exportDocLabel(r), r.remarks, r.stage_name,
+      ].some((v) => (v || "").toString().toLowerCase().includes(q))
+        || matchesDocQuery({ docNum: Number(r.doc_num || 0), __internalId: r.expense_id }, q);
     });
   }, [rows, query, effectiveScope, myKeys]);
 
@@ -214,7 +216,7 @@ export default function ApprovalHistory() {
                 columns: [
                   { header: "Data", cell: (r: typeof filtered[number]) => formatDate(r.decision_date) },
                   { header: "Decisão", cell: (r: typeof filtered[number]) => r.decision === "Y" ? "Aprovado" : r.decision === "N" ? "Rejeitado" : String(r.decision ?? "—") },
-                  { header: "Doc #", cell: (r: typeof filtered[number]) => String(r.doc_num ?? "—") },
+                  { header: "Doc #", cell: (r: typeof filtered[number]) => exportDocLabel(r) },
                   { header: "Tipo", cell: (r: typeof filtered[number]) => r.doc_type_name || "—" },
                   { header: "Parceiro", cell: (r: typeof filtered[number]) => r.card_name || "—" },
                   { header: "Solicitante", cell: (r: typeof filtered[number]) => displayUserName(r.requester_name || r.requester_code) },
@@ -475,7 +477,7 @@ function HistoryCard({ row, onRelationsMap }: { row: ApprovalHistoryRow; onRelat
               {sourceLabel}
             </span>
           </div>
-          <h3 className="font-mono font-semibold mt-1">#{row.doc_num || row.doc_entry || "—"}</h3>
+          <h3 className="font-mono font-semibold mt-1">{Number(row.doc_num || 0) > 0 ? `#${row.doc_num}` : exportDocLabel(row)}</h3>
         </div>
         <div className="text-right flex items-start gap-1">
           {onRelationsMap && (

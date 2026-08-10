@@ -49,3 +49,16 @@ export function matchesDocQuery(
   if (!id) return false;
   return id.startsWith(q) || internalDocCode(id).toLowerCase().includes(q);
 }
+
+/**
+ * Rótulo padronizado para exportações (CSV/PDF) e listas: nº do ERP quando
+ * existir, senão o código interno do documento. Nunca retorna "#0".
+ */
+export function exportDocLabel(
+  input?: { docNum?: number | null; id?: string | null; sap_doc_num?: number | string | null; doc_num?: number | string | null; expense_id?: string | null; __internalId?: string | null } | null,
+): string {
+  const num = Number(input?.docNum ?? input?.sap_doc_num ?? input?.doc_num ?? 0);
+  if (num > 0) return `#${num}`;
+  const code = internalDocCode(input?.__internalId ?? input?.expense_id ?? input?.id);
+  return code ? `#${code}` : "—";
+}

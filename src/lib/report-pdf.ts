@@ -14,6 +14,7 @@
 import { jsPDF } from "jspdf";
 import autoTable, { type UserOptions } from "jspdf-autotable";
 import { supabase } from "@/integrations/supabase/client";
+import { exportDocLabel } from "@/lib/doc-number";
 
 // ---- utilidades comuns ------------------------------------------------------
 
@@ -721,7 +722,7 @@ export async function exportExpenseDetailPdf(
 
   await exportDetailReportPdf({
     title: `${kindLabel} — ${expense.supplier_name}`,
-    subtitle: `#${expense.id.slice(0, 8)}${expense.sap_doc_num ? ` · ERP ${expense.sap_doc_num}` : ""}`,
+    subtitle: `${exportDocLabel({ id: expense.id })}${expense.sap_doc_num ? ` · ERP #${expense.sap_doc_num}` : ""}`,
     statusBadge: { label: opts.statusLabel || expense.status },
     headline: formatCurrency(expense.total_amount, expense.currency),
     sections: [
