@@ -4419,8 +4419,7 @@ export function CreateExpenseModal({
         </DialogHeader>
         {detailsView && (() => {
           const { entry, group } = detailsView;
-          const currencyFmt = (v: number) =>
-            new Intl.NumberFormat("pt-BR", { style: "currency", currency: entry.currency || "BRL" }).format(v);
+          const currencyFmt = (v: number) => formatCurrency(v, entry.currency || "BRL");
 
           // Normalização do termo de busca para comparação case-insensitive
           // e sem sensibilidade a espaços nas bordas.
