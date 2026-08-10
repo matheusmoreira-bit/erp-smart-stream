@@ -190,6 +190,15 @@ Deno.serve(async (req) => {
       await sapLogout(baseUrl, session);
     }
 
+    if (body?.debug) {
+      return new Response(JSON.stringify({
+        rawTotal: rawRows.length,
+        sample: rawRows.slice(0, 2),
+        keys: rawRows[0] ? Object.keys(rawRows[0]) : [],
+        schema, view,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const rows = rawRows.map(mapRow).filter((r): r is NonNullable<ReturnType<typeof mapRow>> => !!r);
 
     // Dedup por code — mantém a primeira ocorrência
