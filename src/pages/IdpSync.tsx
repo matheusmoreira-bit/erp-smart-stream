@@ -337,6 +337,16 @@ export default function IdpSyncPage() {
         <IdpBindingFlagCard />
         <IdpDeprovisionLogCard />
 
+        <IdpDivergencePanel
+          sapUsers={sapUsers}
+          jcUsers={jcUsers}
+          mappings={mappings}
+          companyDb={session?.companyDB}
+          focusUser={focusUser}
+          onBlock={(u) => toggleLock(u)}
+        />
+
+
 
 
         {/* Stats */}
