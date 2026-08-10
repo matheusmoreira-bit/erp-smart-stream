@@ -374,8 +374,9 @@ export default function SapUsersReplicate() {
 
             <label className="flex items-center gap-2 text-sm">
               <Checkbox checked={sendCredentials} onCheckedChange={(v) => setSendCredentials(!!v)} />
-              Enviar credenciais provisórias por e-mail aos usuários replicados
+              Incluir a senha no e-mail (o aviso de acesso criado é sempre enviado)
             </label>
+
           </div>
 
           <div>
