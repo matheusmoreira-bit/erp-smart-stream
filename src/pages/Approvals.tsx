@@ -3318,6 +3318,29 @@ export default function ApprovalsPage() {
                   ))}
                 </div>
               </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Origem</Label>
+                <div className="flex items-center gap-1">
+                  {([
+                    ["all", "Todas"],
+                    ["erp", "Nº do ERP"],
+                    ["internal", "Despesa interna"],
+                  ] as const).map(([key, lbl]) => (
+                    <button
+                      key={key}
+                      onClick={() => setOriginFilter(key)}
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                        originFilter === key
+                          ? "bg-primary/10 text-primary border-primary/30"
+                          : "border-border text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
