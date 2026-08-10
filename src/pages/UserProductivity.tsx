@@ -488,7 +488,7 @@ export default function UserProductivityPage() {
                           <div className="bg-muted/10 border-t border-border">
                             {users.map((u) => (
                               <div
-                                key={u.userCode}
+                                key={u.key}
                                 className="grid grid-cols-[1fr_repeat(5,minmax(0,1fr))] gap-2 px-4 py-2 items-center text-xs border-b border-border/50 last:border-b-0"
                               >
                                 <span className="pl-6 text-muted-foreground truncate">
