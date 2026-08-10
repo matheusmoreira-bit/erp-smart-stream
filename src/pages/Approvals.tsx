@@ -1890,7 +1890,7 @@ function MyRequestsTab() {
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar por nº, fornecedor, tipo..."
+            placeholder="Buscar por nº ou código interno, fornecedor, tipo..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 bg-muted/30 border-border"
@@ -3209,7 +3209,7 @@ export default function ApprovalsPage() {
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Buscar por nº, fornecedor, aprovador, projeto..."
+              placeholder="Buscar por nº ou código interno, fornecedor, aprovador, projeto..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 bg-muted/30 border-border"
