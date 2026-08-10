@@ -35,7 +35,9 @@ import { hasSeenTour, markTourSeen } from "@/lib/tour-state";
  * módulos que o grupo de permissão do usuário realmente enxerga. Sem passos
  * para telas que a pessoa não pode abrir.
  *
- * Persistência: localStorage por usuário + versão. Pode ser reaberto via
+ * Persistência: tabela `user_tour_state` (perfil do usuário, vale em qualquer
+ * dispositivo), com cache local. Pode ser reaberto via
+
  * evento global `erp:onboarding-replay` (item do menu da conta).
  */
 
