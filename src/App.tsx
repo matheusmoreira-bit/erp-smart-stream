@@ -25,6 +25,7 @@ import PagCorpNondeductible from "./pages/PagCorpNondeductible.tsx";
 import PagCorpSettlements from "./pages/PagCorpSettlements.tsx";
 import IntegrationHistory from "./pages/IntegrationHistory.tsx";
 import UsersHub from "./pages/UsersHub.tsx";
+import UserProductivity from "./pages/UserProductivity.tsx";
 import Suppliers from "./pages/Suppliers.tsx";
 import Items from "./pages/Items.tsx";
 import RegistrationRequests from "./pages/RegistrationRequests.tsx";
