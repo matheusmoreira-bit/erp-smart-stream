@@ -567,7 +567,7 @@ function ExpenseDetailModal({
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-xs">
-                  {expense.sap_doc_num != null && (
+                  {expense.sap_doc_num != null ? (
                     <div className="space-y-0.5">
                       <p className="text-muted-foreground">Documento ERP</p>
                       <p className="text-foreground font-mono font-medium">
@@ -575,7 +575,12 @@ function ExpenseDetailModal({
                         {expense.sap_doc_entry ? ` (entry ${expense.sap_doc_entry})` : ""}
                       </p>
                     </div>
-                  )}
+                  ) : internalDocCode(expense.id) ? (
+                    <div className="space-y-0.5">
+                      <p className="text-muted-foreground">Código interno</p>
+                      <p className="text-foreground font-mono font-medium">#{internalDocCode(expense.id)}</p>
+                    </div>
+                  ) : null}
                   {expense.sap_purchase_order_status && (
                     <div className="space-y-0.5">
                       <p className="text-muted-foreground">{isSalesDoc ? "Status PV" : "Status PC"}</p>
