@@ -108,25 +108,33 @@ export function PermissionsV2Provider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function loadAll() {
-      const [{ data: flags }, { data: scope }] = await Promise.all([
+      const [{ data: flags }, { data: scope, error: scopeError }] = await Promise.all([
         supabase
           .from("feature_flags")
           .select("key, enabled")
           .in("key", ["permissions_v2", "permissions_v2_kill"]),
+        // A tabela expõe `enabled` (boolean); pedir uma coluna `mode` fazia o
+        // PostgREST interpretar `mode` como agregado e devolver 400, quebrando
+        // a entrada em empresas com enforcement ligado (ex.: ANA Gaming).
         supabase
           .from("permissions_enforcement_scope")
-          .select("company_db, mode"),
+          .select("company_db, enabled"),
       ]);
 
       if (cancelled) return;
+
+      if (scopeError) {
+        console.error("[permissions-v2] falha ao carregar enforcement scope", scopeError);
+      }
 
       const flagMap = new Map((flags || []).map((f: any) => [f.key, !!f.enabled]));
       const scopeMap: Record<string, PermissionMode> = {};
       for (const row of (scope || []) as any[]) {
         if (row.company_db) {
-          scopeMap[String(row.company_db).toLowerCase()] = row.mode as PermissionMode;
+          scopeMap[String(row.company_db).toLowerCase()] = (row.enabled ? "enforce" : "shadow") as PermissionMode;
         }
       }
+
 
       const next: Snapshot = {
         v2Enabled: flagMap.get("permissions_v2") ?? false,
