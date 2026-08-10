@@ -145,6 +145,35 @@ export default function UserActivityPage() {
     return Array.from(map, ([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [filtered]);
 
+  // ERP Flow: filtro por busca/ação e período (o período já vem aplicado no servidor)
+  const flowFiltered = useMemo(() => {
+    let list = flowRecords;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (r) =>
+          r.actor_email?.toLowerCase().includes(q) ||
+          r.actor_name?.toLowerCase().includes(q) ||
+          r.action?.toLowerCase().includes(q) ||
+          r.detail?.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [flowRecords, search]);
+
+  // Log unificado (SAP + ERP Flow)
+  const unified = useMemo(() => {
+    const sap = systemFilter === "flow" ? [] : filtered;
+    const flow = systemFilter === "sap" ? [] : flowFiltered;
+    return mergeActivity(sap, flow);
+  }, [filtered, flowFiltered, systemFilter]);
+
+  const flowMetrics = useMemo(() => {
+    const users = new Set(flowFiltered.map((r) => r.actor_email).filter(Boolean)).size;
+    return { events: flowFiltered.length, users };
+  }, [flowFiltered]);
+
+
   return (
     <div className="min-h-screen bg-background">
       <PageTitle title="Atividade de Usuários" />
