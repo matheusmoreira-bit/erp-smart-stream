@@ -36,6 +36,40 @@ export default function Profile() {
   const [passwordOpen, setPasswordOpen] = useState(params.get("senha") === "1");
   const securityRef = useRef<HTMLDivElement | null>(null);
   const [highlightSecurity, setHighlightSecurity] = useState(false);
+  /**
+   * Gate do card "Segurança e senha do ERP".
+   * - "checking": ainda validando a sessão da conta (Cloud/Google).
+   * - "allowed": usuário autenticado E com identidade de ERP na empresa atual.
+   * - "no-auth" / "no-erp": bloqueado, card exibido apenas em modo somente leitura.
+   * A troca de senha em si continua validada no servidor (Service Layer exige a
+   * senha atual do próprio usuário), este gate é a camada de UI.
+   */
+  const [securityGate, setSecurityGate] =
+    useState<"checking" | "allowed" | "no-auth" | "no-erp">("checking");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (cancelled) return;
+      if (error || !data?.user) {
+        setSecurityGate("no-auth");
+        return;
+      }
+      setSecurityGate(session?.userName ? "allowed" : "no-erp");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.userName]);
+
+  const canChangeErpPassword = securityGate === "allowed";
+
+  /* Fecha o diálogo (inclusive via deep link) se o acesso não for permitido. */
+  useEffect(() => {
+    if (!canChangeErpPassword && passwordOpen) setPasswordOpen(false);
+  }, [canChangeErpPassword, passwordOpen]);
+
 
   // Deep link /perfil?senha=1: rola até o card de segurança e abre a troca de senha.
   useEffect(() => {
