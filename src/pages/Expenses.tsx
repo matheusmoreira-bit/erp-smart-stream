@@ -1445,6 +1445,11 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
     if (!search) return true;
     const q = search.toLowerCase();
+    const docQ = normalizeDocQuery(search);
+    const internalId = String(e.id || "").replace(/-/g, "").toLowerCase();
+    if (docQ && internalId && (internalId.startsWith(docQ) || internalDocCode(internalId).toLowerCase().includes(docQ))) {
+      return true;
+    }
     return (
       e.supplier_name.toLowerCase().includes(q) ||
       e.requester_name.toLowerCase().includes(q) ||
