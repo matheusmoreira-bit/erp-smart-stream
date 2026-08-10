@@ -1298,7 +1298,10 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       // "sem contrato" (U_FGR_CONTRATO = "N"). Pode ser sobrescrito por
       // headerCustom quando o usuário/regra informar explicitamente.
       ...(/ANAGAMING/i.test(String(expense.company_db || "")) ? { U_FGR_CONTRATO: "N" } : {}),
+      // Nunca herdar desconto do cadastro do parceiro no cabeçalho.
+      DiscountPercent: 0,
       ...headerCustom,
+
       DocumentLines: items.map((it: any) => {
         // Vendas (localização Brasil): campo "Utilização" obrigatório por linha.
         const usageCode = Number((expense as any).sales_usage);
