@@ -286,6 +286,8 @@ Deno.serve(withEdgeMetrics("hana-health-probe", async (req) => {
     if (cfg?.notify_email !== false) {
       let to = ((cfg?.recipient_emails ?? []) as string[]).filter(Boolean);
       if (to.length === 0) to = await resolveAdminEmails(sb);
+      to = filterHealthAlertRecipients(to);
+
       const html = `
         <div style="font-family:Arial,sans-serif;font-size:14px;color:#111">
           <h2 style="margin:0 0 12px">${icon} ${LABEL} — ${headline}</h2>
