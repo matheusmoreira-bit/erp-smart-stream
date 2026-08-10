@@ -1,3 +1,4 @@
+import { getImpersonation } from "@/lib/impersonation";
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sapLogin, sapLogout, ensureSapAuthToken, sapKeepAlive, type SapSession, clearClientCache } from "@/lib/sap-client";
