@@ -1298,7 +1298,10 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       // "sem contrato" (U_FGR_CONTRATO = "N"). Pode ser sobrescrito por
       // headerCustom quando o usuário/regra informar explicitamente.
       ...(/ANAGAMING/i.test(String(expense.company_db || "")) ? { U_FGR_CONTRATO: "N" } : {}),
+      // Nunca herdar desconto do cadastro do parceiro no cabeçalho.
+      DiscountPercent: 0,
       ...headerCustom,
+
       DocumentLines: items.map((it: any) => {
         // Vendas (localização Brasil): campo "Utilização" obrigatório por linha.
         const usageCode = Number((expense as any).sales_usage);
@@ -1318,10 +1321,15 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         const line: Record<string, unknown> = {
           Quantity: qty,
           UnitPrice: unit,
+          // Zera qualquer desconto herdado do cadastro do parceiro/lista de preços.
+          // Sem isso o SAP aplica o "% de desconto" padrão do BP e o total do
+          // pedido fica divergente do valor aprovado no ERP Flow.
+          DiscountPercent: 0,
           ...(/^[A-Z]{3}$/.test(lineCurrency) && lineCurrency !== "BRL" && lineCurrency !== "R$" ? { Currency: lineCurrency } : {}),
           ...usageLine,
           ...lineCustom,
         };
+
         if (hasItem) {
           // Mantém a descrição do item vinda do SAP (não sobrescreve com a da NF).
           // A descrição vinda da NF vai para o campo "Texto Livre" (FreeText).
