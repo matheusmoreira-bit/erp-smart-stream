@@ -2318,6 +2318,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                           <div className="flex items-center gap-2 text-foreground">
                             <Building2 className="w-3.5 h-3.5 text-primary/70 shrink-0" />
                             <span className="truncate">{exp.supplier_name}</span>
+                            <DocCodeLink id={exp.id} docNum={exp.sap_doc_num} onOpen={() => openExpense(exp, origin)} className="shrink-0" />
                           </div>
                         </td>
                         <td className="px-4 py-2.5 text-foreground">{exp.requester_name}</td>
