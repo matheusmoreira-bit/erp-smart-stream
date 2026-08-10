@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, RefreshCw, CheckCircle2, XCircle, Search, Building2, User, Calendar, FileText, Network, FileDown, UserCog } from "lucide-react";
 import { exportListReportPdf, exportListReportCsv } from "@/lib/report-pdf";
+import { exportDocLabel, matchesDocQuery } from "@/lib/doc-number";
 import { toast } from "sonner";
 import { useSap } from "@/contexts/SapContext";
 import { useAuth } from "@/hooks/useAuth";
