@@ -75,14 +75,31 @@ function isFrozen(v: unknown): boolean {
   return s === "tyes" || s === "y" || s === "s" || s === "sim" || s === "true" || s === "1";
 }
 
+/** "Ativo" na view vem como Sim/Não — inativo equivale a Frozen. */
+function isInactive(v: unknown): boolean {
+  const s = String(v ?? "").trim().toLowerCase();
+  if (!s) return false;
+  return s === "não" || s === "nao" || s === "n" || s === "no" || s === "false" || s === "0";
+}
+
+/** Tipo de PN: "Fornecedor" | "Cliente" (algumas views usam C/S). */
+function cardType(raw: Record<string, unknown>): "customer" | "supplier" | null {
+  const s = String(pick(raw, "Tipo de PN", "TipoPN", "CardType", "Tipo") ?? "").trim().toLowerCase();
+  if (!s) return null;
+  if (s.startsWith("cliente") || s === "c" || s === "ccustomer") return "customer";
+  if (s.startsWith("fornecedor") || s === "s" || s === "csupplier") return "supplier";
+  return null;
+}
+
 function mapRow(raw: Record<string, unknown>) {
-  const code = toStr(pick(raw, "CardCode", "Código", "Codigo", "Código PN", "Codigo PN", "Codigo_PN", "cardcode"));
-  const name = toStr(pick(raw, "CardName", "Nome", "Nome do fornecedor", "Nome_PN", "Fornecedor", "Nome do PN", "cardname"));
+  const code = toStr(pick(raw, "CardCode", "Código do PN", "Codigo do PN", "Código", "Codigo", "Código PN", "Codigo PN", "Codigo_PN", "cardcode"));
+  const name = toStr(pick(raw, "CardName", "Nome do PN", "Nome", "Nome do fornecedor", "Nome_PN", "Fornecedor", "cardname"));
   const alias = toStr(pick(raw, "AliasName", "Nome Fantasia", "NomeFantasia", "Fantasia", "aliasname"));
   const taxId = toStr(pick(raw, "CNPJ / CPF", "CNPJ/CPF", "CNPJ", "CPF", "FederalTaxID", "Documento fiscal", "TaxId", "TaxID", "federaltaxid"));
   const taxId0 = toStr(pick(raw, "U_FGR_TaxId0", "TaxId0", "u_fgr_taxid0"));
-  const currency = toStr(pick(raw, "Currency", "Moeda", "currency"));
-  const frozen = isFrozen(pick(raw, "Frozen", "Bloqueado", "frozen"));
+  const currency = toStr(pick(raw, "Currency", "Moeda do PN", "Moeda", "currency"));
+  const frozen = isFrozen(pick(raw, "Frozen", "Bloqueado", "frozen")) ||
+    isInactive(pick(raw, "Ativo", "Ativo?", "ativo"));
   if (!code) return null;
   return {
     code,
@@ -128,20 +145,13 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    if (isSales) {
-      // VW_CLIENTES não existe — retornamos hana_unavailable para que o
-      // client caia no fallback via Service Layer (BusinessPartners).
-      return new Response(JSON.stringify({
-        error: "hana_unavailable",
-        message: "VW_CLIENTES não disponível; usar Service Layer.",
-      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // Cache server-side (service role) — o client não tem permissão de escrita
     // em sap_cache, então a gravação precisa acontecer aqui.
-    const CACHE_KEY = "suppliers_hana_v1";
+    // A view VW_FORNECEDORES traz clientes e fornecedores (coluna "Tipo de PN"),
+    // por isso ela também atende o combobox de vendas.
+    const CACHE_KEY = isSales ? "customers_hana_v1" : "suppliers_hana_v1";
     const CACHE_TTL_MS = 30 * 60 * 1000;
     const force = Boolean(body?.force);
     if (!force) {
@@ -190,7 +200,16 @@ Deno.serve(async (req) => {
       await sapLogout(baseUrl, session);
     }
 
-    const rows = rawRows.map(mapRow).filter((r): r is NonNullable<ReturnType<typeof mapRow>> => !!r);
+
+
+    const wanted = isSales ? "customer" : "supplier";
+    const rows = rawRows
+      .filter((raw) => {
+        const t = cardType(raw);
+        return t === null || t === wanted;
+      })
+      .map(mapRow)
+      .filter((r): r is NonNullable<ReturnType<typeof mapRow>> => !!r);
 
     // Dedup por code — mantém a primeira ocorrência
     const seen = new Set<string>();
