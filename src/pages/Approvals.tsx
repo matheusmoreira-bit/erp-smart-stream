@@ -94,7 +94,8 @@ import { PageTitle } from "@/components/PageTitle";
 import { InternalApprovalHistory } from "@/components/InternalApprovalHistory";
 import { AttachmentViewer } from "@/components/AttachmentViewer";
 import { displayUserName } from "@/lib/user-display";
-import { isDesignatedApprover } from "@/lib/approval-authz";
+import { isDesignatedApprover, matchesApproverIdentity } from "@/lib/approval-authz";
+import { getImpersonation } from "@/lib/impersonation";
 import { isPayrollOrTaxFlow } from "@/hooks/useCurrentUserCostCenter";
 
 
@@ -2271,6 +2272,23 @@ export default function ApprovalsPage() {
   // Se o usuário tem substituição ativa, os documentos dos aprovadores oficiais também aparecem.
   const effectiveShowAll = canToggleShowAll && showAll;
   const sessionUser = (session.userName || "").toLowerCase().trim();
+  const impersonation = getImpersonation();
+  // Uma pessoa pode ter UserCode, nome e e-mails em domínios diferentes. Na
+  // impersonação, a sessão técnica pode ser do admin, portanto o alvo salvo é
+  // parte obrigatória da identidade usada para filtrar e autorizar.
+  const currentUserIdentities = [
+    session.userName,
+    impersonation?.companyDB === session.companyDB ? impersonation.targetUser : null,
+    impersonation?.companyDB === session.companyDB ? impersonation.targetEmail : null,
+    impersonation?.companyDB === session.companyDB ? impersonation.targetName : null,
+  ];
+  const isCurrentUserApprover = (doc: ApprovalDoc): boolean =>
+    matchesApproverIdentity(
+      currentUserIdentities,
+      doc.approverCode,
+      doc.currentApprover,
+      doc.approverEmail,
+    );
   /**
    * Escopo por centro de custo da substituição: quando o grant define
    * `cost_center_prefixes` (ex.: ["1.8"]), a substituição só vale para
@@ -2377,13 +2395,7 @@ export default function ApprovalsPage() {
       if (isRequester && !isSuperUser) return false;
 
       const sessionCodeLower = (session.userName || "").toLowerCase().trim();
-      const isDirectApprover =
-        (!!doc.approverCode &&
-          doc.approverCode.toLowerCase().trim() === sessionCodeLower) ||
-        (!!doc.approverEmail &&
-          (normalizeIdentity(doc.approverEmail) === sessionCodeLower ||
-            identityPrefix(doc.approverEmail) === identityPrefix(session.userName))) ||
-        approverMatches(doc.currentApprover, session.userName);
+      const isDirectApprover = isCurrentUserApprover(doc);
       if (isDirectApprover) return true;
 
       // Substituto ativo: se o usuário é atualmente substituto oficial do aprovador
@@ -2435,17 +2447,14 @@ export default function ApprovalsPage() {
     ? allApprovals
     : allApprovals.filter(
         (a) =>
-          codeEq(a.approverCode, a) ||
+          isCurrentUserApprover(a) ||
           codeEq(a.requesterCode, a) ||
-          approverMatches(a.currentApprover, session.userName) ||
           approverMatches(a.requester, session.userName) ||
           // Aprovadores paralelos do nível atual (mesmo `level_order`).
           ((a as unknown as { __levelApprovers?: Array<{ name: string; email: string }> }).__levelApprovers || []).some(
             (l) =>
-              approverMatches(l.name, session.userName) ||
-              (!!l.email &&
-                (identifiersForDoc(a).includes(l.email.toLowerCase()) ||
-                  approverMatches(l.email, session.userName))),
+              matchesApproverIdentity(currentUserIdentities, null, l.name, l.email) ||
+              (!!l.email && identifiersForDoc(a).includes(l.email.toLowerCase())),
           ) ||
           matchesSubstitutedOfficial(a.currentApprover, a) ||
 
