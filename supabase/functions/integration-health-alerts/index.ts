@@ -9,6 +9,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
+import { filterHealthAlertRecipients } from "../_shared/health-alert-optout.ts";
 
 const PROVIDER_LABEL: Record<string, string> = {
   sap_sl: "SAP Service Layer",
@@ -230,6 +231,8 @@ Deno.serve(withEdgeMetrics("integration-health-alerts", async (req) => {
       if (cfg.notify_email) {
         let to = (cfg.recipient_emails ?? []).filter(Boolean);
         if (to.length === 0) to = await resolveAdminEmails(sb);
+        to = filterHealthAlertRecipients(to);
+
 
         const html = `
           <div style="font-family:Arial,sans-serif;font-size:14px;color:#111">

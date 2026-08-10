@@ -17,6 +17,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { generateDynamicToken, resolveHanaSchema } from "../_shared/hana-views.ts";
+import { filterHealthAlertRecipients } from "../_shared/health-alert-optout.ts";
 
 const DEFAULT_HANA_API_URL = "http://201.48.79.205:8001";
 const FALLBACK_HANA_API_URL = "http://189.91.68.202:8001";
@@ -285,6 +286,8 @@ Deno.serve(withEdgeMetrics("hana-health-probe", async (req) => {
     if (cfg?.notify_email !== false) {
       let to = ((cfg?.recipient_emails ?? []) as string[]).filter(Boolean);
       if (to.length === 0) to = await resolveAdminEmails(sb);
+      to = filterHealthAlertRecipients(to);
+
       const html = `
         <div style="font-family:Arial,sans-serif;font-size:14px;color:#111">
           <h2 style="margin:0 0 12px">${icon} ${LABEL} — ${headline}</h2>
