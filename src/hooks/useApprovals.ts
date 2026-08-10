@@ -735,7 +735,7 @@ export function useApprovals() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [session, fetchFromSap, approvals.length]);
+  }, [session, fetchFromSap, approvals.length, loginManaged]);
 
   useEffect(() => {
     fetchApprovals();
