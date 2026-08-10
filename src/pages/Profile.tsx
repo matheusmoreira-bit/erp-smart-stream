@@ -10,8 +10,9 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ArrowLeft, KeyRound, RefreshCw, Save, User } from "lucide-react";
+import { ArrowLeft, KeyRound, Lock, RefreshCw, Save, User } from "lucide-react";
 
 
 export default function Profile() {
@@ -33,14 +34,50 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [syncedOnce, setSyncedOnce] = useState(false);
   const [params, setParams] = useSearchParams();
-  const [passwordOpen, setPasswordOpen] = useState(params.get("senha") === "1");
+  // Abre somente após o gate de permissão liberar (ver efeito do deep link).
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const securityRef = useRef<HTMLDivElement | null>(null);
   const [highlightSecurity, setHighlightSecurity] = useState(false);
+  /**
+   * Gate do card "Segurança e senha do ERP".
+   * - "checking": ainda validando a sessão da conta (Cloud/Google).
+   * - "allowed": usuário autenticado E com identidade de ERP na empresa atual.
+   * - "no-auth" / "no-erp": bloqueado, card exibido apenas em modo somente leitura.
+   * A troca de senha em si continua validada no servidor (Service Layer exige a
+   * senha atual do próprio usuário), este gate é a camada de UI.
+   */
+  const [securityGate, setSecurityGate] =
+    useState<"checking" | "allowed" | "no-auth" | "no-erp">("checking");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (cancelled) return;
+      if (error || !data?.user) {
+        setSecurityGate("no-auth");
+        return;
+      }
+      setSecurityGate(session?.userName ? "allowed" : "no-erp");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.userName]);
+
+  const canChangeErpPassword = securityGate === "allowed";
+
+  /* Fecha o diálogo (inclusive via deep link) se o acesso não for permitido. */
+  useEffect(() => {
+    if (!canChangeErpPassword && passwordOpen) setPasswordOpen(false);
+  }, [canChangeErpPassword, passwordOpen]);
+
 
   // Deep link /perfil?senha=1: rola até o card de segurança e abre a troca de senha.
   useEffect(() => {
     if (params.get("senha") !== "1") return;
-    setPasswordOpen(true);
+    if (securityGate === "checking") return;
+    if (canChangeErpPassword) setPasswordOpen(true);
     setHighlightSecurity(true);
     const scroll = window.setTimeout(() => {
       securityRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -50,7 +87,7 @@ export default function Profile() {
       window.clearTimeout(scroll);
       window.clearTimeout(unhighlight);
     };
-  }, [params]);
+  }, [params, securityGate, canChangeErpPassword]);
 
 
 
@@ -206,16 +243,31 @@ export default function Profile() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap items-center gap-3">
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={() => setPasswordOpen(true)}
-            >
-              <KeyRound className="w-4 h-4" /> Alterar senha do ERP
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              Usuário ERP: {session?.userName || "—"}
-            </span>
+            {securityGate === "checking" ? (
+              <span className="text-sm text-muted-foreground">Verificando permissão…</span>
+            ) : canChangeErpPassword ? (
+              <>
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => setPasswordOpen(true)}
+                >
+                  <KeyRound className="w-4 h-4" /> Alterar senha do ERP
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Usuário ERP: {session?.userName}
+                </span>
+              </>
+            ) : (
+              <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                <Lock className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>
+                  {securityGate === "no-auth"
+                    ? "Entre com sua conta para gerenciar a senha do ERP."
+                    : "Sua conta não possui um usuário de ERP vinculado nesta empresa, por isso a troca de senha está indisponível. Fale com o administrador."}
+                </span>
+              </div>
+            )}
           </CardContent>
         </Card>
 
