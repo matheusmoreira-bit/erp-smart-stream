@@ -1424,7 +1424,10 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       const q = f.sap_doc_num.trim();
       const num = e.sap_doc_num?.toString() || "";
       const entry = e.sap_doc_entry?.toString() || "";
-      if (!num.includes(q) && !entry.includes(q)) return false;
+      const dq = normalizeDocQuery(q);
+      const iid = String(e.id || "").replace(/-/g, "").toLowerCase();
+      const matchesInternal = !!dq && !!iid && (iid.startsWith(dq) || internalDocCode(iid).toLowerCase().includes(dq));
+      if (!num.includes(q) && !entry.includes(q) && !matchesInternal) return false;
     }
     if (f.branch_id && String(e.branch_id ?? "") !== f.branch_id.trim()) return false;
     const minV = f.min_amount ? Number(f.min_amount.replace(",", ".")) : null;
@@ -1904,7 +1907,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   { header: "Data doc.", cell: (r: typeof filtered[number]) => r.exp.doc_date ? new Date(r.exp.doc_date).toLocaleDateString("pt-BR") : "—" },
                   { header: "Vencimento", cell: (r: typeof filtered[number]) => r.exp.due_date ? new Date(r.exp.due_date).toLocaleDateString("pt-BR") : "—" },
                   { header: "Total", align: "right" as const, cell: (r: typeof filtered[number]) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: /^[A-Z]{3}$/.test(r.exp.currency) ? r.exp.currency : "BRL" }).format(r.exp.total_amount) },
-                  { header: "ERP #", cell: (r: typeof filtered[number]) => r.exp.sap_doc_num ? `#${r.exp.sap_doc_num}` : "—" },
+                  { header: "ERP #", cell: (r: typeof filtered[number]) => r.exp.sap_doc_num ? `#${r.exp.sap_doc_num}` : (internalDocCode(r.exp.id) ? `#${internalDocCode(r.exp.id)}` : "—") },
                   { header: "Origem", cell: (r: typeof filtered[number]) => r.origin === "erp_flow" ? "ERP Flow" : erpLabel },
                 ],
                 rows: pageItems,
@@ -2604,7 +2607,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
               </div>
               <div className="space-y-1.5">
                 <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Nº do documento (SAP)</Label>
-                <Input value={advDraft.sap_doc_num} onChange={(e) => setAdvDraft({ ...advDraft, sap_doc_num: e.target.value })} placeholder="DocNum ou DocEntry" />
+                <Input value={advDraft.sap_doc_num} onChange={(e) => setAdvDraft({ ...advDraft, sap_doc_num: e.target.value })} placeholder="DocNum, DocEntry ou código interno" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Filial (branch)</Label>
