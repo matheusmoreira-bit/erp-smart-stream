@@ -1864,7 +1864,13 @@ function MyRequestsTab() {
     if (!search) return true;
     const q = search.toLowerCase();
     const has = (v: unknown) => String(v ?? "").toLowerCase().includes(q);
-    return has(r.docNum) || has(r.cardName) || has(r.docTypeName) || has(r.approvalModel);
+    return (
+      has(r.docNum) ||
+      matchesDocQuery(r as never, search) ||
+      has(r.cardName) ||
+      has(r.docTypeName) ||
+      has(r.approvalModel)
+    );
   });
 
 
