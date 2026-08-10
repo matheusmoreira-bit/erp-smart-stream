@@ -2505,11 +2505,18 @@ export default function ApprovalsPage() {
       if (!projs.some((p) => projectFilter.includes(p))) return false;
     }
 
+    if (originFilter !== "all") {
+      const internal = isInternalDoc(a as never);
+      if (originFilter === "internal" && !internal) return false;
+      if (originFilter === "erp" && internal) return false;
+    }
+
     if (!search) return true;
     const q = search.toLowerCase();
     const has = (v: unknown) => String(v ?? "").toLowerCase().includes(q);
     return (
       has(a.docNum) ||
+      matchesDocQuery(a as never, search) ||
       has(a.cardName) ||
       has(a.requester) ||
       has(a.currentApprover) ||
