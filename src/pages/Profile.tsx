@@ -176,6 +176,42 @@ export default function Profile() {
 
         <Card>
           <CardHeader>
+            <CardTitle className="text-base">Segurança e senha do ERP</CardTitle>
+            <CardDescription>
+              A entrada no sistema é feita pela conta Google. A senha abaixo é a do ERP, usada apenas
+              nas ações que dependem do SAP (aprovar, integrar, dar baixa) e pode ser alterada em
+              todas as empresas de uma vez.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-3">
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => setPasswordOpen(true)}
+            >
+              <KeyRound className="w-4 h-4" /> Alterar senha do ERP
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Usuário ERP: {session?.userName || "—"}
+            </span>
+          </CardContent>
+        </Card>
+
+        <ChangePasswordDialog
+          hideTrigger
+          open={passwordOpen}
+          onOpenChange={(v) => {
+            setPasswordOpen(v);
+            if (!v && params.get("senha")) {
+              params.delete("senha");
+              setParams(params, { replace: true });
+            }
+          }}
+        />
+
+
+        <Card>
+          <CardHeader>
             <CardTitle className="text-base">Notificações que aceito receber</CardTitle>
             <CardDescription>Por padrão, todas as notificações estão ativas.</CardDescription>
           </CardHeader>
