@@ -322,7 +322,10 @@ export default function UserActivityPage() {
             <div className="rounded-xl border border-border bg-card overflow-hidden">
               <div className="px-6 py-3 border-b border-border bg-muted/30">
                 <h3 className="text-sm font-semibold text-foreground">Log de Atividade Recente</h3>
-                <p className="text-xs text-muted-foreground">{filtered.length} registros</p>
+                <p className="text-xs text-muted-foreground">
+                  {unified.length} registros · {filtered.length} SAP · {flowFiltered.length} ERP Flow
+                </p>
+
               </div>
               <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
                 <table className="w-full text-sm">
