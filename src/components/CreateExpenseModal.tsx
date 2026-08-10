@@ -938,7 +938,16 @@ export function CreateExpenseModal({
     setDraftId(initialDraft.id);
     setDraftHydrated(true);
     if (p.supplier) setSupplier(p.supplier);
-    if (p.currency) setCurrency(p.currency);
+    if (p.currency) {
+      const norm = normalizeCurrencyCode(p.currency);
+      // Rascunho salvo com moeda multimoeda: não trava, deixa o usuário escolher.
+      if (norm === "##") {
+        setCurrency("");
+        setCurrencyOptions(DEFAULT_MULTI_CURRENCIES);
+      } else if (norm) {
+        setCurrency(norm);
+      }
+    }
     if (p.docDate) setDocDate(p.docDate);
     if (p.dueDate) setDueDate(p.dueDate);
     if (p.remarks) setRemarks(p.remarks);
