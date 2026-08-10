@@ -53,19 +53,27 @@ export function ImpersonationBanner() {
   };
 
   return (
-    <div className="fixed bottom-0 inset-x-0 z-[60] bg-warning/95 text-warning-foreground border-t border-warning shadow-lg">
-      <div className="max-w-5xl mx-auto flex items-center gap-3 px-4 py-2 pb-[max(env(safe-area-inset-bottom),0.5rem)]">
+    <>
+      {/* Moldura ao redor da tela inteira indicando sessão impersonada */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 z-[70] border-4 border-warning/80 rounded-sm"
+        style={{ boxShadow: "inset 0 0 24px hsl(var(--warning) / 0.25)" }}
+      />
+
+      {/* Etiqueta flutuante com o botão de sair da sessão */}
+      <div className="fixed bottom-4 right-4 z-[71] flex items-center gap-3 rounded-full bg-warning/95 text-warning-foreground border border-warning shadow-lg px-4 py-2 mb-[env(safe-area-inset-bottom)]">
         <UserCog className="w-4 h-4 shrink-0" aria-hidden="true" />
-        <p className="text-sm flex-1 min-w-0 truncate">
-          Você está atuando como{" "}
+        <p className="text-sm max-w-[16rem] truncate">
+          Atuando como{" "}
           <strong>{displayUserName(state.targetName || state.targetUser)}</strong>
-          <span className="hidden sm:inline"> · sessão iniciada por {state.adminEmail}</span>
         </p>
-        <Button size="sm" variant="secondary" onClick={stop} disabled={busy}>
+        <Button size="sm" variant="secondary" className="rounded-full" onClick={stop} disabled={busy}>
           {busy && <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />}
-          Encerrar
+          Sair
         </Button>
       </div>
-    </div>
+    </>
   );
 }
+
