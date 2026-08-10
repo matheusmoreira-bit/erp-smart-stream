@@ -732,7 +732,7 @@ export function useApprovals() {
 
   // Auto-refresh every 5 minutes while the page is open
   useEffect(() => {
-    if (!session || session.erpType !== "sap" || !session.sessionId) return;
+    if (!session || session.erpType !== "sap") return;
     const id = setInterval(() => {
       fetchApprovals({ force: true });
     }, APPROVALS_CACHE_TTL_MS);
