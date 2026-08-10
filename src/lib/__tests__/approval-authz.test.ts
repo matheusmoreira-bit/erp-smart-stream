@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   isDesignatedApprover,
+  matchesApproverIdentity,
   resolveDesignatedApprovers,
   canCallerApproveInternal,
   type InternalExpense,
@@ -42,6 +43,35 @@ describe("isDesignatedApprover — acentos e caracteres especiais", () => {
 
   it("caller vazio nunca é aprovador", () => {
     expect(isDesignatedApprover("", "João Mourão", "joao.mourao@empresa.com.br")).toBe(false);
+  });
+});
+
+describe("matchesApproverIdentity — aliases entre empresas", () => {
+  it("casa o mesmo UserCode com e-mails de domínios diferentes", () => {
+    expect(matchesApproverIdentity(
+      ["felipe.escudeiro@lotusblanca.net", "felipe.escudeiro"],
+      null,
+      "Felipe Escudeiro",
+      "felipe.escudeiro@anagaming.com.br",
+    )).toBe(true);
+  });
+
+  it("casa pelo UserCode mesmo quando nome e e-mail da view estão incompletos", () => {
+    expect(matchesApproverIdentity(
+      ["felipe.escudeiro@lotusblanca.net"],
+      "felipe.escudeiro",
+      null,
+      null,
+    )).toBe(true);
+  });
+
+  it("não mistura pessoas com o mesmo primeiro nome", () => {
+    expect(matchesApproverIdentity(
+      ["felipe.coelho@anagaming.com.br"],
+      "felipe.escudeiro",
+      "Felipe Escudeiro",
+      "felipe.escudeiro@anagaming.com.br",
+    )).toBe(false);
   });
 });
 

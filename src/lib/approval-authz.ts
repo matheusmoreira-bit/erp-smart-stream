@@ -70,6 +70,25 @@ export function isDesignatedApprover(
   return nameTokens.length === 1;
 }
 
+/**
+ * Compara um aprovador vindo de qualquer fonte (SAP/HANA/Flow) com todas as
+ * identidades conhecidas do usuário. O UserCode é a chave principal; e-mails
+ * de domínios diferentes e o nome de exibição são aliases da mesma pessoa.
+ */
+export function matchesApproverIdentity(
+  callers: Array<string | null | undefined>,
+  approverCode: string | null | undefined,
+  approverName: string | null | undefined,
+  approverEmail: string | null | undefined,
+): boolean {
+  return callers.some((rawCaller) => {
+    const caller = String(rawCaller || "").trim();
+    if (!caller) return false;
+    if (approverCode && identityMatches(caller, approverCode)) return true;
+    return isDesignatedApprover(caller, approverName || null, approverEmail || null);
+  });
+}
+
 export interface ApprovalRuleLevel {
   level_order: number;
   approver_name: string;
