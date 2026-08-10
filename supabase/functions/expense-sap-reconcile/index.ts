@@ -396,6 +396,11 @@ Deno.serve(async (req) => {
         cause_label: finding.cause_label,
         cause_detail: finding.cause_detail,
       });
+    };
+
+    const CONCURRENCY = 5;
+    for (let i = 0; i < expenses.length; i += CONCURRENCY) {
+      await Promise.all(expenses.slice(i, i + CONCURRENCY).map((exp) => processOne(exp)));
     }
 
     await fetch(`${baseUrl}/Logout`, { method: "POST", headers: { Cookie: cookies } }).catch(() => {});
