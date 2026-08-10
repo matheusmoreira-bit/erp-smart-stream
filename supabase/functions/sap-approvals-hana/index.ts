@@ -8,6 +8,8 @@ import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { fetchHanaView } from "../_shared/hana-views.ts";
+import { sapSessionLogin, buildBaseUrl } from "../_shared/sap-cache.ts";
+import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   ...baseCorsHeaders,
