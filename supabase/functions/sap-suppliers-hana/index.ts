@@ -91,13 +91,40 @@ function cardType(raw: Record<string, unknown>): "customer" | "supplier" | null 
   return null;
 }
 
+/**
+ * A view HANA devolve a moeda por extenso ("Real", "Dólar", "Todas as Moedas")
+ * enquanto o Service Layer devolve o código ISO ("BRL", "USD") e "##" para o PN
+ * multimoeda. Normalizamos aqui para o formulário travar/liberar corretamente.
+ */
+function normalizeCurrency(raw: string): string {
+  const s = raw.trim();
+  if (!s) return "";
+  if (s === "##") return "##";
+  if (/^[A-Z]{3}$/.test(s.toUpperCase()) && s.toUpperCase() !== "R$") return s.toUpperCase();
+  const n = s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (n.includes("todas")) return "##"; // multimoeda
+  if (n.includes("real") || s === "R$") return "BRL";
+  if (n.includes("dolar americano") || n.includes("dolar dos estados") || n === "dolar") return "USD";
+  if (n.includes("euro")) return "EUR";
+  if (n.includes("libra")) return "GBP";
+  if (n.includes("franco")) return "CHF";
+  if (n.includes("peso argentino")) return "ARS";
+  if (n.includes("peso uruguaio")) return "UYU";
+  if (n.includes("guarani")) return "PYG";
+  if (n.includes("dolar canadense")) return "CAD";
+  return "";
+}
+
 function mapRow(raw: Record<string, unknown>) {
   const code = toStr(pick(raw, "CardCode", "Código do PN", "Codigo do PN", "Código", "Codigo", "Código PN", "Codigo PN", "Codigo_PN", "cardcode"));
   const name = toStr(pick(raw, "CardName", "Nome do PN", "Nome", "Nome do fornecedor", "Nome_PN", "Fornecedor", "cardname"));
   const alias = toStr(pick(raw, "AliasName", "Nome Fantasia", "NomeFantasia", "Fantasia", "aliasname"));
   const taxId = toStr(pick(raw, "CNPJ / CPF", "CNPJ/CPF", "CNPJ", "CPF", "FederalTaxID", "Documento fiscal", "TaxId", "TaxID", "federaltaxid"));
   const taxId0 = toStr(pick(raw, "U_FGR_TaxId0", "TaxId0", "u_fgr_taxid0"));
-  const currency = toStr(pick(raw, "Currency", "Moeda do PN", "Moeda", "currency"));
+  const currency = normalizeCurrency(toStr(pick(raw, "Currency", "Moeda do PN", "Moeda", "currency")));
   const frozen = isFrozen(pick(raw, "Frozen", "Bloqueado", "frozen")) ||
     isInactive(pick(raw, "Ativo", "Ativo?", "ativo"));
   if (!code) return null;
@@ -105,7 +132,7 @@ function mapRow(raw: Record<string, unknown>) {
     code,
     name: name || code,
     extra: taxId || taxId0 || undefined,
-    currency: currency && currency !== "R$" ? currency : "BRL",
+    currency: currency || "BRL",
     frozen,
     details: {
       fantasyName: alias || undefined,
