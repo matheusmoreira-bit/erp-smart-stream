@@ -679,6 +679,11 @@ export function useApprovals() {
       void loginManaged(session.companyDB).catch(() => {});
     }
 
+    // Durante a impersonação a lista precisa refletir o usuário alvo — nunca
+    // reaproveita o cache montado com a sessão do admin.
+    const skipCache = isImpersonating();
+
+
     const force = !!opts?.force;
     setError(null);
 
