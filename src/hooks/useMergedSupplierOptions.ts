@@ -63,7 +63,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
   //    mais rápida (e completa) do que paginar BusinessPartners via Service
   //    Layer. Em caso de falha ou empresa sem HanaAPI, o hook `useSapCachedList`
   //    abaixo faz o fallback natural para BusinessPartners.
-  const cacheKey = isSales ? "customers_active_v6" : "suppliers_active_v6";
+  const cacheKey = isSales ? "customers_active_v7" : "suppliers_active_v7";
   const cardType = isSales ? "cCustomer" : "cSupplier";
 
   const [hanaLoaded, setHanaLoaded] = useState(false);
