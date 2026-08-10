@@ -34,7 +34,8 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [syncedOnce, setSyncedOnce] = useState(false);
   const [params, setParams] = useSearchParams();
-  const [passwordOpen, setPasswordOpen] = useState(params.get("senha") === "1");
+  // Abre somente após o gate de permissão liberar (ver efeito do deep link).
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const securityRef = useRef<HTMLDivElement | null>(null);
   const [highlightSecurity, setHighlightSecurity] = useState(false);
   /**
