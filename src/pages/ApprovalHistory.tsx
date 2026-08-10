@@ -477,7 +477,7 @@ function HistoryCard({ row, onRelationsMap }: { row: ApprovalHistoryRow; onRelat
               {sourceLabel}
             </span>
           </div>
-          <h3 className="font-mono font-semibold mt-1">#{row.doc_num || row.doc_entry || "—"}</h3>
+          <h3 className="font-mono font-semibold mt-1">{Number(row.doc_num || 0) > 0 ? `#${row.doc_num}` : exportDocLabel(row)}</h3>
         </div>
         <div className="text-right flex items-start gap-1">
           {onRelationsMap && (
