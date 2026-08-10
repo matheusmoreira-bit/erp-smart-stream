@@ -161,11 +161,9 @@ export function MobileMenuSheet({ open, onOpenChange }: Props) {
             className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted min-h-11 text-left"
           >
             <UserCog className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm">Meu perfil</span>
+            <span className="text-sm">Meu perfil e senha</span>
           </button>
-          <div className="[&_button]:!w-full [&_button]:!justify-start [&_button]:!min-h-11 [&_button]:!px-3 [&_button]:!py-3 [&_button]:!rounded-lg [&_button]:!bg-transparent [&_button]:hover:!bg-muted">
-            <ChangePasswordDialog />
-          </div>
+
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted min-h-11 text-left"
