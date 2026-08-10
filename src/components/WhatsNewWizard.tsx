@@ -9,12 +9,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useSap } from "@/contexts/SapContext";
+import { hasSeenTour, markTourSeen } from "@/lib/tour-state";
 
 /** Versão do tour. Incremente para exibir novamente a todos os usuários. */
 const TOUR_VERSION = "2026-08-07-novo-login";
-export const whatsNewStorageKey = (user: string) =>
-  `erp-whatsnew:${TOUR_VERSION}:${user.toLowerCase()}`;
-const storageKey = whatsNewStorageKey;
+/** Chave do tour — persistida no perfil do usuário (vale em qualquer dispositivo). */
+export const whatsNewTourKey = `whatsnew:${TOUR_VERSION}`;
 
 const steps = [
   {
