@@ -15,6 +15,7 @@ import { Activity, RefreshCw, Loader2, AlertTriangle, Database, Server, CreditCa
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 import { cn } from "@/lib/utils";
 import { IntegrationHealthAlerts } from "@/components/IntegrationHealthAlerts";
+import { HanaHealthMonitor } from "@/components/HanaHealthMonitor";
 
 
 type ProviderKey = "sap_sl" | "hana" | "pagcorp" | "mastertax";
