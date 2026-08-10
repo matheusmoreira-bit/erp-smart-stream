@@ -114,8 +114,15 @@ import { CurrencyField } from "@/components/CurrencyField";
 const DEDUP_LOG = "[expense-dedupe]";
 
 function formatCurrency(value: number, currency: string = "BRL") {
-  const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: validCode }).format(value);
+  const code = String(currency || "").trim().toUpperCase();
+  const validCode = /^[A-Z]{3}$/.test(code) ? code : "BRL";
+  const amount = Number.isFinite(value) ? value : 0;
+  try {
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: validCode }).format(amount);
+  } catch {
+    // Código ISO inexistente (ex.: "XXX" vindo da IA) — nunca deixar quebrar a tela.
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(amount);
+  }
 }
 
 export interface PagCorpPrefill {
