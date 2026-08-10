@@ -36,7 +36,9 @@ function jcToOption(jc: JumpCloudUser): SapSearchOption {
 export default function IdpSyncPage() {
   const navigate = useNavigate();
   const { session } = useSap();
-  const { users: sapUsers, isLoading: sapLoading } = useSapUsers();
+  const { users: sapUsers, isLoading: sapLoading, toggleLock } = useSapUsers();
+  const [urlParams] = useSearchParams();
+  const focusUser = urlParams.get("user");
   const {
     jcUsers,
     mappings,
