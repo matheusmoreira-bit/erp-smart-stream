@@ -208,6 +208,7 @@ const App = () => (
 
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </RequireAuth>
             <MobileBottomNav />
           </BrowserRouter>
           <TestCompanyBanner />
