@@ -589,7 +589,10 @@ export function useApprovals() {
     // Aprovações originadas no SAP só devem ser consultadas quando já existe
     // uma sessão técnica ativa. Abrir a tela nunca pode disparar o login ERP:
     // a autenticação é solicitada apenas ao executar uma ação no Service Layer.
-    if (!session || session.erpType !== "sap" || !session.sessionId) return [];
+    // Sem sessão técnica no navegador o servidor resolve a leitura com a
+    // credencial da empresa (só a leitura — ações continuam exigindo sessão).
+    if (!session || session.erpType !== "sap") return [];
+    if (!session.sessionId && SERVICE_LAYER_ONLY_DBS.has(session.companyDB)) return [];
     const companyDb = session.companyDB;
 
     // Empresas sem HANA: consulta direto no Service Layer.
@@ -668,27 +671,12 @@ export function useApprovals() {
       setIsRefreshing(false);
       return;
     }
-    // Sem sessão técnica: tenta login invisível com a senha provisionada.
-    // Nunca abre modal — se não houver credencial salva, apenas não lista
-    // as aprovações nativas do SAP.
-    if (!session.sessionId) {
-      const db = session.companyDB;
-      if (!db || silentLoginTriedRef.current === db) {
-        setApprovals([]);
-        setIsLoading(false);
-        setIsRefreshing(false);
-        return;
-      }
-      silentLoginTriedRef.current = db;
-      try {
-        setIsLoading(true);
-        await loginManaged(db); // dispara novo render com sessionId → refetch
-      } catch {
-        setApprovals([]);
-        setIsLoading(false);
-        setIsRefreshing(false);
-      }
-      return;
+    // Sem sessão técnica: dispara um login invisível (senha provisionada) em
+    // segundo plano, mas NÃO bloqueia a listagem — o servidor lê a view com a
+    // credencial técnica da empresa quando não recebe session_id.
+    if (!session.sessionId && session.companyDB && silentLoginTriedRef.current !== session.companyDB) {
+      silentLoginTriedRef.current = session.companyDB;
+      void loginManaged(session.companyDB).catch(() => {});
     }
 
     const force = !!opts?.force;
@@ -744,7 +732,7 @@ export function useApprovals() {
 
   // Auto-refresh every 5 minutes while the page is open
   useEffect(() => {
-    if (!session || session.erpType !== "sap" || !session.sessionId) return;
+    if (!session || session.erpType !== "sap") return;
     const id = setInterval(() => {
       fetchApprovals({ force: true });
     }, APPROVALS_CACHE_TTL_MS);

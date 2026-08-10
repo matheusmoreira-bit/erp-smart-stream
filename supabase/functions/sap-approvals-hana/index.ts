@@ -8,6 +8,8 @@ import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { fetchHanaView } from "../_shared/hana-views.ts";
+import { sapSessionLogin, buildSapBaseUrl } from "../_shared/sap-cache.ts";
+import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   ...baseCorsHeaders,
@@ -39,11 +41,6 @@ Deno.serve(withEdgeMetrics("sap-approvals-hana", async (req, _mctx) => {
       return new Response(JSON.stringify({ error: "company_db obrigatório" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    if (!sessionId) {
-      return new Response(
-        JSON.stringify({ error: "Sessão SAP inválida ou expirada. Faça login novamente.", code: "SAP_SESSION_EXPIRED" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
 
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { data: credsRows } = await sb
@@ -56,13 +53,37 @@ Deno.serve(withEdgeMetrics("sap-approvals-hana", async (req, _mctx) => {
       creds[r.credential_key] = r.credential_value ?? "";
     }
 
+    // Sem sessão do usuário (login desacoplado / impersonação sem senha
+    // provisionada): a leitura da view é feita com a credencial técnica da
+    // empresa, mas só depois de validar a identidade de quem chamou.
+    let effectiveSessionId = sessionId;
+    if (!effectiveSessionId) {
+      try {
+        await requireUserOrSapSession(req);
+      } catch (authErr) {
+        return authErrorResponse(authErr, corsHeaders);
+      }
+      if (!creds.service_layer_url || !creds.username || !creds.password) {
+        return new Response(
+          JSON.stringify({ error: "Sessão SAP inválida ou expirada. Faça login novamente.", code: "SAP_SESSION_EXPIRED" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const tech = await sapSessionLogin(
+        buildSapBaseUrl(creds.service_layer_url),
+        companyDb,
+        creds.username,
+        creds.password,
+      );
+      effectiveSessionId = tech.sessionId;
+    }
+
     const schema = schemaOverride || HANA_SCHEMA_OVERRIDES[companyDb] || companyDb;
 
     try {
       const rows = await fetchHanaView({
         schema,
         view: "VW_APROVACOES_DETALHADAS",
-        sessionId,
+        sessionId: effectiveSessionId,
         hanaApiUrl: creds.hana_api_url || null,
       });
       return new Response(JSON.stringify({ schema, data: rows }),
