@@ -1001,7 +1001,10 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     const id = readDocParam();
     if (!id) { deepLinkHandledRef.current = true; return; }
     if (!expenses || expenses.length === 0) return;
-    const found = expenses.find((e) => e.id === id);
+    // Aceita o id completo ou o código interno curto (ex.: `#A38F5BF9`).
+    const key = normalizeDocQuery(id);
+    const found = expenses.find((e) => e.id === id)
+      || (key ? expenses.find((e) => e.id.toLowerCase().startsWith(key) || internalDocCode(e.id).toLowerCase() === key) : undefined);
     if (found) {
       openExpense(found);
       deepLinkHandledRef.current = true;
