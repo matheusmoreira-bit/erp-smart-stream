@@ -1108,10 +1108,13 @@ export function CreateExpenseModal({
     const { valid, errors } = validateAttachments(newFiles);
     for (const msg of errors) toast.error(msg);
     if (valid.length === 0) return;
-    setFiles((prev) => [...prev, ...valid]);
-    if (aiEnabled) {
-      processWithAI([...files, ...valid]);
-    }
+    // Usa o estado atualizado (evita perder anexos quando o usuário adiciona
+    // vários arquivos em sequência rápida, antes do re-render).
+    setFiles((prev) => {
+      const next = [...prev, ...valid];
+      if (aiEnabled) queueMicrotask(() => processWithAI(next));
+      return next;
+    });
   };
 
   const removeFile = (index: number) => {
