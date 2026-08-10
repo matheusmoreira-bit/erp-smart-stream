@@ -576,12 +576,14 @@ async function writeApprovalsCache(session: SapSession, docs: ApprovalDoc[]): Pr
 }
 
 export function useApprovals() {
-  const { session } = useSap();
+  const { session, loginManaged } = useSap();
   const [approvals, setApprovals] = useState<ApprovalDoc[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
+  const silentLoginTriedRef = useRef<string | null>(null);
+
 
   const fetchFromSap = useCallback(async (): Promise<ApprovalDoc[]> => {
     // Aprovações originadas no SAP só devem ser consultadas quando já existe
@@ -660,12 +662,35 @@ export function useApprovals() {
 
 
   const fetchApprovals = useCallback(async (opts?: { force?: boolean }) => {
-    if (!session || session.erpType !== "sap" || !session.sessionId) {
+    if (!session || session.erpType !== "sap") {
       setApprovals([]);
       setIsLoading(false);
       setIsRefreshing(false);
       return;
     }
+    // Sem sessão técnica: tenta login invisível com a senha provisionada.
+    // Nunca abre modal — se não houver credencial salva, apenas não lista
+    // as aprovações nativas do SAP.
+    if (!session.sessionId) {
+      const db = session.companyDB;
+      if (!db || silentLoginTriedRef.current === db) {
+        setApprovals([]);
+        setIsLoading(false);
+        setIsRefreshing(false);
+        return;
+      }
+      silentLoginTriedRef.current = db;
+      try {
+        setIsLoading(true);
+        await loginManaged(db); // dispara novo render com sessionId → refetch
+      } catch {
+        setApprovals([]);
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+      return;
+    }
+
     const force = !!opts?.force;
     setError(null);
 
