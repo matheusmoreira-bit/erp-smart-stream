@@ -74,7 +74,8 @@ export default function Profile() {
   // Deep link /perfil?senha=1: rola até o card de segurança e abre a troca de senha.
   useEffect(() => {
     if (params.get("senha") !== "1") return;
-    setPasswordOpen(true);
+    if (securityGate === "checking") return;
+    if (canChangeErpPassword) setPasswordOpen(true);
     setHighlightSecurity(true);
     const scroll = window.setTimeout(() => {
       securityRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -84,7 +85,7 @@ export default function Profile() {
       window.clearTimeout(scroll);
       window.clearTimeout(unhighlight);
     };
-  }, [params]);
+  }, [params, securityGate, canChangeErpPassword]);
 
 
 
