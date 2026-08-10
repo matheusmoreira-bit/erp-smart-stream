@@ -2936,6 +2936,15 @@ export function CreateExpenseModal({
             )}
           </div>
 
+          <SupplierDetailsDialog
+            open={supplierDetailsOpen}
+            onOpenChange={setSupplierDetailsOpen}
+            session={sapSession}
+            cardCode={supplier?.code ?? null}
+            bpLabel={bpLabel}
+          />
+
+
           <RegistrationRequestModal
             open={supplierRequestOpen}
             onOpenChange={setSupplierRequestOpen}
