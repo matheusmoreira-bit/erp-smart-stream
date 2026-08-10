@@ -589,7 +589,10 @@ export function useApprovals() {
     // Aprovações originadas no SAP só devem ser consultadas quando já existe
     // uma sessão técnica ativa. Abrir a tela nunca pode disparar o login ERP:
     // a autenticação é solicitada apenas ao executar uma ação no Service Layer.
-    if (!session || session.erpType !== "sap" || !session.sessionId) return [];
+    // Sem sessão técnica no navegador o servidor resolve a leitura com a
+    // credencial da empresa (só a leitura — ações continuam exigindo sessão).
+    if (!session || session.erpType !== "sap") return [];
+    if (!session.sessionId && SERVICE_LAYER_ONLY_DBS.has(session.companyDB)) return [];
     const companyDb = session.companyDB;
 
     // Empresas sem HANA: consulta direto no Service Layer.
