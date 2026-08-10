@@ -71,6 +71,8 @@ import { TestCompanyBanner } from "./components/TestCompanyBanner.tsx";
 import { TestCompanyVisibilityGate } from "./components/TestCompanyVisibilityGate.tsx";
 import { DefaultPasswordWarning } from "./components/DefaultPasswordWarning.tsx";
 import { MobileBottomNav } from "./components/MobileBottomNav.tsx";
+import { RequireAuth } from "./components/RequireAuth.tsx";
+import Login from "./pages/Login.tsx";
 
 
 const queryClient = new QueryClient();
