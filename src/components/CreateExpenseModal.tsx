@@ -3549,11 +3549,7 @@ export function CreateExpenseModal({
                   );
                   const currency = currencies[0] || "BRL";
                   const totalStr = estimatedTotal > 0
-                    ? new Intl.NumberFormat("pt-BR", {
-                        style: "currency",
-                        currency,
-                        maximumFractionDigits: 2,
-                      }).format(estimatedTotal)
+                    ? formatCurrency(estimatedTotal, currency)
                     : "—";
                   return (
                     <button
