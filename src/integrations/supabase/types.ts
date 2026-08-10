@@ -7858,6 +7858,14 @@ export type Database = {
           total: number
         }[]
       }
+      get_flow_last_login: {
+        Args: never
+        Returns: {
+          email: string
+          last_activity: string
+          last_login: string
+        }[]
+      }
       get_flow_stage_metrics: {
         Args: { _days?: number }
         Returns: {
