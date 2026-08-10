@@ -2,6 +2,7 @@ import { List, type RowComponentProps } from "react-window";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Building2, Eye, Copy, Network } from "lucide-react";
+import { DocCodeLink } from "@/components/DocCodeLink";
 import { type Expense, STATUS_COLORS, useStatusLabel } from "@/hooks/useExpenses";
 
 function formatCurrency(value: number, currency: string = "BRL") {
