@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { docNumberLabel } from "@/lib/doc-number";
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
 import { useMyCapabilities } from "@/hooks/useMyCapabilities";
@@ -236,7 +237,7 @@ function ApprovalCard({
       animate={{ opacity: 1, y: 0 }}
       role="button"
       tabIndex={0}
-      aria-label={`Abrir aprovação ${doc.docTypeName} nº ${doc.docNum}, ${doc.cardName}, valor ${formatCurrency(doc.docTotal, doc.currency)}${overdue ? ", vencida" : ""}`}
+      aria-label={`Abrir aprovação ${doc.docTypeName} nº ${docNumberLabel(doc)}, ${doc.cardName}, valor ${formatCurrency(doc.docTotal, doc.currency)}${overdue ? ", vencida" : ""}`}
       className={`glass-card p-5 flex flex-col gap-3 cursor-pointer hover:ring-1 hover:ring-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background transition-all ${overdue ? "border-destructive/40" : ""}`}
       onClick={onOpen}
       onKeyDown={(e) => {
@@ -251,7 +252,7 @@ function ApprovalCard({
           <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
             {doc.docTypeName}
           </span>
-          <h3 className="text-foreground font-semibold mt-2 font-mono">#{doc.docNum}</h3>
+          <h3 className="text-foreground font-semibold mt-2 font-mono">{docNumberLabel(doc)}</h3>
         </div>
         <div className="text-right flex items-start gap-1">
           {onRelationsMap && (
@@ -422,7 +423,7 @@ function DelegationDialog({
           <div className="text-sm bg-muted/30 rounded-lg p-3 space-y-1">
             <p className="text-muted-foreground text-xs">Documento</p>
             <p className="text-foreground font-medium">
-              <span className="font-mono">#{doc?.docNum}</span> · {doc?.docTypeName}
+              <span className="font-mono">{docNumberLabel(doc)}</span> · {doc?.docTypeName}
             </p>
             <p className="text-xs text-muted-foreground">
               Aprovador atual: <span className="text-foreground">{doc?.currentApprover}</span>
@@ -783,7 +784,7 @@ function ApprovalDetailModal({
                 <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
                   {doc.docTypeName}
                 </span>
-                <span className="font-mono text-sm sm:text-base">#{doc.docNum}</span>
+                <span className="font-mono text-sm sm:text-base">{docNumberLabel(doc)}</span>
                 <span className="text-lg sm:text-2xl font-bold font-mono ml-auto">{formatCurrency(doc.docTotal, doc.currency)}</span>
               </DialogTitle>
             </DialogHeader>
@@ -834,7 +835,7 @@ function ApprovalDetailModal({
               onClick={() => {
                 void exportListReportPdf({
                   title: `Pedido de Aprovação — ${doc.cardName}`,
-                  subtitle: `#${doc.docNum} · ${doc.docTypeName}`,
+                  subtitle: `${docNumberLabel(doc)} · ${doc.docTypeName}`,
                   meta: [
                     { label: "Parceiro", value: `${doc.cardName} (${doc.cardCode})` },
                     { label: "Solicitante", value: doc.requester || "—" },
@@ -858,7 +859,7 @@ function ApprovalDetailModal({
                     { header: "Projeto", cell: (l) => l.Project || "—" },
                   ],
                   rows: doc.documentLines || [],
-                  fileName: `aprovacao_${doc.docNum}`,
+                  fileName: `aprovacao_${docNumberLabel(doc).replace("#", "")}`,
                 });
               }}
             >
@@ -1368,7 +1369,7 @@ function ApprovalDetailModal({
               <ApprovalRuleExplainDialog
                 open={showExplain}
                 onClose={() => setShowExplain(false)}
-                docTitle={`${doc.docTypeName} #${doc.docNum || "—"} · ${doc.cardName}`}
+                docTitle={`${doc.docTypeName} ${docNumberLabel(doc)} · ${doc.cardName}`}
                 appliedRuleId={explainMeta.ruleId}
                 currentLevel={explainMeta.currentLevel}
                 currentApprover={doc.currentApprover || ""}
@@ -1420,10 +1421,10 @@ function ApprovalDetailModal({
                     <span className="text-muted-foreground">Tipo</span>
                     <span className="font-medium">{doc?.docTypeName}</span>
                   </div>
-                  {doc?.docNum ? (
+                  {true ? (
                     <div className="flex justify-between gap-3">
                       <span className="text-muted-foreground">Documento</span>
-                      <span className="font-mono">#{doc.docNum}</span>
+                      <span className="font-mono">{docNumberLabel(doc)}</span>
                     </div>
                   ) : null}
                   <div className="flex justify-between gap-3">
@@ -1554,7 +1555,7 @@ function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string }
     approvalRequestId: -Math.abs(parseInt(e.id.replace(/\D/g, "").slice(0, 9) || "0", 10) || 1),
     docType: isPagcorp ? "Despesa PagCorp" : "Despesa Interna",
     docTypeName: isPagcorp ? "Despesa PagCorp" : "Despesa Interna",
-    docNum: 0,
+    docNum: Number(e.sap_doc_num || 0),
     docEntry: 0,
     docTotal: Number(e.total_amount || 0),
     currency: e.currency || "BRL",
@@ -1751,7 +1752,7 @@ function MyRequestDetailModal({ doc, open, onClose }: { doc: MyRequestDoc | null
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3 flex-wrap">
             <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span>
-            <span className="font-mono">#{doc.docNum}</span>
+            <span className="font-mono">{docNumberLabel(doc)}</span>
             <StatusBadge status={doc.status} label={doc.statusLabel} />
             <span className="text-2xl font-bold font-mono ml-auto">{formatCurrency(doc.docTotal, doc.currency)}</span>
           </DialogTitle>
@@ -1952,7 +1953,7 @@ function MyRequestsTab() {
                   <td className="py-3 px-3">
                     <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span>
                   </td>
-                  <td className="py-3 px-3 font-mono text-xs text-foreground font-semibold">#{doc.docNum}</td>
+                  <td className="py-3 px-3 font-mono text-xs text-foreground font-semibold">{docNumberLabel(doc)}</td>
                   <td className="py-3 px-3 text-right font-mono text-foreground font-medium">{formatCurrency(doc.docTotal, doc.currency)}</td>
                   <td className="py-3 px-3 text-foreground">{doc.cardName}</td>
                   <td className="py-3 px-3 text-muted-foreground text-xs">{doc.approvalModel || "—"}</td>
@@ -3075,7 +3076,7 @@ export default function ApprovalsPage() {
                 ],
                 columns: [
                   { header: "Tipo", cell: (a: typeof filtered[number]) => a.docTypeName || "—" },
-                  { header: "Doc #", cell: (a: typeof filtered[number]) => String(a.docNum ?? "—") },
+                  { header: "Doc #", cell: (a: typeof filtered[number]) => docNumberLabel(a as never) },
                   { header: "Parceiro", cell: (a: typeof filtered[number]) => a.cardName },
                   { header: "Solicitante", cell: (a: typeof filtered[number]) => a.requester || "—" },
                   { header: "Aprovador atual", cell: (a: typeof filtered[number]) => a.currentApprover || "—" },
@@ -3525,7 +3526,7 @@ export default function ApprovalsPage() {
                       <td className="py-3 px-3">
                         <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span>
                       </td>
-                      <td className="py-3 px-3 font-mono text-xs text-foreground font-semibold">#{doc.docNum}</td>
+                      <td className="py-3 px-3 font-mono text-xs text-foreground font-semibold">{docNumberLabel(doc)}</td>
                       <td className="py-3 px-3 text-right font-mono text-foreground font-medium">{formatCurrency(doc.docTotal, doc.currency)}</td>
                       <td className="py-3 px-3 text-foreground">{doc.cardName}</td>
                       <td className="py-3 px-3 text-foreground font-medium">
