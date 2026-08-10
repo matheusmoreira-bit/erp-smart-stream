@@ -309,54 +309,60 @@ export default function UserActivityPage() {
                   <thead className="sticky top-0 bg-card z-10">
                     <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
                       <th className="px-4 py-3 text-left">Data/Hora</th>
+                      <th className="px-4 py-3 text-left">Sistema</th>
                       <th className="px-4 py-3 text-left">Usuário</th>
                       <th className="px-4 py-3 text-left">Ação</th>
                       <th className="px-4 py-3 text-left">Origem</th>
                       <th className="px-4 py-3 text-left">IP</th>
-                      <th className="px-4 py-3 text-left">Máquina</th>
+                      <th className="px-4 py-3 text-left">Máquina / Detalhe</th>
                       <th className="px-4 py-3 text-left">Duração</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.slice(0, 200).map((r, i) => (
-                      <tr key={`${r.UserCode}-${r.Date}-${r.Time}-${i}`} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
+                    {unified.slice(0, 300).map((e) => (
+                      <tr key={e.id} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
                         <td className="px-4 py-2 text-muted-foreground whitespace-nowrap">
                           <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3" />
-                            {formatDate(r.Date)} {formatTime(r.Time)}
+                            {formatEventDateTime(e)}
                           </span>
                         </td>
-                        <td className="px-4 py-2 font-medium text-foreground">{r.UserCode}</td>
                         <td className="px-4 py-2">
                           <Badge
-                            variant={isFailedLogin(r) || r.Action === "K" ? "destructive" : "secondary"}
-                            className={
-                              r.Action === "I" || r.Action === "W"
-                                ? isFailedLogin(r) ? "" : "bg-primary/15 text-primary"
-                                : r.Action === "O"
-                                ? "bg-muted text-muted-foreground"
-                                : ""
-                            }
+                            variant="outline"
+                            className={e.system === "flow" ? "border-primary/40 text-primary" : "text-muted-foreground"}
                           >
-                            {isFailedLogin(r) ? "Falha de Login" : getActionLabel(r.Action)}
+                            {e.system === "flow" ? "ERP Flow" : "SAP"}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-2 font-medium text-foreground">{e.user}</td>
+                        <td className="px-4 py-2">
+                          <Badge
+                            variant={e.negative ? "destructive" : "secondary"}
+                            className={!e.negative && e.system === "flow" ? "bg-primary/15 text-primary" : ""}
+                          >
+                            {e.actionLabel}
                           </Badge>
                         </td>
                         <td className="px-4 py-2 text-muted-foreground text-xs">
                           <span className="flex items-center gap-1">
-                            <Monitor className="w-3 h-3" />
-                            {getSourceLabel(r.Source)}
+                            {e.system === "flow" ? <Workflow className="w-3 h-3" /> : <Monitor className="w-3 h-3" />}
+                            {e.sourceLabel}
                           </span>
                         </td>
-                        <td className="px-4 py-2 text-muted-foreground font-mono text-xs">{r.ClientIP || "—"}</td>
-                        <td className="px-4 py-2 text-muted-foreground text-xs truncate max-w-[150px]">{r.ClientName || "—"}</td>
-                        <td className="px-4 py-2 text-muted-foreground text-xs">{formatDuration(r.AliveDurtn)}</td>
+                        <td className="px-4 py-2 text-muted-foreground font-mono text-xs">{e.ip || "—"}</td>
+                        <td className="px-4 py-2 text-muted-foreground text-xs truncate max-w-[220px]">
+                          {e.machine || e.detail || "—"}
+                        </td>
+                        <td className="px-4 py-2 text-muted-foreground text-xs">{formatDuration(e.durationMinutes)}</td>
                       </tr>
                     ))}
-                    {filtered.length === 0 && (
+                    {unified.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="text-center text-muted-foreground py-8">Nenhum registro encontrado</td>
+                        <td colSpan={8} className="text-center text-muted-foreground py-8">Nenhum registro encontrado</td>
                       </tr>
                     )}
+
                   </tbody>
                 </table>
               </div>
