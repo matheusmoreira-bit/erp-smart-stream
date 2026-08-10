@@ -403,12 +403,12 @@ export function MainMenu() {
             <NotificationBell />
             <button
               onClick={() => navigate("/perfil")}
-              title="Meu perfil"
+              title="Meu perfil e senha do ERP"
               className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
             >
               <UserCog className="w-4 h-4" />
             </button>
-            <ChangePasswordDialog />
+
             <ThemeToggle />
             <UserCompanyMenu />
           </div>
