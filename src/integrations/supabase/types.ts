@@ -3428,6 +3428,42 @@ export type Database = {
         }
         Relationships: []
       }
+      hana_health_probes: {
+        Row: {
+          base_url: string
+          company_db: string | null
+          created_at: string
+          duration_ms: number | null
+          error_message: string | null
+          http_status: number | null
+          id: string
+          ok: boolean
+          view_name: string | null
+        }
+        Insert: {
+          base_url: string
+          company_db?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          http_status?: number | null
+          id?: string
+          ok?: boolean
+          view_name?: string | null
+        }
+        Update: {
+          base_url?: string
+          company_db?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          http_status?: number | null
+          id?: string
+          ok?: boolean
+          view_name?: string | null
+        }
+        Relationships: []
+      }
       idp_deprovision_log: {
         Row: {
           approval_rules_orphaned: number
