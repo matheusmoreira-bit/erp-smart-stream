@@ -201,8 +201,12 @@ export default function UserActivityPage() {
 
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         {error && (
-          <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">{error}</div>
+          <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">SAP: {error}</div>
         )}
+        {flowError && (
+          <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">ERP Flow: {flowError}</div>
+        )}
+
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">
