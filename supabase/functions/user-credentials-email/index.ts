@@ -107,7 +107,9 @@ Deno.serve(async (req) => {
       : [];
 
     if (!isEmail(email)) return json({ sent: false, reason: "invalid_email" }, 400);
-    if (!userCode || !password) return json({ sent: false, reason: "missing_fields" }, 400);
+    // A senha é opcional: quando não é conhecida, envia apenas o aviso de acesso criado.
+    if (!userCode) return json({ sent: false, reason: "missing_fields" }, 400);
+
 
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
