@@ -94,17 +94,23 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
         // Com senha: valida a credencial provisionada abrindo sessão real no ERP.
         await login(target, password, session.companyDB, "sap");
       } else {
-        // Sem senha: entra apenas por identidade — a sessão do Service Layer,
-        // quando necessária, é resolvida sob demanda pelo broker.
+        // Sem senha: entra por identidade, mas PRESERVA a sessão do Service
+        // Layer do usuário original (o admin). Assim leituras e ações no ERP
+        // continuam funcionando durante a impersonação; se não houver sessão
+        // viva, o broker resolve depois (senha provisionada ou modal).
         sessionStorage.setItem(
           "erp_session_v1",
           JSON.stringify({
             erpType: session.erpType || "sap",
             companyDB: session.companyDB,
             userName: target,
+            sessionId: session.sessionId || undefined,
+            routeId: session.routeId || undefined,
+            expiresAt: session.expiresAt || undefined,
           }),
         );
       }
+
 
       await logAuditAction({
         action: "impersonation_start",

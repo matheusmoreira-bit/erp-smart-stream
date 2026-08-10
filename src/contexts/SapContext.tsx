@@ -1,3 +1,4 @@
+import { getImpersonation } from "@/lib/impersonation";
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sapLogin, sapLogout, ensureSapAuthToken, sapKeepAlive, type SapSession, clearClientCache } from "@/lib/sap-client";
@@ -198,10 +199,13 @@ export function SapProvider({ children }: { children: ReactNode }) {
       const { sapAutoLogin } = await import("@/lib/user-sap-credentials");
       const result = await sapAutoLogin(companyDB);
       const timeoutMin = Math.min(Math.max(result.sessionTimeout || 30, 1), 30);
+      // Impersonação: a sessão técnica é do usuário original (admin), mas a
+      // identidade exibida/filtrada continua sendo a do usuário alvo.
+      const imp = getImpersonation();
       setSession({
         erpType: "sap",
         companyDB: result.companyDB,
-        userName: result.sapUser,
+        userName: imp?.companyDB === companyDB ? imp.targetUser : result.sapUser,
         sessionId: result.sessionId,
         routeId: result.routeId,
         expiresAt: Date.now() + timeoutMin * 60 * 1000,
@@ -304,10 +308,11 @@ export function SapProvider({ children }: { children: ReactNode }) {
       const { sapAutoLogin } = await import("@/lib/user-sap-credentials");
       const result = await sapAutoLogin(db);
       const timeoutMin = Math.min(Math.max(result.sessionTimeout || 30, 1), 30);
+      const impAct = getImpersonation();
       setSession((prev) => ({
         erpType: "sap",
         companyDB: db,
-        userName: result.sapUser,
+        userName: impAct?.companyDB === db ? impAct.targetUser : result.sapUser,
         sessionId: result.sessionId,
         routeId: result.routeId,
         isSuperUser: prev?.companyDB === db ? prev?.isSuperUser : undefined,

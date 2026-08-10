@@ -3,6 +3,7 @@ import { useSap } from "@/contexts/SapContext";
 import { sapQuery, sapQueryView, sapReadApprovalsCache, sapWriteApprovalsCache, type SapSession } from "@/lib/sap-client";
 import { supabase } from "@/integrations/supabase/client";
 import { displayUserName } from "@/lib/user-display";
+import { isImpersonating } from "@/lib/impersonation";
 
 
 
@@ -679,11 +680,16 @@ export function useApprovals() {
       void loginManaged(session.companyDB).catch(() => {});
     }
 
+    // Durante a impersonação a lista precisa refletir o usuário alvo — nunca
+    // reaproveita o cache montado com a sessão do admin.
+    const skipCache = isImpersonating();
+
+
     const force = !!opts?.force;
     setError(null);
 
     // 1) Try cache first (unless forced)
-    if (!force) {
+    if (!force && !skipCache) {
       try {
         const cached = await readApprovalsCache(session as SapSession);
         if (cached) {
@@ -707,7 +713,7 @@ export function useApprovals() {
       setApprovals(docs);
       const now = new Date().toISOString();
       setLastUpdatedAt(now);
-      writeApprovalsCache(session as SapSession, docs).catch((e) => console.warn("approvals cache write failed:", e));
+      if (!skipCache) writeApprovalsCache(session as SapSession, docs).catch((e) => console.warn("approvals cache write failed:", e));
     } catch (e) {
       console.error("Error fetching approvals:", e);
       const msg = e instanceof Error ? e.message : "Erro ao buscar aprovações";
