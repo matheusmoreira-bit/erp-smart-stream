@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
@@ -9,8 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { toast } from "sonner";
-import { ArrowLeft, RefreshCw, Save, User } from "lucide-react";
+import { ArrowLeft, KeyRound, RefreshCw, Save, User } from "lucide-react";
+
 
 export default function Profile() {
   const navigate = useNavigate();
