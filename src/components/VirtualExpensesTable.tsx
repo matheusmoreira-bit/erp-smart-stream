@@ -73,6 +73,7 @@ function VirtualRowComponent({
       <div role="cell" className="flex items-center gap-2 text-foreground min-w-0">
         <Building2 className="w-3.5 h-3.5 text-primary/70 shrink-0" aria-hidden="true" />
         <span className="truncate">{exp.supplier_name}</span>
+        <DocCodeLink id={exp.id} docNum={exp.sap_doc_num} onOpen={() => onOpen(exp, origin)} className="shrink-0" />
       </div>
       <div role="cell" className="text-foreground truncate">{exp.requester_name}</div>
       <div role="cell" className="text-muted-foreground whitespace-nowrap">{formatDate(exp.created_at)}</div>
