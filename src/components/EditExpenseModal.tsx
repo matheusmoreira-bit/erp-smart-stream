@@ -26,6 +26,8 @@ import { DateInputBR } from "@/components/DateInputBR";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { useSap } from "@/contexts/SapContext";
+import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
+import { canViewLotusCostCenters, filterLotusCostCenters } from "@/lib/cost-center-visibility";
 import {
   validateAttachments,
   ALLOWED_ATTACHMENT_ACCEPT,
