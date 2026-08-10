@@ -340,15 +340,17 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
           <DropdownMenuItem
             onSelect={() => {
               setOpen(false);
+              void resetTour(whatsNewTourKey);
               window.dispatchEvent(new CustomEvent(WHATSNEW_REPLAY_EVENT));
             }}
           >
             <Sparkles className="w-4 h-4 mr-2" /> Reiniciar tour inicial
           </DropdownMenuItem>
           <DropdownMenuItem
-            onSelect={() =>
-              window.dispatchEvent(new CustomEvent(ONBOARDING_REPLAY_EVENT))
-            }
+            onSelect={() => {
+              void resetTour(onboardingTourKey);
+              window.dispatchEvent(new CustomEvent(ONBOARDING_REPLAY_EVENT));
+            }}
           >
             <Compass className="w-4 h-4 mr-2" /> Rever tour de boas-vindas
           </DropdownMenuItem>
