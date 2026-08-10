@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { docNumberLabel } from "@/lib/doc-number";
+import { docNumberLabel } from "@/lib/doc-number";
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
 import { useMyCapabilities } from "@/hooks/useMyCapabilities";
@@ -1555,7 +1556,7 @@ function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string }
     approvalRequestId: -Math.abs(parseInt(e.id.replace(/\D/g, "").slice(0, 9) || "0", 10) || 1),
     docType: isPagcorp ? "Despesa PagCorp" : "Despesa Interna",
     docTypeName: isPagcorp ? "Despesa PagCorp" : "Despesa Interna",
-    docNum: 0,
+    docNum: Number(e.sap_doc_num || 0),
     docEntry: 0,
     docTotal: Number(e.total_amount || 0),
     currency: e.currency || "BRL",
