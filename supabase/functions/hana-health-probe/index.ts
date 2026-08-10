@@ -178,11 +178,15 @@ Deno.serve(withEdgeMetrics("hana-health-probe", async (req) => {
     kv[r.credential_key] = r.credential_value ?? "";
     byCompany.set(r.company_db, kv);
   }
-  const candidates = Array.from(byCompany.entries()).filter(([, kv]) =>
-    kv.service_layer_url && kv.username && kv.password &&
-    kv.use_hana_db !== "false" &&
-    (kv.username || "").trim().toLowerCase() === "apiuser"
-  );
+  const isTestBase = (db: string) => /tst|teste|test/i.test(db);
+  const candidates = Array.from(byCompany.entries())
+    .filter(([, kv]) =>
+      kv.service_layer_url && kv.username && kv.password &&
+      kv.use_hana_db !== "false" &&
+      (kv.username || "").trim().toLowerCase() === "apiuser"
+    )
+    // Produção primeiro: bases de teste podem não ter as views publicadas.
+    .sort((a, b) => Number(isTestBase(a[0])) - Number(isTestBase(b[0])));
 
   if (candidates.length === 0) {
     return new Response(JSON.stringify({ ok: true, skipped: "nenhuma empresa com HanaAPI habilitada" }), {
@@ -190,48 +194,51 @@ Deno.serve(withEdgeMetrics("hana-health-probe", async (req) => {
     });
   }
 
-  // 2. Sessão do Service Layer (necessária no header sessionid do HanaAPI).
-  let sessionId = "";
-  let sessionCompany: string | null = null;
-  let sessionSchema = "";
-  let loginError: string | null = null;
-  for (const [companyDb, kv] of candidates) {
-    try {
-      const sid = await sapLogin(slBaseUrl(kv.service_layer_url), kv.username, kv.password, kv.db_name || companyDb);
-      if (sid) {
-        sessionId = sid;
-        sessionCompany = companyDb;
-        sessionSchema = resolveHanaSchema(companyDb, kv.db_name);
-        break;
-      }
-    } catch (e) {
-      loginError = e instanceof Error ? e.message : String(e);
-    }
-  }
-
-  // 3. Endpoints a sondar: IPs configurados + primário padrão + fallback.
+  // 2. Endpoints a sondar: IPs configurados + primário padrão + fallback.
   const bases = new Set<string>([DEFAULT_HANA_API_URL, FALLBACK_HANA_API_URL]);
   for (const [, kv] of candidates) {
     const u = (kv.hana_api_url ?? "").trim();
     if (u) bases.add(u.replace(/\/+$/, ""));
   }
+  const baseList = Array.from(bases);
 
+  // 3. Sessão do Service Layer (header sessionid do HanaAPI). Se a empresa
+  // escolhida não tiver a view publicada (404 "nao encontrado"), tenta a próxima.
   let probes: ProbeResult[] = [];
-  if (!sessionId) {
-    probes = Array.from(bases).map((base) => ({
+  let loginError: string | null = null;
+  let lastCompany: string | null = null;
+
+  for (const [companyDb, kv] of candidates.slice(0, 4)) {
+    let sessionId = "";
+    try {
+      sessionId = await sapLogin(slBaseUrl(kv.service_layer_url), kv.username, kv.password, kv.db_name || companyDb);
+    } catch (e) {
+      loginError = e instanceof Error ? e.message : String(e);
+      continue;
+    }
+    if (!sessionId) continue;
+    lastCompany = companyDb;
+    const schema = resolveHanaSchema(companyDb, kv.db_name);
+    const attempt = await Promise.all(baseList.map((base) => probeBase(base, schema, sessionId, companyDb)));
+    probes = attempt;
+    const schemaIssue = attempt.every((p) =>
+      p.http_status === 404 && /nao encontrado|não encontrado/i.test(p.error_message ?? "")
+    );
+    if (!schemaIssue) break;
+  }
+
+  if (probes.length === 0) {
+    probes = baseList.map((base) => ({
       base_url: base,
-      company_db: sessionCompany,
+      company_db: lastCompany,
       view_name: PROBE_VIEW,
       ok: false,
       http_status: null,
       duration_ms: 0,
       error_message: `sem sessão SAP para sondar: ${loginError ?? "login indisponível"}`,
     }));
-  } else {
-    probes = await Promise.all(
-      Array.from(bases).map((base) => probeBase(base, sessionSchema, sessionId, sessionCompany)),
-    );
   }
+
 
   await sb.from("hana_health_probes").insert(probes);
 
