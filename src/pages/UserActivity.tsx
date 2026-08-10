@@ -185,14 +185,15 @@ export default function UserActivityPage() {
             </Button>
             <div className="min-w-0">
               <h1 className="text-2xl font-bold text-foreground">Atividade de Usuários</h1>
-              <p className="text-sm text-muted-foreground">Dashboard de logins e ações — tabela USR5</p>
+              <p className="text-sm text-muted-foreground">Logins e ações — SAP (USR5) + ERP Flow</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Button variant="outline" size="sm" onClick={refresh} disabled={isLoading}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            <Button variant="outline" size="sm" onClick={refreshAll} disabled={isLoading || flowLoading}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading || flowLoading ? "animate-spin" : ""}`} />
               Atualizar
+
             </Button>
           </div>
         </div>
