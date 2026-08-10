@@ -145,20 +145,13 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    if (isSales) {
-      // VW_CLIENTES não existe — retornamos hana_unavailable para que o
-      // client caia no fallback via Service Layer (BusinessPartners).
-      return new Response(JSON.stringify({
-        error: "hana_unavailable",
-        message: "VW_CLIENTES não disponível; usar Service Layer.",
-      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // Cache server-side (service role) — o client não tem permissão de escrita
     // em sap_cache, então a gravação precisa acontecer aqui.
-    const CACHE_KEY = "suppliers_hana_v1";
+    // A view VW_FORNECEDORES traz clientes e fornecedores (coluna "Tipo de PN"),
+    // por isso ela também atende o combobox de vendas.
+    const CACHE_KEY = isSales ? "customers_hana_v1" : "suppliers_hana_v1";
     const CACHE_TTL_MS = 30 * 60 * 1000;
     const force = Boolean(body?.force);
     if (!force) {
