@@ -308,7 +308,8 @@ Deno.serve(async (req) => {
     const rowsToUpsert: Array<Record<string, unknown>> = [];
 
     // Lotes pequenos e sequenciais: o Service Layer não gosta de rajadas.
-    for (const exp of expenses) {
+    // Processa em lotes paralelos (5 por vez) para não estourar o tempo da função.
+    const processOne = async (exp: typeof expenses[number]) => {
       const endpoint = exp.doc_type === "sales" ? "Orders" : "PurchaseOrders";
       let finding: Finding & { sapTotal: number; sapNet: number; breakdown: Record<string, unknown> };
       let sapDocNum: number | null = exp.sap_doc_num ?? null;
