@@ -1230,7 +1230,10 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
   if (String((exp as any).doc_type) === "sales") {
     // Pedido de venda aprovado no ERP Flow → integra ao SAP (Orders) usando o
     // Apiuser da empresa. Não depende da sessão SAP do aprovador.
-    if (!(exp as any).sap_doc_entry) {
+    {
+      // Se o pedido já existe no SAP, reenviamos em modo PATCH para refletir
+      // ajustes feitos no Flow (valores, itens, CC/projeto) após a reaprovação.
+      const alreadyInSap = !!(exp as any).sap_doc_entry;
       try {
         const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
         const svcUrl = Deno.env.get("SUPABASE_URL") || "";
@@ -1242,10 +1245,10 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
             apikey: svcKey,
             "x-internal-retry": "1",
           },
-          body: JSON.stringify({ expense_id: expenseId }),
+          body: JSON.stringify({ expense_id: expenseId, patch_document: alreadyInSap }),
         });
         const sapBody = await sapRes.json().catch(() => ({}));
-        stageLog("sales_to_sap", sapRes.ok ? "info" : "error", {
+        stageLog(alreadyInSap ? "sales_to_sap_patch" : "sales_to_sap", sapRes.ok ? "info" : "error", {
           requestId,
           expenseId,
           status: sapRes.status,
