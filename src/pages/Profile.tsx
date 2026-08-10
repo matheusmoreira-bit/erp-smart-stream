@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useSap } from "@/contexts/SapContext";
@@ -34,11 +34,25 @@ export default function Profile() {
   const [syncedOnce, setSyncedOnce] = useState(false);
   const [params, setParams] = useSearchParams();
   const [passwordOpen, setPasswordOpen] = useState(params.get("senha") === "1");
+  const securityRef = useRef<HTMLDivElement | null>(null);
+  const [highlightSecurity, setHighlightSecurity] = useState(false);
 
-  // Deep link /perfil?senha=1 abre direto a troca de senha do ERP.
+  // Deep link /perfil?senha=1: rola até o card de segurança e abre a troca de senha.
   useEffect(() => {
-    if (params.get("senha") === "1") setPasswordOpen(true);
+    if (params.get("senha") !== "1") return;
+    setPasswordOpen(true);
+    setHighlightSecurity(true);
+    const scroll = window.setTimeout(() => {
+      securityRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+    const unhighlight = window.setTimeout(() => setHighlightSecurity(false), 2600);
+    return () => {
+      window.clearTimeout(scroll);
+      window.clearTimeout(unhighlight);
+    };
   }, [params]);
+
+
 
 
   useEffect(() => {
@@ -174,7 +188,15 @@ export default function Profile() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card
+          ref={securityRef}
+          id="seguranca"
+          className={
+            highlightSecurity
+              ? "scroll-mt-24 ring-2 ring-primary transition-shadow"
+              : "scroll-mt-24 transition-shadow"
+          }
+        >
           <CardHeader>
             <CardTitle className="text-base">Segurança e senha do ERP</CardTitle>
             <CardDescription>
