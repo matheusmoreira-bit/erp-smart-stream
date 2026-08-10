@@ -231,8 +231,15 @@ function ExpenseDetailModal({
   if (!expense) return null;
 
   const showSubmit = expense.status === "rascunho";
-  const showCancel = canCancel && (expense.status === "rascunho" || expense.status === "pendente_aprovacao");
   const alreadyInSap = !!(expense.sap_doc_entry || expense.sap_doc_num);
+  // Cancelamento: rascunho/pendente, ou já integrado ao ERP e ainda sem NF de
+  // entrada — nesse caso o cancelamento é propagado ao ERP.
+  const cancelPropagatesToErp =
+    alreadyInSap && (expense.status === "aprovado" || expense.status === "pc_lancado");
+  const showCancel =
+    canCancel &&
+    (expense.status === "rascunho" || expense.status === "pendente_aprovacao" || cancelPropagatesToErp);
+
   const hasSapError = !!expense.sap_integration_error && !alreadyInSap;
   // Edição permitida enquanto a NF de entrada NÃO foi lançada no ERP.
   // Se o documento já está no ERP (pc_lancado), a edição retorna o documento
