@@ -78,18 +78,22 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
   const HANA_TTL_MS = 30 * 60 * 1000;
 
   const mapHanaRows = (rows: any[]): EnrichedSupplierOption[] =>
-    rows.map((r) => ({
-      code: r.code,
-      name: r.name,
-      extra: r.extra,
-      currency: r.currency || "BRL",
-      frozen: !!r.frozen,
-      syncStatus: "synced",
-      details: {
-        fantasyName: r.details?.fantasyName,
-        taxId: r.details?.taxId,
-      },
-    }));
+    rows.map((r) => {
+      const rawTax = r.details?.taxId || r.extra || null;
+      const taxId = rawTax ? formatCnpjCpf(rawTax) : undefined;
+      return {
+        code: r.code,
+        name: r.name,
+        extra: taxId ?? r.extra,
+        currency: r.currency || "BRL",
+        frozen: !!r.frozen,
+        syncStatus: "synced",
+        details: {
+          fantasyName: r.details?.fantasyName,
+          taxId,
+        },
+      };
+    });
 
   useEffect(() => {
     let cancelled = false;
