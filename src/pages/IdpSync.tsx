@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
 import {
   ArrowLeft,
@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { PageTitle } from "@/components/PageTitle";
 import { IdpBindingFlagCard } from "@/components/IdpBindingFlagCard";
 import { IdpDeprovisionLogCard } from "@/components/IdpDeprovisionLogCard";
+import IdpDivergencePanel from "@/components/users/IdpDivergencePanel";
 
 
 function jcToOption(jc: JumpCloudUser): SapSearchOption {
@@ -36,7 +37,9 @@ function jcToOption(jc: JumpCloudUser): SapSearchOption {
 export default function IdpSyncPage() {
   const navigate = useNavigate();
   const { session } = useSap();
-  const { users: sapUsers, isLoading: sapLoading } = useSapUsers();
+  const { users: sapUsers, isLoading: sapLoading, toggleLock } = useSapUsers();
+  const [urlParams] = useSearchParams();
+  const focusUser = urlParams.get("user");
   const {
     jcUsers,
     mappings,
@@ -334,6 +337,16 @@ export default function IdpSyncPage() {
 
         <IdpBindingFlagCard />
         <IdpDeprovisionLogCard />
+
+        <IdpDivergencePanel
+          sapUsers={sapUsers}
+          jcUsers={jcUsers}
+          mappings={mappings}
+          companyDb={session?.companyDB}
+          focusUser={focusUser}
+          onBlock={(u) => toggleLock(u)}
+        />
+
 
 
 
