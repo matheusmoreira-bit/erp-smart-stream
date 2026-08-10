@@ -172,9 +172,19 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
     params: { $filter: "Active eq 'tYES'", $select: "CenterCode,CenterName" },
     mapRow: costCenterMapRow,
   });
+  // CCs LOTUS só aparecem para Contábil e RH/DP/Folha (ou admins).
+  const { groups: myGroups, isPrivileged: isPrivilegedUser } = useMyPermissionGroups();
+  const canSeeLotus = useMemo(
+    () => canViewLotusCostCenters(myGroups, isPrivilegedUser),
+    [myGroups, isPrivilegedUser],
+  );
   const costCenterOptions = useMemo(
-    () => rawCostCenterOptions.filter((o) => !o.name?.toLowerCase().startsWith("centro geral")),
-    [rawCostCenterOptions],
+    () =>
+      filterLotusCostCenters(
+        rawCostCenterOptions.filter((o) => !o.name?.toLowerCase().startsWith("centro geral")),
+        canSeeLotus,
+      ),
+    [rawCostCenterOptions, canSeeLotus],
   );
 
   const projectMapRow = useCallback((row: any) => ({ code: row.Code, name: row.Name }), []);
