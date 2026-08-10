@@ -291,7 +291,30 @@ export default function UserProductivityPage() {
               ))}
             </SelectContent>
           </Select>
+          <Select
+            value={systemFilter}
+            onValueChange={(v) => setSystemFilter(v as "all" | ProductivitySystem)}
+          >
+            <SelectTrigger className="w-[180px] bg-card">
+              <SelectValue placeholder="Origem" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">SAP + ERP Flow</SelectItem>
+              <SelectItem value="sap">{SYSTEM_LABEL.sap}</SelectItem>
+              <SelectItem value="flow">{SYSTEM_LABEL.flow}</SelectItem>
+            </SelectContent>
+          </Select>
+          {bySystem.length > 0 && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              {bySystem.map((s) => (
+                <Badge key={s.system} variant="secondary">
+                  {SYSTEM_LABEL[s.system]}: {s.docsCriados.toLocaleString("pt-BR")} docs
+                </Badge>
+              ))}
+            </div>
+          )}
         </div>
+
 
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
