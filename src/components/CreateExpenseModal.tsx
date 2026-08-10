@@ -71,7 +71,8 @@ import { saveDraft, deleteDraft } from "@/hooks/useDocumentDrafts";
 import { supabase } from "@/integrations/supabase/client";
 import { useMergedSupplierOptions, type CrossCompanyMatch, type EnrichedSupplierOption } from "@/hooks/useMergedSupplierOptions";
 import { useCompanies } from "@/hooks/useCompanies";
-import { onlyDigits } from "@/lib/supplier-search";
+import { onlyDigits, formatCnpjCpf } from "@/lib/supplier-search";
+import { SupplierDetailsDialog } from "@/components/SupplierDetailsDialog";
 import { SupplierEmptyState } from "@/components/SupplierEmptyState";
 import {
   hashFileContent,
@@ -208,6 +209,7 @@ export function CreateExpenseModal({
   const [aiSupplierData, setAiSupplierData] = useState<SupplierFormPrefill | null>(null);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [supplierRequestOpen, setSupplierRequestOpen] = useState(false);
+  const [supplierDetailsOpen, setSupplierDetailsOpen] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [pendingPrefill, setPendingPrefill] = useState<PagCorpPrefill | null>(null);
   const [headerCostCenter, setHeaderCostCenter] = useState<SapSearchOption | null>(null);
@@ -2890,6 +2892,28 @@ export function CreateExpenseModal({
                 />
               )}
             />
+            {supplier && (
+              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                <span className="font-mono text-foreground">{supplier.code}</span>
+                <span>·</span>
+                <span className="font-mono">
+                  {formatCnpjCpf(
+                    (supplier as EnrichedSupplierOption).details?.taxId ||
+                      (supplier as EnrichedSupplierOption).extra ||
+                      "",
+                  ) || "CNPJ não informado"}
+                </span>
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs"
+                  onClick={() => setSupplierDetailsOpen(true)}
+                >
+                  Ver cadastro (banco/PIX)
+                </Button>
+              </div>
+            )}
             {!supplier && !isSales && (suggestedSupplierName || aiSupplierData?.federal_tax_id) && (
                 <div className="mt-2 flex min-w-0 flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 sm:flex-row sm:items-start">
                 <span className="text-amber-600 dark:text-amber-400 text-sm">⚠️</span>
@@ -2911,6 +2935,15 @@ export function CreateExpenseModal({
               </div>
             )}
           </div>
+
+          <SupplierDetailsDialog
+            open={supplierDetailsOpen}
+            onOpenChange={setSupplierDetailsOpen}
+            session={sapSession}
+            cardCode={supplier?.code ?? null}
+            bpLabel={bpLabel}
+          />
+
 
           <RegistrationRequestModal
             open={supplierRequestOpen}
