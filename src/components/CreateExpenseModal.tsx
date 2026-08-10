@@ -1985,7 +1985,10 @@ export function CreateExpenseModal({
     setCurrencyWarning(null);
     setCurrencyOptions(null);
     if (val) {
-      const supplierCurrency = ((val as any).currency || "").trim();
+      const rawCurrency = ((val as any).currency || "").trim();
+      // A view HANA devolve "Todas as Moedas" no lugar de "##": normalizamos
+      // para não travar o campo com um valor que não é uma moeda de verdade.
+      const supplierCurrency = normalizeCurrencyCode(rawCurrency);
       if (supplierCurrency && supplierCurrency !== "##") {
         setCurrency(supplierCurrency);
       } else if (supplierCurrency === "##") {
