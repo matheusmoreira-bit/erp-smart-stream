@@ -71,7 +71,8 @@ import { saveDraft, deleteDraft } from "@/hooks/useDocumentDrafts";
 import { supabase } from "@/integrations/supabase/client";
 import { useMergedSupplierOptions, type CrossCompanyMatch, type EnrichedSupplierOption } from "@/hooks/useMergedSupplierOptions";
 import { useCompanies } from "@/hooks/useCompanies";
-import { onlyDigits } from "@/lib/supplier-search";
+import { onlyDigits, formatCnpjCpf } from "@/lib/supplier-search";
+import { SupplierDetailsDialog } from "@/components/SupplierDetailsDialog";
 import { SupplierEmptyState } from "@/components/SupplierEmptyState";
 import {
   hashFileContent,
@@ -208,6 +209,7 @@ export function CreateExpenseModal({
   const [aiSupplierData, setAiSupplierData] = useState<SupplierFormPrefill | null>(null);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [supplierRequestOpen, setSupplierRequestOpen] = useState(false);
+  const [supplierDetailsOpen, setSupplierDetailsOpen] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [pendingPrefill, setPendingPrefill] = useState<PagCorpPrefill | null>(null);
   const [headerCostCenter, setHeaderCostCenter] = useState<SapSearchOption | null>(null);
