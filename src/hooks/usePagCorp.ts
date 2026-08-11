@@ -120,6 +120,11 @@ export interface PagCorpTransaction {
   cardLastDigits?: string;
   eventClassification?: string;
   status?: string;
+  /** Razão social do estabelecimento identificada pela IA do PagCorp (aiAnalysis). */
+  merchantName?: string | null;
+  /** CNPJ do estabelecimento (aiAnalysis) — pode ser alfanumérico; sempre string. */
+  merchantTaxId?: string | null;
+
   hasAccountability?: boolean;
   accountabilityApproved?: boolean;
   accountabilityId?: string | number | null;
