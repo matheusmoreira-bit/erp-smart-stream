@@ -45,8 +45,7 @@ export function AuditRunsList() {
             {data.map((run) => (
               <li key={run.id}>
                 <Link
-                  to={`../runs/${run.id}`}
-                  relative="path"
+                  to={`/auditoria/geral/sap-runs/${run.id}`}
                   className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/30"
                 >
                   <div className="min-w-0 flex-1">
@@ -88,7 +87,7 @@ export function AuditRunsList() {
       <NewAuditRunDialog
         open={open}
         onOpenChange={setOpen}
-        onCreated={(id) => navigate(`../runs/${id}`, { relative: "path" })}
+        onCreated={(id) => navigate(`/auditoria/geral/sap-runs/${id}`)}
       />
     </div>
   );

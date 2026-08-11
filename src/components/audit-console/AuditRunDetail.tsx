@@ -6,8 +6,9 @@ import { useAuditRun, useAuditInsights } from "@/hooks/useAuditConsole";
 import { AuditDivergencesTable } from "./AuditDivergencesTable";
 import { RunStatusBadge, SeverityBadge } from "./badges";
 
-export function AuditRunDetail() {
-  const { runId } = useParams<{ runId: string }>();
+export function AuditRunDetail(props: { runId?: string } = {}) {
+  const { runId: paramRunId } = useParams<{ runId: string }>();
+  const runId = props.runId ?? paramRunId;
   const { data: run, isLoading } = useAuditRun(runId);
   const { data: insights } = useAuditInsights(runId, 10);
 
@@ -16,7 +17,7 @@ export function AuditRunDetail() {
     return (
       <div className="rounded-xl border border-border bg-card/60 p-8 text-center">
         <p className="text-sm text-muted-foreground">Auditoria não encontrada.</p>
-        <Link to="../runs" relative="path" className="mt-2 inline-block text-xs text-primary hover:underline">
+        <Link to="/auditoria/geral/sap-runs" className="mt-2 inline-block text-xs text-primary hover:underline">
           Voltar à lista
         </Link>
       </div>
@@ -32,8 +33,7 @@ export function AuditRunDetail() {
     <div className="space-y-6">
       <div>
         <Link
-          to="../runs"
-          relative="path"
+          to="/auditoria/geral/sap-runs"
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-3.5 w-3.5" />

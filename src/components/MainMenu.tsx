@@ -249,8 +249,7 @@ const modules: Record<string, ModuleCard> = {
     moduleKey: "",
     subModuleKeys: ["audit_console", "fiscal_audit", "audit_log", "kyp"],
     subItems: [
-      { label: "Auditoria SAP", path: "/auditoria/sap", moduleKey: "audit_console" },
-      { label: "Auditoria Fiscal", path: "/auditoria/fiscal", moduleKey: "fiscal_audit" },
+      { label: "Auditoria (SAP · Pagamentos · Fiscal)", path: "/auditoria/geral", moduleKey: "audit_console" },
       { label: "Cruzamento Fiscal × Pagamentos", path: "/auditoria/cruzamento", moduleKey: "fiscal_audit" },
       { label: "KYP — Fornecedores", path: "/auditoria/kyp", moduleKey: "kyp" },
       { label: "Logs do Sistema", path: "/auditoria/logs", moduleKey: "audit_log" },
