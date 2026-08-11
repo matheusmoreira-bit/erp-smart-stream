@@ -319,9 +319,11 @@ export default function FiscalAudit({ embedded = false }: { embedded?: boolean }
   }, [invoices, salesInvoices, docType]);
 
   // === Análise — notas em aberto no período ===
+  // Aberto = status aberto no SAP E saldo remanescente (DocTotal - PaidToDate) > 0.
+  // Sem o PaidToDate, notas parcial ou totalmente pagas apareciam como pendentes.
   const oldOpen = useMemo(() => {
     return docList
-      .filter((i) => i.DocumentStatus === "bost_Open")
+      .filter((i) => i.DocumentStatus === "bost_Open" && openBalance(i) > 0.01)
       .sort((a, b) => new Date(a.DocDate).getTime() - new Date(b.DocDate).getTime());
   }, [docList]);
 
@@ -329,10 +331,18 @@ export default function FiscalAudit({ embedded = false }: { embedded?: boolean }
     const m = new Map<string, number>();
     oldOpen.forEach((i) => {
       const c = i.DocCurrency || "BRL";
-      m.set(c, (m.get(c) || 0) + (Number(i.DocTotal) || 0));
+      m.set(c, (m.get(c) || 0) + openBalance(i));
     });
     return Array.from(m.entries());
   }, [oldOpen]);
+
+  // Cache antigo → os status de pagamento podem estar defasados.
+  const cacheAgeHours = useMemo(() => {
+    if (!cacheInfo?.fetchedAt) return null;
+    return (Date.now() - new Date(cacheInfo.fetchedAt).getTime()) / 3600000;
+  }, [cacheInfo]);
+  const cacheStale = cacheAgeHours != null && cacheAgeHours > 24;
+
 
   // === Quantitativo ===
   const buckets = useMemo(() => {
