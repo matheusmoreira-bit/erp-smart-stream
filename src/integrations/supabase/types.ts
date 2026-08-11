@@ -8044,6 +8044,7 @@ export type Database = {
           official_name: string
         }[]
       }
+      api_key_register_use: { Args: { _id: string }; Returns: undefined }
       approvals_feed_bundle: { Args: { _company_db: string }; Returns: Json }
       archive_audit_trail: {
         Args: { _batch_limit?: number; _keep_months?: number }
