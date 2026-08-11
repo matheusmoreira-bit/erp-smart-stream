@@ -5,7 +5,10 @@
 // Compatibilidade: as chaves legadas guardadas em secrets de ambiente
 // (EXTERNAL_APPROVALS_API_KEY, PAGCORP_STATUS_API_KEY) continuam válidas.
 
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+// Cliente mínimo aceito (evita conflito entre versões do supabase-js).
+// deno-lint-ignore no-explicit-any
+type SupabaseClient = any;
+
 
 export async function sha256Hex(value: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
