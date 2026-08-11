@@ -12,6 +12,9 @@ import { KanbanColumn } from "@/components/audit-cross/KanbanColumn";
 import { CruzamentoCard } from "@/components/audit-cross/CruzamentoCard";
 import { CruzamentoDetailDrawer } from "@/components/audit-cross/CruzamentoDetailDrawer";
 import { AutoReconcileSettings } from "@/components/audit-cross/AutoReconcileSettings";
+import { PoNfBoard } from "@/components/audit-cross/PoNfBoard";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 
 const CENARIO_LABEL: Record<CenarioCruzamento, string> = {
   pago_sem_nota: "Pago sem nota",
@@ -70,6 +73,8 @@ export default function AuditCrossFiscal() {
   const [statusFilter, setStatusFilter] = useState<StatusMatch | "all">("all");
   const [detailRow, setDetailRow] = useState<CruzamentoRow | null>(null);
   const [onlyExceptions, setOnlyExceptions] = useState(true);
+  const [view, setView] = useState<"pagamentos" | "documentos">("documentos");
+
 
   const { rows, loading, refresh, runCross, updateRow } = useAuditCrossFiscal({
     empresa_id: empresaId || undefined,
@@ -161,12 +166,20 @@ export default function AuditCrossFiscal() {
   return (
     <div className="p-4 sm:p-6 space-y-4">
       <div>
-        <h2 className="text-xl font-bold">Cruzamento Fiscal × Pagamentos</h2>
+        <h2 className="text-xl font-bold">Cruzamento Fiscal</h2>
         <p className="text-sm text-muted-foreground">
-          Conciliação automática de NFS-e × pagamento × lançamento no ERP. O Kanban mostra apenas as exceções;
-          o que casa com alta confiança é conciliado sozinho.
+          Duas visões: <strong>Nota × Pagamento</strong> (conciliação de baixas) e{" "}
+          <strong>Pedido × NF de Entrada × MasterTax</strong> (cobertura documental no ERP).
         </p>
       </div>
+
+      <Tabs value={view} onValueChange={(v) => setView(v as "pagamentos" | "documentos")}>
+        <TabsList>
+          <TabsTrigger value="documentos">PC × NF de Entrada × MasterTax</TabsTrigger>
+          <TabsTrigger value="pagamentos">Nota × Pagamento</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
 
       {/* Filtros de período */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
@@ -187,14 +200,19 @@ export default function AuditCrossFiscal() {
           <Input type="date" value={fim} onChange={(e) => setFim(e.target.value)} />
         </div>
         <div className="flex gap-2">
-          <Button onClick={handleRun} disabled={running || !empresaId} className="flex-1">
-            {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
-            <span className="ml-1 hidden sm:inline">Executar</span>
-          </Button>
-          <Button variant="outline" size="icon" onClick={refresh} aria-label="Atualizar">
-            <RefreshCw className="w-4 h-4" />
-          </Button>
+          {view === "pagamentos" && (
+            <>
+              <Button onClick={handleRun} disabled={running || !empresaId} className="flex-1">
+                {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
+                <span className="ml-1 hidden sm:inline">Executar</span>
+              </Button>
+              <Button variant="outline" size="icon" onClick={refresh} aria-label="Atualizar">
+                <RefreshCw className="w-4 h-4" />
+              </Button>
+            </>
+          )}
         </div>
+
       </div>
 
       {!empresaId && (
@@ -203,7 +221,13 @@ export default function AuditCrossFiscal() {
         </div>
       )}
 
+      {view === "documentos" && (
+        <PoNfBoard companyDb={loggedCompanyDb} inicio={inicio} fim={fim} />
+      )}
+
+      {view === "pagamentos" && (<>
       {/* Busca e filtros de status */}
+
       <div className="flex flex-col sm:flex-row gap-2 sm:items-center justify-between">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -293,6 +317,8 @@ export default function AuditCrossFiscal() {
         onConfirm={handleConfirm}
         onIgnore={handleIgnore}
       />
+      </>)}
+
     </div>
   );
 }
