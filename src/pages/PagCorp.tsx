@@ -1414,7 +1414,7 @@ export default function PagCorp() {
                         <TableCell className={`text-sm text-foreground whitespace-nowrap ${inGroup ? "pl-6" : ""}`}>
                           {formatDate(t.date)}
                         </TableCell>
-                        <TableCell className="text-sm text-foreground max-w-[250px] truncate">
+                        <TableCell className="text-sm text-foreground max-w-[250px]">
                           <div className="flex items-center gap-2">
                             <span className="truncate">{t.description}</span>
                             {t.isNondeductible && (
@@ -1424,7 +1424,14 @@ export default function PagCorp() {
                               </Badge>
                             )}
                           </div>
+                          {(t.merchantName || t.merchantTaxId) && (
+                            <div className="text-xs text-muted-foreground truncate">
+                              {t.merchantName || "Estabelecimento"}
+                              {t.merchantTaxId ? ` • ${formatTaxId(t.merchantTaxId)}` : ""}
+                            </div>
+                          )}
                         </TableCell>
+
                         <TableCell className="text-sm text-muted-foreground">
                           {t.accountAlias || t.accountName || "—"}
                           {t.cardLastDigits && (
