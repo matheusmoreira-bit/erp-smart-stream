@@ -72,7 +72,7 @@ const GROUPS: GroupDef[] = [
         label: "Auditorias",
         icon: Radar,
         module: "audit_console",
-        render: (id) => (id ? <AuditRunDetail /> : <AuditRunsList />),
+        render: (id) => (id ? <AuditRunDetail runId={id} /> : <AuditRunsList />),
       },
       { key: "sap-divergences", label: "Divergências", icon: AlertTriangle, module: "audit_console", render: () => <AuditDivergencesTable /> },
       { key: "sap-documents", label: "Documentos", icon: FileSearch, module: "audit_console", render: () => <AuditDocumentsTab /> },
