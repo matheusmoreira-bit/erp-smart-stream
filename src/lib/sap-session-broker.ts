@@ -20,7 +20,7 @@ export interface ResolvedSapSession {
   isSuperUser?: boolean;
 }
 
-type Resolver = (companyDB: string) => Promise<ResolvedSapSession | null>;
+type Resolver = (companyDB: string, interactive: boolean) => Promise<ResolvedSapSession | null>;
 
 let resolver: Resolver | null = null;
 const inFlight = new Map<string, Promise<ResolvedSapSession | null>>();
@@ -33,13 +33,20 @@ export function registerSapSessionResolver(fn: Resolver | null) {
  * Garante uma sessão válida do Service Layer para a base informada.
  * Chamadas concorrentes para a mesma base compartilham a mesma promise,
  * evitando múltiplos /Login (e múltiplos modais) simultâneos.
+ *
+ * `interactive` só deve ser `true` em ações que gravam diretamente no SAP.
+ * Em qualquer outro caso a sessão é resolvida silenciosamente (senha
+ * provisionada) e, se não houver credencial, retorna `null` sem abrir modal.
  */
-export function resolveSapSession(companyDB: string): Promise<ResolvedSapSession | null> {
+export function resolveSapSession(
+  companyDB: string,
+  interactive = false,
+): Promise<ResolvedSapSession | null> {
   if (!resolver) return Promise.resolve(null);
-  const key = companyDB || "__default__";
+  const key = `${companyDB || "__default__"}:${interactive ? "i" : "s"}`;
   const existing = inFlight.get(key);
   if (existing) return existing;
-  const p = resolver(companyDB)
+  const p = resolver(companyDB, interactive)
     .catch(() => null)
     .finally(() => { inFlight.delete(key); });
   inFlight.set(key, p);
