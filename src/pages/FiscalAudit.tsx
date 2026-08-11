@@ -681,6 +681,8 @@ export default function FiscalAudit({ embedded = false }: { embedded?: boolean }
                             <div className="text-xs text-muted-foreground">{i.CardCode}</div>
                           </td>
                           <td className="px-4 py-2.5 text-right">{fmtMoney(i.DocTotal, i.DocCurrency === "R$" ? "BRL" : i.DocCurrency)}</td>
+                          <td className="px-4 py-2.5 text-right font-medium">{fmtMoney(openBalance(i), i.DocCurrency === "R$" ? "BRL" : i.DocCurrency)}</td>
+
                           <td className="px-4 py-2.5 text-right">
                             <Badge variant="outline" className={days > 180 ? "bg-destructive/15 text-destructive border-destructive/30" : "bg-warning/15 text-warning border-warning/30"}>
                               {days} d
