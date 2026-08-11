@@ -263,10 +263,17 @@ export function usePagCorp() {
           cardName: item.cardName || item.card_name || item.accountAlias || item.parentAccountAlias || "",
           cardLastDigits: item.cardLastDigits || item.lastDigits || "",
           status: item.status || item.statusDescription || "",
+          // Novo objeto `aiAnalysis` (API PagCorp, produção a partir de 17/08).
+          // Retrocompatível: ausente/nulo mantém o comportamento anterior.
+          merchantName:
+            (typeof item.aiAnalysis?.companyName === "string" && item.aiAnalysis.companyName.trim()) || null,
+          merchantTaxId:
+            (item.aiAnalysis?.companyDocument != null && String(item.aiAnalysis.companyDocument).trim()) || null,
           hasAccountability,
           accountabilityApproved,
           accountabilityId: item.accountabilityId || null,
           attachments: item.attachments || [],
+
           receipts,
           integrated: false,
           isReversed: Number(item.amount || item.value || item.expenseValue || 0) === 0,
