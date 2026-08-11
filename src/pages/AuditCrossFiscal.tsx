@@ -73,6 +73,8 @@ export default function AuditCrossFiscal() {
   const [statusFilter, setStatusFilter] = useState<StatusMatch | "all">("all");
   const [detailRow, setDetailRow] = useState<CruzamentoRow | null>(null);
   const [onlyExceptions, setOnlyExceptions] = useState(true);
+  const [view, setView] = useState<"pagamentos" | "documentos">("documentos");
+
 
   const { rows, loading, refresh, runCross, updateRow } = useAuditCrossFiscal({
     empresa_id: empresaId || undefined,
