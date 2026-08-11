@@ -1014,7 +1014,14 @@ function RuleFormModal({
     }
     setIsSaving(true);
     try {
-      await onSubmit({ name, priority, doc_type: docType, criteria, levels });
+      // Espaços colados nos curingas ("% folha %") quebram o match do LIKE —
+      // o padrão é normalizado antes de persistir.
+      const cleanedCriteria = criteria.map((c) => ({
+        ...c,
+        value: String(c.value ?? "").trim().replace(/^%\s+/, "%").replace(/\s+%$/, "%"),
+        ...(c.value2 !== undefined ? { value2: String(c.value2 ?? "").trim() } : {}),
+      }));
+      await onSubmit({ name, priority, doc_type: docType, criteria: cleanedCriteria, levels });
       toast.success(editing ? "Regra atualizada com sucesso!" : "Regra criada com sucesso!");
       onClose();
     } catch (e) {
