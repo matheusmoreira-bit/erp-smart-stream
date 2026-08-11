@@ -157,11 +157,40 @@ export function PagCorpIntegrateDialog({
     return /^[A-Z]{3}$/.test(c) ? c : "BRL";
   }, [transaction?.currency]);
 
-  const runAi = useCallback(async (tx: PagCorpTransaction) => {
+  const runAi = useCallback(async (tx: PagCorpTransaction, opts: { forceOcr?: boolean } = {}) => {
     if (!companyDb) return;
     setAiBusy(true);
     setAiNotice(null);
     try {
+      // 1) Caminho rápido: a própria API do PagCorp já devolve o estabelecimento
+      //    identificado no comprovante (objeto `aiAnalysis`). Quando presente,
+      //    evita uma chamada de OCR/IA.
+      const merchantTax = normalizeTaxKey(tx.merchantTaxId);
+      const merchantName = (tx.merchantName || "").trim();
+      if (!opts.forceOcr && (merchantTax || merchantName)) {
+        if (merchantTax) {
+          const hit = await findSupplierByTaxId(merchantTax, companyDb);
+          if (hit?.card_code) {
+            setSupplier({
+              code: hit.card_code,
+              name: hit.card_name,
+              extra: hit.federal_tax_id || undefined,
+            });
+            toast.success("Fornecedor identificado pelo PagCorp", {
+              description: `${hit.card_name}${merchantTax ? ` • ${formatTaxId(merchantTax)}` : ""}`,
+            });
+            return;
+          }
+        }
+        if (merchantName) {
+          setAiResult({ card_name: merchantName, federal_tax_id: merchantTax || undefined });
+          setAiNotice(
+            `Estabelecimento informado pelo PagCorp: ${merchantName}${merchantTax ? ` (${formatTaxId(merchantTax)})` : ""}. Não localizado no cadastro — selecione ou solicite o cadastro.`,
+          );
+          return;
+        }
+      }
+
       const urls: string[] = [];
       for (const r of (tx.receipts || []) as any[]) {
         if (Array.isArray(r?.files)) {
