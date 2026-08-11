@@ -17,6 +17,8 @@ import { SupplierFormModal, type SupplierFormPrefill } from "@/components/Suppli
 import type { PagCorpTransaction } from "@/hooks/usePagCorp";
 import { supabase } from "@/integrations/supabase/client";
 import { findSupplierByTaxId, type Supplier } from "@/hooks/useSuppliers";
+import { normalizeTaxKey, formatTaxId } from "@/lib/tax-id";
+
 import { RegistrationRequestModal } from "@/components/RegistrationRequestModal";
 import { usePagCorpCardMapping } from "@/hooks/usePagCorpCardMapping";
 import { hashUrls, withAiCache } from "@/lib/ai-file-cache";
