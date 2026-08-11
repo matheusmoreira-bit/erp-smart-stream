@@ -76,15 +76,40 @@ function classify(params: {
 }): Finding & { sapTotal: number; sapNet: number; breakdown: Record<string, unknown> } {
   const { flowTotal, flowLinesTotal, flowCurrency, sapDoc, sapLines } = params;
 
-  const sapTotal = round(num(sapDoc.DocTotal));
-  const vat = round(num(sapDoc.VatSum));
-  const freight = round(num(sapDoc.TotalExpenses ?? sapDoc.TotalExpns));
-  const rounding = round(num(sapDoc.RoundingDiffAmount));
-  const discountPercent = round(num(sapDoc.DiscountPercent), 4);
-  const totalDiscount = round(num(sapDoc.TotalDiscount));
+  // O ERP Flow grava o total na MOEDA DO DOCUMENTO (USD/EUR/…), enquanto o
+  // SAP grava DocTotal na moeda local (BRL) e DocTotalFC na moeda estrangeira.
+  // Comparar DocTotal com o total do Flow em moeda estrangeira gera divergência
+  // falsa — por isso escolhemos a base de comparação pela moeda.
   const currency = typeof sapDoc.DocCurrency === "string" ? sapDoc.DocCurrency : null;
+  const localCurrency = typeof sapDoc.DocCurrency === "string" && sapDoc.DocCurrency === "##"
+    ? "BRL"
+    : "BRL";
+  const flowCur = (flowCurrency || localCurrency).toUpperCase();
+  const sapCur = (currency && currency !== "##" ? currency : localCurrency).toUpperCase();
+  const docRate = round(num(sapDoc.DocRate), 6);
+  const totalFC = round(num(sapDoc.DocTotalFC));
+  // Usa a moeda estrangeira quando o documento SAP não está na moeda local e
+  // o Flow está na mesma moeda do documento.
+  const useFC = sapCur !== localCurrency && sapCur === flowCur && totalFC > 0;
 
-  const linesTotal = round(sapLines.reduce((s, l) => s + num(l.LineTotal ?? num(l.Quantity) * num(l.UnitPrice ?? l.Price)), 0));
+  const sapTotal = useFC ? totalFC : round(num(sapDoc.DocTotal));
+  const vat = round(num(useFC ? (sapDoc.VatSumFc ?? sapDoc.VatSumFC ?? 0) : sapDoc.VatSum));
+  const freightLocal = round(num(sapDoc.TotalExpenses ?? sapDoc.TotalExpns));
+  const freight = useFC && docRate > 0 ? round(freightLocal / docRate) : freightLocal;
+  const roundingLocal = round(num(sapDoc.RoundingDiffAmount));
+  const rounding = useFC && docRate > 0 ? round(roundingLocal / docRate) : roundingLocal;
+  const discountPercent = round(num(sapDoc.DiscountPercent), 4);
+  const totalDiscountLocal = round(num(sapDoc.TotalDiscount));
+  const totalDiscount = useFC && docRate > 0 ? round(totalDiscountLocal / docRate) : totalDiscountLocal;
+
+  const linesTotal = round(
+    sapLines.reduce((s, l) => {
+      const fc = num((l as Record<string, unknown>).TotalFrgn);
+      if (useFC && fc) return s + fc;
+      const local = num(l.LineTotal ?? num(l.Quantity) * num(l.UnitPrice ?? l.Price));
+      return s + (useFC && docRate > 0 ? local / docRate : local);
+    }, 0),
+  );
   const linesWithDiscount = sapLines.filter((l) => num(l.DiscountPercent) > 0).length;
 
   // Total "líquido" do SAP: sem imposto, sem frete e sem arredondamento.
@@ -94,6 +119,7 @@ function classify(params: {
 
   const breakdown = {
     sap_total: sapTotal,
+    sap_total_local: round(num(sapDoc.DocTotal)),
     sap_net: sapNet,
     sap_lines_total: linesTotal,
     flow_total: flowTotal,
@@ -104,11 +130,16 @@ function classify(params: {
     discount_percent: discountPercent,
     total_discount: totalDiscount,
     currency,
+    flow_currency: flowCur,
+    sap_currency: sapCur,
+    comparison_currency: useFC ? sapCur : localCurrency,
+    doc_rate: docRate || null,
     diff_gross: diffGross,
     diff_net: diffNet,
     lines_with_discount: linesWithDiscount,
     sap_line_count: sapLines.length,
   };
+
 
   const finish = (status: Finding["status"], cause: string | null, detail: Record<string, unknown> = {}) => ({
     status,
@@ -120,11 +151,22 @@ function classify(params: {
     breakdown,
   });
 
-  // 1) Totais batem exatamente.
+  // 1) Totais batem exatamente (na mesma moeda).
   if (Math.abs(diffGross) <= TOLERANCE) return finish("ok", null);
+
+  // 1b) Moedas realmente diferentes entre Flow e SAP: nunca comparar valores.
+  if (sapCur !== flowCur) {
+    return finish("divergent", "currency", {
+      moeda_flow: flowCur,
+      moeda_sap: sapCur,
+      taxa: docRate || null,
+      explicacao: `Documento gravado em ${sapCur} no SAP e em ${flowCur} no Flow — totais não são comparáveis diretamente.`,
+    });
+  }
 
   // 2) Diferença explicada por desconto (cabeçalho ou linhas).
   if (Math.abs(diffNet) > TOLERANCE) {
+
     if (totalDiscount > 0 && Math.abs(round(diffNet - totalDiscount)) <= TOLERANCE) {
       return finish("divergent", "discount_header", {
         desconto_percentual: discountPercent,
@@ -142,14 +184,8 @@ function classify(params: {
         explicacao: `${linesWithDiscount} linha(s) com desconto aplicado no SAP.`,
       });
     }
-    if (currency && flowCurrency && currency !== flowCurrency) {
-      return finish("divergent", "currency", {
-        moeda_flow: flowCurrency,
-        moeda_sap: currency,
-        taxa: num(sapDoc.DocRate),
-        explicacao: `Documento gravado em ${currency} no SAP e em ${flowCurrency} no Flow.`,
-      });
-    }
+    // (divergência de moeda já tratada acima, antes das demais causas)
+
     if (Math.abs(diffNet) <= 0.05) {
       return finish("divergent", "rounding", { diferenca: diffNet, explicacao: "Diferença de centavos por arredondamento." });
     }
