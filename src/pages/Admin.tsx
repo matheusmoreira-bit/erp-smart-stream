@@ -25,6 +25,8 @@ import {
   RefreshCw,
   Users,
   ShieldCheck,
+  KeyRound,
+
   Sun,
   Moon,
   Database,
