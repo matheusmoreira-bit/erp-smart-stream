@@ -82,7 +82,14 @@ async function markCopyToTarget(baseUrl: string, cookies: string, absoluteEntry:
   }
 }
 
+/** Nome como o SAP grava em Attachments2_Lines.FileName (sem extensão, minúsculo). */
+function sapBaseName(fileName: string) {
+  const safe = sanitizeSapFileName(fileName || "anexo");
+  return safe.replace(/\.[^.]+$/, "").trim().toLowerCase();
+}
+
 async function isCallerPrivileged(req: Request, admin: SupabaseClient) {
+
   try {
     const u = await requireUser(req);
     const { data } = await admin.rpc("has_role", { _user_id: u.id, _role: "admin" });
@@ -201,28 +208,93 @@ Deno.serve(async (req) => {
     try {
       sap = await loginSap(creds, companyDb);
 
-      for (const exp of todo) {
+      const sapConn = sap;
+      const processExpense = async (exp: any) => {
         const endpoint = exp.doc_type === "sales" ? "Orders" : "PurchaseOrders";
         const docEntry = Number(exp.sap_doc_entry);
         entry.checked++;
         try {
-          const getRes = await fetch(`${sap.baseUrl}/${endpoint}(${docEntry})?$select=AttachmentEntry,DocNum`, {
-            headers: { Cookie: sap.cookies },
+
+          const getRes = await fetch(`${sapConn.baseUrl}/${endpoint}(${docEntry})?$select=AttachmentEntry,DocNum`, {
+            headers: { Cookie: sapConn.cookies },
           });
           const getBody = await getRes.json().catch(() => ({}));
           if (!getRes.ok) {
             entry.errors.push(`${endpoint}(${docEntry}): consulta falhou [${getRes.status}]`);
-            continue;
+            return;
           }
           const existingEntry = Number(getBody?.AttachmentEntry) > 0 ? Number(getBody.AttachmentEntry) : 0;
+          const expAtts = attByExpense.get(exp.id) || [];
+
           if (existingEntry) {
             if (Number(exp.sap_attachment_entry || 0) !== existingEntry) {
               await admin.from("expenses")
                 .update({ sap_attachment_entry: existingEntry, sap_attachment_status: "success" })
                 .eq("id", exp.id);
             }
-            continue;
+
+            // O documento tem anexo, mas pode estar INCOMPLETO (ex.: apenas o
+            // comprovante de aprovação subiu e o arquivo do usuário ficou de fora).
+            const linesRes = await fetch(`${sapConn.baseUrl}/Attachments2(${existingEntry})`, { headers: { Cookie: sapConn.cookies } });
+            const linesBody = await linesRes.json().catch(() => ({}));
+            if (!linesRes.ok) {
+              entry.errors.push(`Attachments2(${existingEntry}): consulta falhou [${linesRes.status}]`);
+              return;
+            }
+            const sapNames = new Set(
+              (linesBody?.Attachments2_Lines ?? []).map((l: any) =>
+                String(l?.FileName ?? "").trim().toLowerCase()
+              ).filter(Boolean),
+            );
+            const missingFiles = expAtts.filter((a: any) => !sapNames.has(sapBaseName(a.file_name || "")));
+            if (!missingFiles.length) return;
+
+            const infoInc = {
+              expense_id: exp.id,
+              doc_entry: docEntry,
+              doc_num: getBody?.DocNum ?? exp.sap_doc_num,
+              supplier: exp.supplier_name,
+              status: exp.status,
+              attachment_entry: existingEntry,
+              attachments: expAtts.length,
+              missing_files: missingFiles.map((a: any) => a.file_name),
+              reason: "incomplete",
+            };
+            entry.missing.push(infoInc);
+            if (dryRun) return;
+
+            const files: { name: string; blob: Blob }[] = [];
+            for (const a of missingFiles) {
+              const { data: blob } = await admin.storage.from("expense-attachments").download(a.file_path);
+              if (blob) files.push({ name: a.file_name || "anexo", blob });
+            }
+            if (!files.length) { entry.errors.push(`${exp.id}: arquivos faltantes não encontrados no storage`); return; }
+
+            const addForm = new FormData();
+            for (const f of files) addForm.append("files", f.blob, sanitizeSapFileName(f.name));
+            const addRes = await fetch(`${sapConn.baseUrl}/Attachments2(${existingEntry})`, {
+              method: "PATCH",
+              headers: { Cookie: sapConn.cookies },
+              body: addForm,
+            });
+            if (!addRes.ok && addRes.status !== 204) {
+              const t = await addRes.text().catch(() => "");
+              throw new Error(`Complemento de anexo em Attachments2(${existingEntry}) falhou [${addRes.status}]: ${t.slice(0, 200)}`);
+            }
+            const afterRes = await fetch(`${sapConn.baseUrl}/Attachments2(${existingEntry})`, { headers: { Cookie: sapConn.cookies } });
+            const afterBody = await afterRes.json().catch(() => ({}));
+            await markCopyToTarget(sapConn.baseUrl, sapConn.cookies, existingEntry, afterBody, files.length);
+
+            await admin.from("expense_approval_log").insert({
+              expense_id: exp.id,
+              decision: "integrated",
+              approver_name: "sistema",
+              remarks: `Anexo incompleto corrigido (auditoria): ${files.length} arquivo(s) adicionados ao ${endpoint}(${docEntry}).`,
+            } as any);
+            entry.patched.push({ ...infoInc, added: files.length });
+            return;
           }
+
 
           const info = {
             expense_id: exp.id,
@@ -233,7 +305,7 @@ Deno.serve(async (req) => {
             attachments: (attByExpense.get(exp.id) || []).length,
           };
           entry.missing.push(info);
-          if (dryRun) continue;
+          if (dryRun) return;
 
           // Baixa arquivos e sobe
           const files: { name: string; blob: Blob }[] = [];
@@ -241,20 +313,20 @@ Deno.serve(async (req) => {
             const { data: blob } = await admin.storage.from("expense-attachments").download(a.file_path);
             if (blob) files.push({ name: a.file_name || "anexo", blob });
           }
-          if (!files.length) { entry.errors.push(`${exp.id}: arquivos não encontrados no storage`); continue; }
+          if (!files.length) { entry.errors.push(`${exp.id}: arquivos não encontrados no storage`); return; }
 
           const form = new FormData();
           for (const f of files) form.append("files", f.blob, sanitizeSapFileName(f.name));
-          const res = await fetch(`${sap.baseUrl}/Attachments2`, { method: "POST", headers: { Cookie: sap.cookies }, body: form });
+          const res = await fetch(`${sapConn.baseUrl}/Attachments2`, { method: "POST", headers: { Cookie: sapConn.cookies }, body: form });
           const resBody = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(`Attachments2 [${res.status}]: ${resBody?.error?.message?.value || ""}`);
           const absoluteEntry = Number(resBody?.AbsoluteEntry);
           if (!absoluteEntry) throw new Error("SAP não retornou AbsoluteEntry");
-          await markCopyToTarget(sap.baseUrl, sap.cookies, absoluteEntry, resBody, files.length);
+          await markCopyToTarget(sapConn.baseUrl, sapConn.cookies, absoluteEntry, resBody, files.length);
 
-          const patchRes = await fetch(`${sap.baseUrl}/${endpoint}(${docEntry})`, {
+          const patchRes = await fetch(`${sapConn.baseUrl}/${endpoint}(${docEntry})`, {
             method: "PATCH",
-            headers: { Cookie: sap.cookies, "Content-Type": "application/json" },
+            headers: { Cookie: sapConn.cookies, "Content-Type": "application/json" },
             body: JSON.stringify({ AttachmentEntry: absoluteEntry }),
           });
           if (!patchRes.ok && patchRes.status !== 204) {
@@ -276,7 +348,19 @@ Deno.serve(async (req) => {
         } catch (e) {
           entry.errors.push(`${exp.id}: ${(e as Error).message}`);
         }
-      }
+      };
+
+      // Pool de concorrência — a checagem sequencial no SAP estoura o tempo limite.
+      const queue = [...todo];
+      const workers = Array.from({ length: Math.min(6, queue.length) }, async () => {
+        for (;;) {
+          const next = queue.shift();
+          if (!next) return;
+          await processExpense(next);
+        }
+      });
+      await Promise.all(workers);
+
     } catch (e) {
       entry.errors.push((e as Error).message);
     } finally {
