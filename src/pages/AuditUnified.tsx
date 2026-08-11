@@ -90,7 +90,7 @@ const GROUPS: GroupDef[] = [
         label: "Resultados",
         icon: AlertTriangle,
         module: "audit_console",
-        render: (id) => (id ? <PayAuditDetail /> : <PayAuditResults />),
+        render: (id) => (id ? <PayAuditDetail resultId={id} /> : <PayAuditResults />),
       },
       { key: "pay-queue", label: "Fila", icon: ListChecks, module: "audit_console", render: () => <PayAuditQueue /> },
       { key: "pay-signals", label: "Sinais de fraude", icon: ShieldAlert, module: "audit_console", render: () => <PayFraudSignals /> },
