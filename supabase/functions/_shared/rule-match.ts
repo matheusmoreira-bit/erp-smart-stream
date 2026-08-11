@@ -49,7 +49,13 @@ export function evaluateCriterion(c: RuleCriterion, ctx: Record<string, unknown>
     case "not_contains":
       return !val.includes(target);
     case "like": {
-      const pattern = target
+      // Padrões salvos pela UI podem vir com espaços colados nos curingas
+      // ("% folha %"). Eles NÃO fazem parte do padrão — normaliza antes.
+      const cleanPattern = target
+        .trim()
+        .replace(/^%\s+/, "%")
+        .replace(/\s+%$/, "%");
+      const pattern = cleanPattern
         .split("")
         .map((ch) => (ch === "%" ? ".*" : ch === "_" ? "." : escapeRegex(ch)))
         .join("");

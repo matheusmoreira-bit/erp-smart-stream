@@ -36,7 +36,10 @@ export function evaluateCriterion(
     case "not_contains":
       return !val.includes(target);
     case "like": {
-      const pattern = target.split("").map((ch) => ch === "%" ? ".*" : ch === "_" ? "." : escapeRegex(ch)).join("");
+      // Padrões salvos com espaços colados nos curingas ("% folha %") não devem
+      // exigir o espaço literal — normaliza as bordas antes de compilar.
+      const cleanPattern = target.trim().replace(/^%\s+/, "%").replace(/\s+%$/, "%");
+      const pattern = cleanPattern.split("").map((ch) => ch === "%" ? ".*" : ch === "_" ? "." : escapeRegex(ch)).join("");
       try {
         const re = new RegExp(`^${pattern}$`);
         return re.test(val) || tokens.some((t) => re.test(t));
