@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { ensureCopyToTargetDocument } from "../_shared/sap-attach-copy.ts";
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 
 const corsHeaders = {
@@ -487,28 +488,7 @@ async function uploadAttachmentsToSap(
     throw new Error(`SAP Attachments2 falhou [${res.status}]: ${msg}`);
   }
   const absoluteEntry: number | null = body.AbsoluteEntry ?? null;
-  if (absoluteEntry != null) {
-    try {
-      const lines = Array.isArray(body?.Attachments2_Lines) ? body.Attachments2_Lines : [];
-      const patchLines = lines.length > 0
-        ? lines.map((l: { Line?: number }, idx: number) => ({
-            Line: typeof l?.Line === "number" ? l.Line : idx,
-            CopyToTargetDocument: "tYES",
-          }))
-        : files.map((_, idx) => ({ Line: idx, CopyToTargetDocument: "tYES" }));
-      const patchRes = await fetch(`${sapBaseUrl}/Attachments2(${absoluteEntry})`, {
-        method: "PATCH",
-        headers: { Cookie: cookies, "Content-Type": "application/json" },
-        body: JSON.stringify({ Attachments2_Lines: patchLines }),
-      });
-      if (!patchRes.ok) {
-        const txt = await patchRes.text().catch(() => "");
-        console.warn(`SAP Attachments2 PATCH CopyToTargetDocument falhou [${patchRes.status}]: ${txt.slice(0, 200)}`);
-      }
-    } catch (e) {
-      console.warn("SAP Attachments2 PATCH CopyToTargetDocument erro:", (e as Error).message);
-    }
-  }
+  await ensureCopyToTargetDocument(sapBaseUrl, cookies, absoluteEntry, body, files.length);
   return absoluteEntry;
 }
 
