@@ -125,6 +125,8 @@ export default function NfEntrada() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editItem, setEditItem] = useState<NfEntradaImport | null>(null);
+  const [provisionItem, setProvisionItem] = useState<NfEntradaImport | null>(null);
+
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const filtered = useMemo(() => {
