@@ -251,7 +251,7 @@ async function directorateItemIds(
 }
 
 const OWNER_COLUMNS =
-  "id, cost_center, requester_email, requester_name, created_by_email, current_approver, original_approver";
+  "id, cost_center, requester_email, requester_name, created_by_email, current_approver, original_approver, approval_rule_id";
 
 function applyFilters(query: any, filters: any[]): { query: any; error?: string } {
   for (const f of filters) {
