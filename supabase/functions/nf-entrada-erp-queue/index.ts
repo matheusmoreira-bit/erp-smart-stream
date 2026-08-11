@@ -31,6 +31,23 @@ function idemKey(op: string, cnpj: string, chave: string, target: string): strin
   return [op, (cnpj || "").toUpperCase(), (chave || "").toUpperCase(), target].join("|");
 }
 
+/** Tolerância de divergência nota x pedido: bloqueia acima de 1% ou R$ 50. */
+const DIVERGENCE_PCT = 0.01;
+const DIVERGENCE_ABS = 50;
+
+function divergence(valorNota: number, valorPedido: number) {
+  const diff = Math.abs(valorNota - valorPedido);
+  const pct = valorPedido > 0 ? diff / valorPedido : diff > 0 ? 1 : 0;
+  return {
+    valor_nota: valorNota,
+    valor_pedido: valorPedido,
+    diferenca: Number(diff.toFixed(2)),
+    percentual: Number((pct * 100).toFixed(2)),
+    bloqueante: diff > DIVERGENCE_ABS && pct > DIVERGENCE_PCT,
+  };
+}
+
+
 async function log(
   sb: any,
   importId: string,
