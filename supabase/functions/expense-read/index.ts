@@ -317,6 +317,10 @@ Deno.serve(async (req) => {
 
     const scoped = !(caller.privileged && wantsAll) && !caller.privileged;
 
+    // Regras da matriz em que o caller é aprovador — garante que ele veja os
+    // documentos mesmo quando `current_approver` guarda uma grafia diferente.
+    const myRules = scoped ? await approverRuleIds(admin, aliases) : new Set<string>();
+
     /* ── Tabelas filhas: restringe pelos expense_ids visíveis ── */
     let allowedExpenseIds: string[] | null = null;
     if (scoped && table !== "expenses") {
