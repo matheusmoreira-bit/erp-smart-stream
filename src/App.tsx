@@ -55,6 +55,8 @@ import FlowPerformance from "./pages/FlowPerformance.tsx";
 import IntegrationHealth from "./pages/IntegrationHealth.tsx";
 import AuditTimeline from "./pages/AuditTimeline.tsx";
 import AccessReview from "./pages/AccessReview.tsx";
+import ApiKeys from "./pages/ApiKeys.tsx";
+
 import SlaEscalation from "./pages/SlaEscalation.tsx";
 import SlaDashboard from "./pages/SlaDashboard.tsx";
 import BackofficeRetryQueue from "./pages/BackofficeRetryQueue.tsx";
