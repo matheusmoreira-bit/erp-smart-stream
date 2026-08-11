@@ -180,13 +180,24 @@ function applyRules(
   const orderByEntry = new Map(orders.map((o) => [o.DocEntry, o]));
   const grpoByEntry = new Map(grpos.map((g) => [g.DocEntry, g]));
 
-  // 1. missing_order — PI/GRPO sem PO de origem
+  // 1. missing_order — PI sem PO/GRPO de origem
+  // IMPORTANTE: o vínculo é determinado pelo próprio SAP (BaseType 22 = Pedido de compra,
+  // 20 = GRPO). Não depende dos documentos carregados na janela do período, pois o PO pode
+  // ser anterior ao intervalo auditado (causava falsos positivos).
   const r1 = ruleFor(rules, "missing_order");
   if (r1) {
     for (const inv of invoices) {
-      const baseEntries = (inv.DocumentLines ?? []).map((l) => l.BaseEntry).filter(Boolean);
-      const hasBase = baseEntries.some((e) => orderByEntry.has(e!) || grpoByEntry.has(e!));
-      if (!hasBase && (inv.DocumentLines?.length ?? 0) > 0) {
+      const lines = inv.DocumentLines ?? [];
+      const hasBase = lines.some((l) => {
+        const be = l.BaseEntry;
+        if (be == null) return false;
+        const bt = l.BaseType;
+        // BaseType 22 = Purchase Order, 20 = Goods Receipt PO
+        if (bt === 22 || bt === 20) return true;
+        // fallback: vínculo com documentos carregados
+        return orderByEntry.has(be) || grpoByEntry.has(be);
+      });
+      if (!hasBase && lines.length > 0) {
         out.push({
           audit_run_id: runId, company_db: companyDB,
           divergence_type: "missing_order", severity: r1.default_severity,
@@ -197,6 +208,7 @@ function applyRules(
       }
     }
   }
+
 
   // 2. value_mismatch — PO vs PI
   const r2 = ruleFor(rules, "value_mismatch");
