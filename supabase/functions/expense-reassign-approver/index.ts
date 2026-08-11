@@ -438,6 +438,23 @@ Deno.serve(async (req) => {
       let fallbackInfo: { branch: string; sibling: string } | null = null;
       let usedCc: string | null = null;
 
+      // Regras por item/grupo (ex.: "Folha") só batem se o contexto trouxer os
+      // tokens dos itens — mesmo formato usado no frontend (envolto em espaços).
+      const wrapTokens = (arr: string[]) => (arr.length ? ` ${arr.join(" ")} ` : "");
+      const codeTokens = items.map((i) => String(i.item_code || "").trim().toLowerCase()).filter(Boolean);
+      const nameTokens = items.map((i) => String(i.description || "").trim().toLowerCase()).filter(Boolean);
+      const groupTokens = items
+        .map((i) => String(i.items_group_name || "").trim().toLowerCase())
+        .filter(Boolean);
+      const itemCtx = {
+        item_codes: wrapTokens([...codeTokens, ...nameTokens]),
+        item_groups: wrapTokens(groupTokens),
+        "item.code": wrapTokens(codeTokens),
+        "item.name": wrapTokens(nameTokens),
+        "item.any": wrapTokens([...codeTokens, ...nameTokens]),
+        rateio_type: String(doc.rateio_type || "").toLowerCase(),
+      };
+
       for (const cc of candidateCcs.length > 0 ? candidateCcs : [""]) {
         const ctx: Record<string, unknown> = {
           total_amount: Number(doc.total_amount || 0),
@@ -449,6 +466,7 @@ Deno.serve(async (req) => {
           "supplier.code": norm(doc.supplier_code),
           currency: doc.currency || "BRL",
           doc_type: docType,
+          ...itemCtx,
         };
         matched = findMatchingRule(rules, ctx, docType);
         if (matched) {
