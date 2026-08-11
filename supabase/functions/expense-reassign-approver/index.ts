@@ -259,11 +259,13 @@ Deno.serve(async (req) => {
       return json(200, { ok: true, scanned: docs.length, reassigned: changed, results: segResults, dry_run: dryRun, scope: "segment" });
     }
 
-    // ── Itens (para CC quando o cabeçalho está vazio) ───────────────────
+    // ── Itens (CC quando o cabeçalho está vazio + contexto de regra) ────
     const ids = docs.map((d) => d.id);
     const { data: itemsRaw } = await admin
       .from("expense_items")
-      .select("expense_id, cost_center, project, line_total")
+      .select(
+        "expense_id, cost_center, project, line_total, item_code, description, items_group_name",
+      )
       .in("expense_id", ids);
     const itemsByDoc = new Map<string, Record<string, any>[]>();
     for (const it of (itemsRaw || []) as Record<string, any>[]) {
