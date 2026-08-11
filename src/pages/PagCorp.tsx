@@ -60,6 +60,8 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
 import { usePagCorp, type PagCorpTransaction } from "@/hooks/usePagCorp";
+import { normalizeTaxKey, formatTaxId } from "@/lib/tax-id";
+
 import { useCredentials } from "@/hooks/useCredentials";
 import { toast } from "sonner";
 import { useCompanies } from "@/hooks/useCompanies";
