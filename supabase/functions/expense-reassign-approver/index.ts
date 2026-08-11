@@ -452,7 +452,6 @@ Deno.serve(async (req) => {
         "item.code": wrapTokens(codeTokens),
         "item.name": wrapTokens(nameTokens),
         "item.any": wrapTokens([...codeTokens, ...nameTokens]),
-        rateio_type: String(doc.rateio_type || "").toLowerCase(),
       };
 
       for (const cc of candidateCcs.length > 0 ? candidateCcs : [""]) {
