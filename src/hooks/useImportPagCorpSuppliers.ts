@@ -216,8 +216,12 @@ export function useImportPagCorpSuppliers(
       const result = await res.json();
       const items: any[] = result.items || [];
 
+      // Transações com comprovante OU com estabelecimento já identificado pela
+      // análise inteligente do PagCorp (`aiAnalysis`).
       const withReceipts = items.filter(
-        (t) => Array.isArray(t.receipts) && t.receipts.length > 0,
+        (t) =>
+          (Array.isArray(t.receipts) && t.receipts.length > 0) ||
+          !!(t.aiAnalysis?.companyName || t.aiAnalysis?.companyDocument),
       );
 
       const results: PagCorpCandidate[] = [];
@@ -234,21 +238,31 @@ export function useImportPagCorpSuppliers(
         const txAmount = Number(tx.amount || tx.value || tx.expenseValue || 0);
 
         try {
-          const { data, error: fnErr } = await supabase.functions.invoke(
-            "supplier-ai-extract",
-            {
-              body: {
-                description: txDesc,
-                amount: txAmount,
-                receipts: tx.receipts || [],
-                attachments: (tx.attachments || []).slice(0, 5),
-                hint: tx.accountName || tx.accountAlias,
-              },
-            },
-          );
-          if (fnErr) throw fnErr;
+          // Caminho rápido: o PagCorp já devolve razão social e CNPJ do
+          // estabelecimento — dispensa a extração por IA.
+          const aiName = String(tx.aiAnalysis?.companyName || "").trim();
+          const aiDoc = normalizeTaxKey(tx.aiAnalysis?.companyDocument);
+          let extracted: any = null;
 
-          const extracted = (data as any)?.supplier;
+          if (aiName) {
+            extracted = { card_name: aiName, federal_tax_id: aiDoc || null };
+          } else {
+            const { data, error: fnErr } = await supabase.functions.invoke(
+              "supplier-ai-extract",
+              {
+                body: {
+                  description: txDesc,
+                  amount: txAmount,
+                  receipts: tx.receipts || [],
+                  attachments: (tx.attachments || []).slice(0, 5),
+                  hint: tx.accountName || tx.accountAlias,
+                },
+              },
+            );
+            if (fnErr) throw fnErr;
+            extracted = (data as any)?.supplier;
+          }
+
           if (!extracted?.card_name) {
             results.push({
               key: `${txId}-${i}`,
