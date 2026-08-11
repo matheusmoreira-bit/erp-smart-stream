@@ -439,13 +439,31 @@ async function processRun(runId: string, companyDB: string, dateFrom: string, da
     const divergences = applyRules(runId, companyDB, rules, { orders, grpos, invoices, payments });
 
     if (divergences.length > 0) {
+      // Normaliza as linhas: no insert em lote do PostgREST, chaves ausentes em
+      // parte das linhas viram NULL (não o default da coluna), o que quebrava
+      // a constraint NOT NULL de is_fraud_flag.
+      const rows = divergences.map((d) => ({
+        audit_run_id: d.audit_run_id,
+        company_db: d.company_db,
+        divergence_type: d.divergence_type,
+        severity: d.severity ?? "medium",
+        description: d.description,
+        expected_value: d.expected_value ?? null,
+        actual_value: d.actual_value ?? null,
+        delta_value: d.delta_value ?? null,
+        card_code: d.card_code ?? null,
+        source_table: d.source_table ?? null,
+        source_id: d.source_id ?? null,
+        is_fraud_flag: d.is_fraud_flag === true,
+      }));
       // chunked insert
-      for (let i = 0; i < divergences.length; i += 500) {
-        const chunk = divergences.slice(i, i + 500);
+      for (let i = 0; i < rows.length; i += 500) {
+        const chunk = rows.slice(i, i + 500);
         const { error } = await sb.from("audit_console_divergences").insert(chunk);
         if (error) throw new Error(`Erro ao gravar divergências: ${error.message}`);
       }
     }
+
 
     await updateRun(runId, { current_step: "Gerando insights IA", progress_pct: 92 });
     await generateAiInsights(runId, companyDB, divergences, { docs: totalDocs });
