@@ -1549,7 +1549,7 @@ function ApprovalDetailModal({
   );
 }
 
-function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string } {
+function mapInternalExpense(e: Expense, ruleName?: string | null): ApprovalDoc & { __internalId?: string } {
   const isPagcorp = e.origin === "pagcorp";
   return {
     approvalRequestId: -Math.abs(parseInt(e.id.replace(/\D/g, "").slice(0, 9) || "0", 10) || 1),
@@ -1573,7 +1573,7 @@ function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string }
     docDate: e.created_at,
     dueDate: e.due_date || "",
     remarks: e.remarks || "",
-    approvalModel: "Regra Interna",
+    approvalModel: (ruleName || "").trim() || "Regra Interna",
     daysOpen: Math.floor((Date.now() - new Date(e.created_at).getTime()) / 86_400_000),
     attachmentEntry: 0,
     attachmentNames: "",
