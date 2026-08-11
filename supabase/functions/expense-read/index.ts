@@ -339,7 +339,7 @@ Deno.serve(async (req) => {
       );
       allowedExpenseIds = (parents || [])
         .filter((r: any) =>
-          ownsExpense(r, aliases, caller.directorateBranch) || byItems.has(String(r.id)),
+          ownsExpense(r, aliases, caller.directorateBranch, myRules) || byItems.has(String(r.id)),
         )
         .map((r: any) => String(r.id));
       if (allowedExpenseIds.length === 0) return json(200, { data: [] }, cors);
@@ -393,7 +393,7 @@ Deno.serve(async (req) => {
       if (batch.length === 0) return batch;
       const hasOwnerCols =
         select === "*" ||
-        (select.includes("requester_email") &&
+        (select.includes("requester_email") && select.includes("approval_rule_id") &&
           (!caller.directorateBranch || select.includes("cost_center")));
       if (hasOwnerCols) {
         const byItems = await directorateItemIds(
@@ -402,7 +402,7 @@ Deno.serve(async (req) => {
           caller.directorateBranch,
         );
         return batch.filter(
-          (r) => ownsExpense(r, aliases, caller.directorateBranch) || byItems.has(String(r.id)),
+          (r) => ownsExpense(r, aliases, caller.directorateBranch, myRules) || byItems.has(String(r.id)),
         );
       }
       const ids = batch.map((r) => r.id).filter(Boolean);
@@ -412,7 +412,7 @@ Deno.serve(async (req) => {
       const allowed = new Set(
         (owners || [])
           .filter((r: any) =>
-            ownsExpense(r, aliases, caller.directorateBranch) || byItems.has(String(r.id)),
+            ownsExpense(r, aliases, caller.directorateBranch, myRules) || byItems.has(String(r.id)),
           )
           .map((r: any) => String(r.id)),
       );
