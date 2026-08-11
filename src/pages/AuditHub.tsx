@@ -1,4 +1,5 @@
 import AuditConsole from "./AuditConsole";
+import AuditPayments from "./AuditPayments";
 import FiscalAudit from "./FiscalAudit";
 import AuditLog from "./AuditLog";
 import AuditCrossFiscal from "./AuditCrossFiscal";
@@ -6,11 +7,13 @@ import AuditKYP from "./AuditKYP";
 import SapTotalsReconciliation from "./SapTotalsReconciliation";
 import { TabsHub, type HubTabDef } from "@/components/TabsHub";
 
-type TabKey = "sap" | "fiscal" | "cruzamento" | "totais" | "kyp" | "logs";
+type TabKey = "sap" | "pagamentos" | "fiscal" | "cruzamento" | "totais" | "kyp" | "logs";
 
 const TABS: readonly HubTabDef<TabKey>[] = [
   { key: "sap", label: "Auditoria SAP", module: "audit_console", path: "/auditoria/sap", render: () => <AuditConsole /> },
+  { key: "pagamentos", label: "Auditoria de Pagamentos", module: "audit_console", path: "/auditoria/pagamentos", render: () => <AuditPayments /> },
   { key: "fiscal", label: "Auditoria Fiscal", module: "fiscal_audit", path: "/auditoria/fiscal", render: () => <FiscalAudit /> },
+
   { key: "cruzamento", label: "Cruzamento Fiscal × Pagamentos", module: "fiscal_audit", path: "/auditoria/cruzamento", render: () => <AuditCrossFiscal /> },
   { key: "totais", label: "Reconciliação de Totais", module: "fiscal_audit", path: "/auditoria/totais", render: () => <SapTotalsReconciliation /> },
   { key: "kyp", label: "KYP — Fornecedores", module: "kyp", path: "/auditoria/kyp", render: () => <AuditKYP /> },
