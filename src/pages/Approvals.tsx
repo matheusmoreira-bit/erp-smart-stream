@@ -2159,7 +2159,7 @@ export default function ApprovalsPage() {
           }
           return doc;
         }),
-    [expenses],
+    [expenses, ruleNameById],
   );
 
 
