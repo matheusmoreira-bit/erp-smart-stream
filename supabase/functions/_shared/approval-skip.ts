@@ -66,6 +66,22 @@ export function requesterMatchesApprover(
 }
 
 /**
+ * Remove do conjunto de níveis TODAS as linhas cujo aprovador é o próprio
+ * solicitante. Usado para que o solicitante nunca apareça como aprovador
+ * (nem no nível atual, nem em níveis paralelos) — a aprovação dele é sempre
+ * escalada para o próximo aprovador/nível.
+ */
+export function excludeRequesterLevels(
+  levels: ApprovalLevel[],
+  requesterName: string | null,
+  requesterEmail: string | null,
+): ApprovalLevel[] {
+  return (levels || []).filter(
+    (l) => !requesterMatchesApprover(requesterName, requesterEmail, l.approver_name, l.approver_email),
+  );
+}
+
+/**
  * Given the ordered approval levels and the requester identity, pick the
  * first level whose approver(s) are NOT the requester. Supports MULTIPLE rows
  * per `level_order` (parallel approvers — the first to decide encerra o nível).

@@ -44,6 +44,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History, UserCog, ChevronsUpDown, Check, Network, FileDown, Link2, Undo2, Briefcase } from "lucide-react";
 import { copyDocLink, readDocParam, setDocParam } from "@/lib/doc-deep-link";
+import { excludeRequesterApprovers, isSameAsRequester } from "@/lib/self-approval";
 import { exportListReportPdf, exportListReportCsv } from "@/lib/report-pdf";
 import { useSap } from "@/contexts/SapContext";
 import { gateSync } from "@/contexts/PermissionsV2Context";
@@ -2141,8 +2142,13 @@ export default function ApprovalsPage() {
             e,
             ruleNameById[(e as { approval_rule_id?: string | null }).approval_rule_id || ""] || null,
           );
-          const current = ((e as { level_approvers?: Array<{ name: string; email: string }> })
-            .level_approvers) || [];
+          // O solicitante nunca conta como aprovador do nível — a aprovação
+          // dele é escalada para os demais aprovadores / próximo nível.
+          const current = excludeRequesterApprovers(
+            ((e as { level_approvers?: Array<{ name: string; email: string }> }).level_approvers) || [],
+            e.requester_name,
+            e.requester_email,
+          );
           if (current.length > 0) {
             if (!doc.approverEmail && current[0]?.email) doc.approverEmail = current[0].email;
             // Uma delegação explícita em `current_approver` tem precedência.
@@ -2430,9 +2436,14 @@ export default function ApprovalsPage() {
       if (!doc) return false;
       const isRequester =
         codeEq(doc.requesterCode, doc) ||
-        approverMatches(doc.requester, session.userName);
-      // Bloqueio de auto-aprovação — super-usuário pode ignorar (uso admin/teste).
-      if (isRequester && !isSuperUser) return false;
+        approverMatches(doc.requester, session.userName) ||
+        currentUserIdentities.some((id) =>
+          isSameAsRequester(doc.requester, doc.requester, id, id),
+        );
+      // Bloqueio de auto-aprovação — vale para TODOS (inclusive super-usuário):
+      // o solicitante nunca aprova o próprio documento; a decisão fica com os
+      // demais aprovadores do nível ou escala para o próximo.
+      if (isRequester) return false;
 
       const sessionCodeLower = (session.userName || "").toLowerCase().trim();
       const isDirectApprover = isCurrentUserApprover(doc);
