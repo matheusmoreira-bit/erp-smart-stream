@@ -624,7 +624,7 @@ export function PagCorpIntegrateDialog({
                     size="sm"
                     variant="ghost"
                     className="h-6 px-2 text-xs gap-1"
-                    onClick={() => transaction && runAi(transaction)}
+                    onClick={() => transaction && runAi(transaction, { forceOcr: true })}
                     disabled={aiBusy}
                   >
                     <Sparkles className="w-3 h-3" />
