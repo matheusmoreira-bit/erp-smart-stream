@@ -673,9 +673,10 @@ Deno.serve(async (req) => {
 
     // Quando o usuário informa a data de emissão da nota (caso Google Cloud:
     // compras de meses distintos faturadas em uma única NF), ela vira a data
-    // do documento, do imposto e do vencimento do PC.
+    // do documento e do imposto. O VENCIMENTO, porém, é SEMPRE a data da
+    // transação no cartão (a última, em consolidações).
     const headerDocDate = documentDate || txDate;
-    const headerDueDate = documentDate || lastTxDate;
+    const headerDueDate = lastTxDate || documentDate || txDate;
 
     const baseDoc: Record<string, unknown> = {
       CardCode: supplierCode,
