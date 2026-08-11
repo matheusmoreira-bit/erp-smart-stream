@@ -3335,7 +3335,7 @@ export function CreateExpenseModal({
                     </div>
                     <div className="min-w-0 sm:col-span-3">
                       <label className="text-[10px] text-muted-foreground">Total</label>
-                      <Input value={formatCurrency(item.line_total)} readOnly className="h-8 w-full min-w-0 px-2 text-sm bg-muted/30 font-mono" />
+                      <Input value={formatCurrency(item.line_total, currency || "BRL")} readOnly className="h-8 w-full min-w-0 px-2 text-sm bg-muted/30 font-mono" />
 
                     </div>
                   </div>
