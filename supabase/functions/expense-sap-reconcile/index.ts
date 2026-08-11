@@ -184,14 +184,8 @@ function classify(params: {
         explicacao: `${linesWithDiscount} linha(s) com desconto aplicado no SAP.`,
       });
     }
-    if (currency && flowCurrency && currency !== flowCurrency) {
-      return finish("divergent", "currency", {
-        moeda_flow: flowCurrency,
-        moeda_sap: currency,
-        taxa: num(sapDoc.DocRate),
-        explicacao: `Documento gravado em ${currency} no SAP e em ${flowCurrency} no Flow.`,
-      });
-    }
+    // (divergência de moeda já tratada acima, antes das demais causas)
+
     if (Math.abs(diffNet) <= 0.05) {
       return finish("divergent", "rounding", { diferenca: diffNet, explicacao: "Diferença de centavos por arredondamento." });
     }
