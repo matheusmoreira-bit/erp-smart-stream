@@ -23,6 +23,7 @@ import {
   normalizeText,
   tokenizePerson,
 } from "@/lib/text-normalize";
+import { isSameAsRequester } from "@/lib/self-approval";
 
 export function normalize(s: unknown): string {
   return normalizeText(s);
@@ -136,6 +137,13 @@ export function resolveDesignatedApprover(exp: InternalExpense): {
 
 export function canCallerApproveInternal(caller: string, exp: InternalExpense): boolean {
   if (exp.status !== "pendente_aprovacao") return false;
-  const candidates = resolveDesignatedApprovers(exp);
+  // Auto-aprovação: quem criou o documento nunca aprova — a decisão escala
+  // para os demais aprovadores do nível (ou para o próximo nível).
+  if (isSameAsRequester(exp.requester_name || null, exp.requester_email || null, caller, caller)) {
+    return false;
+  }
+  const candidates = resolveDesignatedApprovers(exp).filter(
+    ({ name, email }) => !isSameAsRequester(exp.requester_name || null, exp.requester_email || null, name, email),
+  );
   return candidates.some(({ name, email }) => isDesignatedApprover(caller, name, email));
 }
