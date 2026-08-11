@@ -189,7 +189,9 @@ export function useAuditDashboard() {
           .select("id,severity,divergence_type,is_fraud_flag,is_reviewed,created_at")
           .eq("company_db", companyDB)
           .gte("created_at", sinceIso)
+          .not("divergence_type", "in", `(${IGNORED_DIVERGENCE_TYPES.join(",")})`)
           .limit(2000),
+
       ]);
       if (runsRes.error) throw runsRes.error;
       if (divsRes.error) throw divsRes.error;
