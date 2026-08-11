@@ -284,7 +284,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
 
   // Self-approval guard: when the requester matches the level's approver,
   // skip forward to the next level. If every level matches, fall back to
-  // Juliana Gavineli (global validator, all companies).
+  // Matheus Moreira (global validator, all companies).
   let resolvedApprover: string | null = input.current_approver || null;
   let resolvedApproverEmail: string | null = null;
   let resolvedLevel = 1;
