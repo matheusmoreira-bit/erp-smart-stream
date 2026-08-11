@@ -12,6 +12,9 @@ import { KanbanColumn } from "@/components/audit-cross/KanbanColumn";
 import { CruzamentoCard } from "@/components/audit-cross/CruzamentoCard";
 import { CruzamentoDetailDrawer } from "@/components/audit-cross/CruzamentoDetailDrawer";
 import { AutoReconcileSettings } from "@/components/audit-cross/AutoReconcileSettings";
+import { PoNfBoard } from "@/components/audit-cross/PoNfBoard";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 
 const CENARIO_LABEL: Record<CenarioCruzamento, string> = {
   pago_sem_nota: "Pago sem nota",
