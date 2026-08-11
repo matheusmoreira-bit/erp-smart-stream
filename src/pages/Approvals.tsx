@@ -1549,7 +1549,7 @@ function ApprovalDetailModal({
   );
 }
 
-function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string } {
+function mapInternalExpense(e: Expense, ruleName?: string | null): ApprovalDoc & { __internalId?: string } {
   const isPagcorp = e.origin === "pagcorp";
   return {
     approvalRequestId: -Math.abs(parseInt(e.id.replace(/\D/g, "").slice(0, 9) || "0", 10) || 1),
@@ -1573,7 +1573,7 @@ function mapInternalExpense(e: Expense): ApprovalDoc & { __internalId?: string }
     docDate: e.created_at,
     dueDate: e.due_date || "",
     remarks: e.remarks || "",
-    approvalModel: "Regra Interna",
+    approvalModel: (ruleName || "").trim() || "Regra Interna",
     daysOpen: Math.floor((Date.now() - new Date(e.created_at).getTime()) / 86_400_000),
     attachmentEntry: 0,
     attachmentNames: "",
@@ -2089,6 +2089,44 @@ export default function ApprovalsPage() {
   // segmentação). Carregar no mount custava centenas de regras + níveis.
   const { rules } = useApprovalRules({ backfill: false, enabled: !!selectedDoc });
 
+  // Nome da regra de alçada aplicada a cada despesa interna (consulta leve:
+  // só id + nome das regras referenciadas pelos documentos em tela).
+  const [ruleNameById, setRuleNameById] = useState<Record<string, string>>({});
+  const ruleIdsKey = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (expenses || [])
+            .map((e) => (e as { approval_rule_id?: string | null }).approval_rule_id || "")
+            .filter(Boolean),
+        ),
+      )
+        .sort()
+        .join(","),
+    [expenses],
+  );
+  useEffect(() => {
+    const ids = ruleIdsKey ? ruleIdsKey.split(",") : [];
+    const missing = ids.filter((id) => !ruleNameById[id]);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("approval_rules")
+        .select("id, name")
+        .in("id", missing);
+      if (cancelled || !data) return;
+      setRuleNameById((prev) => {
+        const next = { ...prev };
+        for (const r of data as Array<{ id: string; name: string }>) next[r.id] = r.name;
+        return next;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ruleIdsKey, ruleNameById]);
+
 
   // Merge SAP approvals with internal pending expenses.
   // Os aprovadores do nível atual já vêm resolvidos pelo servidor
@@ -2099,7 +2137,10 @@ export default function ApprovalsPage() {
       (expenses || [])
         .filter((e) => e.status === "pendente_aprovacao")
         .map((e) => {
-          const doc = mapInternalExpense(e);
+          const doc = mapInternalExpense(
+            e,
+            ruleNameById[(e as { approval_rule_id?: string | null }).approval_rule_id || ""] || null,
+          );
           const current = ((e as { level_approvers?: Array<{ name: string; email: string }> })
             .level_approvers) || [];
           if (current.length > 0) {
@@ -2118,7 +2159,7 @@ export default function ApprovalsPage() {
           }
           return doc;
         }),
-    [expenses],
+    [expenses, ruleNameById],
   );
 
 
