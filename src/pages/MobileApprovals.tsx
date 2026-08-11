@@ -31,6 +31,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useSap } from "@/contexts/SapContext";
 import { useExpenses, getStatusLabel, type Expense } from "@/hooks/useExpenses";
 import { isDesignatedApprover, isPendingApproval } from "@/lib/approval-authz";
+import { isSameAsRequester } from "@/lib/self-approval";
 
 /**
  * Tela mobile-first de aprovações (destino do PWA instalável).
