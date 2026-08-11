@@ -30,3 +30,4 @@
 - [Governança de notificações](mem://features/notification-governance.md) — Regras globais/por empresa de envio (bases de teste, autoaprovação, destinatários) em /notificacoes/regras.
 - [Cadeia de aprovação em rateio](mem://features/rateio-approval-chain.md) — Segmento = CC + projeto; cadeias mescladas quando o doc é rateado entre alçadas diferentes.
 - [Grupos de permissão consolidados](mem://features/permission-groups-simplified.md) — Estrutura oficial de 8 grupos globais; não recriar CFO/Contas a Pagar/PagCorp/Contábil nem grupos por empresa.
+- [Critério Tipo de Rateio](mem://features/criterio-tipo-rateio.md) — rateio_type como critério das regras de aprovação; regra Folha do Instituto (Ketlhenn, prioridade 999).

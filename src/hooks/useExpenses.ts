@@ -783,6 +783,7 @@ export function useExpenses(
               "supplier.status": supplierAttrs.status,
               currency: input.currency || "BRL",
               doc_type: docType,
+              rateio_type: (input.rateio_type || "padrao").toLowerCase(),
               item_codes: itemCtx.item_codes,
               item_groups: itemCtx.item_groups,
               "item.code": itemCtx["item.code"],

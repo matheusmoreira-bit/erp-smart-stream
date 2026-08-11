@@ -339,6 +339,13 @@ const CATALOG_FIELDS = new Set([
   "item.code",
   "item_groups",
 ]);
+const RATEIO_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "padrao", label: "Padrão" },
+  { value: "folha", label: "Folha" },
+  { value: "imposto", label: "Imposto" },
+  { value: "reembolso", label: "Reembolso" },
+  { value: "viagens", label: "Viagens" },
+];
 const SUPPLIER_STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "ativo", label: "Ativo" },
   { value: "inativo", label: "Inativo" },
@@ -352,14 +359,14 @@ function defaultOperatorForField(field: string): CriterionOperator {
   if (field === "cost_center" || field === "item_codes" || field === "item.any" || field === "item.code") return "like";
   if (field === "supplier_name" || field === "supplier.name" || field === "item.name") return "contains";
   if (field === "requester_name") return "equal";
-  if (field === "doc_type") return "equal";
+  if (field === "doc_type" || field === "rateio_type") return "equal";
   if (field === "supplier.status") return "equal";
   return "equal";
 }
 
 function operatorAllowedForField(field: string, operator: CriterionOperator): boolean {
   if (field === "total_amount") return NUMERIC_OPERATORS.includes(operator);
-  if (field === "doc_type") return DOC_TYPE_OPERATORS.includes(operator);
+  if (field === "doc_type" || field === "rateio_type") return DOC_TYPE_OPERATORS.includes(operator);
   return TEXT_OPERATORS.includes(operator);
 }
 
@@ -406,6 +413,7 @@ function CriterionRow({
   const isNumericField = criterion.field === "total_amount";
   const isRequesterField = criterion.field === "requester_name";
   const isDocTypeField = criterion.field === "doc_type";
+  const isRateioTypeField = criterion.field === "rateio_type";
   const isBetween = criterion.operator === "between";
   const useCatalog = CATALOG_FIELDS.has(criterion.field) && !isBetween;
   const effectiveOperator = operatorAllowedForField(criterion.field, criterion.operator)
@@ -413,7 +421,7 @@ function CriterionRow({
     : defaultOperatorForField(criterion.field);
   const operatorOptions = isNumericField
     ? NUMERIC_OPERATORS
-    : isDocTypeField
+    : isDocTypeField || isRateioTypeField
       ? DOC_TYPE_OPERATORS
       : TEXT_OPERATORS;
 
@@ -539,6 +547,20 @@ function CriterionRow({
               <SelectContent>
                 {(Object.keys(DOC_TYPE_LABELS) as RuleDocType[]).map((key) => (
                   <SelectItem key={key} value={key}>{DOC_TYPE_LABELS[key]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : isRateioTypeField ? (
+            <Select
+              value={criterion.value || ""}
+              onValueChange={(v) => onChange(index, { ...criterion, value: v })}
+            >
+              <SelectTrigger className="h-9 text-xs">
+                <SelectValue placeholder="Selecionar tipo de rateio..." />
+              </SelectTrigger>
+              <SelectContent>
+                {RATEIO_TYPE_OPTIONS.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

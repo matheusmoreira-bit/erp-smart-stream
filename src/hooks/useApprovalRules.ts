@@ -73,6 +73,7 @@ export const ENTITY_OPTIONS: EntityOption[] = [
     ],
   },
   { value: "item_groups", label: "Grupo de Itens", fieldWhenNoAttribute: "item_groups" },
+  { value: "rateio_type", label: "Tipo de Rateio", fieldWhenNoAttribute: "rateio_type" },
   { value: "doc_type", label: "Tipo de Documento", fieldWhenNoAttribute: "doc_type" },
   { value: "currency", label: "Moeda", fieldWhenNoAttribute: "currency" },
 ];
@@ -96,6 +97,7 @@ export const FIELD_TO_ENTITY: Record<string, { entity: string; attribute?: strin
   "item.code": { entity: "item", attribute: "code" },
   "item.name": { entity: "item", attribute: "name" },
   item_groups: { entity: "item_groups" },
+  rateio_type: { entity: "rateio_type" },
   doc_type: { entity: "doc_type" },
   currency: { entity: "currency" },
 };

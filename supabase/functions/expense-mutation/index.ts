@@ -59,6 +59,7 @@ async function rematchRuleFromMatrix(
     supplierName: string | null;
     supplierCode: string | null;
     expenseId: string;
+    rateioType?: string | null;
     items?: Array<{ cost_center?: string | null }> | null;
   },
 ): Promise<string | null> {
@@ -97,6 +98,7 @@ async function rematchRuleFromMatrix(
     "supplier.code": String(ctx.supplierCode || "").toLowerCase(),
     currency: ctx.currency || "BRL",
     doc_type: ctx.docType,
+    rateio_type: String(ctx.rateioType || "padrao").toLowerCase(),
   });
 
   for (const cc of candidateCcs) {
@@ -272,6 +274,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
       supplierName: input.supplier_name || null,
       supplierCode: input.supplier_code || null,
       expenseId: "",
+      rateioType: (input as any).rateio_type || null,
       items,
     });
     if (rematched) ruleId = rematched;
@@ -677,6 +680,7 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
         supplierName: current.supplier_name,
         supplierCode: current.supplier_code,
         expenseId,
+        rateioType: (updates as any).rateio_type ?? (current as any).rateio_type ?? null,
         items,
       });
       if (rematched) {

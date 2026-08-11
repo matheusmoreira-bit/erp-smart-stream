@@ -465,6 +465,7 @@ Deno.serve(async (req) => {
           "supplier.code": norm(doc.supplier_code),
           currency: doc.currency || "BRL",
           doc_type: docType,
+          rateio_type: String(doc.rateio_type || "padrao").toLowerCase(),
           ...itemCtx,
         };
         matched = findMatchingRule(rules, ctx, docType);
