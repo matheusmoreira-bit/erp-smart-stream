@@ -4,6 +4,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@3.23.8";
 import { openapiSpec } from "./openapi.ts";
+import { validateApiKey } from "../_shared/api-keys.ts";
+
 
 
 const cors = {
@@ -69,12 +71,14 @@ Deno.serve(async (req) => {
 
 
 
-  const expected = Deno.env.get("PAGCORP_STATUS_API_KEY");
-  if (!expected) return json({ error: "API not configured" }, 503);
-  const provided = req.headers.get("x-api-key") ?? "";
-  if (provided.length !== expected.length || provided !== expected) {
-    return json({ error: "Unauthorized" }, 401);
-  }
+  const authClient = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    { auth: { persistSession: false } },
+  );
+  const keyCheck = await validateApiKey(authClient, req, "pagcorp-status-api", "PAGCORP_STATUS_API_KEY");
+  if (!keyCheck.valid) return json({ error: keyCheck.reason || "Unauthorized" }, 401);
+
 
   const url = new URL(req.url);
   const raw = Object.fromEntries(url.searchParams.entries());

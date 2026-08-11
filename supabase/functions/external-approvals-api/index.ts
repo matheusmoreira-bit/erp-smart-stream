@@ -15,6 +15,8 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
+import { validateApiKey } from "../_shared/api-keys.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -418,14 +420,11 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const expected = Deno.env.get("EXTERNAL_APPROVALS_API_KEY");
-    if (!expected) return json(500, { error: "EXTERNAL_APPROVALS_API_KEY não configurada no servidor" });
-    const provided =
-      req.headers.get("x-api-key") ||
-      (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-    if (!provided || provided !== expected) {
-      return json(401, { error: "API key inválida ou ausente" });
+    const keyCheck = await validateApiKey(sb(), req, "external-approvals-api", "EXTERNAL_APPROVALS_API_KEY");
+    if (!keyCheck.valid) {
+      return json(401, { error: keyCheck.reason || "API key inválida ou ausente" });
     }
+
 
     if (req.method !== "POST") return json(405, { error: "Use POST" });
 
