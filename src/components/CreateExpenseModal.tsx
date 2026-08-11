@@ -194,7 +194,7 @@ export function CreateExpenseModal({
 
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
   // Capacidade do GRUPO: cadastrar direto no ERP ou apenas solicitar cadastro.
-  const { has: hasCapability, isPrivileged: isPrivilegedUser } = useMyCapabilities();
+  const { has: hasCapability, isPrivileged: isPrivilegedUser, loading: capsLoading } = useMyCapabilities();
   const canRegisterSupplier = hasCapability("suppliers_register_direct");
 
   const [dialogContainer, setDialogContainer] = useState<HTMLDivElement | null>(null);
