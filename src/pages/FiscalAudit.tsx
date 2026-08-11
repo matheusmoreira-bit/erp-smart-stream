@@ -89,6 +89,11 @@ const isCancelled = (i: SapInvoice) => {
   return c === "tyes" || c === "y" || c === "yes" || c === "true";
 };
 
+/** Saldo em aberto real: total do documento menos o que já foi pago/conciliado no SAP. */
+const openBalance = (i: SapInvoice) =>
+  (Number(i.DocTotal) || 0) - (Number(i.PaidToDate) || 0);
+
+
 export default function FiscalAudit({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
   const { session } = useSap();
