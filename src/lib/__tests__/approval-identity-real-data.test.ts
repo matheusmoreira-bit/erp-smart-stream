@@ -90,6 +90,8 @@ describe("dados reais — nomes parecidos não vazam aprovação", () => {
   it("cada um aprova o próprio documento (nenhum some)", () => {
     for (const p of Object.values(DIR) as Person[]) {
       if (!p.name && !p.email) continue;
+      // Auto-aprovação: o solicitante (Felipe) não aprova o próprio documento.
+      if (p === DIR.felipe) continue;
       const exp = pending(p, DIR.felipe);
       const caller = p.email || p.code;
       expect(canCallerApproveInternal(caller, exp), caller).toBe(true);
