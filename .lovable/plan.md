@@ -1,70 +1,41 @@
-# Limpeza de alertas de segurança — plano de 1 semana
+# Preparação para o novo campo `aiAnalysis` da API PagCorp
 
-Objetivo: revalidar todos os alertas (inclusive os ignorados desde o início do projeto), manter ignorados só os que realmente fazem sentido e zerar o resto sem interromper o uso do sistema.
+A partir de 17/08 (já em homologação) cada despesa retornada pelo endpoint de despesas trará `aiAnalysis.companyName` e `aiAnalysis.companyDocument` (razão social e CNPJ do estabelecimento identificados no comprovante). A mudança é retrocompatível — hoje nada quebra —, mas dá para aproveitá-la para reduzir trabalho manual e custo de IA no fluxo atual.
 
-## O que foi verificado agora (estado real)
+## Situação atual (verificada no código)
 
-- Scanner persistido: 3 achados abertos, todos nível `warn`
-  - `pagcorp_card_mapping`: política de admin no papel `public` em vez de `authenticated`
-  - `permissions_enforcement_scope`: duas políticas no papel `public`
-  - Um achado informativo dizendo que a visibilidade operacional ampla é intencional (não exige ação)
-- Linter do banco: 105 apontamentos, sendo
-  - 3 tabelas com RLS ligado e nenhuma policy: `auth_caller_cache`, `edge_rate_limits`, `expense_audit_log` (uso exclusivo de backend)
-  - 1 extensão no schema público: `pg_trgm`
-  - ~100 avisos de funções `SECURITY DEFINER` executáveis: 85 funções no total, 45 executáveis por `anon` e 56 por `authenticated`
-- Nenhuma tabela do schema `public` está sem RLS
-- Todas as 85 funções `SECURITY DEFINER` já têm `search_path` fixado
-- 21 policies ainda usam o papel `public` em vez de `authenticated`
-- CORS: o helper de allowlist (`cors-allowlist`) já é usado por 38 edge functions; cerca de 70 ainda respondem com `Access-Control-Allow-Origin: *`
-- Dependências (npm audit): sem vulnerabilidades altas/críticas
+- `pagcorp-proxy` repassa os itens brutos da API, então os novos campos chegam ao frontend sem alteração no proxy.
+- `usePagCorp` normaliza a transação e hoje não tem nenhum dado de estabelecimento: o fornecedor exibido cai em `cardName`/`accountName` e o fornecedor real é escolhido manualmente na integração.
+- `useImportPagCorpSuppliers` faz OCR por transação chamando a função `supplier-ai-extract` para descobrir razão social/CNPJ do comprovante — exatamente o dado que a PagCorp passará a entregar pronto.
+- `cleanDigits` remove tudo que não é dígito e `hasValidBrazilianTaxId` exige 11/14 dígitos — isso quebra com o CNPJ alfanumérico anunciado.
 
-Sobre os itens ignorados: a lista de achados ignorados só pode ser reaberta por você, na aba Security do projeto. Eu não consigo "designorar" — por isso a revalidação começa por você reativar todos e eu reclassificar um a um.
+## O que será feito
 
-## Princípio para não quebrar o sistema
+### 1. Normalizar o novo campo na leitura das transações
+Em `usePagCorp.ts`, incluir no modelo `PagCorpTransaction` os campos `merchantName` e `merchantTaxId`, lidos de `aiAnalysis.companyName` / `aiAnalysis.companyDocument` (tolerando ausência/nulo, sempre como string). Nenhum comportamento existente muda quando vierem vazios.
 
-Nenhuma mudança remove acesso de quem já usa. A regra é: primeiro medir quem chama o quê, depois restringir, sempre em lote pequeno e reversível. Tudo que restringe papel/permissão entra com verificação prévia de uso real (logs das edge functions e das chamadas ao banco) antes de aplicar.
+### 2. Exibir o estabelecimento na tela do PagCorp
+Mostrar razão social + CNPJ identificados no card/linha da transação (com fallback para o texto atual quando não houver `aiAnalysis`), para o operador conferir antes de integrar.
 
-## Cronograma (5 dias úteis)
+### 3. Sugestão automática de fornecedor na integração
+Ao abrir a seleção de fornecedor de uma transação, pré-buscar pelo CNPJ do `aiAnalysis` (e, em segundo lugar, pela razão social), sugerindo o fornecedor SAP correspondente. A escolha continua sendo confirmada pelo usuário — nada é integrado automaticamente.
 
-**Dia 1 — Revalidação dos ignorados**
-- Você reabre todos os achados ignorados na aba Security
-- Reclassificação de cada um em: corrigir agora, corrigir no plano, ou ignorar de forma justificada
-- Reescrita da memória de segurança para refletir só os riscos realmente aceitos (visibilidade operacional compartilhada, tabelas de cache internas, etc.)
-- Entrega: lista final com o motivo de cada item mantido ignorado
+### 4. Usar `aiAnalysis` antes do OCR no importador de fornecedores
+Em `useImportPagCorpSuppliers`, quando a transação já trouxer `companyName`/`companyDocument`, usar esses dados direto e pular a chamada a `supplier-ai-extract`. O OCR fica como fallback para transações sem `aiAnalysis`. Isso deixa o scan muito mais rápido e reduz custo de IA. O casamento com `pagcorp_supplier_links` e com a lista de fornecedores segue igual.
 
-**Dia 2 — Políticas RLS no papel correto (risco baixo)**
-- Trocar `public` por `authenticated` nas 21 policies que hoje avaliam papel público, mantendo exatamente a mesma condição de acesso
-- Exceções checadas antes: `enabled_erp_types` e as policies de `service_role`, que continuam como estão
-- As 3 tabelas sem policy (`auth_caller_cache`, `edge_rate_limits`, `expense_audit_log`) ganham policy explícita de "somente backend", documentando a intenção e silenciando o alerta
-- Verificação: abrir aprovações, despesas, PagCorp e cadastros com um usuário comum e um admin
+### 5. Tratar CNPJ alfanumérico
+Criar uma normalização de documento que preserve letras (uppercase, sem pontuação) e usá-la nos pontos de comparação de CNPJ do fluxo PagCorp, mantendo a validação numérica atual apenas onde o SAP exige. `hasValidBrazilianTaxId` passa a aceitar também 14 caracteres alfanuméricos.
 
-**Dia 3 — Superfície das funções SECURITY DEFINER (maior volume)**
-- Inventário das 85 funções separando: usadas pelo frontend, usadas só por edge function/cron, e órfãs
-- Revogar `EXECUTE` de `anon` em tudo que não precisa de acesso anônimo (hoje são 45 funções; a expectativa é sobrar quase nada, já que o app exige login)
-- Revogar `EXECUTE` de `authenticated` nas funções que só o backend chama (métricas, prune, sync, auditoria)
-- Aplicado em 3 lotes, com teste de fumaça entre eles
-- Verificação: aprovações, feed, notificações, cadastros e telas de backoffice
-
-**Dia 4 — CORS e cabeçalhos**
-- Migrar as ~70 edge functions restantes para o helper de allowlist (mesmo padrão já usado nas 38 atuais), incluindo o `_shared/employee-sync`
-- Revisar CSP/HSTS e demais cabeçalhos do app publicado
-- Verificação: fluxos que chamam funções a partir do domínio próprio e do preview
-
-**Dia 5 — Fechamento**
-- Mover `pg_trgm` para o schema `extensions` (checando os índices que dependem dela; se houver risco de indisponibilidade, fica registrado como risco aceito em vez de mexer)
-- Rodar novamente scanner + linter + `npm audit`
-- Marcar como corrigidos os achados resolvidos e publicar o relatório final com GO/NO-GO
+### 6. Validação em homologação
+Rodar o scan de importação e a listagem de despesas contra a base de homologação para confirmar o formato do `aiAnalysis`, e registrar o comportamento esperado antes de 17/08.
 
 ## Detalhes técnicos
 
-- Todas as mudanças de banco vão em migrações pequenas e independentes, uma por tema (policies, grants de função, extensão), para permitir rollback isolado.
-- `ALTER POLICY ... TO authenticated` não altera a expressão `USING`/`WITH CHECK`; o efeito prático é apenas deixar de avaliar a regra para requisições anônimas.
-- Revogações seguem o padrão `REVOKE EXECUTE ON FUNCTION public.<fn>(<assinatura>) FROM anon;` — assinatura completa, porque há funções sobrecarregadas (`check_applicable_approval_rules`, `find_open_registration_duplicate`).
-- Funções chamadas por edge function com `service_role` não são afetadas por revogação de `anon`/`authenticated`.
-- Nas edge functions, o CORS passa a devolver o cabeçalho só para origens da allowlist; a resposta de `OPTIONS` continua existindo em todas.
-- Nada de mexer em `verify_jwt`, chaves ou schema de auth neste plano.
+- Arquivos: `src/hooks/usePagCorp.ts`, `src/pages/PagCorp.tsx`, `src/hooks/useImportPagCorpSuppliers.ts`, e um helper de normalização de documento em `src/lib/`.
+- Sem migração de banco e sem mudança em `pagcorp-proxy` ou nas funções de integração com o SAP.
+- Todos os novos campos são opcionais: com resposta antiga (sem `aiAnalysis`) o sistema se comporta exatamente como hoje.
 
-## Riscos
+## Fora de escopo
 
-- Revogar `EXECUTE` de uma função que o frontend usa quebra a tela correspondente. Mitigado pelo inventário do Dia 3 e pelos lotes com teste entre eles.
-- Mover `pg_trgm` pode exigir recriar índices de busca; se o custo for alto, o item é registrado como risco aceito e não executado.
+- Criar fornecedor automaticamente a partir do `aiAnalysis` sem revisão humana.
+- Expor o CNPJ do estabelecimento na API pública de status do PagCorp (ela é deliberadamente sem dados de fornecedor).
