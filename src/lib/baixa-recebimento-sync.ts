@@ -64,7 +64,7 @@ async function callBaixaFunction(body: Record<string, unknown>): Promise<SyncBai
 async function ensureServiceLayerSession(session: SapSession): Promise<boolean> {
   if (session?.sessionId) return true;
   const { resolveSapSession } = await import("@/lib/sap-session-broker");
-  const resolved = await resolveSapSession(session?.companyDB || "");
+  const resolved = await resolveSapSession(session?.companyDB || "", true);
   return !!resolved?.sessionId;
 }
 

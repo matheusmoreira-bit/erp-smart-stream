@@ -137,6 +137,13 @@ const NEEDS_SAP_SESSION = new Set([
   "issueSapAuthToken",
 ]);
 
+// Somente estas ações podem abrir o modal de credenciais do ERP quando o
+// usuário não tem senha provisionada: são gravações/ações diretas no SAP.
+const INTERACTIVE_SAP_ACTIONS = new Set([
+  "sapAction",
+  "issueSapAuthToken",
+]);
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {}): Promise<any> {
   const action = typeof body?.action === "string" ? body.action : "";
@@ -155,7 +162,7 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
   // Autenticação preguiçosa: só agora, no momento da ação, garantimos sessão.
   if (NEEDS_SAP_SESSION.has(action) && !body.sessionId) {
     const { resolveSapSession } = await import("@/lib/sap-session-broker");
-    const resolved = await resolveSapSession(companyDB);
+    const resolved = await resolveSapSession(companyDB, INTERACTIVE_SAP_ACTIONS.has(action));
     if (!resolved?.sessionId) {
       throw new SapSessionExpiredError(
         "É necessário autenticar no ERP para executar esta ação.",
@@ -234,7 +241,10 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
         reauthTried = true;
         const broker = await import("@/lib/sap-session-broker");
         window.dispatchEvent(new CustomEvent("erp:sap-session-invalid", { detail: { companyDB } }));
-        const resolved = await broker.resolveSapSession(companyDB);
+        const resolved = await broker.resolveSapSession(
+          companyDB,
+          INTERACTIVE_SAP_ACTIONS.has(action),
+        );
         if (resolved?.sessionId) {
           body = { ...body, sessionId: resolved.sessionId, routeId: resolved.routeId };
           attempt--; // não consome tentativa da política de retry
