@@ -22,7 +22,12 @@ import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
-import { pickApproverSkippingRequester, SELF_APPROVAL_FALLBACK } from "../_shared/approval-skip.ts";
+import {
+  pickApproverSkippingRequester,
+  excludeRequesterLevels,
+  requesterMatchesApprover,
+  SELF_APPROVAL_FALLBACK,
+} from "../_shared/approval-skip.ts";
 import {
   buildRateioSegments,
   loadRateioSegments,
