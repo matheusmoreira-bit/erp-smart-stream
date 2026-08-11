@@ -74,15 +74,18 @@ Deno.serve(async (req) => {
   );
 
   let body: {
-    action?: "enqueue" | "process" | "recheck";
+    action?: "enqueue" | "process" | "recheck" | "preview";
     import_id?: string;
     import_ids?: string[];
     operation?: "invoice_draft" | "purchase_order";
     payload?: Record<string, unknown>;
+    /** Justificativa obrigatória quando a divergência bloqueante é liberada. */
+    override_reason?: string;
     queue_id?: string;
     limit?: number;
     cron?: boolean;
   } = {};
+
   try { body = await req.json(); } catch { /* ignore */ }
 
   const action = body.action || "process";
