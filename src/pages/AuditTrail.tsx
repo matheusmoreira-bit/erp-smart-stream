@@ -12,6 +12,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Download,
 } from "lucide-react";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 import { Button } from "@/components/ui/button";
@@ -313,6 +314,10 @@ export default function AuditTrailPage() {
               <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
               Atualizar
             </Button>
+            <Button variant="outline" size="sm" onClick={() => void exportCsv()} disabled={exporting}>
+              <Download className={`w-4 h-4 mr-2 ${exporting ? "animate-pulse" : ""}`} />
+              {exporting ? "Exportando..." : "Exportar CSV"}
+            </Button>
             <Button size="sm" onClick={runVerify} disabled={verifying}>
               {verifyResult?.ok === false ? (
                 <ShieldAlert className="w-4 h-4 mr-2" />
@@ -434,7 +439,7 @@ export default function AuditTrailPage() {
               ) : rows.length === 0 ? (
                 <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Sem registros</TableCell></TableRow>
               ) : rows.map(r => (
-                <TableRow key={r.id} className="cursor-pointer" onClick={() => setDetail(r)}>
+                <TableRow key={r.id} className="cursor-pointer" onClick={() => void openDetail(r)}>
                   <TableCell className="font-mono text-xs">{r.id}</TableCell>
                   <TableCell className="text-xs">{new Date(r.ts).toLocaleString("pt-BR")}</TableCell>
                   <TableCell className="text-xs">
