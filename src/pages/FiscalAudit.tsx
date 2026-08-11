@@ -37,7 +37,10 @@ interface SapInvoice {
   DocTotal: number;
   DocCurrency: string;
   DocumentStatus: string;
+  /** Valor já pago/conciliado no SAP. Sem ele o "em aberto" fica superestimado. */
+  PaidToDate?: number;
   Cancelled?: string;
+
   UserSign: number;
   CreationDate: string | null;
   _companyDB?: string;
@@ -85,6 +88,11 @@ const isCancelled = (i: SapInvoice) => {
   const c = (i.Cancelled || "").toString().toLowerCase();
   return c === "tyes" || c === "y" || c === "yes" || c === "true";
 };
+
+/** Saldo em aberto real: total do documento menos o que já foi pago/conciliado no SAP. */
+const openBalance = (i: SapInvoice) =>
+  (Number(i.DocTotal) || 0) - (Number(i.PaidToDate) || 0);
+
 
 export default function FiscalAudit({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
@@ -212,7 +220,7 @@ export default function FiscalAudit({ embedded = false }: { embedded?: boolean }
       const fetchStart = cacheInfo?.fetchStart && cacheInfo.fetchStart < startDate ? cacheInfo.fetchStart : startDate;
       const fetchEnd = cacheInfo?.fetchEnd && cacheInfo.fetchEnd > endDate ? cacheInfo.fetchEnd : endDate;
 
-      const select = "DocEntry,DocNum,DocDate,DocDueDate,CardCode,CardName,DocTotal,DocCurrency,DocumentStatus,Cancelled,UserSign,CreationDate";
+      const select = "DocEntry,DocNum,DocDate,DocDueDate,CardCode,CardName,DocTotal,PaidToDate,DocCurrency,DocumentStatus,Cancelled,UserSign,CreationDate";
       const filter = `DocDate ge '${fetchStart}' and DocDate le '${fetchEnd}'`;
       const invoiceParams = { $select: select, $filter: filter, $orderby: "DocDate desc" };
 
@@ -311,9 +319,11 @@ export default function FiscalAudit({ embedded = false }: { embedded?: boolean }
   }, [invoices, salesInvoices, docType]);
 
   // === Análise — notas em aberto no período ===
+  // Aberto = status aberto no SAP E saldo remanescente (DocTotal - PaidToDate) > 0.
+  // Sem o PaidToDate, notas parcial ou totalmente pagas apareciam como pendentes.
   const oldOpen = useMemo(() => {
     return docList
-      .filter((i) => i.DocumentStatus === "bost_Open")
+      .filter((i) => i.DocumentStatus === "bost_Open" && openBalance(i) > 0.01)
       .sort((a, b) => new Date(a.DocDate).getTime() - new Date(b.DocDate).getTime());
   }, [docList]);
 
@@ -321,10 +331,18 @@ export default function FiscalAudit({ embedded = false }: { embedded?: boolean }
     const m = new Map<string, number>();
     oldOpen.forEach((i) => {
       const c = i.DocCurrency || "BRL";
-      m.set(c, (m.get(c) || 0) + (Number(i.DocTotal) || 0));
+      m.set(c, (m.get(c) || 0) + openBalance(i));
     });
     return Array.from(m.entries());
   }, [oldOpen]);
+
+  // Cache antigo → os status de pagamento podem estar defasados.
+  const cacheAgeHours = useMemo(() => {
+    if (!cacheInfo?.fetchedAt) return null;
+    return (Date.now() - new Date(cacheInfo.fetchedAt).getTime()) / 3600000;
+  }, [cacheInfo]);
+  const cacheStale = cacheAgeHours != null && cacheAgeHours > 24;
+
 
   // === Quantitativo ===
   const buckets = useMemo(() => {
@@ -580,11 +598,23 @@ export default function FiscalAudit({ embedded = false }: { embedded?: boolean }
           </div>
         )}
 
+        {cacheStale && !loading && (
+          <div className="p-3 bg-warning/10 border border-warning/30 rounded-lg text-warning text-sm flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>
+              Estes dados vêm de um cache de {fmtDateTime(cacheInfo?.fetchedAt)} (
+              {Math.floor((cacheAgeHours ?? 0) / 24)} dia(s) atrás). Notas pagas depois dessa data ainda aparecem como
+              em aberto — clique em <strong>Atualizar do SAP</strong> para revalidar.
+            </span>
+          </div>
+        )}
+
         {error && (
           <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm flex items-center gap-2">
             <AlertTriangle className="w-4 h-4" /> {error}
           </div>
         )}
+
 
         <Tabs defaultValue="analysis" className="w-full">
           <TabsList>
@@ -626,16 +656,18 @@ export default function FiscalAudit({ embedded = false }: { embedded?: boolean }
                       <th className="px-4 py-3 text-left">Vencimento</th>
                       <th className="px-4 py-3 text-left">Parceiro</th>
                       <th className="px-4 py-3 text-right">Valor</th>
+                      <th className="px-4 py-3 text-right">Saldo em aberto</th>
                       <th className="px-4 py-3 text-right">Dias em aberto</th>
+
                       <th className="px-4 py-3 text-left">Usuário</th>
                       {consolidated && <th className="px-4 py-3 text-left">Empresa</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {loading ? (
-                      <tr><td colSpan={consolidated ? 8 : 7} className="text-center py-12"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></td></tr>
+                      <tr><td colSpan={consolidated ? 9 : 8} className="text-center py-12"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></td></tr>
                     ) : oldOpen.length === 0 ? (
-                      <tr><td colSpan={consolidated ? 8 : 7} className="text-center text-muted-foreground py-12">Nenhuma nota em aberto no período 🎉</td></tr>
+                      <tr><td colSpan={consolidated ? 9 : 8} className="text-center text-muted-foreground py-12">Nenhuma nota em aberto no período 🎉</td></tr>
                     ) : oldOpen.map((i) => {
                       const days = daysBetween(new Date(i.DocDate), today);
                       const u = users.get(userKey(i._companyDB, i.UserSign));
@@ -649,6 +681,8 @@ export default function FiscalAudit({ embedded = false }: { embedded?: boolean }
                             <div className="text-xs text-muted-foreground">{i.CardCode}</div>
                           </td>
                           <td className="px-4 py-2.5 text-right">{fmtMoney(i.DocTotal, i.DocCurrency === "R$" ? "BRL" : i.DocCurrency)}</td>
+                          <td className="px-4 py-2.5 text-right font-medium">{fmtMoney(openBalance(i), i.DocCurrency === "R$" ? "BRL" : i.DocCurrency)}</td>
+
                           <td className="px-4 py-2.5 text-right">
                             <Badge variant="outline" className={days > 180 ? "bg-destructive/15 text-destructive border-destructive/30" : "bg-warning/15 text-warning border-warning/30"}>
                               {days} d
