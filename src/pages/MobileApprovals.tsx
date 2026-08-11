@@ -81,7 +81,9 @@ export default function MobileApprovals() {
       expenses.filter(
         (e) =>
           isPendingApproval(e.status) &&
-          isDesignatedApprover(caller, e.current_approver || null, (e as any).current_approver_email || null),
+          isDesignatedApprover(caller, e.current_approver || null, (e as any).current_approver_email || null) &&
+          // Auto-aprovação: o solicitante nunca aprova o próprio documento.
+          !isSameAsRequester(e.requester_name || null, e.requester_email || null, caller, caller),
       ),
     [expenses, caller],
   );
