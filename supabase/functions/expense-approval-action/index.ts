@@ -1035,7 +1035,25 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
         current_level_order: minLevel,
       };
       if (remarks) updates.remarks = remarks;
-      await admin.from("expenses").update(updates).eq("id", expenseId);
+      const { error: headerErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
+      if (headerErr) {
+        // O cabeçalho é o que a tela de aprovações lê: se ele não avançar, o
+        // documento fica "travado" no aprovador anterior mesmo com os
+        // segmentos já aprovados. Tenta de novo sem campos opcionais.
+        stageLog("update_advance_level", "error", {
+          requestId, expenseId, phase: "segment_header_update", error: headerErr.message,
+        });
+        const { error: retryErr } = await admin
+          .from("expenses")
+          .update({ current_approver: label, current_level_order: minLevel })
+          .eq("id", expenseId);
+        if (retryErr) {
+          stageLog("update_advance_level", "error", {
+            requestId, expenseId, phase: "segment_header_update_retry", error: retryErr.message,
+          });
+        }
+      }
+
 
       for (const n of advancedNotifications) {
         await notifyApprovalPending(admin, {
