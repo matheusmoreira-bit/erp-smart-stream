@@ -598,11 +598,23 @@ export default function FiscalAudit({ embedded = false }: { embedded?: boolean }
           </div>
         )}
 
+        {cacheStale && !loading && (
+          <div className="p-3 bg-warning/10 border border-warning/30 rounded-lg text-warning text-sm flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>
+              Estes dados vêm de um cache de {fmtDateTime(cacheInfo?.fetchedAt)} (
+              {Math.floor((cacheAgeHours ?? 0) / 24)} dia(s) atrás). Notas pagas depois dessa data ainda aparecem como
+              em aberto — clique em <strong>Atualizar do SAP</strong> para revalidar.
+            </span>
+          </div>
+        )}
+
         {error && (
           <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm flex items-center gap-2">
             <AlertTriangle className="w-4 h-4" /> {error}
           </div>
         )}
+
 
         <Tabs defaultValue="analysis" className="w-full">
           <TabsList>
