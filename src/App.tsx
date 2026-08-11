@@ -121,6 +121,8 @@ const App = () => (
               <Route path="/backoffice/saude-integracoes" element={<AdminRoute><IntegrationHealth /></AdminRoute>} />
               <Route path="/backoffice/retry-queue" element={<AdminRoute><BackofficeRetryQueue /></AdminRoute>} />
               <Route path="/backoffice/revisao-acessos" element={<AdminRoute><AccessReview /></AdminRoute>} />
+              <Route path="/backoffice/chaves-api" element={<AdminRoute><ApiKeys /></AdminRoute>} />
+
               <Route path="/backoffice/sla-escalonamento" element={<AdminRoute><SlaEscalation /></AdminRoute>} />
               <Route path="/backoffice/sla-dashboard" element={<AdminRoute><SlaDashboard /></AdminRoute>} />
               <Route path="/backoffice/roadmap" element={<AdminRoute><BackofficeRoadmap /></AdminRoute>} />
