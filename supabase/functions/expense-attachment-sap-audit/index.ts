@@ -68,9 +68,9 @@ async function markCopyToTarget(baseUrl: string, cookies: string, absoluteEntry:
     const patchLines = lines.length > 0
       ? lines.map((l: { Line?: number }, idx: number) => ({
           Line: typeof l?.Line === "number" ? l.Line : idx,
-          CopyToTargetDocument: "tYES",
+          CopyToTargetDoc: "tYES",
         }))
-      : Array.from({ length: count }, (_, idx) => ({ Line: idx, CopyToTargetDocument: "tYES" }));
+      : Array.from({ length: count }, (_, idx) => ({ Line: idx, CopyToTargetDoc: "tYES" }));
     const res = await fetch(`${baseUrl}/Attachments2(${absoluteEntry})`, {
       method: "PATCH",
       headers: { Cookie: cookies, "Content-Type": "application/json" },
@@ -116,11 +116,13 @@ Deno.serve(async (req) => {
   const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
   const auditKey = Deno.env.get("ATTACHMENT_AUDIT_KEY") || "";
   const auditKey2 = Deno.env.get("ATTACHMENT_AUDIT_KEY2") || "";
+  const auditKey3 = Deno.env.get("ATTACHMENT_AUDIT_KEY3") || "";
   const bearer = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
   const provided = req.headers.get("x-internal-key") || "";
   const internal = (!!svcKey && (provided === svcKey || bearer === svcKey)) ||
     (!!auditKey && provided === auditKey) ||
-    (!!auditKey2 && provided === auditKey2);
+    (!!auditKey2 && provided === auditKey2) ||
+    (!!auditKey3 && provided === auditKey3);
   if (!internal) {
     let ok = false;
     try { ok = await isCallerPrivileged(req, admin); } catch { ok = false; }
@@ -128,6 +130,36 @@ Deno.serve(async (req) => {
   }
 
   const body = await req.json().catch(() => ({}));
+
+  // Modo debug: inspeciona no SAP as linhas de anexo de um documento específico.
+  if (body?.debug_expense_id) {
+    const { data: exp } = await admin
+      .from("expenses")
+      .select("id, company_db, doc_type, sap_doc_entry, sap_attachment_entry")
+      .eq("id", String(body.debug_expense_id))
+      .maybeSingle();
+    if (!exp) return json(404, { error: "expense não encontrada" });
+    const { data: credRows2 } = await admin
+      .from("system_credentials")
+      .select("credential_key, credential_value")
+      .eq("system_name", "sap")
+      .eq("company_db", (exp as any).company_db);
+    const creds2: Record<string, string> = {};
+    for (const r of credRows2 || []) creds2[(r as any).credential_key] = (r as any).credential_value;
+    const conn = await loginSap(creds2, (exp as any).company_db);
+    const endpoint = (exp as any).doc_type === "sales" ? "Orders" : "PurchaseOrders";
+    const docRes = await fetch(`${conn.baseUrl}/${endpoint}(${(exp as any).sap_doc_entry})?$select=AttachmentEntry,DocNum`, { headers: { Cookie: conn.cookies } });
+    const docBody = await docRes.json().catch(() => ({}));
+    const ae = Number(docBody?.AttachmentEntry) || 0;
+    let lines: unknown = null;
+    if (ae) {
+      const lr = await fetch(`${conn.baseUrl}/Attachments2(${ae})`, { headers: { Cookie: conn.cookies } });
+      lines = await lr.json().catch(() => ({}));
+    }
+    await fetch(`${conn.baseUrl}/Logout`, { method: "POST", headers: { Cookie: conn.cookies } }).catch(() => {});
+    return json(200, { doc: docBody, attachment_entry: ae, lines });
+  }
+
   const onlyCompany = String(body?.company_db || "").trim();
   const dryRun = body?.dry_run !== false; // padrão: simulação
   const limit = Math.min(Number(body?.limit) || 500, 2000);
@@ -201,8 +233,11 @@ Deno.serve(async (req) => {
         .map((r: any) => String(r.expense_id)),
     );
 
-    const todo = candidates.filter((e: any) => (attByExpense.get(e.id) || []).length > 0 && !nfPosted.has(String(e.id)));
+    // Inclui também documentos SEM arquivo no Flow: se no SAP só existe o PDF
+    // "ERPFlow_*", o anexo original do usuário se perdeu e precisa ser reportado.
+    const todo = candidates.filter((e: any) => !nfPosted.has(String(e.id)));
     if (!todo.length) { report.push(entry); continue; }
+
 
     let sap: { baseUrl: string; cookies: string } | null = null;
     try {
@@ -241,13 +276,45 @@ Deno.serve(async (req) => {
               entry.errors.push(`Attachments2(${existingEntry}): consulta falhou [${linesRes.status}]`);
               return;
             }
-            const sapNames = new Set(
-              (linesBody?.Attachments2_Lines ?? []).map((l: any) =>
-                String(l?.FileName ?? "").trim().toLowerCase()
-              ).filter(Boolean),
-            );
-            const missingFiles = expAtts.filter((a: any) => !sapNames.has(sapBaseName(a.file_name || "")));
-            if (!missingFiles.length) return;
+            const sapLines = (linesBody?.Attachments2_Lines ?? []).map((l: any) => ({
+              name: String(l?.FileName ?? "").trim().toLowerCase(),
+              ext: String(l?.FileExtension ?? "").trim().toLowerCase(),
+              sizeKb: Number(l?.FileSize) || 0,
+            })).filter((l: any) => l.name);
+            const sapNamesList = sapLines.map((l: any) => l.name);
+            // Só o comprovante gerado pelo Flow ("ERPFlow_*") => anexo original ficou pra trás.
+            const onlyErpFlow = sapNamesList.length > 0 && sapNamesList.every((n: string) => n.startsWith("erpflow"));
+            // O SAP renomeia arquivos já existentes na pasta de anexos acrescentando
+            // um carimbo de data/hora ("1.pdf" -> "111082026115500834949"). Por isso a
+            // comparação usa nome exato OU (mesma extensão + tamanho equivalente),
+            // evitando reenviar o mesmo arquivo a cada execução.
+            const fileAlreadyInSap = (a: any) => {
+              const base = sapBaseName(a.file_name || "");
+              const ext = String(a.file_name || "").split(".").pop()?.toLowerCase() || "";
+              const kb = Math.round((Number(a.file_size) || 0) / 1024);
+              return sapLines.some((l: any) =>
+                l.name === base ||
+                (l.ext === ext && (l.name.startsWith(base) || (kb > 0 && Math.abs(l.sizeKb - kb) <= 2)))
+              );
+            };
+            const missingFiles = expAtts.filter((a: any) => !fileAlreadyInSap(a));
+            if (!missingFiles.length) {
+              if (onlyErpFlow) {
+                entry.missing.push({
+                  expense_id: exp.id,
+                  doc_entry: docEntry,
+                  doc_num: getBody?.DocNum ?? exp.sap_doc_num,
+                  supplier: exp.supplier_name,
+                  status: exp.status,
+                  attachment_entry: existingEntry,
+                  attachments: expAtts.length,
+                  sap_files: sapNamesList,
+                  reason: "only_erpflow_no_source",
+                });
+              }
+              return;
+            }
+
 
             const infoInc = {
               expense_id: exp.id,
@@ -258,7 +325,9 @@ Deno.serve(async (req) => {
               attachment_entry: existingEntry,
               attachments: expAtts.length,
               missing_files: missingFiles.map((a: any) => a.file_name),
-              reason: "incomplete",
+              sap_files: sapNamesList,
+              only_erpflow: onlyErpFlow,
+              reason: onlyErpFlow ? "only_erpflow" : "incomplete",
             };
             entry.missing.push(infoInc);
             if (dryRun) return;
