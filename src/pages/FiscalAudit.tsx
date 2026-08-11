@@ -474,34 +474,53 @@ export default function FiscalAudit({ embedded = false }: { embedded?: boolean }
   const docTypeLabel = docType === "entrada" ? "NF de Entrada" : docType === "saida" ? "NF de Saída" : "NF Entrada + Saída";
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border px-6 py-6">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <Button variant="ghost" size="icon" aria-label="Voltar" onClick={() => navigate("/")}>
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <div className="min-w-0">
-              <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-                <FileSearch className="w-6 h-6 text-warning" />
-                Auditoria Fiscal
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                {docTypeLabel} — {scopeLabel}
-              </p>
+    <div className={embedded ? "" : "min-h-screen bg-background"}>
+      {embedded ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-foreground">
+              <FileSearch className="h-6 w-6 text-warning" />
+              Auditoria Fiscal
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {docTypeLabel} — {scopeLabel}
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={refreshFromSap} disabled={loading || !session || consolidated}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+            Atualizar do SAP
+          </Button>
+        </div>
+      ) : (
+        <header className="border-b border-border px-6 py-6">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <Button variant="ghost" size="icon" aria-label="Voltar" onClick={() => navigate("/")}>
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+              <div className="min-w-0">
+                <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                  <FileSearch className="w-6 h-6 text-warning" />
+                  Auditoria Fiscal
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  {docTypeLabel} — {scopeLabel}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <Button variant="outline" size="sm" onClick={refreshFromSap} disabled={loading || !session || consolidated}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+                Atualizar do SAP
+              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <Button variant="outline" size="sm" onClick={refreshFromSap} disabled={loading || !session || consolidated}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-              Atualizar do SAP
-            </Button>
-          </div>
-        </div>
-      </header>
+        </header>
+      )}
 
-      <main className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+      <main className={embedded ? "space-y-6" : "max-w-7xl mx-auto px-6 py-6 space-y-6"}>
+
         {/* Filters */}
         <div className="glass-card p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
           <div>
