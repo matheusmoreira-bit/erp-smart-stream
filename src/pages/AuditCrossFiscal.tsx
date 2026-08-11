@@ -211,7 +211,13 @@ export default function AuditCrossFiscal() {
         </div>
       )}
 
+      {view === "documentos" && (
+        <PoNfBoard companyDb={loggedCompanyDb} inicio={inicio} fim={fim} />
+      )}
+
+      {view === "pagamentos" && (<>
       {/* Busca e filtros de status */}
+
       <div className="flex flex-col sm:flex-row gap-2 sm:items-center justify-between">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
