@@ -208,11 +208,12 @@ Deno.serve(async (req) => {
     try {
       sap = await loginSap(creds, companyDb);
 
-      for (const exp of todo) {
+      const processExpense = async (exp: any) => {
         const endpoint = exp.doc_type === "sales" ? "Orders" : "PurchaseOrders";
         const docEntry = Number(exp.sap_doc_entry);
         entry.checked++;
         try {
+
           const getRes = await fetch(`${sap.baseUrl}/${endpoint}(${docEntry})?$select=AttachmentEntry,DocNum`, {
             headers: { Cookie: sap.cookies },
           });
