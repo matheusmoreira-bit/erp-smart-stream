@@ -307,6 +307,8 @@ export default function AuditCrossFiscal() {
         onConfirm={handleConfirm}
         onIgnore={handleIgnore}
       />
+      </>)}
+
     </div>
   );
 }
