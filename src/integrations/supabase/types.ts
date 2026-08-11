@@ -367,6 +367,63 @@ export type Database = {
         }
         Relationships: []
       }
+      api_keys: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          is_legacy: boolean
+          key_hash: string
+          key_prefix: string
+          last_used_at: string | null
+          name: string
+          notes: string | null
+          revoke_reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          service: string
+          updated_at: string
+          use_count: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_legacy?: boolean
+          key_hash: string
+          key_prefix: string
+          last_used_at?: string | null
+          name: string
+          notes?: string | null
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          service: string
+          updated_at?: string
+          use_count?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_legacy?: boolean
+          key_hash?: string
+          key_prefix?: string
+          last_used_at?: string | null
+          name?: string
+          notes?: string | null
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          service?: string
+          updated_at?: string
+          use_count?: number
+        }
+        Relationships: []
+      }
       approval_action_tokens: {
         Row: {
           approver_email: string
