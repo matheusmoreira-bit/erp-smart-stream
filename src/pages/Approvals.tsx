@@ -2089,6 +2089,44 @@ export default function ApprovalsPage() {
   // segmentação). Carregar no mount custava centenas de regras + níveis.
   const { rules } = useApprovalRules({ backfill: false, enabled: !!selectedDoc });
 
+  // Nome da regra de alçada aplicada a cada despesa interna (consulta leve:
+  // só id + nome das regras referenciadas pelos documentos em tela).
+  const [ruleNameById, setRuleNameById] = useState<Record<string, string>>({});
+  const ruleIdsKey = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (expenses || [])
+            .map((e) => (e as { approval_rule_id?: string | null }).approval_rule_id || "")
+            .filter(Boolean),
+        ),
+      )
+        .sort()
+        .join(","),
+    [expenses],
+  );
+  useEffect(() => {
+    const ids = ruleIdsKey ? ruleIdsKey.split(",") : [];
+    const missing = ids.filter((id) => !ruleNameById[id]);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("approval_rules")
+        .select("id, name")
+        .in("id", missing);
+      if (cancelled || !data) return;
+      setRuleNameById((prev) => {
+        const next = { ...prev };
+        for (const r of data as Array<{ id: string; name: string }>) next[r.id] = r.name;
+        return next;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ruleIdsKey, ruleNameById]);
+
 
   // Merge SAP approvals with internal pending expenses.
   // Os aprovadores do nível atual já vêm resolvidos pelo servidor
@@ -2099,7 +2137,10 @@ export default function ApprovalsPage() {
       (expenses || [])
         .filter((e) => e.status === "pendente_aprovacao")
         .map((e) => {
-          const doc = mapInternalExpense(e);
+          const doc = mapInternalExpense(
+            e,
+            ruleNameById[(e as { approval_rule_id?: string | null }).approval_rule_id || ""] || null,
+          );
           const current = ((e as { level_approvers?: Array<{ name: string; email: string }> })
             .level_approvers) || [];
           if (current.length > 0) {
