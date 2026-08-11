@@ -1330,6 +1330,295 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_pay_config: {
+        Row: {
+          approval_thresholds: Json
+          bank_change_window_days: number
+          company_db: string
+          created_at: string
+          enabled: boolean
+          fornecedor_risco: Json
+          run_agent_on: Database["public"]["Enums"]["audit_pay_agent_mode"]
+          tolerance_pct_baixa: number
+          tolerance_pct_media: number
+          updated_at: string
+        }
+        Insert: {
+          approval_thresholds?: Json
+          bank_change_window_days?: number
+          company_db: string
+          created_at?: string
+          enabled?: boolean
+          fornecedor_risco?: Json
+          run_agent_on?: Database["public"]["Enums"]["audit_pay_agent_mode"]
+          tolerance_pct_baixa?: number
+          tolerance_pct_media?: number
+          updated_at?: string
+        }
+        Update: {
+          approval_thresholds?: Json
+          bank_change_window_days?: number
+          company_db?: string
+          created_at?: string
+          enabled?: boolean
+          fornecedor_risco?: Json
+          run_agent_on?: Database["public"]["Enums"]["audit_pay_agent_mode"]
+          tolerance_pct_baixa?: number
+          tolerance_pct_media?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      audit_pay_finding: {
+        Row: {
+          audit_result_id: string
+          company_db: string
+          created_at: string
+          delta: number | null
+          explanation: string | null
+          field_name: string | null
+          finding_type: Database["public"]["Enums"]["audit_pay_finding_type"]
+          id: string
+          severity: Database["public"]["Enums"]["audit_pay_severity"]
+          value_after: Json | null
+          value_before: Json | null
+        }
+        Insert: {
+          audit_result_id: string
+          company_db: string
+          created_at?: string
+          delta?: number | null
+          explanation?: string | null
+          field_name?: string | null
+          finding_type: Database["public"]["Enums"]["audit_pay_finding_type"]
+          id?: string
+          severity?: Database["public"]["Enums"]["audit_pay_severity"]
+          value_after?: Json | null
+          value_before?: Json | null
+        }
+        Update: {
+          audit_result_id?: string
+          company_db?: string
+          created_at?: string
+          delta?: number | null
+          explanation?: string | null
+          field_name?: string | null
+          finding_type?: Database["public"]["Enums"]["audit_pay_finding_type"]
+          id?: string
+          severity?: Database["public"]["Enums"]["audit_pay_severity"]
+          value_after?: Json | null
+          value_before?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_pay_finding_audit_result_id_fkey"
+            columns: ["audit_result_id"]
+            isOneToOne: false
+            referencedRelation: "audit_pay_result"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_pay_fraud_signal: {
+        Row: {
+          company_db: string
+          confidence: number
+          created_at: string
+          detected_at: string
+          entity_ref: string
+          entity_type: Database["public"]["Enums"]["audit_pay_entity_type"]
+          id: string
+          narrative: string | null
+          period_end: string | null
+          period_start: string | null
+          related_audit_result_ids: string[]
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: Database["public"]["Enums"]["audit_pay_severity"]
+          signal_type: Database["public"]["Enums"]["audit_pay_signal_type"]
+          status: Database["public"]["Enums"]["audit_pay_signal_status"]
+          updated_at: string
+        }
+        Insert: {
+          company_db: string
+          confidence?: number
+          created_at?: string
+          detected_at?: string
+          entity_ref: string
+          entity_type: Database["public"]["Enums"]["audit_pay_entity_type"]
+          id?: string
+          narrative?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          related_audit_result_ids?: string[]
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: Database["public"]["Enums"]["audit_pay_severity"]
+          signal_type: Database["public"]["Enums"]["audit_pay_signal_type"]
+          status?: Database["public"]["Enums"]["audit_pay_signal_status"]
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string
+          confidence?: number
+          created_at?: string
+          detected_at?: string
+          entity_ref?: string
+          entity_type?: Database["public"]["Enums"]["audit_pay_entity_type"]
+          id?: string
+          narrative?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          related_audit_result_ids?: string[]
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: Database["public"]["Enums"]["audit_pay_severity"]
+          signal_type?: Database["public"]["Enums"]["audit_pay_signal_type"]
+          status?: Database["public"]["Enums"]["audit_pay_signal_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      audit_pay_queue: {
+        Row: {
+          attempts: number
+          baseline_source: Database["public"]["Enums"]["audit_pay_baseline_source"]
+          company_db: string
+          created_at: string
+          document_ref: string
+          document_type: Database["public"]["Enums"]["audit_pay_doc_type"]
+          enqueued_at: string
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          priority: number
+          started_at: string | null
+          status: Database["public"]["Enums"]["audit_pay_queue_status"]
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          baseline_source?: Database["public"]["Enums"]["audit_pay_baseline_source"]
+          company_db: string
+          created_at?: string
+          document_ref: string
+          document_type?: Database["public"]["Enums"]["audit_pay_doc_type"]
+          enqueued_at?: string
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          priority?: number
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["audit_pay_queue_status"]
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          baseline_source?: Database["public"]["Enums"]["audit_pay_baseline_source"]
+          company_db?: string
+          created_at?: string
+          document_ref?: string
+          document_type?: Database["public"]["Enums"]["audit_pay_doc_type"]
+          enqueued_at?: string
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          priority?: number
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["audit_pay_queue_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      audit_pay_result: {
+        Row: {
+          audited_at: string
+          baseline_snapshot: Json
+          baseline_source: Database["public"]["Enums"]["audit_pay_baseline_source"]
+          centro_custo: string | null
+          company_db: string
+          created_at: string
+          desvio_valor_abs: number | null
+          desvio_valor_pct: number | null
+          document_ref: string
+          document_type: Database["public"]["Enums"]["audit_pay_doc_type"]
+          fornecedor_code: string | null
+          fornecedor_name: string | null
+          has_findings: boolean
+          id: string
+          overall_severity: Database["public"]["Enums"]["audit_pay_severity"]
+          projeto: string | null
+          queue_id: string | null
+          risk_score: number
+          settlement_snapshot: Json
+          solicitante: string | null
+          updated_at: string
+          valor_baseline: number | null
+          valor_pago: number | null
+        }
+        Insert: {
+          audited_at?: string
+          baseline_snapshot?: Json
+          baseline_source?: Database["public"]["Enums"]["audit_pay_baseline_source"]
+          centro_custo?: string | null
+          company_db: string
+          created_at?: string
+          desvio_valor_abs?: number | null
+          desvio_valor_pct?: number | null
+          document_ref: string
+          document_type: Database["public"]["Enums"]["audit_pay_doc_type"]
+          fornecedor_code?: string | null
+          fornecedor_name?: string | null
+          has_findings?: boolean
+          id?: string
+          overall_severity?: Database["public"]["Enums"]["audit_pay_severity"]
+          projeto?: string | null
+          queue_id?: string | null
+          risk_score?: number
+          settlement_snapshot?: Json
+          solicitante?: string | null
+          updated_at?: string
+          valor_baseline?: number | null
+          valor_pago?: number | null
+        }
+        Update: {
+          audited_at?: string
+          baseline_snapshot?: Json
+          baseline_source?: Database["public"]["Enums"]["audit_pay_baseline_source"]
+          centro_custo?: string | null
+          company_db?: string
+          created_at?: string
+          desvio_valor_abs?: number | null
+          desvio_valor_pct?: number | null
+          document_ref?: string
+          document_type?: Database["public"]["Enums"]["audit_pay_doc_type"]
+          fornecedor_code?: string | null
+          fornecedor_name?: string | null
+          has_findings?: boolean
+          id?: string
+          overall_severity?: Database["public"]["Enums"]["audit_pay_severity"]
+          projeto?: string | null
+          queue_id?: string | null
+          risk_score?: number
+          settlement_snapshot?: Json
+          solicitante?: string | null
+          updated_at?: string
+          valor_baseline?: number | null
+          valor_pago?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_pay_result_queue_id_fkey"
+            columns: ["queue_id"]
+            isOneToOne: false
+            referencedRelation: "audit_pay_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_trail: {
         Row: {
           actor_email: string | null
@@ -8291,6 +8580,54 @@ export type Database = {
         | "missing_payment"
       audit_console_run_status: "pending" | "running" | "completed" | "failed"
       audit_console_severity: "low" | "medium" | "high" | "critical"
+      audit_pay_agent_mode: "every_finding" | "batch_daily"
+      audit_pay_baseline_source: "erp_flow_approval" | "sap_purchase_order"
+      audit_pay_doc_type:
+        | "ap_invoice"
+        | "outgoing_payment"
+        | "purchase_order"
+        | "expense_flow"
+      audit_pay_entity_type:
+        | "fornecedor"
+        | "solicitante"
+        | "projeto"
+        | "centro_custo"
+        | "par_solicitante_aprovador"
+      audit_pay_finding_type:
+        | "desvio_valor"
+        | "troca_fornecedor"
+        | "troca_dados_bancarios"
+        | "alteracao_itens"
+        | "troca_centro_custo"
+        | "troca_projeto"
+        | "divergencia_solicitante"
+        | "alteracao_pos_aprovacao"
+        | "pagamento_sem_documento"
+        | "pagamento_duplicado"
+        | "pago_acima_aprovado"
+      audit_pay_queue_status:
+        | "pending"
+        | "processing"
+        | "done"
+        | "error"
+        | "skipped"
+      audit_pay_severity: "conforme" | "baixa" | "media" | "alta" | "critica"
+      audit_pay_signal_status:
+        | "aberto"
+        | "em_analise"
+        | "confirmado_erro"
+        | "confirmado_fraude"
+        | "descartado"
+      audit_pay_signal_type:
+        | "reincidencia"
+        | "fracionamento"
+        | "alteracao_pos_aprovacao"
+        | "fornecedor_novo_alto_valor"
+        | "mudanca_bancaria_pre_pagamento"
+        | "duplicidade"
+        | "distribuicao_temporal_anomala"
+        | "valores_redondos"
+        | "conluio_solicitante_aprovador"
       expense_status:
         | "rascunho"
         | "pendente_aprovacao"
@@ -8460,6 +8797,60 @@ export const Constants = {
       ],
       audit_console_run_status: ["pending", "running", "completed", "failed"],
       audit_console_severity: ["low", "medium", "high", "critical"],
+      audit_pay_agent_mode: ["every_finding", "batch_daily"],
+      audit_pay_baseline_source: ["erp_flow_approval", "sap_purchase_order"],
+      audit_pay_doc_type: [
+        "ap_invoice",
+        "outgoing_payment",
+        "purchase_order",
+        "expense_flow",
+      ],
+      audit_pay_entity_type: [
+        "fornecedor",
+        "solicitante",
+        "projeto",
+        "centro_custo",
+        "par_solicitante_aprovador",
+      ],
+      audit_pay_finding_type: [
+        "desvio_valor",
+        "troca_fornecedor",
+        "troca_dados_bancarios",
+        "alteracao_itens",
+        "troca_centro_custo",
+        "troca_projeto",
+        "divergencia_solicitante",
+        "alteracao_pos_aprovacao",
+        "pagamento_sem_documento",
+        "pagamento_duplicado",
+        "pago_acima_aprovado",
+      ],
+      audit_pay_queue_status: [
+        "pending",
+        "processing",
+        "done",
+        "error",
+        "skipped",
+      ],
+      audit_pay_severity: ["conforme", "baixa", "media", "alta", "critica"],
+      audit_pay_signal_status: [
+        "aberto",
+        "em_analise",
+        "confirmado_erro",
+        "confirmado_fraude",
+        "descartado",
+      ],
+      audit_pay_signal_type: [
+        "reincidencia",
+        "fracionamento",
+        "alteracao_pos_aprovacao",
+        "fornecedor_novo_alto_valor",
+        "mudanca_bancaria_pre_pagamento",
+        "duplicidade",
+        "distribuicao_temporal_anomala",
+        "valores_redondos",
+        "conluio_solicitante_aprovador",
+      ],
       expense_status: [
         "rascunho",
         "pendente_aprovacao",
