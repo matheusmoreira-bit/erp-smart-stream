@@ -172,7 +172,7 @@ function applyRules(
     orders: SapDoc[];
     grpos: SapDoc[];
     invoices: SapDoc[];
-    payments: Array<{ DocEntry: number; DocDate: string; CardCode: string; DocTotal: number; PaymentInvoices?: Array<{ DocEntry: number }> }>;
+    payments: Array<{ DocEntry: number; DocDate: string; CardCode: string; PaymentInvoices?: Array<{ DocEntry: number }> }>;
   },
 ): DivergenceInsert[] {
   const out: DivergenceInsert[] = [];
@@ -448,9 +448,9 @@ async function processRun(runId: string, companyDB: string, dateFrom: string, da
     const invoices = await sapFetchAll<SapDoc>(creds.baseUrl, cookie, "PurchaseInvoices", filter, docSelect);
 
     await updateRun(runId, { current_step: "Buscando Pagamentos", progress_pct: 70 });
-    const payments = await sapFetchAll<{ DocEntry: number; DocDate: string; CardCode: string; DocTotal: number; PaymentInvoices: Array<{ DocEntry: number }> }>(
+    const payments = await sapFetchAll<{ DocEntry: number; DocDate: string; CardCode: string; PaymentInvoices: Array<{ DocEntry: number }> }>(
       creds.baseUrl, cookie, "VendorPayments", filter,
-      "DocEntry,DocDate,CardCode,DocTotal,PaymentInvoices",
+      "DocEntry,DocDate,CardCode,PaymentInvoices",
     );
 
     const totalDocs = orders.length + grpos.length + invoices.length + payments.length;
