@@ -4,6 +4,7 @@ import { authFetch } from "@/lib/auth-fetch";
 import { createSupplier, type Supplier } from "@/hooks/useSuppliers";
 import type { SapSession } from "@/lib/sap-client";
 import { normalizeWords } from "@/lib/text-normalize";
+import { normalizeTaxKey, isValidBrTaxId } from "@/lib/tax-id";
 
 export interface PagCorpCandidate {
   /** Stable client-side id (tx id + index) */
@@ -56,18 +57,22 @@ export interface PagCorpSupplierLink {
   resolution: "imported" | "linked" | "ignored";
 }
 
+/**
+ * Chave canônica de documento. Preserva letras: o CNPJ pode ser alfanumérico
+ * (nova regra da Receita Federal, refletida no `aiAnalysis` do PagCorp).
+ */
 export function cleanDigits(s?: string | null): string {
-  return (s || "").replace(/\D/g, "");
+  return normalizeTaxKey(s);
 }
 
 /**
- * Valid Brazilian tax id: CPF (11 digits) or CNPJ (14 digits).
- * Only suppliers with a valid local tax id can be imported into SAP.
+ * Documento local válido: CPF (11 dígitos) ou CNPJ (14 caracteres alfanuméricos).
+ * Só fornecedores com documento válido podem ser importados para o SAP.
  */
 export function hasValidBrazilianTaxId(s?: string | null): boolean {
-  const d = cleanDigits(s);
-  return d.length === 11 || d.length === 14;
+  return isValidBrTaxId(s);
 }
+
 
 export function normalizeName(s?: string | null): string {
   return normalizeWords(s);
@@ -211,8 +216,12 @@ export function useImportPagCorpSuppliers(
       const result = await res.json();
       const items: any[] = result.items || [];
 
+      // Transações com comprovante OU com estabelecimento já identificado pela
+      // análise inteligente do PagCorp (`aiAnalysis`).
       const withReceipts = items.filter(
-        (t) => Array.isArray(t.receipts) && t.receipts.length > 0,
+        (t) =>
+          (Array.isArray(t.receipts) && t.receipts.length > 0) ||
+          !!(t.aiAnalysis?.companyName || t.aiAnalysis?.companyDocument),
       );
 
       const results: PagCorpCandidate[] = [];
@@ -229,21 +238,31 @@ export function useImportPagCorpSuppliers(
         const txAmount = Number(tx.amount || tx.value || tx.expenseValue || 0);
 
         try {
-          const { data, error: fnErr } = await supabase.functions.invoke(
-            "supplier-ai-extract",
-            {
-              body: {
-                description: txDesc,
-                amount: txAmount,
-                receipts: tx.receipts || [],
-                attachments: (tx.attachments || []).slice(0, 5),
-                hint: tx.accountName || tx.accountAlias,
-              },
-            },
-          );
-          if (fnErr) throw fnErr;
+          // Caminho rápido: o PagCorp já devolve razão social e CNPJ do
+          // estabelecimento — dispensa a extração por IA.
+          const aiName = String(tx.aiAnalysis?.companyName || "").trim();
+          const aiDoc = normalizeTaxKey(tx.aiAnalysis?.companyDocument);
+          let extracted: any = null;
 
-          const extracted = (data as any)?.supplier;
+          if (aiName) {
+            extracted = { card_name: aiName, federal_tax_id: aiDoc || null };
+          } else {
+            const { data, error: fnErr } = await supabase.functions.invoke(
+              "supplier-ai-extract",
+              {
+                body: {
+                  description: txDesc,
+                  amount: txAmount,
+                  receipts: tx.receipts || [],
+                  attachments: (tx.attachments || []).slice(0, 5),
+                  hint: tx.accountName || tx.accountAlias,
+                },
+              },
+            );
+            if (fnErr) throw fnErr;
+            extracted = (data as any)?.supplier;
+          }
+
           if (!extracted?.card_name) {
             results.push({
               key: `${txId}-${i}`,

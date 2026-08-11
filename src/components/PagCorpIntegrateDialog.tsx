@@ -17,6 +17,8 @@ import { SupplierFormModal, type SupplierFormPrefill } from "@/components/Suppli
 import type { PagCorpTransaction } from "@/hooks/usePagCorp";
 import { supabase } from "@/integrations/supabase/client";
 import { findSupplierByTaxId, type Supplier } from "@/hooks/useSuppliers";
+import { normalizeTaxKey, formatTaxId } from "@/lib/tax-id";
+
 import { RegistrationRequestModal } from "@/components/RegistrationRequestModal";
 import { usePagCorpCardMapping } from "@/hooks/usePagCorpCardMapping";
 import { hashUrls, withAiCache } from "@/lib/ai-file-cache";
@@ -157,11 +159,40 @@ export function PagCorpIntegrateDialog({
     return /^[A-Z]{3}$/.test(c) ? c : "BRL";
   }, [transaction?.currency]);
 
-  const runAi = useCallback(async (tx: PagCorpTransaction) => {
+  const runAi = useCallback(async (tx: PagCorpTransaction, opts: { forceOcr?: boolean } = {}) => {
     if (!companyDb) return;
     setAiBusy(true);
     setAiNotice(null);
     try {
+      // 1) Caminho rápido: a própria API do PagCorp já devolve o estabelecimento
+      //    identificado no comprovante (objeto `aiAnalysis`). Quando presente,
+      //    evita uma chamada de OCR/IA.
+      const merchantTax = normalizeTaxKey(tx.merchantTaxId);
+      const merchantName = (tx.merchantName || "").trim();
+      if (!opts.forceOcr && (merchantTax || merchantName)) {
+        if (merchantTax) {
+          const hit = await findSupplierByTaxId(merchantTax, companyDb);
+          if (hit?.card_code) {
+            setSupplier({
+              code: hit.card_code,
+              name: hit.card_name,
+              extra: hit.federal_tax_id || undefined,
+            });
+            toast.success("Fornecedor identificado pelo PagCorp", {
+              description: `${hit.card_name}${merchantTax ? ` • ${formatTaxId(merchantTax)}` : ""}`,
+            });
+            return;
+          }
+        }
+        if (merchantName) {
+          setAiResult({ card_name: merchantName, federal_tax_id: merchantTax || undefined });
+          setAiNotice(
+            `Estabelecimento informado pelo PagCorp: ${merchantName}${merchantTax ? ` (${formatTaxId(merchantTax)})` : ""}. Não localizado no cadastro — selecione ou solicite o cadastro.`,
+          );
+          return;
+        }
+      }
+
       const urls: string[] = [];
       for (const r of (tx.receipts || []) as any[]) {
         if (Array.isArray(r?.files)) {
@@ -593,7 +624,7 @@ export function PagCorpIntegrateDialog({
                     size="sm"
                     variant="ghost"
                     className="h-6 px-2 text-xs gap-1"
-                    onClick={() => transaction && runAi(transaction)}
+                    onClick={() => transaction && runAi(transaction, { forceOcr: true })}
                     disabled={aiBusy}
                   >
                     <Sparkles className="w-3 h-3" />
