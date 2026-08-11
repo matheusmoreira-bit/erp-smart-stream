@@ -774,6 +774,10 @@ Deno.serve(async (req) => {
           ? aiResult.document_date
           : expense.eventDate || expense.date || endDate;
 
+        // Vencimento é SEMPRE a data da transação no cartão, mesmo quando a
+        // IA identifica outra data de emissão na nota.
+        const finalDueDate = expense.eventDate || expense.date || finalDocDate;
+
         // ── Validate supplier and item in SAP ──
         const employeeName = expense.employeeName || expense.userName || "";
 
