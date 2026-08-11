@@ -27,6 +27,8 @@ import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { useSap } from "@/contexts/SapContext";
 import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
+import { useMyCapabilities } from "@/hooks/useMyCapabilities";
+
 import { canViewLotusCostCenters, filterLotusCostCenters } from "@/lib/cost-center-visibility";
 import {
   validateAttachments,
