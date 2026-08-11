@@ -6,7 +6,7 @@ import { useAuditRun, useAuditInsights } from "@/hooks/useAuditConsole";
 import { AuditDivergencesTable } from "./AuditDivergencesTable";
 import { RunStatusBadge, SeverityBadge } from "./badges";
 
-export function AuditRunDetail() {
+export function AuditRunDetail(props: { runId?: string } = {}) {
   const { runId: paramRunId } = useParams<{ runId: string }>();
   const runId = props.runId ?? paramRunId;
   const { data: run, isLoading } = useAuditRun(runId);

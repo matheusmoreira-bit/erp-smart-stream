@@ -22,7 +22,7 @@ function Row({ label, before, after, diverged }: { label: string; before: unknow
   );
 }
 
-export function PayAuditDetail() {
+export function PayAuditDetail(props: { resultId?: string } = {}) {
   const { resultId: paramResultId } = useParams();
   const resultId = props.resultId ?? paramResultId;
   const { data: result, isLoading } = usePayResult(resultId);
