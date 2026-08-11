@@ -656,7 +656,9 @@ export default function FiscalAudit({ embedded = false }: { embedded?: boolean }
                       <th className="px-4 py-3 text-left">Vencimento</th>
                       <th className="px-4 py-3 text-left">Parceiro</th>
                       <th className="px-4 py-3 text-right">Valor</th>
+                      <th className="px-4 py-3 text-right">Saldo em aberto</th>
                       <th className="px-4 py-3 text-right">Dias em aberto</th>
+
                       <th className="px-4 py-3 text-left">Usuário</th>
                       {consolidated && <th className="px-4 py-3 text-left">Empresa</th>}
                     </tr>
