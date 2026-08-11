@@ -161,15 +161,54 @@ async function identifyCallerCached(req: Request, admin: SupabaseClient): Promis
   return value;
 }
 
+/**
+ * Regras de aprovação em que o caller aparece como aprovador (por e-mail ou
+ * nome). Usado para não depender da string gravada em `current_approver`, que
+ * pode divergir do nome real do usuário (ex.: grafia diferente na matriz).
+ */
+async function approverRuleIds(
+  admin: SupabaseClient,
+  aliases: Set<string>,
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (aliases.size === 0) return out;
+  try {
+    const { data } = await admin
+      .from("approval_rule_levels")
+      .select("rule_id, approver_email, approver_name");
+    for (const r of (data || []) as any[]) {
+      for (const alias of aliases) {
+        if (
+          identityMatches(r.approver_email, alias) ||
+          personMatches(r.approver_email, alias) ||
+          identityMatches(r.approver_name, alias) ||
+          personMatches(r.approver_name, alias)
+        ) {
+          out.add(String(r.rule_id));
+          break;
+        }
+      }
+    }
+  } catch { /* ignore */ }
+  return out;
+}
+
 /** Uma despesa pertence ao caller quando ele é solicitante, criador ou aprovador. */
 function ownsExpense(
   row: Record<string, unknown>,
   aliases: Set<string>,
   directorateBranch: string | null = null,
+  approverRules: Set<string> | null = null,
 ): boolean {
   // Grupo "Usuário Administrativo": tudo da própria diretoria (1.6.x quando o
   // IdP informa 1.6.1.2). Sem CC no IdP, cai na regra de dono abaixo.
   if (costCenterInBranch(row.cost_center, directorateBranch)) return true;
+  // Aprovador pela MATRIZ (independe da grafia gravada em current_approver).
+  if (
+    approverRules &&
+    row.approval_rule_id &&
+    approverRules.has(String(row.approval_rule_id))
+  ) return true;
   const candidates = [
     row.requester_email,
     row.requester_name,
@@ -187,6 +226,7 @@ function ownsExpense(
   }
   return false;
 }
+
 
 
 /**
