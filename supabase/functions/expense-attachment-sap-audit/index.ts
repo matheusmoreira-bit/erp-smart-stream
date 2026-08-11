@@ -208,14 +208,15 @@ Deno.serve(async (req) => {
     try {
       sap = await loginSap(creds, companyDb);
 
+      const sapConn = sap;
       const processExpense = async (exp: any) => {
         const endpoint = exp.doc_type === "sales" ? "Orders" : "PurchaseOrders";
         const docEntry = Number(exp.sap_doc_entry);
         entry.checked++;
         try {
 
-          const getRes = await fetch(`${sap.baseUrl}/${endpoint}(${docEntry})?$select=AttachmentEntry,DocNum`, {
-            headers: { Cookie: sap.cookies },
+          const getRes = await fetch(`${sapConn.baseUrl}/${endpoint}(${docEntry})?$select=AttachmentEntry,DocNum`, {
+            headers: { Cookie: sapConn.cookies },
           });
           const getBody = await getRes.json().catch(() => ({}));
           if (!getRes.ok) {
@@ -234,7 +235,7 @@ Deno.serve(async (req) => {
 
             // O documento tem anexo, mas pode estar INCOMPLETO (ex.: apenas o
             // comprovante de aprovação subiu e o arquivo do usuário ficou de fora).
-            const linesRes = await fetch(`${sap.baseUrl}/Attachments2(${existingEntry})`, { headers: { Cookie: sap.cookies } });
+            const linesRes = await fetch(`${sapConn.baseUrl}/Attachments2(${existingEntry})`, { headers: { Cookie: sapConn.cookies } });
             const linesBody = await linesRes.json().catch(() => ({}));
             if (!linesRes.ok) {
               entry.errors.push(`Attachments2(${existingEntry}): consulta falhou [${linesRes.status}]`);
@@ -271,18 +272,18 @@ Deno.serve(async (req) => {
 
             const addForm = new FormData();
             for (const f of files) addForm.append("files", f.blob, sanitizeSapFileName(f.name));
-            const addRes = await fetch(`${sap.baseUrl}/Attachments2(${existingEntry})`, {
+            const addRes = await fetch(`${sapConn.baseUrl}/Attachments2(${existingEntry})`, {
               method: "PATCH",
-              headers: { Cookie: sap.cookies },
+              headers: { Cookie: sapConn.cookies },
               body: addForm,
             });
             if (!addRes.ok && addRes.status !== 204) {
               const t = await addRes.text().catch(() => "");
               throw new Error(`Complemento de anexo em Attachments2(${existingEntry}) falhou [${addRes.status}]: ${t.slice(0, 200)}`);
             }
-            const afterRes = await fetch(`${sap.baseUrl}/Attachments2(${existingEntry})`, { headers: { Cookie: sap.cookies } });
+            const afterRes = await fetch(`${sapConn.baseUrl}/Attachments2(${existingEntry})`, { headers: { Cookie: sapConn.cookies } });
             const afterBody = await afterRes.json().catch(() => ({}));
-            await markCopyToTarget(sap.baseUrl, sap.cookies, existingEntry, afterBody, files.length);
+            await markCopyToTarget(sapConn.baseUrl, sapConn.cookies, existingEntry, afterBody, files.length);
 
             await admin.from("expense_approval_log").insert({
               expense_id: exp.id,
@@ -316,16 +317,16 @@ Deno.serve(async (req) => {
 
           const form = new FormData();
           for (const f of files) form.append("files", f.blob, sanitizeSapFileName(f.name));
-          const res = await fetch(`${sap.baseUrl}/Attachments2`, { method: "POST", headers: { Cookie: sap.cookies }, body: form });
+          const res = await fetch(`${sapConn.baseUrl}/Attachments2`, { method: "POST", headers: { Cookie: sapConn.cookies }, body: form });
           const resBody = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(`Attachments2 [${res.status}]: ${resBody?.error?.message?.value || ""}`);
           const absoluteEntry = Number(resBody?.AbsoluteEntry);
           if (!absoluteEntry) throw new Error("SAP não retornou AbsoluteEntry");
-          await markCopyToTarget(sap.baseUrl, sap.cookies, absoluteEntry, resBody, files.length);
+          await markCopyToTarget(sapConn.baseUrl, sapConn.cookies, absoluteEntry, resBody, files.length);
 
-          const patchRes = await fetch(`${sap.baseUrl}/${endpoint}(${docEntry})`, {
+          const patchRes = await fetch(`${sapConn.baseUrl}/${endpoint}(${docEntry})`, {
             method: "PATCH",
-            headers: { Cookie: sap.cookies, "Content-Type": "application/json" },
+            headers: { Cookie: sapConn.cookies, "Content-Type": "application/json" },
             body: JSON.stringify({ AttachmentEntry: absoluteEntry }),
           });
           if (!patchRes.ok && patchRes.status !== 204) {
