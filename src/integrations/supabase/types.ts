@@ -4246,12 +4246,22 @@ export type Database = {
           cost_center: string | null
           created_at: string
           data_emissao: string | null
+          divergence_amount: number | null
+          divergence_override_at: string | null
+          divergence_override_by: string | null
+          divergence_override_reason: string | null
+          erp_invoice_checked_at: string | null
+          erp_invoice_doc_entry: string | null
+          erp_invoice_posted: boolean
           expense_id: string | null
           id: string
           impostos: Json
           itens: Json
           last_error: string | null
           last_poll_at: string | null
+          match_candidates: Json | null
+          match_resolved_at: string | null
+          match_resolved_by: string | null
           nome_fornecedor: string | null
           numero_nf: string | null
           pdf_storage_path: string | null
@@ -4278,12 +4288,22 @@ export type Database = {
           cost_center?: string | null
           created_at?: string
           data_emissao?: string | null
+          divergence_amount?: number | null
+          divergence_override_at?: string | null
+          divergence_override_by?: string | null
+          divergence_override_reason?: string | null
+          erp_invoice_checked_at?: string | null
+          erp_invoice_doc_entry?: string | null
+          erp_invoice_posted?: boolean
           expense_id?: string | null
           id?: string
           impostos?: Json
           itens?: Json
           last_error?: string | null
           last_poll_at?: string | null
+          match_candidates?: Json | null
+          match_resolved_at?: string | null
+          match_resolved_by?: string | null
           nome_fornecedor?: string | null
           numero_nf?: string | null
           pdf_storage_path?: string | null
@@ -4310,12 +4330,22 @@ export type Database = {
           cost_center?: string | null
           created_at?: string
           data_emissao?: string | null
+          divergence_amount?: number | null
+          divergence_override_at?: string | null
+          divergence_override_by?: string | null
+          divergence_override_reason?: string | null
+          erp_invoice_checked_at?: string | null
+          erp_invoice_doc_entry?: string | null
+          erp_invoice_posted?: boolean
           expense_id?: string | null
           id?: string
           impostos?: Json
           itens?: Json
           last_error?: string | null
           last_poll_at?: string | null
+          match_candidates?: Json | null
+          match_resolved_at?: string | null
+          match_resolved_by?: string | null
           nome_fornecedor?: string | null
           numero_nf?: string | null
           pdf_storage_path?: string | null
@@ -4407,6 +4437,71 @@ export type Database = {
           value?: Json
         }
         Relationships: []
+      }
+      nf_entrada_write_queue: {
+        Row: {
+          attempts: number
+          company_db: string
+          created_at: string
+          erp_document_id: string | null
+          erp_document_type: string | null
+          erp_type: string
+          error_message: string | null
+          id: string
+          idempotency_key: string
+          import_id: string
+          operation: string
+          payload: Json
+          processed_at: string | null
+          requested_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          company_db: string
+          created_at?: string
+          erp_document_id?: string | null
+          erp_document_type?: string | null
+          erp_type?: string
+          error_message?: string | null
+          id?: string
+          idempotency_key: string
+          import_id: string
+          operation: string
+          payload?: Json
+          processed_at?: string | null
+          requested_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          company_db?: string
+          created_at?: string
+          erp_document_id?: string | null
+          erp_document_type?: string | null
+          erp_type?: string
+          error_message?: string | null
+          id?: string
+          idempotency_key?: string
+          import_id?: string
+          operation?: string
+          payload?: Json
+          processed_at?: string | null
+          requested_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nf_entrada_write_queue_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "nf_entrada_imports"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       nfse_email_log: {
         Row: {

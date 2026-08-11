@@ -23,6 +23,8 @@ import {
 } from "@/hooks/useNfEntrada";
 import { PageTitle } from "@/components/PageTitle";
 import { EditNfEntradaDialog } from "@/components/EditNfEntradaDialog";
+import { NfEntradaProvisionDialog } from "@/components/NfEntradaProvisionDialog";
+
 import { copyDocLink, readDocParam, setDocParam } from "@/lib/doc-deep-link";
 import { setPendingPurchaseFiles } from "@/lib/pending-purchase-files";
 
@@ -125,6 +127,8 @@ export default function NfEntrada() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editItem, setEditItem] = useState<NfEntradaImport | null>(null);
+  const [provisionItem, setProvisionItem] = useState<NfEntradaImport | null>(null);
+
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const filtered = useMemo(() => {
@@ -257,27 +261,15 @@ export default function NfEntrada() {
   }
 
 
-  async function handleCreateInvoiceDraft(it: NfEntradaImport) {
-    if (!confirm(
-      `Lançar esboço de NF de Entrada no SAP vinculado ao PC ${it.sap_matched_po_doc_entry}?`,
-    )) return;
-    setBusyId(it.id);
-    try {
-      const res = await createInvoiceDraft(it.id);
-      if (res?.alreadyExists) {
-        toast({ title: "Esboço já existente", description: `Draft ${res.draftId} já criado no SAP.` });
-      } else {
-        toast({
-          title: "Esboço de NF de Entrada criado",
-          description: `Draft ${res?.draftId} vinculado ao PC ${res?.poEntry}.`,
-        });
-      }
-    } catch (e) {
-      toast({ title: "Falha ao lançar esboço", description: (e as Error).message, variant: "destructive" });
-    } finally {
-      setBusyId(null);
-    }
+  /**
+   * Provisionar deixou de ser uma escrita direta e cega no ERP: agora abre a
+   * conferência (de-para nota x pedido, divergências) e a gravação vai para a
+   * fila idempotente do adapter.
+   */
+  function handleCreateInvoiceDraft(it: NfEntradaImport) {
+    setProvisionItem(it);
   }
+
 
   async function handleCancel(id: string) {
 
@@ -619,6 +611,13 @@ export default function NfEntrada() {
         onOpenChange={(o) => !o && setEditItem(null)}
         onSaved={refresh}
       />
+
+      <NfEntradaProvisionDialog
+        item={provisionItem}
+        onOpenChange={(o) => !o && setProvisionItem(null)}
+        onDone={refresh}
+      />
+
 
 
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
