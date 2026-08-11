@@ -200,14 +200,19 @@ export default function AuditCrossFiscal() {
           <Input type="date" value={fim} onChange={(e) => setFim(e.target.value)} />
         </div>
         <div className="flex gap-2">
-          <Button onClick={handleRun} disabled={running || !empresaId} className="flex-1">
-            {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
-            <span className="ml-1 hidden sm:inline">Executar</span>
-          </Button>
-          <Button variant="outline" size="icon" onClick={refresh} aria-label="Atualizar">
-            <RefreshCw className="w-4 h-4" />
-          </Button>
+          {view === "pagamentos" && (
+            <>
+              <Button onClick={handleRun} disabled={running || !empresaId} className="flex-1">
+                {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
+                <span className="ml-1 hidden sm:inline">Executar</span>
+              </Button>
+              <Button variant="outline" size="icon" onClick={refresh} aria-label="Atualizar">
+                <RefreshCw className="w-4 h-4" />
+              </Button>
+            </>
+          )}
         </div>
+
       </div>
 
       {!empresaId && (
