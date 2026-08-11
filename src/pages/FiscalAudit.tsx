@@ -215,7 +215,7 @@ export default function FiscalAudit({ embedded = false }: { embedded?: boolean }
       const fetchStart = cacheInfo?.fetchStart && cacheInfo.fetchStart < startDate ? cacheInfo.fetchStart : startDate;
       const fetchEnd = cacheInfo?.fetchEnd && cacheInfo.fetchEnd > endDate ? cacheInfo.fetchEnd : endDate;
 
-      const select = "DocEntry,DocNum,DocDate,DocDueDate,CardCode,CardName,DocTotal,DocCurrency,DocumentStatus,Cancelled,UserSign,CreationDate";
+      const select = "DocEntry,DocNum,DocDate,DocDueDate,CardCode,CardName,DocTotal,PaidToDate,DocCurrency,DocumentStatus,Cancelled,UserSign,CreationDate";
       const filter = `DocDate ge '${fetchStart}' and DocDate le '${fetchEnd}'`;
       const invoiceParams = { $select: select, $filter: filter, $orderby: "DocDate desc" };
 
