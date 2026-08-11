@@ -23,7 +23,8 @@ function Row({ label, before, after, diverged }: { label: string; before: unknow
 }
 
 export function PayAuditDetail() {
-  const { resultId } = useParams();
+  const { resultId: paramResultId } = useParams();
+  const resultId = props.resultId ?? paramResultId;
   const { data: result, isLoading } = usePayResult(resultId);
   const { data: findings } = usePayFindings(resultId);
   const { data: signals } = usePayFraudSignals();
@@ -41,7 +42,7 @@ export function PayAuditDetail() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <Link to="../results" relative="path" className="mb-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+          <Link to="/auditoria/geral/pay-results" className="mb-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-3.5 w-3.5" /> Resultados
           </Link>
           <h2 className="truncate text-2xl font-bold tracking-tight text-foreground">{result.document_ref}</h2>

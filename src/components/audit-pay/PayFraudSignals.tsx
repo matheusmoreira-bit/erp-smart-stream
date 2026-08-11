@@ -79,8 +79,7 @@ export function PayFraudSignals() {
                   {(s.related_audit_result_ids ?? []).slice(0, 12).map((id) => (
                     <Link
                       key={id}
-                      to={`../results/${id}`}
-                      relative="path"
+                      to={`/auditoria/geral/pay-results/${id}`}
                       className="rounded border border-border bg-muted/40 px-2 py-0.5 font-mono text-[10px] text-muted-foreground hover:text-foreground"
                     >
                       {id.slice(0, 8)}

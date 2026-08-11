@@ -90,7 +90,7 @@ export function PayAuditResults() {
           <ul className="divide-y divide-border">
             {data.map((r) => (
               <li key={r.id}>
-                <Link to={`../results/${r.id}`} relative="path" className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/30">
+                <Link to={`/auditoria/geral/pay-results/${r.id}`} className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/30">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-xs text-muted-foreground">{r.document_ref}</span>

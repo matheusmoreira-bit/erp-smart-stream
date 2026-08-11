@@ -86,7 +86,7 @@ const isCancelled = (i: SapInvoice) => {
   return c === "tyes" || c === "y" || c === "yes" || c === "true";
 };
 
-export default function FiscalAudit() {
+export default function FiscalAudit({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
   const { session } = useSap();
   const { hasAccess, loading: permLoading } = useModuleAccess("fiscal_audit");
