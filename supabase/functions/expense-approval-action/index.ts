@@ -634,14 +634,25 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
 
   // Casa contra QUALQUER linha do nível atual (paralelo). Se houver override
   // (delegação), o nome/email do override toma precedência.
+  // O SOLICITANTE nunca é alvo válido: se ele consta no nível, a aprovação
+  // dele é escalada (os demais aprovadores do nível/próximo nível decidem).
+  const requesterIdName = ((exp as any).requester_name as string | null) || null;
+  const requesterIdEmail = ((exp as any).requester_email as string | null) || null;
+  const currentLevelRowsNoSelf = excludeRequesterLevels(
+    currentLevelRows as any,
+    requesterIdName,
+    requesterIdEmail,
+  );
   const designatedTargets: Array<{ name: string | null; email: string | null }> = segmentMode
-    ? pendingSegments.map((s) => ({ name: s.current_approver, email: s.current_approver_email }))
+    ? pendingSegments
+        .map((s) => ({ name: s.current_approver, email: s.current_approver_email }))
+        .filter((t) => !requesterMatchesApprover(requesterIdName, requesterIdEmail, t.name, t.email))
     : (overrideApprover
       ? [{
           name: overrideIsEmail ? null : overrideApprover,
           email: overrideIsEmail ? overrideApprover : null,
-        }]
-      : currentLevelRows.map((row) => ({ name: row.approver_name, email: row.approver_email })));
+        }].filter((t) => !requesterMatchesApprover(requesterIdName, requesterIdEmail, t.name, t.email))
+      : currentLevelRowsNoSelf.map((row) => ({ name: row.approver_name, email: row.approver_email })));
 
 
   let isMatch = !!callerIdentity && designatedTargets.some((t) =>
