@@ -63,6 +63,9 @@ export interface DivergenceFilters {
   limit?: number;
 }
 
+/** Tipos de divergência ignorados: o processo de GRPO (recebimento) não é utilizado. */
+export const IGNORED_DIVERGENCE_TYPES = ["missing_grpo", "missing_ap"] as const;
+
 export function useAuditDivergences(filters: DivergenceFilters = {}) {
   const { session } = useSap();
   const companyDB = session?.companyDB ?? "";
@@ -74,6 +77,7 @@ export function useAuditDivergences(filters: DivergenceFilters = {}) {
         .from("audit_console_divergences")
         .select("*")
         .eq("company_db", companyDB)
+        .not("divergence_type", "in", `(${IGNORED_DIVERGENCE_TYPES.join(",")})`)
         .order("created_at", { ascending: false })
         .limit(filters.limit ?? 200);
       if (filters.runId) q = q.eq("audit_run_id", filters.runId);
@@ -87,6 +91,7 @@ export function useAuditDivergences(filters: DivergenceFilters = {}) {
     },
   });
 }
+
 
 export function useAuditInsights(runId?: string, limit = 20) {
   const { session } = useSap();
@@ -184,7 +189,9 @@ export function useAuditDashboard() {
           .select("id,severity,divergence_type,is_fraud_flag,is_reviewed,created_at")
           .eq("company_db", companyDB)
           .gte("created_at", sinceIso)
+          .not("divergence_type", "in", `(${IGNORED_DIVERGENCE_TYPES.join(",")})`)
           .limit(2000),
+
       ]);
       if (runsRes.error) throw runsRes.error;
       if (divsRes.error) throw divsRes.error;
