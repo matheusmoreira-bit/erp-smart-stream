@@ -864,7 +864,7 @@ Deno.serve(async (req) => {
         const sapPayload: Record<string, unknown> = {
           CardCode: finalSupplierCode,
           DocDate: finalDocDate,
-          DocDueDate: finalDocDate,
+          DocDueDate: finalDueDate,
           TaxDate: finalDocDate,
           BPL_IDAssignedToInvoice: bplId || 1,
           U_FGR_RATEIO_CC: "N",
