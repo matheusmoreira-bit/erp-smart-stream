@@ -2141,8 +2141,13 @@ export default function ApprovalsPage() {
             e,
             ruleNameById[(e as { approval_rule_id?: string | null }).approval_rule_id || ""] || null,
           );
-          const current = ((e as { level_approvers?: Array<{ name: string; email: string }> })
-            .level_approvers) || [];
+          // O solicitante nunca conta como aprovador do nível — a aprovação
+          // dele é escalada para os demais aprovadores / próximo nível.
+          const current = excludeRequesterApprovers(
+            ((e as { level_approvers?: Array<{ name: string; email: string }> }).level_approvers) || [],
+            e.requester_name,
+            e.requester_email,
+          );
           if (current.length > 0) {
             if (!doc.approverEmail && current[0]?.email) doc.approverEmail = current[0].email;
             // Uma delegação explícita em `current_approver` tem precedência.
