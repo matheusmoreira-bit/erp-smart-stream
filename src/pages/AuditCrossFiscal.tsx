@@ -161,12 +161,20 @@ export default function AuditCrossFiscal() {
   return (
     <div className="p-4 sm:p-6 space-y-4">
       <div>
-        <h2 className="text-xl font-bold">Cruzamento Fiscal × Pagamentos</h2>
+        <h2 className="text-xl font-bold">Cruzamento Fiscal</h2>
         <p className="text-sm text-muted-foreground">
-          Conciliação automática de NFS-e × pagamento × lançamento no ERP. O Kanban mostra apenas as exceções;
-          o que casa com alta confiança é conciliado sozinho.
+          Duas visões: <strong>Nota × Pagamento</strong> (conciliação de baixas) e{" "}
+          <strong>Pedido × NF de Entrada × MasterTax</strong> (cobertura documental no ERP).
         </p>
       </div>
+
+      <Tabs value={view} onValueChange={(v) => setView(v as "pagamentos" | "documentos")}>
+        <TabsList>
+          <TabsTrigger value="documentos">PC × NF de Entrada × MasterTax</TabsTrigger>
+          <TabsTrigger value="pagamentos">Nota × Pagamento</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
 
       {/* Filtros de período */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
