@@ -188,7 +188,36 @@ Deno.serve(async (req) => {
             results.push({ import_id: row.id, queued: false, reason: "Esboço já existe no ERP" });
             continue;
           }
+
+          // Divergência de valor: bloqueia por padrão; só passa com justificativa
+          // explícita, que fica registrada na nota e no histórico (auditoria).
+          const valorPedido = Number((body.payload as any)?.valor_pedido ?? NaN);
+          if (Number.isFinite(valorPedido)) {
+            const div = divergence(Number(row.valor_total || 0), valorPedido);
+            if (div.bloqueante) {
+              if (!body.override_reason?.trim()) {
+                results.push({
+                  import_id: row.id,
+                  queued: false,
+                  reason: `Divergência de ${div.percentual}% (R$ ${div.diferenca}) entre nota e pedido — liberação justificada é obrigatória`,
+                });
+                continue;
+              }
+              await sb.from("nf_entrada_imports").update({
+                divergence_amount: div.diferenca,
+                divergence_override_at: new Date().toISOString(),
+                divergence_override_by: actor,
+                divergence_override_reason: body.override_reason.trim().slice(0, 500),
+              }).eq("id", row.id);
+              await log(sb, row.id, "divergence_override",
+                `Divergência de ${div.percentual}% (R$ ${div.diferenca}) liberada: ${body.override_reason.trim()}`, actor, div);
+            } else {
+              await sb.from("nf_entrada_imports").update({ divergence_amount: div.diferenca }).eq("id", row.id);
+            }
+          }
+
           target = String(poEntry);
+
         } else {
           target = "new-po";
         }
