@@ -23,6 +23,8 @@ import {
 } from "@/hooks/useNfEntrada";
 import { PageTitle } from "@/components/PageTitle";
 import { EditNfEntradaDialog } from "@/components/EditNfEntradaDialog";
+import { NfEntradaProvisionDialog } from "@/components/NfEntradaProvisionDialog";
+
 import { copyDocLink, readDocParam, setDocParam } from "@/lib/doc-deep-link";
 import { setPendingPurchaseFiles } from "@/lib/pending-purchase-files";
 
