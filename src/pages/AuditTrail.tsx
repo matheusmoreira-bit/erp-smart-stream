@@ -108,6 +108,7 @@ export default function AuditTrailPage() {
   const [pageSize, setPageSize] = useState(50);
 
   // Verify + detail
+  const [exporting, setExporting] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [verifyResult, setVerifyResult] = useState<{ ok: boolean; total: number; broken: number | null } | null>(null);
   const [detail, setDetail] = useState<AuditTrailRow | null>(null);
