@@ -665,9 +665,9 @@ export default function FiscalAudit({ embedded = false }: { embedded?: boolean }
                   </thead>
                   <tbody>
                     {loading ? (
-                      <tr><td colSpan={consolidated ? 8 : 7} className="text-center py-12"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></td></tr>
+                      <tr><td colSpan={consolidated ? 9 : 8} className="text-center py-12"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></td></tr>
                     ) : oldOpen.length === 0 ? (
-                      <tr><td colSpan={consolidated ? 8 : 7} className="text-center text-muted-foreground py-12">Nenhuma nota em aberto no período 🎉</td></tr>
+                      <tr><td colSpan={consolidated ? 9 : 8} className="text-center text-muted-foreground py-12">Nenhuma nota em aberto no período 🎉</td></tr>
                     ) : oldOpen.map((i) => {
                       const days = daysBetween(new Date(i.DocDate), today);
                       const u = users.get(userKey(i._companyDB, i.UserSign));
