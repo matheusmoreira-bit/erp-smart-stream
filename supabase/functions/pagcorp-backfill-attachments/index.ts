@@ -7,6 +7,7 @@
 // POST body: { company_db?: string, log_ids?: string[], limit?: number, dry_run?: boolean }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { ensureCopyToTargetDocument } from "../_shared/sap-attach-copy.ts";
 import { requireUser, AuthError } from "../_shared/auth.ts";
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 
@@ -113,28 +114,7 @@ async function uploadAttachments(sap: SapSession, files: { name: string; blob: B
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`Attachments2 HTTP ${res.status}: ${body?.error?.message?.value || JSON.stringify(body)}`);
   const absoluteEntry: number | null = body.AbsoluteEntry ?? null;
-  if (absoluteEntry != null) {
-    try {
-      const lines = Array.isArray(body?.Attachments2_Lines) ? body.Attachments2_Lines : [];
-      const patchLines = lines.length > 0
-        ? lines.map((l: { Line?: number }, idx: number) => ({
-            Line: typeof l?.Line === "number" ? l.Line : idx,
-            CopyToTargetDocument: "tYES",
-          }))
-        : files.map((_, idx) => ({ Line: idx, CopyToTargetDocument: "tYES" }));
-      const patchRes = await fetch(`${sap.baseUrl}/Attachments2(${absoluteEntry})`, {
-        method: "PATCH",
-        headers: { Cookie: sap.cookies, "Content-Type": "application/json" },
-        body: JSON.stringify({ Attachments2_Lines: patchLines }),
-      });
-      if (!patchRes.ok) {
-        const txt = await patchRes.text().catch(() => "");
-        console.warn(`Attachments2 PATCH CopyToTargetDocument falhou [${patchRes.status}]: ${txt.slice(0, 200)}`);
-      }
-    } catch (e) {
-      console.warn("Attachments2 PATCH CopyToTargetDocument erro:", (e as Error).message);
-    }
-  }
+  await ensureCopyToTargetDocument(sap.baseUrl, sap.cookies, absoluteEntry, body, files.length);
   return absoluteEntry;
 }
 async function patchDocumentAttachment(sap: SapSession, endpoint: string, docEntry: number, attachmentEntry: number): Promise<void> {

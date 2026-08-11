@@ -1,4 +1,5 @@
 import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
+import { ensureCopyToTargetDocument } from "../_shared/sap-attach-copy.ts";
 // Edge function: post an internal approved expense as a Purchase Order in SAP B1
 // Endpoint: POST /functions/v1/expense-to-sap
 // Body: { expense_id: string }
@@ -502,31 +503,7 @@ async function uploadAttachmentsToSap(
   }
   const absoluteEntry: number | null = body.AbsoluteEntry ?? null;
 
-  // Marca "Copiar para documento de destino" (CopyToTargetDocument = tYES) em todas
-  // as linhas de anexo, para que ao copiar o Pedido de Compra para um documento
-  // de destino (ex.: NF de entrada) os anexos sejam levados junto.
-  if (absoluteEntry != null) {
-    try {
-      const lines = Array.isArray(body?.Attachments2_Lines) ? body.Attachments2_Lines : [];
-      const patchLines = lines.length > 0
-        ? lines.map((l: { Line?: number }, idx: number) => ({
-            Line: typeof l?.Line === "number" ? l.Line : idx,
-            CopyToTargetDocument: "tYES",
-          }))
-        : files.map((_, idx) => ({ Line: idx, CopyToTargetDocument: "tYES" }));
-      const patchRes = await fetch(`${sapBaseUrl}/Attachments2(${absoluteEntry})`, {
-        method: "PATCH",
-        headers: { Cookie: cookies, "Content-Type": "application/json" },
-        body: JSON.stringify({ Attachments2_Lines: patchLines }),
-      });
-      if (!patchRes.ok) {
-        const txt = await patchRes.text().catch(() => "");
-        console.warn(`SAP Attachments2 PATCH CopyToTargetDocument falhou [${patchRes.status}]: ${txt.slice(0, 200)}`);
-      }
-    } catch (e) {
-      console.warn("SAP Attachments2 PATCH CopyToTargetDocument erro:", (e as Error).message);
-    }
-  }
+  await ensureCopyToTargetDocument(sapBaseUrl, cookies, absoluteEntry, body, files.length);
 
   return absoluteEntry;
 }
