@@ -37,7 +37,10 @@ interface SapInvoice {
   DocTotal: number;
   DocCurrency: string;
   DocumentStatus: string;
+  /** Valor já pago/conciliado no SAP. Sem ele o "em aberto" fica superestimado. */
+  PaidToDate?: number;
   Cancelled?: string;
+
   UserSign: number;
   CreationDate: string | null;
   _companyDB?: string;
