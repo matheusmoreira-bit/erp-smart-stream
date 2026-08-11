@@ -220,7 +220,7 @@ Deno.serve(async (req) => {
           const getBody = await getRes.json().catch(() => ({}));
           if (!getRes.ok) {
             entry.errors.push(`${endpoint}(${docEntry}): consulta falhou [${getRes.status}]`);
-            continue;
+            return;
           }
           const existingEntry = Number(getBody?.AttachmentEntry) > 0 ? Number(getBody.AttachmentEntry) : 0;
           const expAtts = attByExpense.get(exp.id) || [];
@@ -238,7 +238,7 @@ Deno.serve(async (req) => {
             const linesBody = await linesRes.json().catch(() => ({}));
             if (!linesRes.ok) {
               entry.errors.push(`Attachments2(${existingEntry}): consulta falhou [${linesRes.status}]`);
-              continue;
+              return;
             }
             const sapNames = new Set(
               (linesBody?.Attachments2_Lines ?? []).map((l: any) =>
@@ -246,7 +246,7 @@ Deno.serve(async (req) => {
               ).filter(Boolean),
             );
             const missingFiles = expAtts.filter((a: any) => !sapNames.has(sapBaseName(a.file_name || "")));
-            if (!missingFiles.length) continue;
+            if (!missingFiles.length) return;
 
             const infoInc = {
               expense_id: exp.id,
@@ -260,14 +260,14 @@ Deno.serve(async (req) => {
               reason: "incomplete",
             };
             entry.missing.push(infoInc);
-            if (dryRun) continue;
+            if (dryRun) return;
 
             const files: { name: string; blob: Blob }[] = [];
             for (const a of missingFiles) {
               const { data: blob } = await admin.storage.from("expense-attachments").download(a.file_path);
               if (blob) files.push({ name: a.file_name || "anexo", blob });
             }
-            if (!files.length) { entry.errors.push(`${exp.id}: arquivos faltantes não encontrados no storage`); continue; }
+            if (!files.length) { entry.errors.push(`${exp.id}: arquivos faltantes não encontrados no storage`); return; }
 
             const addForm = new FormData();
             for (const f of files) addForm.append("files", f.blob, sanitizeSapFileName(f.name));
@@ -291,7 +291,7 @@ Deno.serve(async (req) => {
               remarks: `Anexo incompleto corrigido (auditoria): ${files.length} arquivo(s) adicionados ao ${endpoint}(${docEntry}).`,
             } as any);
             entry.patched.push({ ...infoInc, added: files.length });
-            continue;
+            return;
           }
 
 
@@ -304,7 +304,7 @@ Deno.serve(async (req) => {
             attachments: (attByExpense.get(exp.id) || []).length,
           };
           entry.missing.push(info);
-          if (dryRun) continue;
+          if (dryRun) return;
 
           // Baixa arquivos e sobe
           const files: { name: string; blob: Blob }[] = [];
@@ -312,7 +312,7 @@ Deno.serve(async (req) => {
             const { data: blob } = await admin.storage.from("expense-attachments").download(a.file_path);
             if (blob) files.push({ name: a.file_name || "anexo", blob });
           }
-          if (!files.length) { entry.errors.push(`${exp.id}: arquivos não encontrados no storage`); continue; }
+          if (!files.length) { entry.errors.push(`${exp.id}: arquivos não encontrados no storage`); return; }
 
           const form = new FormData();
           for (const f of files) form.append("files", f.blob, sanitizeSapFileName(f.name));
