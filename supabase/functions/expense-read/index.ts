@@ -161,15 +161,54 @@ async function identifyCallerCached(req: Request, admin: SupabaseClient): Promis
   return value;
 }
 
+/**
+ * Regras de aprovação em que o caller aparece como aprovador (por e-mail ou
+ * nome). Usado para não depender da string gravada em `current_approver`, que
+ * pode divergir do nome real do usuário (ex.: grafia diferente na matriz).
+ */
+async function approverRuleIds(
+  admin: SupabaseClient,
+  aliases: Set<string>,
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (aliases.size === 0) return out;
+  try {
+    const { data } = await admin
+      .from("approval_rule_levels")
+      .select("rule_id, approver_email, approver_name");
+    for (const r of (data || []) as any[]) {
+      for (const alias of aliases) {
+        if (
+          identityMatches(r.approver_email, alias) ||
+          personMatches(r.approver_email, alias) ||
+          identityMatches(r.approver_name, alias) ||
+          personMatches(r.approver_name, alias)
+        ) {
+          out.add(String(r.rule_id));
+          break;
+        }
+      }
+    }
+  } catch { /* ignore */ }
+  return out;
+}
+
 /** Uma despesa pertence ao caller quando ele é solicitante, criador ou aprovador. */
 function ownsExpense(
   row: Record<string, unknown>,
   aliases: Set<string>,
   directorateBranch: string | null = null,
+  approverRules: Set<string> | null = null,
 ): boolean {
   // Grupo "Usuário Administrativo": tudo da própria diretoria (1.6.x quando o
   // IdP informa 1.6.1.2). Sem CC no IdP, cai na regra de dono abaixo.
   if (costCenterInBranch(row.cost_center, directorateBranch)) return true;
+  // Aprovador pela MATRIZ (independe da grafia gravada em current_approver).
+  if (
+    approverRules &&
+    row.approval_rule_id &&
+    approverRules.has(String(row.approval_rule_id))
+  ) return true;
   const candidates = [
     row.requester_email,
     row.requester_name,
@@ -187,6 +226,7 @@ function ownsExpense(
   }
   return false;
 }
+
 
 
 /**
@@ -211,7 +251,7 @@ async function directorateItemIds(
 }
 
 const OWNER_COLUMNS =
-  "id, cost_center, requester_email, requester_name, created_by_email, current_approver, original_approver";
+  "id, cost_center, requester_email, requester_name, created_by_email, current_approver, original_approver, approval_rule_id";
 
 function applyFilters(query: any, filters: any[]): { query: any; error?: string } {
   for (const f of filters) {
@@ -277,6 +317,10 @@ Deno.serve(async (req) => {
 
     const scoped = !(caller.privileged && wantsAll) && !caller.privileged;
 
+    // Regras da matriz em que o caller é aprovador — garante que ele veja os
+    // documentos mesmo quando `current_approver` guarda uma grafia diferente.
+    const myRules = scoped ? await approverRuleIds(admin, aliases) : new Set<string>();
+
     /* ── Tabelas filhas: restringe pelos expense_ids visíveis ── */
     let allowedExpenseIds: string[] | null = null;
     if (scoped && table !== "expenses") {
@@ -295,7 +339,7 @@ Deno.serve(async (req) => {
       );
       allowedExpenseIds = (parents || [])
         .filter((r: any) =>
-          ownsExpense(r, aliases, caller.directorateBranch) || byItems.has(String(r.id)),
+          ownsExpense(r, aliases, caller.directorateBranch, myRules) || byItems.has(String(r.id)),
         )
         .map((r: any) => String(r.id));
       if (allowedExpenseIds.length === 0) return json(200, { data: [] }, cors);
@@ -349,7 +393,7 @@ Deno.serve(async (req) => {
       if (batch.length === 0) return batch;
       const hasOwnerCols =
         select === "*" ||
-        (select.includes("requester_email") &&
+        (select.includes("requester_email") && select.includes("approval_rule_id") &&
           (!caller.directorateBranch || select.includes("cost_center")));
       if (hasOwnerCols) {
         const byItems = await directorateItemIds(
@@ -358,7 +402,7 @@ Deno.serve(async (req) => {
           caller.directorateBranch,
         );
         return batch.filter(
-          (r) => ownsExpense(r, aliases, caller.directorateBranch) || byItems.has(String(r.id)),
+          (r) => ownsExpense(r, aliases, caller.directorateBranch, myRules) || byItems.has(String(r.id)),
         );
       }
       const ids = batch.map((r) => r.id).filter(Boolean);
@@ -368,7 +412,7 @@ Deno.serve(async (req) => {
       const allowed = new Set(
         (owners || [])
           .filter((r: any) =>
-            ownsExpense(r, aliases, caller.directorateBranch) || byItems.has(String(r.id)),
+            ownsExpense(r, aliases, caller.directorateBranch, myRules) || byItems.has(String(r.id)),
           )
           .map((r: any) => String(r.id)),
       );
