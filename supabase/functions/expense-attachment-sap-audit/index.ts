@@ -347,7 +347,19 @@ Deno.serve(async (req) => {
         } catch (e) {
           entry.errors.push(`${exp.id}: ${(e as Error).message}`);
         }
-      }
+      };
+
+      // Pool de concorrência — a checagem sequencial no SAP estoura o tempo limite.
+      const queue = [...todo];
+      const workers = Array.from({ length: Math.min(6, queue.length) }, async () => {
+        for (;;) {
+          const next = queue.shift();
+          if (!next) return;
+          await processExpense(next);
+        }
+      });
+      await Promise.all(workers);
+
     } catch (e) {
       entry.errors.push((e as Error).message);
     } finally {
