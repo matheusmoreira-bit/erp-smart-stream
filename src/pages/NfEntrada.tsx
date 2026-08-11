@@ -610,6 +610,13 @@ export default function NfEntrada() {
         onSaved={refresh}
       />
 
+      <NfEntradaProvisionDialog
+        item={provisionItem}
+        onOpenChange={(o) => !o && setProvisionItem(null)}
+        onDone={refresh}
+      />
+
+
 
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
         <DialogContent className="max-w-3xl">
