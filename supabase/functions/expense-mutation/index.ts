@@ -274,6 +274,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
       supplierName: input.supplier_name || null,
       supplierCode: input.supplier_code || null,
       expenseId: "",
+      rateioType: (input as any).rateio_type || null,
       items,
     });
     if (rematched) ruleId = rematched;
@@ -679,6 +680,7 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
         supplierName: current.supplier_name,
         supplierCode: current.supplier_code,
         expenseId,
+        rateioType: (updates as any).rateio_type ?? (current as any).rateio_type ?? null,
         items,
       });
       if (rematched) {
