@@ -114,36 +114,43 @@ export default function AuditTrailPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
+  const applyFilters = useCallback(
+    <T,>(q: T): T => {
+      let b = q as unknown as ReturnType<typeof supabase.from>["select"] extends never ? never : any;
+      if (tableFilter !== "all") b = b.eq("table_name", tableFilter);
+      if (opFilter !== "all") b = b.eq("op", opFilter);
+      if (actorFilter !== "all") b = b.eq("actor_email", actorFilter);
+      if (dateFrom) b = b.gte("ts", dateFrom.toISOString());
+      if (dateTo) {
+        const end = new Date(dateTo);
+        end.setHours(23, 59, 59, 999);
+        b = b.lte("ts", end.toISOString());
+      }
+      const s = search.trim();
+      if (s) {
+        b = b.or(`actor_email.ilike.%${s}%,table_name.ilike.%${s}%`);
+      }
+      return b as T;
+    },
+    [tableFilter, opFilter, actorFilter, dateFrom, dateTo, search],
+  );
+
   const load = useCallback(async () => {
     setIsLoading(true);
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
 
-    let q = supabase
-      .from("audit_trail" as never)
-      .select(
-        "id, ts, actor_id, actor_email, actor_role, schema_name, table_name, op, row_pk, old_data, new_data, changed_cols",
-        { count: "exact" },
-      )
-      .order("id", { ascending: false })
-      .range(from, to);
-
-    if (tableFilter !== "all") q = q.eq("table_name", tableFilter);
-    if (opFilter !== "all") q = q.eq("op", opFilter);
-    if (actorFilter !== "all") q = q.eq("actor_email", actorFilter);
-    if (dateFrom) q = q.gte("ts", dateFrom.toISOString());
-    if (dateTo) {
-      const end = new Date(dateTo);
-      end.setHours(23, 59, 59, 999);
-      q = q.lte("ts", end.toISOString());
-    }
-    if (search.trim()) {
-      const s = search.trim();
-      // OR across actor_email / table_name / row_pk::text
-      q = q.or(
-        `actor_email.ilike.%${s}%,table_name.ilike.%${s}%,row_pk.cs.{"${s}"}`,
-      );
-    }
+    // Lista leve: sem old_data/new_data (jsonb pesado) — carregados sob demanda no detalhe.
+    // Contagem "planned" evita full scan em ~700k registros.
+    const q = applyFilters(
+      supabase
+        .from("audit_trail" as never)
+        .select("id, ts, actor_id, actor_email, actor_role, schema_name, table_name, op, row_pk, changed_cols", {
+          count: "planned",
+        })
+        .order("id", { ascending: false })
+        .range(from, to),
+    );
 
     const { data, error, count } = await q;
     if (error) {
@@ -151,34 +158,100 @@ export default function AuditTrailPage() {
       setRows([]);
       setTotal(0);
     } else {
-      setRows((data as unknown as AuditTrailRow[]) || []);
-      setTotal(count || 0);
+      const list = (data as unknown as AuditTrailRow[]) || [];
+      setRows(list);
+      setTotal(Math.max(count || 0, from + list.length));
     }
     setIsLoading(false);
-  }, [tableFilter, opFilter, actorFilter, dateFrom, dateTo, search, page, pageSize]);
+  }, [applyFilters, page, pageSize]);
 
   useEffect(() => { load(); }, [load]);
 
   // Reset page when filters change
   useEffect(() => { setPage(1); }, [tableFilter, opFilter, actorFilter, dateFrom, dateTo, search, pageSize]);
 
-  // Load distinct tables + actors once
+  // Load distinct tables + actors once (RPC agregada — evita baixar 10k linhas)
   useEffect(() => {
     (async () => {
-      const [{ data: tData }, { data: aData }] = await Promise.all([
-        supabase.from("audit_trail" as never).select("table_name").limit(10000),
-        supabase.from("audit_trail" as never).select("actor_email").not("actor_email", "is", null).limit(10000),
-      ]);
-      const tSet = new Set<string>();
-      ((tData as unknown as { table_name: string }[]) || []).forEach(r => tSet.add(r.table_name));
-      setTables(Array.from(tSet).sort());
-      const aSet = new Set<string>();
-      ((aData as unknown as { actor_email: string | null }[]) || []).forEach(r => {
-        if (r.actor_email) aSet.add(r.actor_email);
-      });
-      setActors(Array.from(aSet).sort());
+      const { data } = await (supabase.rpc as unknown as (fn: string) => Promise<{ data: unknown }>)(
+        "audit_trail_filter_options",
+      );
+      const row = (Array.isArray(data) ? data[0] : data) as { tables: string[] | null; actors: string[] | null } | null;
+      setTables(row?.tables ?? []);
+      setActors(row?.actors ?? []);
     })();
   }, []);
+
+  const openDetail = async (row: AuditTrailRow) => {
+    setDetail(row);
+    const { data } = await supabase
+      .from("audit_trail" as never)
+      .select("old_data, new_data")
+      .eq("id", row.id)
+      .maybeSingle();
+    const full = data as unknown as { old_data: Record<string, unknown> | null; new_data: Record<string, unknown> | null } | null;
+    if (full) setDetail(cur => (cur && cur.id === row.id ? { ...cur, ...full } : cur));
+  };
+
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      const CHUNK = 1000;
+      const MAX = 100000;
+      const all: AuditTrailRow[] = [];
+      for (let offset = 0; offset < MAX; offset += CHUNK) {
+        const { data, error } = await applyFilters(
+          supabase
+            .from("audit_trail" as never)
+            .select("id, ts, actor_id, actor_email, actor_role, schema_name, table_name, op, row_pk, changed_cols")
+            .order("id", { ascending: false })
+            .range(offset, offset + CHUNK - 1),
+        );
+        if (error) throw error;
+        const batch = (data as unknown as AuditTrailRow[]) || [];
+        all.push(...batch);
+        if (batch.length < CHUNK) break;
+      }
+
+      const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+      const header = ["id", "data_hora", "usuario", "role", "schema", "tabela", "operacao", "chave", "colunas_alteradas"];
+      const lines = [header.join(";")];
+      for (const r of all) {
+        lines.push(
+          [
+            r.id,
+            new Date(r.ts).toLocaleString("pt-BR"),
+            r.actor_email ?? "",
+            r.actor_role ?? "",
+            r.schema_name,
+            r.table_name,
+            OP_LABEL[r.op] ?? r.op,
+            r.row_pk ? JSON.stringify(r.row_pk) : "",
+            (r.changed_cols ?? []).join(", "),
+          ]
+            .map(esc)
+            .join(";"),
+        );
+      }
+      const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `audit-trail-${format(new Date(), "yyyy-MM-dd-HHmm")}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Exportação concluída", description: `${all.length.toLocaleString("pt-BR")} registros exportados.` });
+    } catch (e) {
+      toast({
+        title: "Falha ao exportar",
+        description: e instanceof Error ? e.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
 
   const runVerify = async () => {
     setVerifying(true);
