@@ -31,3 +31,4 @@
 - [Cadeia de aprovação em rateio](mem://features/rateio-approval-chain.md) — Segmento = CC + projeto; cadeias mescladas quando o doc é rateado entre alçadas diferentes.
 - [Grupos de permissão consolidados](mem://features/permission-groups-simplified.md) — Estrutura oficial de 8 grupos globais; não recriar CFO/Contas a Pagar/PagCorp/Contábil nem grupos por empresa.
 - [Critério Tipo de Rateio](mem://features/criterio-tipo-rateio.md) — rateio_type como critério das regras de aprovação; regra Folha do Instituto (Ketlhenn, prioridade 999).
+- [Aprovador de contingência da matriz](mem://features/approval-matrix-fallback-approver.md) — Fallback global = Matheus Moreira; regras 1.80/1.81/1.90/1.91 na Cactus (Juliana até 300k, +Marco Tulio acima).

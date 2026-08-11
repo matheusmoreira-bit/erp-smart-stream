@@ -1,13 +1,13 @@
 // Fallback global da matriz de regras de aprovação.
 //
 // Regra (todas as empresas): quando NENHUMA regra de aprovação é encontrada
-// para o documento, o aprovador passa a ser Juliana Gavineli — nunca um admin
+// para o documento, o aprovador passa a ser Matheus Moreira — nunca um admin
 // genérico. Além disso, disparamos um alerta por e-mail avisando que a matriz
 // está com lacuna (CC/projeto/faixa sem alçada).
 
 export const MATRIX_FALLBACK_APPROVER = {
-  name: "Juliana Gavineli",
-  email: "juliana.gavineli@anagaming.com.br",
+  name: "Matheus Moreira",
+  email: "matheus.moreira@anagaming.com.br",
 } as const;
 
 /** Destinatários do alerta de falha na matriz (secret APPROVAL_MATRIX_ALERT_EMAILS). */
