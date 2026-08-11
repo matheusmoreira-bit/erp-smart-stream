@@ -282,7 +282,10 @@ export function SapProvider({ children }: { children: ReactNode }) {
   const [credError, setCredError] = useState<string | null>(null);
   const credResolveRef = useRef<((s: ResolvedSapSession | null) => void) | null>(null);
 
-  const resolveSapSessionForAction = useCallback(async (companyDB: string): Promise<ResolvedSapSession | null> => {
+  const resolveSapSessionForAction = useCallback(async (
+    companyDB: string,
+    interactive = false,
+  ): Promise<ResolvedSapSession | null> => {
     const current = sessionRef.current;
     const db = companyDB || current?.companyDB || "";
     if (!db) return null;
@@ -328,7 +331,8 @@ export function SapProvider({ children }: { children: ReactNode }) {
       /* sem senha provisionada (ou credencial inválida) → pede ao usuário */
     }
 
-    // 3) Modal de login da empresa.
+    // 3) Modal de login da empresa — apenas em ações diretas no SAP.
+    if (!interactive) return null;
     if (credResolveRef.current) credResolveRef.current(null);
     return await new Promise<ResolvedSapSession | null>((resolve) => {
       credResolveRef.current = resolve;
