@@ -469,12 +469,16 @@ export default function PagCorp() {
 
     if (search.trim()) {
       const q = search.toLowerCase();
+      const qKey = normalizeTaxKey(search);
       list = list.filter(
         (t) =>
           t.description.toLowerCase().includes(q) ||
-          (t.accountName || "").toLowerCase().includes(q)
+          (t.accountName || "").toLowerCase().includes(q) ||
+          (t.merchantName || "").toLowerCase().includes(q) ||
+          (!!qKey && normalizeTaxKey(t.merchantTaxId).includes(qKey))
       );
     }
+
 
     if (cardFilter !== "all") {
       list = list.filter((t) => {
