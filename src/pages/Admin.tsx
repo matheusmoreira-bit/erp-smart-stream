@@ -754,6 +754,8 @@ export default function Admin() {
                     { label: "Retries SAP", icon: RefreshCw, to: "/backoffice/retry-queue" },
                     { label: "Auditoria de baixas PagCorp", icon: FileCheck2, to: "/backoffice/baixas-pagcorp" },
                     { label: "Revisão de acessos", icon: ShieldCheck, to: "/backoffice/revisao-acessos" },
+                    { label: "Chaves de API", icon: KeyRound, to: "/backoffice/chaves-api" },
+
                     { label: "Escalonamento por SLA", icon: AlarmClock, to: "/backoffice/sla-escalonamento" },
                     { label: "Dashboard de SLA", icon: TrendingUp, to: "/backoffice/sla-dashboard" },
                     { label: "Roadmap", icon: Rocket, to: "/backoffice/roadmap" },
