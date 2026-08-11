@@ -7995,6 +7995,13 @@ export type Database = {
           cutoff: string
         }[]
       }
+      audit_trail_filter_options: {
+        Args: never
+        Returns: {
+          actors: string[]
+          tables: string[]
+        }[]
+      }
       business_hours_deadline: {
         Args: { _hours?: number; _start: string }
         Returns: string
