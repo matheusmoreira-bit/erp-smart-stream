@@ -4,6 +4,7 @@ import { authFetch } from "@/lib/auth-fetch";
 import { createSupplier, type Supplier } from "@/hooks/useSuppliers";
 import type { SapSession } from "@/lib/sap-client";
 import { normalizeWords } from "@/lib/text-normalize";
+import { normalizeTaxKey, isValidBrTaxId } from "@/lib/tax-id";
 
 export interface PagCorpCandidate {
   /** Stable client-side id (tx id + index) */
