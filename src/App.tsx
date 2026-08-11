@@ -156,11 +156,14 @@ const App = () => (
               <Route path="/cartoes/historico" element={<IntegrationHistory />} />
 
               {/* Auditoria */}
-              <Route path="/auditoria" element={<Navigate to="/auditoria/sap" replace />} />
-              <Route path="/auditoria/sap/*" element={<AuditHub tab="sap" />} />
-              <Route path="/auditoria/pagamentos/*" element={<AuditHub tab="pagamentos" />} />
-
-              <Route path="/auditoria/fiscal" element={<AuditHub tab="fiscal" />} />
+              <Route path="/auditoria" element={<Navigate to="/auditoria/geral" replace />} />
+              <Route path="/auditoria/geral" element={<AuditHub tab="geral" />} />
+              <Route path="/auditoria/geral/:section" element={<AuditHub tab="geral" />} />
+              <Route path="/auditoria/geral/:section/:id" element={<AuditHub tab="geral" />} />
+              {/* Rotas legadas → módulo unificado */}
+              <Route path="/auditoria/sap/*" element={<Navigate to="/auditoria/geral/sap-dashboard" replace />} />
+              <Route path="/auditoria/pagamentos/*" element={<Navigate to="/auditoria/geral/pay-dashboard" replace />} />
+              <Route path="/auditoria/fiscal" element={<Navigate to="/auditoria/geral/fiscal" replace />} />
               <Route path="/auditoria/cruzamento" element={<AuditHub tab="cruzamento" />} />
               <Route path="/auditoria/totais" element={<AuditHub tab="totais" />} />
               <Route path="/auditoria/kyp" element={<AuditHub tab="kyp" />} />
