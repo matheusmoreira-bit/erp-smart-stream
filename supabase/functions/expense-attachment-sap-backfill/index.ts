@@ -8,6 +8,7 @@
 // POST { expense_id, attachment_ids?: string[] }
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { ensureCopyToTargetDocument } from "../_shared/sap-attach-copy.ts";
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
@@ -109,27 +110,6 @@ async function loginSap(creds: Record<string, string>, companyDb: string) {
 }
 
 /** Marca todas as linhas do anexo para copiar ao documento de destino. */
-async function markCopyToTarget(baseUrl: string, cookies: string, absoluteEntry: number, body: any, count: number) {
-  try {
-    const lines = Array.isArray(body?.Attachments2_Lines) ? body.Attachments2_Lines : [];
-    const patchLines = lines.length > 0
-      ? lines.map((l: { Line?: number }, idx: number) => ({
-          Line: typeof l?.Line === "number" ? l.Line : idx,
-          CopyToTargetDocument: "tYES",
-        }))
-      : Array.from({ length: count }, (_, idx) => ({ Line: idx, CopyToTargetDocument: "tYES" }));
-    const res = await fetch(`${baseUrl}/Attachments2(${absoluteEntry})`, {
-      method: "PATCH",
-      headers: { Cookie: cookies, "Content-Type": "application/json" },
-      body: JSON.stringify({ Attachments2_Lines: patchLines }),
-    });
-    if (!res.ok) {
-      console.warn(`CopyToTargetDocument PATCH falhou [${res.status}]: ${(await res.text().catch(() => "")).slice(0, 200)}`);
-    }
-  } catch (e) {
-    console.warn("CopyToTargetDocument erro:", (e as Error).message);
-  }
-}
 
 Deno.serve(async (req) => {
   const foreign = rejectForeignOrigin(req);
@@ -241,7 +221,7 @@ Deno.serve(async (req) => {
       absoluteEntry = existingEntry;
       const after = await fetch(`${sap.baseUrl}/Attachments2(${existingEntry})`, { headers: { Cookie: sap.cookies } });
       const afterBody = await after.json().catch(() => ({}));
-      await markCopyToTarget(sap.baseUrl, sap.cookies, absoluteEntry, afterBody, files.length);
+      await ensureCopyToTargetDocument(sap.baseUrl, sap.cookies, absoluteEntry, afterBody, files.length);
     } else {
       const res = await fetch(`${sap.baseUrl}/Attachments2`, {
         method: "POST",
@@ -254,7 +234,7 @@ Deno.serve(async (req) => {
       }
       absoluteEntry = Number(resBody?.AbsoluteEntry);
       if (!absoluteEntry) throw new Error("SAP não retornou AbsoluteEntry do anexo");
-      await markCopyToTarget(sap.baseUrl, sap.cookies, absoluteEntry, resBody, files.length);
+      await ensureCopyToTargetDocument(sap.baseUrl, sap.cookies, absoluteEntry, resBody, files.length);
 
       const patchRes = await fetch(`${sap.baseUrl}/${endpoint}(${docEntry})`, {
         method: "PATCH",
