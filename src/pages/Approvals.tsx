@@ -2438,7 +2438,7 @@ export default function ApprovalsPage() {
         codeEq(doc.requesterCode, doc) ||
         approverMatches(doc.requester, session.userName) ||
         currentUserIdentities.some((id) =>
-          isSameAsRequester(doc.requester, doc.requesterEmail ?? null, id, id),
+          isSameAsRequester(doc.requester, doc.requester, id, id),
         );
       // Bloqueio de auto-aprovação — vale para TODOS (inclusive super-usuário):
       // o solicitante nunca aprova o próprio documento; a decisão fica com os
