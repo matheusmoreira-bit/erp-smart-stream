@@ -27,3 +27,4 @@
 - [Segmentos de gestão](mem://features/management-segments.md) — ANA Gaming / Lótus / CSC por usuário; CSC vê todos os projetos nas bases ANA Gaming.
 - [Governança de notificações](mem://features/notification-governance.md) — Regras globais/por empresa de envio (bases de teste, autoaprovação, destinatários) em /notificacoes/regras.
 - [Cadeia de aprovação em rateio](mem://features/rateio-approval-chain.md) — Segmento = CC + projeto; cadeias mescladas quando o doc é rateado entre alçadas diferentes.
+- [Grupos de permissão consolidados](mem://features/permission-groups-simplified.md) — Estrutura oficial de 8 grupos globais; não recriar CFO/Contas a Pagar/PagCorp/Contábil nem grupos por empresa.
