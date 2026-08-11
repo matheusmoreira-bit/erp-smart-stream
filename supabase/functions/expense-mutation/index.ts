@@ -59,6 +59,7 @@ async function rematchRuleFromMatrix(
     supplierName: string | null;
     supplierCode: string | null;
     expenseId: string;
+    rateioType?: string | null;
     items?: Array<{ cost_center?: string | null }> | null;
   },
 ): Promise<string | null> {
@@ -97,6 +98,7 @@ async function rematchRuleFromMatrix(
     "supplier.code": String(ctx.supplierCode || "").toLowerCase(),
     currency: ctx.currency || "BRL",
     doc_type: ctx.docType,
+    rateio_type: String(ctx.rateioType || "padrao").toLowerCase(),
   });
 
   for (const cc of candidateCcs) {

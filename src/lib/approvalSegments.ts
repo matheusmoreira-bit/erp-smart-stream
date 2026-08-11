@@ -223,6 +223,7 @@ export function segmentDocByRules(
       "supplier.status": "",
       currency: (doc.currency || "BRL").toUpperCase(),
       doc_type: docType,
+      rateio_type: "padrao",
       item_codes: any,
       item_groups: "",
       "item.code": codes,
