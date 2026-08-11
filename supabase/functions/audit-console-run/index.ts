@@ -322,7 +322,7 @@ function applyRules(
   // o processo de GRPO não é utilizado, portanto "missing_grpo" e "missing_ap" gerariam
   // apenas ruído/falsos positivos. Não remover as regras do banco; apenas não avaliá-las.
 
-  }
+
 
   // 9. missing_payment — PI vencida sem pagamento
   const r9 = ruleFor(rules, "missing_payment");
