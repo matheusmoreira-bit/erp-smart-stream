@@ -84,11 +84,56 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // ─────────────────────────── PREVIEW ───────────────────────────
+    // Monta o de-para nota x pedido para conferência humana antes de escrever.
+    if (action === "preview") {
+      const importId = body.import_id;
+      if (!importId) return json(400, { error: "import_id é obrigatório" });
+
+      const { data: nf } = await sb.from("nf_entrada_imports").select("*").eq("id", importId).maybeSingle();
+      if (!nf) return json(404, { error: "NF capturada não encontrada" });
+      if (!nf.sap_company_db) return json(400, { error: "NF sem empresa (base) definida" });
+      if (!nf.sap_matched_po_doc_entry) return json(400, { error: "NF sem pedido de compra vinculado" });
+
+      const { adapter, erp_type } = await resolveAdapterForCompany(sb, nf.sap_company_db);
+      const ctx: AdapterContext = { supabase: sb, company_db: nf.sap_company_db, actor };
+      const [pedido] = await adapter.buscarPedidoCompra(ctx, { pedido_id: String(nf.sap_matched_po_doc_entry) });
+      if (!pedido) return json(404, { error: "Pedido de compra não encontrado no ERP" });
+
+      const jaLancada = await adapter.nfEntradaJaLancada(ctx, String(nf.sap_matched_po_doc_entry));
+      const notaItens = Array.isArray(nf.itens) ? (nf.itens as any[]) : [];
+      const div = divergence(Number(nf.valor_total || 0), Number(pedido.valor_total || 0));
+
+      return json(200, {
+        ok: true,
+        erp_type,
+        nota: {
+          id: nf.id,
+          numero: nf.numero_nf,
+          chave: nf.chave_acesso,
+          fornecedor: nf.nome_fornecedor,
+          cnpj: nf.cnpj_fornecedor,
+          valor_total: nf.valor_total,
+          data_emissao: nf.data_emissao,
+          itens: notaItens,
+        },
+        pedido,
+        ja_lancada: jaLancada,
+        divergencia: {
+          ...div,
+          linhas_diferentes: notaItens.length > 0 && notaItens.length !== pedido.linhas.length,
+          override_aplicado: !!nf.divergence_override_at,
+          override_motivo: nf.divergence_override_reason,
+        },
+      });
+    }
+
     // ─────────────────────────── ENQUEUE ───────────────────────────
     if (action === "enqueue") {
       const ids = body.import_ids?.length ? body.import_ids : body.import_id ? [body.import_id] : [];
       if (!ids.length) return json(400, { error: "import_id ou import_ids é obrigatório" });
       const operation = body.operation || "invoice_draft";
+
 
       const { data: rows, error } = await sb
         .from("nf_entrada_imports")
