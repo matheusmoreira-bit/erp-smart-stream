@@ -118,7 +118,8 @@ export default function AuditTrailPage() {
 
   const applyFilters = useCallback(
     <T,>(q: T): T => {
-      let b = q as unknown as ReturnType<typeof supabase.from>["select"] extends never ? never : any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let b = q as any;
       if (tableFilter !== "all") b = b.eq("table_name", tableFilter);
       if (opFilter !== "all") b = b.eq("op", opFilter);
       if (actorFilter !== "all") b = b.eq("actor_email", actorFilter);
