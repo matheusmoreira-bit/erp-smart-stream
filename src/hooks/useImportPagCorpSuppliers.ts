@@ -56,18 +56,22 @@ export interface PagCorpSupplierLink {
   resolution: "imported" | "linked" | "ignored";
 }
 
+/**
+ * Chave canônica de documento. Preserva letras: o CNPJ pode ser alfanumérico
+ * (nova regra da Receita Federal, refletida no `aiAnalysis` do PagCorp).
+ */
 export function cleanDigits(s?: string | null): string {
-  return (s || "").replace(/\D/g, "");
+  return normalizeTaxKey(s);
 }
 
 /**
- * Valid Brazilian tax id: CPF (11 digits) or CNPJ (14 digits).
- * Only suppliers with a valid local tax id can be imported into SAP.
+ * Documento local válido: CPF (11 dígitos) ou CNPJ (14 caracteres alfanuméricos).
+ * Só fornecedores com documento válido podem ser importados para o SAP.
  */
 export function hasValidBrazilianTaxId(s?: string | null): boolean {
-  const d = cleanDigits(s);
-  return d.length === 11 || d.length === 14;
+  return isValidBrTaxId(s);
 }
+
 
 export function normalizeName(s?: string | null): string {
   return normalizeWords(s);
