@@ -44,6 +44,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Activity, LogOut, Eye, CheckCircle, XCircle, Paperclip, X, CheckCircle2, XOctagon, History, UserCog, ChevronsUpDown, Check, Network, FileDown, Link2, Undo2, Briefcase } from "lucide-react";
 import { copyDocLink, readDocParam, setDocParam } from "@/lib/doc-deep-link";
+import { excludeRequesterApprovers, isSameAsRequester } from "@/lib/self-approval";
 import { exportListReportPdf, exportListReportCsv } from "@/lib/report-pdf";
 import { useSap } from "@/contexts/SapContext";
 import { gateSync } from "@/contexts/PermissionsV2Context";
