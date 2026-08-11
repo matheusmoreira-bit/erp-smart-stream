@@ -151,11 +151,22 @@ function classify(params: {
     breakdown,
   });
 
-  // 1) Totais batem exatamente.
+  // 1) Totais batem exatamente (na mesma moeda).
   if (Math.abs(diffGross) <= TOLERANCE) return finish("ok", null);
+
+  // 1b) Moedas realmente diferentes entre Flow e SAP: nunca comparar valores.
+  if (sapCur !== flowCur) {
+    return finish("divergent", "currency", {
+      moeda_flow: flowCur,
+      moeda_sap: sapCur,
+      taxa: docRate || null,
+      explicacao: `Documento gravado em ${sapCur} no SAP e em ${flowCur} no Flow — totais não são comparáveis diretamente.`,
+    });
+  }
 
   // 2) Diferença explicada por desconto (cabeçalho ou linhas).
   if (Math.abs(diffNet) > TOLERANCE) {
+
     if (totalDiscount > 0 && Math.abs(round(diffNet - totalDiscount)) <= TOLERANCE) {
       return finish("divergent", "discount_header", {
         desconto_percentual: discountPercent,
