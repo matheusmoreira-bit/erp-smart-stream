@@ -34,8 +34,14 @@ export function isLotusCostCenter(code?: string | null, name?: string | null): b
 export function canViewLotusCostCenters(
   groups: string[] | null | undefined,
   isPrivileged = false,
+  opts?: { hasCapability?: boolean; loading?: boolean },
 ): boolean {
+  // Enquanto grupos/capacidades carregam, não escondemos nada (evita falso
+  // negativo: o usuário autorizado abria o formulário sem os CCs LOTUS).
+  if (opts?.loading) return true;
   if (isPrivileged) return true;
+  // Fonte principal: capacidade configurada no grupo.
+  if (opts?.hasCapability) return true;
   return (groups || []).some((g) => {
     const n = normalizeText(g);
     return ALLOWED_GROUP_TOKENS.some(
@@ -43,6 +49,7 @@ export function canViewLotusCostCenters(
     );
   });
 }
+
 
 /** Remove opções LOTUS quando o usuário não tem direito de vê-las. */
 export function filterLotusCostCenters<T extends { code?: string | null; name?: string | null }>(

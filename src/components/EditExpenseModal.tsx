@@ -27,6 +27,8 @@ import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { useSap } from "@/contexts/SapContext";
 import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
+import { useMyCapabilities } from "@/hooks/useMyCapabilities";
+
 import { canViewLotusCostCenters, filterLotusCostCenters } from "@/lib/cost-center-visibility";
 import {
   validateAttachments,
@@ -175,11 +177,19 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
     mapRow: costCenterMapRow,
   });
   // CCs LOTUS só aparecem para Contábil e RH/DP/Folha (ou admins).
-  const { groups: myGroups, isPrivileged: isPrivilegedUser } = useMyPermissionGroups();
+  const { groups: myGroups, isPrivileged: isPrivilegedUser, loading: myGroupsLoading } =
+    useMyPermissionGroups();
+  const { has: hasLotusCapability, loading: capsLoading } = useMyCapabilities();
   const canSeeLotus = useMemo(
-    () => canViewLotusCostCenters(myGroups, isPrivilegedUser),
-    [myGroups, isPrivilegedUser],
+    () =>
+      canViewLotusCostCenters(myGroups, isPrivilegedUser, {
+        hasCapability: hasLotusCapability("cost_centers_lotus"),
+        loading: myGroupsLoading || capsLoading,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [myGroups, isPrivilegedUser, myGroupsLoading, capsLoading],
   );
+
   const costCenterOptions = useMemo(
     () =>
       filterLotusCostCenters(

@@ -68,10 +68,17 @@ export const CAPABILITY_CATALOG: CapabilityDef[] = [
     category: "data_scope",
   },
   {
+    key: "cost_centers_lotus",
+    label: "Ver centros de custo LOTUS",
+    hint: "Exibe os centros de custo LOTUS BLANCA nos formulários (Contabilidade & Fiscal, CFO/Financeiro, Gente e Gestão e Admin).",
+    category: "data_scope",
+  },
+  {
     key: "cost_centers_view_all",
     label: "Selecionar todos os centros de custo",
     hint: "Permite lançar em qualquer CC, mesmo com visibilidade de documentos restrita.",
     category: "data_scope",
+
   },
   {
     key: "drafts_view_all",

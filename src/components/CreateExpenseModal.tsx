@@ -194,7 +194,7 @@ export function CreateExpenseModal({
 
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
   // Capacidade do GRUPO: cadastrar direto no ERP ou apenas solicitar cadastro.
-  const { has: hasCapability, isPrivileged: isPrivilegedUser } = useMyCapabilities();
+  const { has: hasCapability, isPrivileged: isPrivilegedUser, loading: capsLoading } = useMyCapabilities();
   const canRegisterSupplier = hasCapability("suppliers_register_direct");
 
   const [dialogContainer, setDialogContainer] = useState<HTMLDivElement | null>(null);
@@ -270,11 +270,17 @@ export function CreateExpenseModal({
     mapRow: costCenterMapRow,
   });
   // CCs LOTUS só aparecem para Contábil e RH/DP/Folha (ou admins).
-  const { groups: myGroups } = useMyPermissionGroups();
+  const { groups: myGroups, loading: myGroupsLoading } = useMyPermissionGroups();
   const canSeeLotusCcs = useMemo(
-    () => canViewLotusCostCenters(myGroups, isPrivilegedUser || !!sapSession?.isSuperUser),
-    [myGroups, isPrivilegedUser, sapSession?.isSuperUser],
+    () =>
+      canViewLotusCostCenters(myGroups, isPrivilegedUser || !!sapSession?.isSuperUser, {
+        hasCapability: hasCapability("cost_centers_lotus"),
+        loading: myGroupsLoading || capsLoading,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [myGroups, myGroupsLoading, capsLoading, isPrivilegedUser, sapSession?.isSuperUser],
   );
+
   const costCenterOptions = useMemo(
     () =>
       filterLotusCostCenters(
