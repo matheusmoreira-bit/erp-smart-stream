@@ -580,12 +580,61 @@ Deno.serve(async (req) => {
       (transaction.accountName as string | undefined) ||
       ""
     ).toString().trim();
+    // Descrição da PRESTAÇÃO DE CONTAS (quando existe). A API do PagCorp
+    // devolve esse texto em nomes diferentes conforme o tipo de despesa
+    // (campo do expense ou do recibo), então procuramos por todos os
+    // candidatos conhecidos e usamos o primeiro texto não vazio.
+    const pickAccountabilityText = (tx: Record<string, unknown>): string => {
+      const candidates: unknown[] = [
+        tx.accountabilityDescription,
+        tx.accountabilityObservation,
+        tx.accountabilityJustification,
+        tx.expenseAccountabilityDescription,
+        tx.receiptDescription,
+        tx.justification,
+        tx.observation,
+        tx.observations,
+        tx.note,
+        tx.notes,
+        tx.comments,
+      ];
+      const receipts = Array.isArray(tx.receipts) ? (tx.receipts as Record<string, unknown>[]) : [];
+      for (const r of receipts) {
+        candidates.push(
+          r?.description,
+          r?.observation,
+          r?.observations,
+          r?.justification,
+          r?.note,
+          r?.notes,
+          r?.comments,
+          r?.receiptDescription,
+        );
+      }
+      for (const c of candidates) {
+        const s = typeof c === "string" ? c.trim() : "";
+        if (s) return s;
+      }
+      return "";
+    };
+
+    const accountabilityTexts = transactions
+      .map((t) => {
+        const text = pickAccountabilityText(t as Record<string, unknown>);
+        if (!text) return "";
+        return isConsolidated ? `[#${t.id}] ${text}` : text;
+      })
+      .filter((s) => !!s);
+    const accountabilitySuffix = accountabilityTexts.length > 0 ? ` | PC: ${accountabilityTexts.join(" ; ")}` : "";
+
     const description = truncateSapText(
-      isConsolidated
+      (isConsolidated
         ? `PagCorp${holderName ? ` ${holderName}` : ""} — consolidado ${transactions.length} transações`
-        : `PagCorp${holderName ? ` ${holderName}` : ""} — ${transaction.description || ""}`,
+        : `PagCorp${holderName ? ` ${holderName}` : ""} — ${transaction.description || ""}`) +
+        accountabilitySuffix,
       190,
     );
+
 
     const toIsoDate = (v: unknown): string | null => {
       if (!v) return null;
