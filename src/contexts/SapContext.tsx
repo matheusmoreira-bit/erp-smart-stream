@@ -610,7 +610,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
   }, [session?.erpType, session?.sessionId, session?.sapAuthToken, session?.routeId, session?.companyDB, session?.userName, session?.isSuperUser, session?.expiresAt, setSession]);
 
   return (
-    <ErpContext.Provider value={{ session, isLoading, error, login, loginManaged, loginIdentity, logout }}>
+    <ErpContext.Provider value={{ session, isLoading, error, login, loginManaged, loginIdentity, logout, impersonateAs }}>
       {children}
       <SapCredentialsDialog
         open={!!credPrompt}
