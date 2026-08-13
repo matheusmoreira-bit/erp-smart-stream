@@ -704,19 +704,16 @@ export default function PagCorpMapping() {
                                     size="icon"
                                     aria-label={editingCardIds.includes(m.id) ? "Cancelar edição" : "Editar mapeamento"}
                                     title={editingCardIds.includes(m.id) ? "Cancelar edição" : "Editar mapeamento"}
-                                    onClick={() => {
-                                      const wasEditing = editingCardIds.includes(m.id!);
-                                      toggleCardEdit(m.id!);
-                                      if (wasEditing) loadCardMappings();
-                                    }}
+                                    onClick={() => handleToggleCardEdit(i)}
                                     className={editingCardIds.includes(m.id) ? "text-primary" : "text-muted-foreground hover:text-foreground"}
                                   >
                                     {editingCardIds.includes(m.id) ? <X className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
                                   </Button>
                                 )}
-                                <Button variant="ghost" size="icon" aria-label="Excluir mapeamento" title="Excluir mapeamento" onClick={() => removeCardRow(i)} className="text-destructive hover:text-destructive">
+                                <Button variant="ghost" size="icon" aria-label="Excluir mapeamento" title="Excluir mapeamento" onClick={() => requestRemoveCardRow(i)} className="text-destructive hover:text-destructive">
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
+
                               </div>
                             </TableCell>
                           </TableRow>
