@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { assertFunctionAllowed } from "@/lib/read-only-guard";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -23,6 +24,7 @@ export async function invokeFn<T = any>(
   name: string,
   options?: Parameters<typeof supabase.functions.invoke>[1],
 ) {
+  assertFunctionAllowed(name);
   let { data: { session } } = await supabase.auth.getSession();
   let authToken = session?.access_token && tokenHasSub(session.access_token) ? session.access_token : null;
 
