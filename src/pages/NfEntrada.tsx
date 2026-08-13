@@ -390,7 +390,7 @@ export default function NfEntrada() {
               )}
 
               {filtered.map((it) => {
-                const s = statusPresentation(it);
+                const s = nfStagePresentation(it);
                 const isOpen = expandedId === it.id;
                 const toggle = () => setExpandedId(isOpen ? null : it.id);
                 const hasPoLink = !!it.sap_matched_po_doc_entry;
