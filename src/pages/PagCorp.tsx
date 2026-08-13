@@ -140,7 +140,7 @@ export default function PagCorp() {
   const { session, logout } = useSap();
   const { transactions, isLoading, error, fetchTransactions, integrateDirect, integrateConsolidated } = usePagCorp();
   const { createExpense } = useExpenses();
-  const { credentials, isLoading: credsLoading, lastFetchOk: credsFetchOk, fetchCredentials } = useCredentials();
+  const { fetchCredentials } = useCredentials();
   const { getLabel } = useCompanies(true);
 
   useEffect(() => {
@@ -148,7 +148,7 @@ export default function PagCorp() {
     fetchCredentials(session.companyDB, "sap");
   }, [fetchCredentials, session?.companyDB]);
 
-  const hasSapCredentials = credentials.some((c) => c.system_name === "sap" && c.company_db === session?.companyDB);
+
 
   /**
    * Garante que existe sessão do Service Layer antes de integrar.
