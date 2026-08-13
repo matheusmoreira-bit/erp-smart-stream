@@ -1460,18 +1460,20 @@ export function useExpenses(
           }
 
           // Se o documento veio do ERP (origem ERP OU já existe no SAP com
-          // sap_doc_entry), NÃO tentamos criar um novo pedido de compra. A
-          // decisão de aprovação já foi registrada; qualquer criação no SAP
-          // duplicaria o pedido original. Apenas registramos e paramos aqui.
+          // sap_doc_entry), NÃO criamos um novo pedido de compra — isso
+          // duplicaria o documento. Quando ele já existe no SAP e foi editado
+          // no Flow, o próprio servidor (expense-approval-action) reenvia em
+          // modo PATCH; aqui apenas registramos a trilha.
           if (originFromErp || alreadyInErp) {
             await logExpenseDecision(expenseId, "integrated", {
               approverName: actor,
               remarks: alreadyInErp
-                ? "Documento já existente no ERP — nenhum novo pedido de compra criado."
+                ? "Documento já existente no ERP — alteração reenviada ao SAP em modo atualização (PATCH)."
                 : "Documento originado no ERP — apenas a decisão de aprovação foi registrada.",
             });
             return;
           }
+
 
 
           // Integração ao SAP é DESACOPLADA da aprovação: a aprovação já
