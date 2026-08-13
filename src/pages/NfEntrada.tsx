@@ -28,72 +28,8 @@ import { NfEntradaProvisionDialog } from "@/components/NfEntradaProvisionDialog"
 import { copyDocLink, readDocParam, setDocParam } from "@/lib/doc-deep-link";
 import { setPendingPurchaseFiles } from "@/lib/pending-purchase-files";
 
-type StatusVariant = "default" | "secondary" | "destructive" | "outline";
+import { nfStage, nfStagePresentation, STAGE_OPTIONS } from "@/lib/nf-entrada-status";
 
-/**
- * Os rótulos descrevem a ETAPA do documento no fluxo Master Tax → ERP Flow → SAP.
- * Antes falavam em "aprovação", o que não corresponde ao que a etapa representa.
- */
-const STATUS_LABELS: Record<NfEntradaStatus, { label: string; variant: StatusVariant; hint: string }> = {
-  pending_expense: {
-    label: "Sem pedido vinculado",
-    variant: "outline",
-    hint: "NF capturada no Master Tax, ainda sem pedido de compra correspondente no ERP Flow.",
-  },
-  awaiting_erpflow_approval: {
-    label: "Pedido em andamento no ERP Flow",
-    variant: "secondary",
-    hint: "Existe pedido de compra no ERP Flow, mas ele ainda não foi concluído/integrado ao SAP.",
-  },
-  erpflow_rejected: {
-    label: "Pedido recusado no ERP Flow",
-    variant: "destructive",
-    hint: "O pedido de compra vinculado foi recusado no ERP Flow.",
-  },
-  awaiting_sap: {
-    label: "Aguardando NF de entrada no SAP",
-    variant: "secondary",
-    hint: "Pedido de compra já existe no SAP; falta lançar a NF de entrada (esboço) contra esse pedido.",
-  },
-  sap_rejected: {
-    label: "Recusada pelo SAP",
-    variant: "destructive",
-    hint: "O SAP recusou o documento; verifique o histórico para o motivo.",
-  },
-  awaiting_invoice: {
-    label: "Aguardando NF de entrada no SAP",
-    variant: "secondary",
-    hint: "Falta lançar a NF de entrada no SAP para encerrar o fluxo.",
-  },
-  completed: {
-    label: "NF lançada no SAP",
-    variant: "default",
-    hint: "Fluxo concluído: NF de entrada registrada no SAP.",
-  },
-  integration_error: {
-    label: "Erro de integração",
-    variant: "destructive",
-    hint: "A integração falhou. Use “Tentar integração novamente” após corrigir os dados.",
-  },
-  cancelled: {
-    label: "Fluxo cancelado",
-    variant: "outline",
-    hint: "O fluxo desta NF foi cancelado manualmente.",
-  },
-};
-
-/** Rótulo efetivo da linha: reflete o esboço já lançado, quando houver. */
-function statusPresentation(it: NfEntradaImport): { label: string; variant: StatusVariant; hint: string } {
-  const base = STATUS_LABELS[it.status];
-  if (it.sap_invoice_draft_id && it.status !== "completed" && it.status !== "cancelled") {
-    return {
-      label: "Esboço de NF no SAP",
-      variant: "secondary",
-      hint: `Esboço ${it.sap_invoice_draft_id} criado no SAP, aguardando conferência/efetivação pelo fiscal.`,
-    };
-  }
-  return base;
-}
 
 
 function formatCurrency(v: number | null) {
@@ -117,7 +53,10 @@ function DetailField({ label, value, mono }: { label: string; value: string | nu
 export default function NfEntrada() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { items, loading, error, refresh, reprocess, rematchSap, recheckSap, cancel, pullNow, createInvoiceDraft } = useNfEntrada();
+  const {
+    items, loading, error, companyDb, foreignCount,
+    refresh, reprocess, rematchSap, recheckSap, cancel, pullNow, createInvoiceDraft,
+  } = useNfEntrada();
 
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -133,7 +72,8 @@ export default function NfEntrada() {
 
   const filtered = useMemo(() => {
     return items.filter((it) => {
-      if (statusFilter !== "all" && it.status !== statusFilter) return false;
+      if (statusFilter !== "all" && nfStage(it) !== statusFilter) return false;
+
       if (search) {
         const q = search.toLowerCase();
         return (
@@ -376,8 +316,8 @@ export default function NfEntrada() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os status</SelectItem>
-              {Object.entries(STATUS_LABELS).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v.label}</SelectItem>
+              {STAGE_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -389,6 +329,19 @@ export default function NfEntrada() {
             <span>{filtered.length} de {items.length}</span>
           </div>
         </div>
+
+        <div className="text-xs text-muted-foreground">
+          {companyDb ? (
+            <>
+              Exibindo apenas notas em que <strong>{companyDb}</strong> é a destinatária (tomadora).
+              {foreignCount > 0 && ` ${foreignCount} nota(s) de outro CNPJ foram ocultadas.`}
+            </>
+          ) : (
+            "Selecione uma empresa para ver as notas capturadas pelo Master Tax."
+          )}
+        </div>
+
+
 
         {error && (
           <div className="rounded-md border border-destructive/30 bg-destructive/10 text-destructive text-sm px-3 py-2">
@@ -432,12 +385,15 @@ export default function NfEntrada() {
               )}
               {!loading && filtered.length === 0 && (
                 <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                  Nenhuma NF importada ainda. Configure os secrets <code>MASTERTAX_BASE_URL</code> e <code>MASTERTAX_TOKEN</code> e clique em "Buscar Master Tax agora".
+                  {!companyDb
+                    ? "Selecione uma empresa para listar as notas capturadas pelo Master Tax."
+                    : `Nenhuma NF do Master Tax para ${companyDb} com os filtros atuais.`}
                 </TableCell></TableRow>
               )}
 
+
               {filtered.map((it) => {
-                const s = statusPresentation(it);
+                const s = nfStagePresentation(it);
                 const isOpen = expandedId === it.id;
                 const toggle = () => setExpandedId(isOpen ? null : it.id);
                 const hasPoLink = !!it.sap_matched_po_doc_entry;
@@ -555,6 +511,9 @@ export default function NfEntrada() {
                             <DetailField label="NF SAP" value={it.sap_invoice_draft_id} mono />
                             <DetailField label="Origem do status" value={statusOrigin(it).label} />
                             <DetailField label="Base SAP" value={it.sap_company_db} mono />
+                            <DetailField label="Destinatário (tomador)" value={it.nome_destinatario} />
+                            <DetailField label="CNPJ destinatário" value={it.cnpj_destinatario} mono />
+
                             <DetailField
                               label="Última varredura (last_poll_at)"
                               value={it.last_poll_at ? new Date(it.last_poll_at).toLocaleString("pt-BR") : "nunca"}

@@ -4,7 +4,7 @@ import type { NfEntradaImport, NfEntradaStatus } from "@/hooks/useNfEntrada";
 
 type StatusVariant = "default" | "secondary" | "destructive" | "outline";
 
-export type StatusPresentation = { label: string; variant: StatusVariant; hint: string };
+export type StatusPresentation = { label: string; variant: StatusVariant; hint: string; next?: string };
 
 /** Bases de teste não são varridas pelo watcher automático (mesma regra da edge function). */
 export function isTestCompanyDb(db: string | null | undefined): boolean {
@@ -73,6 +73,12 @@ export function NfEntradaStatusCell({ item, presentation }: { item: NfEntradaImp
       </div>
 
       <div className="text-[10px] text-muted-foreground leading-snug">{presentation.hint}</div>
+      {presentation.next && (
+        <div className="text-[10px] text-foreground/70 leading-snug">
+          <span className="font-medium">Próxima ação: </span>{presentation.next}
+        </div>
+      )}
+
 
       {awaitsSap && (
         <div className="flex flex-wrap items-center gap-1 text-[10px]">

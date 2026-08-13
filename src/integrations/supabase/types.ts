@@ -4623,6 +4623,7 @@ export type Database = {
       nf_entrada_imports: {
         Row: {
           chave_acesso: string
+          cnpj_destinatario: string | null
           cnpj_fornecedor: string | null
           condicao_pagamento: string | null
           cost_center: string | null
@@ -4644,6 +4645,7 @@ export type Database = {
           match_candidates: Json | null
           match_resolved_at: string | null
           match_resolved_by: string | null
+          nome_destinatario: string | null
           nome_fornecedor: string | null
           numero_nf: string | null
           pdf_storage_path: string | null
@@ -4665,6 +4667,7 @@ export type Database = {
         }
         Insert: {
           chave_acesso: string
+          cnpj_destinatario?: string | null
           cnpj_fornecedor?: string | null
           condicao_pagamento?: string | null
           cost_center?: string | null
@@ -4686,6 +4689,7 @@ export type Database = {
           match_candidates?: Json | null
           match_resolved_at?: string | null
           match_resolved_by?: string | null
+          nome_destinatario?: string | null
           nome_fornecedor?: string | null
           numero_nf?: string | null
           pdf_storage_path?: string | null
@@ -4707,6 +4711,7 @@ export type Database = {
         }
         Update: {
           chave_acesso?: string
+          cnpj_destinatario?: string | null
           cnpj_fornecedor?: string | null
           condicao_pagamento?: string | null
           cost_center?: string | null
@@ -4728,6 +4733,7 @@ export type Database = {
           match_candidates?: Json | null
           match_resolved_at?: string | null
           match_resolved_by?: string | null
+          nome_destinatario?: string | null
           nome_fornecedor?: string | null
           numero_nf?: string | null
           pdf_storage_path?: string | null
