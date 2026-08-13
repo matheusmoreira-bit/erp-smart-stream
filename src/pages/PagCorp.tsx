@@ -151,27 +151,20 @@ export default function PagCorp() {
 
 
   /**
-   * Garante que existe sessão do Service Layer antes de integrar.
-   * - Sessão viva ou senha provisionada → segue silenciosamente.
-   * - Sem senha provisionada → abre o formulário de login do ERP
-   *   (usuário + senha) para gerar o sessionId e enviar o documento.
-   * Não bloqueia mais por falha transitória no GET /credentials.
+   * A integração PagCorp → SAP é feita 100% no servidor (`pagcorp-to-sap`),
+   * que faz o /Login com as CREDENCIAIS DE SERVIÇO da empresa
+   * (system_credentials: username/password). Portanto não exigimos mais
+   * sessão/senha do usuário aqui — apenas a empresa selecionada.
    */
   const checkSapCredentials = async (): Promise<boolean> => {
     const db = session?.companyDB || "";
-    if (!db) return false;
-    try {
-      const { resolveSapSession } = await import("@/lib/sap-session-broker");
-      const resolved = await resolveSapSession(db, true);
-      if (resolved?.sessionId) return true;
-    } catch { /* trata abaixo */ }
-    toast.error("Não foi possível autenticar no ERP", {
-      description:
-        "Informe suas credenciais do ERP para continuar ou verifique as credenciais da empresa em Integrações → Credenciais.",
-      action: { label: "Configurar", onClick: () => navigate("/integracoes/credenciais") },
-    });
-    return false;
+    if (!db) {
+      toast.error("Selecione uma empresa para integrar");
+      return false;
+    }
+    return true;
   };
+
 
 
   const today = new Date();
