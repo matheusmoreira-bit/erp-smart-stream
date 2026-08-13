@@ -195,10 +195,49 @@ async function identifyCallerCached(req: Request, admin: SupabaseClient): Promis
   return memoize(value);
 }
 
+/**
+ * Titulares que o caller substitui hoje (grant vigente e não revogado).
+ * Sem isso, o substituto ativo não via NENHUM documento da fila do titular.
+ */
+async function substituteOfficialAliases(
+  admin: SupabaseClient,
+  aliases: Set<string>,
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (aliases.size === 0) return out;
+  try {
+    const nowIso = new Date().toISOString();
+    const { data } = await admin
+      .from("approver_substitutes")
+      .select("official_email, official_name, substitute_email, substitute_name")
+      .is("revoked_at", null)
+      .lte("starts_at", nowIso)
+      .gte("ends_at", nowIso);
+    for (const r of (data || []) as any[]) {
+      const isMine = Array.from(aliases).some((alias) =>
+        identityMatches(r.substitute_email, alias) ||
+        personListMatches(r.substitute_email, alias) ||
+        identityMatches(r.substitute_name, alias) ||
+        personListMatches(r.substitute_name, alias),
+      );
+      if (!isMine) continue;
+      const email = String(r.official_email || "").toLowerCase();
+      if (email) {
+        out.add(email);
+        const prefix = email.split("@")[0];
+        if (prefix) out.add(prefix);
+      }
+      if (r.official_name) out.add(String(r.official_name).toLowerCase());
+    }
+  } catch { /* ignore */ }
+  return out;
+}
+
 function ownsExpense(
   row: Record<string, unknown>,
   aliases: Set<string>,
   directorateBranch: string | null,
+  substituteAliases?: Set<string> | null,
 ): boolean {
   if (costCenterInBranch(row.cost_center, directorateBranch)) return true;
   const candidates = [
@@ -212,6 +251,15 @@ function ownsExpense(
     if (!c) continue;
     for (const alias of aliases) {
       if (identityMatches(c, alias) || personListMatches(c, alias)) return true;
+    }
+  }
+  // Substituto ativo: herda apenas a fila de aprovação do titular.
+  if (substituteAliases && substituteAliases.size > 0) {
+    for (const c of [row.current_approver, row.original_approver]) {
+      if (!c) continue;
+      for (const alias of substituteAliases) {
+        if (identityMatches(c, alias) || personListMatches(c, alias)) return true;
+      }
     }
   }
   return false;
@@ -251,8 +299,9 @@ Deno.serve(async (req) => {
 
     // Recorte de visibilidade (mesma semântica de `expense-read`), em memória.
     if (!caller.privileged) {
+      const subAliases = await substituteOfficialAliases(admin, caller.aliases);
       docs = docs.filter((d) => {
-        if (ownsExpense(d, caller.aliases, caller.directorateBranch)) return true;
+        if (ownsExpense(d, caller.aliases, caller.directorateBranch, subAliases)) return true;
         if (!caller.directorateBranch) return false;
         return (d.items || []).some((it: Record<string, unknown>) =>
           costCenterInBranch(it.cost_center, caller.directorateBranch),
