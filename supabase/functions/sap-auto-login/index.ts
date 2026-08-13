@@ -72,6 +72,13 @@ Deno.serve(async (req) => {
 
     const admin = service();
 
+    // ── Invalidação explícita (sessão recusada pelo SAP) ────────────────
+    if (body.invalidate === true) {
+      await admin.from("erp_session_cache").delete()
+        .eq("user_id", user.id).eq("company_db", companyDb);
+      return json({ ok: true, invalidated: true });
+    }
+
     // ── 0) Registro de sessão criada fora daqui (login interativo) ──────
     const store = body.store;
     if (store && typeof store.session_id === "string" && store.session_id.trim()) {

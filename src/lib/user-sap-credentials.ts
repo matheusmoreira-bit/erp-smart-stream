@@ -104,3 +104,16 @@ export async function cacheSapSession(params: {
     /* cache é otimização — nunca bloqueia a ação do usuário */
   }
 }
+
+/** Descarta a sessão em cache no servidor (sessão recusada pelo ERP). */
+export async function invalidateSapSessionCache(companyDb: string): Promise<void> {
+  try {
+    await authFetch("sap-auto-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ company_db: companyDb, invalidate: true }),
+    });
+  } catch {
+    /* melhor esforço */
+  }
+}
