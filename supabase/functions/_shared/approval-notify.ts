@@ -376,78 +376,189 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
     // Canais habilitados para esta empresa / tipo de evento
     const channels = await getChannelSettings(admin, input.companyDb, "approval_pending");
 
-    // In-app (dedupe por documento + nível)
     const refId = `${input.expenseId}:${input.levelOrder ?? 0}`;
     const docLink = `/aprovacoes?doc=${encodeURIComponent(`internal:${input.expenseId}`)}`;
-    const { data: existing } = await admin
-      .from("notifications")
-      .select("id")
-      .eq("category", "approval")
-      .contains("metadata", { ref_id: refId })
-      .limit(1);
-    if (existing && existing.length > 0) {
-      await logNotificationAudit(admin, { ...auditBase, channel: "in_app", status: "skipped_duplicate" });
-      return;
-    }
-
     const bodyText = [subtitle, ...details.filter((d) => d.value).map((d) => `${d.label}: ${d.value}`)].join(" · ");
-
-    if (channels.in_app) {
-      await admin.from("notifications").insert({
-        user_identifier: identifier,
-        company_db: input.companyDb || null,
-        title,
-        body: bodyText,
-        category: "approval",
-        link: docLink,
-        metadata: { ref_id: refId, expense_id: input.expenseId, level_order: input.levelOrder ?? null },
-      });
-      await logNotificationAudit(admin, { ...auditBase, channel: "in_app" });
-    } else {
-      await logNotificationAudit(admin, { ...auditBase, channel: "in_app", status: "skipped_channel_disabled" });
-    }
-
-    // Push nativo no celular (best-effort, paralelo a e-mail/Slack).
-    if (channels.push) {
-      await pushToRecipient(admin, identifier, { title, body: bodyText, url: docLink, tag: refId });
-      await logNotificationAudit(admin, { ...auditBase, channel: "push" });
-    } else {
-      await logNotificationAudit(admin, { ...auditBase, channel: "push", status: "skipped_channel_disabled" });
-    }
-
-    if (!channels.email && !channels.slack) return;
-
-    if (!email || !isEmail(email)) {
-      await logNotificationAudit(admin, { ...auditBase, channel: "email", status: "skipped_no_email" });
-      return;
-    }
-
     const appUrl = appPublicUrl();
-    const token = await issueApprovalToken(admin, {
-      expenseId: input.expenseId,
-      approverEmail: email,
-      approverName: input.approverName,
-      levelOrder: input.levelOrder,
-      channel: "email",
+
+    /** Entrega a notificação para um destinatário (titular ou substituto). */
+    const deliver = async (rcpt: {
+      email: string;
+      name?: string | null;
+      role: "approver" | "substitute";
+      ref: string;
+      title: string;
+      subtitle: string;
+      body: string;
+    }) => {
+      const rcptEmail = (rcpt.email || "").trim().toLowerCase();
+      const rcptIdentifier = rcptEmail && isEmail(rcptEmail)
+        ? rcptEmail.split("@")[0]
+        : (rcpt.name || "").trim().toLowerCase() || rcptEmail;
+      if (!rcptEmail && !rcptIdentifier) return;
+
+      const audit = {
+        ...auditBase,
+        recipient: rcptEmail || rcptIdentifier,
+        recipientName: rcpt.name ?? null,
+        recipientRole: rcpt.role,
+      };
+
+      // In-app (dedupe por documento + nível + destinatário)
+      const { data: existing } = await admin
+        .from("notifications")
+        .select("id")
+        .eq("category", "approval")
+        .contains("metadata", { ref_id: rcpt.ref })
+        .limit(1);
+      if (existing && existing.length > 0) {
+        await logNotificationAudit(admin, { ...audit, channel: "in_app", status: "skipped_duplicate" });
+        return;
+      }
+
+      if (channels.in_app) {
+        await admin.from("notifications").insert({
+          user_identifier: rcptIdentifier,
+          company_db: input.companyDb || null,
+          title: rcpt.title,
+          body: rcpt.body,
+          category: "approval",
+          link: docLink,
+          metadata: {
+            ref_id: rcpt.ref,
+            expense_id: input.expenseId,
+            level_order: input.levelOrder ?? null,
+            ...(rcpt.role === "substitute"
+              ? { substitute_for: (input.approverEmail || input.approverName || "").toLowerCase() }
+              : {}),
+          },
+        });
+        await logNotificationAudit(admin, { ...audit, channel: "in_app" });
+      } else {
+        await logNotificationAudit(admin, { ...audit, channel: "in_app", status: "skipped_channel_disabled" });
+      }
+
+      if (channels.push) {
+        await pushToRecipient(admin, rcptIdentifier, { title: rcpt.title, body: rcpt.body, url: docLink, tag: rcpt.ref });
+        await logNotificationAudit(admin, { ...audit, channel: "push" });
+      } else {
+        await logNotificationAudit(admin, { ...audit, channel: "push", status: "skipped_channel_disabled" });
+      }
+
+      if (!channels.email && !channels.slack) return;
+      if (!rcptEmail || !isEmail(rcptEmail)) {
+        await logNotificationAudit(admin, { ...audit, channel: "email", status: "skipped_no_email" });
+        return;
+      }
+
+      const token = await issueApprovalToken(admin, {
+        expenseId: input.expenseId,
+        approverEmail: rcptEmail,
+        approverName: rcpt.name,
+        levelOrder: input.levelOrder,
+        channel: "email",
+      });
+      const approveUrl = token ? `${appUrl}/aprovar/${token}` : null;
+
+      if (channels.email) {
+        await sendEmail(
+          [rcptEmail],
+          `[ERP Flow] ${rcpt.title}`,
+          buildEmailHtml(rcpt.title, rcpt.subtitle, details, approveUrl, `${appUrl}${docLink}`),
+        );
+        await logNotificationAudit(admin, { ...audit, channel: "email" });
+      } else {
+        await logNotificationAudit(admin, { ...audit, channel: "email", status: "skipped_channel_disabled" });
+      }
+
+      if (channels.slack) {
+        await sendSlackApproval({
+          email: rcptEmail, title: rcpt.title, subtitle: rcpt.subtitle, details, approveUrl, appUrl: `${appUrl}${docLink}`,
+        });
+        if (slackEnabled()) await logNotificationAudit(admin, { ...audit, channel: "slack" });
+      } else {
+        await logNotificationAudit(admin, { ...audit, channel: "slack", status: "skipped_channel_disabled" });
+      }
+    };
+
+    // 1) Aprovador titular
+    await deliver({
+      email,
+      name: input.approverName,
+      role: "approver",
+      ref: refId,
+      title,
+      subtitle,
+      body: bodyText,
     });
-    const approveUrl = token ? `${appUrl}/aprovar/${token}` : null;
 
-    if (channels.email) {
-      await sendEmail([email], `[ERP Flow] ${title}`, buildEmailHtml(title, subtitle, details, approveUrl, `${appUrl}${docLink}`));
-      await logNotificationAudit(admin, { ...auditBase, channel: "email" });
-    } else {
-      await logNotificationAudit(admin, { ...auditBase, channel: "email", status: "skipped_channel_disabled" });
+    // 2) Substitutos vigentes do titular — recebem a mesma solicitação, com
+    //    aviso de que estão respondendo em nome do aprovador oficial.
+    for (const sub of await activeSubstitutesFor(admin, {
+      officialEmail: email,
+      officialName: input.approverName,
+      companyDb: input.companyDb,
+    })) {
+      const officialLabel = input.approverName || email || "o aprovador titular";
+      const subTitle = `${title} (em nome de ${officialLabel})`;
+      const subSubtitle = `${subtitle} Você está como aprovador substituto de ${officialLabel}.`;
+      await deliver({
+        email: sub.email,
+        name: sub.name,
+        role: "substitute",
+        ref: `${refId}:sub:${(sub.email || sub.name || "").toLowerCase()}`,
+        title: subTitle,
+        subtitle: subSubtitle,
+        body: [subSubtitle, ...details.filter((d) => d.value).map((d) => `${d.label}: ${d.value}`)].join(" · "),
+      });
     }
-
-    if (channels.slack) {
-      await sendSlackApproval({ email, title, subtitle, details, approveUrl, appUrl: `${appUrl}${docLink}` });
-      if (slackEnabled()) await logNotificationAudit(admin, { ...auditBase, channel: "slack" });
-    } else {
-      await logNotificationAudit(admin, { ...auditBase, channel: "slack", status: "skipped_channel_disabled" });
-    }
-
-
   } catch (e) {
     console.warn("[approval-notify] erro inesperado:", e instanceof Error ? e.message : String(e));
   }
+}
+
+/**
+ * Substitutos com delegação VIGENTE (janela ativa e não revogada) para o
+ * aprovador titular informado. O escopo por empresa é respeitado quando o
+ * grant tem `company_db` (nulo = todas as empresas).
+ */
+async function activeSubstitutesFor(admin: any, params: {
+  officialEmail?: string | null;
+  officialName?: string | null;
+  companyDb?: string | null;
+}): Promise<Array<{ email: string; name: string | null }>> {
+  const out: Array<{ email: string; name: string | null }> = [];
+  const norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
+  const prefix = (v: string) => (v.includes("@") ? v.split("@")[0] : v);
+  const keys = new Set(
+    [norm(params.officialEmail), norm(params.officialName)]
+      .filter(Boolean)
+      .flatMap((v) => [v, prefix(v)]),
+  );
+  if (keys.size === 0) return out;
+  try {
+    const nowIso = new Date().toISOString();
+    const { data } = await admin
+      .from("approver_substitutes")
+      .select("company_db, official_email, official_name, substitute_email, substitute_name")
+      .is("revoked_at", null)
+      .lte("starts_at", nowIso)
+      .gte("ends_at", nowIso);
+    const seen = new Set<string>();
+    for (const r of (data || []) as any[]) {
+      if (r.company_db && params.companyDb && norm(r.company_db) !== norm(params.companyDb)) continue;
+      const offKeys = [norm(r.official_email), norm(r.official_name)]
+        .filter(Boolean)
+        .flatMap((v) => [v, prefix(v)]);
+      if (!offKeys.some((k) => keys.has(k))) continue;
+      const subEmail = norm(r.substitute_email);
+      const dedupe = subEmail || norm(r.substitute_name);
+      if (!dedupe || seen.has(dedupe)) continue;
+      seen.add(dedupe);
+      out.push({ email: subEmail, name: r.substitute_name || null });
+    }
+  } catch (e) {
+    console.warn("[approval-notify] substitutos:", e instanceof Error ? e.message : String(e));
+  }
+  return out;
 }
