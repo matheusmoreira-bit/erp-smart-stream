@@ -32,7 +32,9 @@ interface Props {
  * permissões e visibilidade como esse usuário.
  */
 export function ImpersonationDialog({ open, onOpenChange }: Props) {
-  const { session, login } = useSap();
+  const { session, login, impersonateAs } = useSap();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { getLabel } = useCompanies(true);
   const { users, isLoading } = useSapUsers();
   const [search, setSearch] = useState("");
