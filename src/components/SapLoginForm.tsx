@@ -607,7 +607,7 @@ export function SapLoginForm() {
               {googleLoading ? "Conectando..." : "Entrar com Google"}
             </Button>
           ) : (
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full" disabled={isLoading || loginError?.blocking === true}>
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
               ) : (
