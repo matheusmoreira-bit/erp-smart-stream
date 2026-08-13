@@ -297,6 +297,7 @@ export function useSapCachedList({
             }
             cachedData = filterActiveRows(endpoint, cachedData, cacheKey);
             setOptions(cachedData.map(mapRowRef.current));
+            hadRenderedData = cachedData.length > 0;
 
             // Cache válido (ou sem sessão para revalidar): encerra aqui.
             if (!isExpired || !session) {
