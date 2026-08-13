@@ -1965,7 +1965,7 @@ export function CreateExpenseModal({
     setItems([{ description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" }]);
     setFiles(next.docs.map((d) => d.file));
     setDraftId(null);
-    applyFiscalGroup(next.docs.map((d) => d.extracted));
+    applyFiscalGroup(fiscalPayloadOf(next.docs));
     currentGroupRef.current = next;
   };
 
