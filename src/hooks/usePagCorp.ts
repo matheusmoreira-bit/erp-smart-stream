@@ -169,26 +169,51 @@ export function usePagCorp() {
     if (!hadCache) setIsLoading(true);
 
     try {
-      const params: Record<string, string> = {};
-      if (startDate) params.startDate = startDate;
-      if (endDate) params.endDate = endDate;
-      if (companyDb) params.companyDb = companyDb;
-
       const { sapFunctionFetch } = await import("@/lib/auth-fetch");
-      const queryString = new URLSearchParams(params).toString();
-      const url = `pagcorp-proxy${queryString ? `?${queryString}` : ""}`;
-      const res = await sapFunctionFetch(url);
 
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || `Erro ${res.status}`);
+      // A API do PagCorp limita a consulta a ~1 mês. Para períodos maiores,
+      // quebramos em janelas de até 30 dias e buscamos sequencialmente,
+      // concatenando os resultados (a deduplicação abaixo cuida de sobreposições).
+      const windows: Array<{ start?: string; end?: string }> = [];
+      if (startDate && endDate) {
+        const MS_DAY = 24 * 60 * 60 * 1000;
+        let cursor = new Date(`${startDate}T00:00:00`);
+        const final = new Date(`${endDate}T00:00:00`);
+        let guard = 0;
+        while (cursor.getTime() <= final.getTime() && guard < 60) {
+          const chunkEnd = new Date(Math.min(cursor.getTime() + 30 * MS_DAY, final.getTime()));
+          windows.push({
+            start: cursor.toISOString().slice(0, 10),
+            end: chunkEnd.toISOString().slice(0, 10),
+          });
+          cursor = new Date(chunkEnd.getTime() + MS_DAY);
+          guard++;
+        }
+      }
+      if (windows.length === 0) windows.push({ start: startDate, end: endDate });
+
+      const rawItems: any[] = [];
+      for (const w of windows) {
+        const params: Record<string, string> = {};
+        if (w.start) params.startDate = w.start;
+        if (w.end) params.endDate = w.end;
+        if (companyDb) params.companyDb = companyDb;
+
+        const queryString = new URLSearchParams(params).toString();
+        const url = `pagcorp-proxy${queryString ? `?${queryString}` : ""}`;
+        const res = await sapFunctionFetch(url);
+
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          throw new Error(errBody.error || `Erro ${res.status}`);
+        }
+
+        const result = await res.json();
+        if (Array.isArray(result.items)) rawItems.push(...result.items);
       }
 
-
-      const result = await res.json();
       // Dedupe por expenseId: a API do PagCorp tem retornado a mesma transação repetida.
       // Mantemos a primeira ocorrência por (id ?? expenseId).
-      const rawItems: any[] = Array.isArray(result.items) ? result.items : [];
       const dedupedRaw: any[] = [];
       const seenExpenseIds = new Set<string | number>();
       for (const it of rawItems) {
