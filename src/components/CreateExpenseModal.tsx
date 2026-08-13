@@ -1237,6 +1237,35 @@ export function CreateExpenseModal({
     return name ? `name:${name}` : "unknown";
   };
 
+  // Boleto/comprovante são instrumentos de COBRANÇA da mesma compra — nunca
+  // devem virar um segundo pedido. O beneficiário costuma ser o banco, então
+  // o CNPJ diverge da NF e o agrupamento por fornecedor os separava.
+  const PAYMENT_KINDS = new Set(["boleto", "comprovante_pagamento"]);
+  const isPaymentInstrument = (doc: any): boolean =>
+    PAYMENT_KINDS.has(String(doc?.document_kind || "").toLowerCase());
+
+  const docTotalOf = (doc: any): number => {
+    const t = Number(doc?.total_amount);
+    if (Number.isFinite(t) && t > 0) return t;
+    const items = Array.isArray(doc?.items) ? doc.items : [];
+    return items.reduce((s: number, i: any) => s + (Number(i?.line_total) || 0), 0);
+  };
+
+  // Extrações que alimentam o formulário: ignora os companions (boletos) para
+  // não duplicar valores, mas aproveita o vencimento deles quando a NF não traz.
+  const fiscalPayloadOf = (docs: Array<{ extracted: any; companion?: boolean }>): any[] => {
+    const main = docs.filter((d) => !d.companion);
+    const base = (main.length > 0 ? main : docs).map((d) => d.extracted);
+    if (base.length === 0) return base;
+    if (!base[0]?.due_date) {
+      const companionDue = docs.find((d) => d.companion && d.extracted?.due_date)?.extracted?.due_date;
+      if (companionDue) base[0] = { ...base[0], due_date: companionDue };
+    }
+    return base;
+  };
+
+
+
   const processWithAI = async (filesToProcess: File[]) => {
     // Guard anti-duplicação: `isProcessing` (estado) + `aiInFlightRef` (síncrono).
     // O ref pega o intervalo entre o clique e o setState — evita 2ª chamada
