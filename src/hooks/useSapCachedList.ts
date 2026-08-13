@@ -150,10 +150,46 @@ function ensureRealtimeInvalidation() {
 // sido gravadas por uma tela que não enviou o $filter).
 const ACTIVE_ONLY_ENDPOINTS = new Set(["CostCenters", "ProfitCenters", "Projects"]);
 
+/** "purchase" | "sales" | null, deduzido da cacheKey da lista de itens. */
+function itemUsageFromCacheKey(cacheKey?: string): "purchase" | "sales" | null {
+  const k = (cacheKey || "").toLowerCase();
+  if (k.includes("sales")) return "sales";
+  if (k.includes("purchase")) return "purchase";
+  return null;
+}
+
 function withActiveFilter(
   endpoint: string,
   params?: Record<string, string | number>,
+  cacheKey?: string,
 ): Record<string, string | number> | undefined {
+  if (endpoint === "Items") {
+    // Itens inválidos/congelados, ativos imobilizados (itFixedAssets) e itens
+    // que o ERP não marca como de compra/venda não podem aparecer nos
+    // comboboxes de pedidos.
+    const next: Record<string, string | number> = { ...(params || {}) };
+    const existing = String(next.$filter || "");
+    const usage = itemUsageFromCacheKey(cacheKey);
+    const guards: string[] = [];
+    if (!/Valid|Frozen/.test(existing)) guards.push("Valid eq 'tYES'", "Frozen eq 'tNO'");
+    if (!/ItemType/.test(existing)) guards.push("ItemType ne 'itFixedAssets'");
+    if (usage === "purchase" && !/PurchaseItem/.test(existing)) guards.push("PurchaseItem eq 'tYES'");
+    if (usage === "sales" && !/SalesItem/.test(existing)) guards.push("SalesItem eq 'tYES'");
+    if (guards.length) {
+      const guard = guards.join(" and ");
+      next.$filter = existing ? `(${existing}) and ${guard}` : guard;
+    }
+    const select = String(next.$select || "");
+    if (select) {
+      const fields = select.split(",").map((f) => f.trim());
+      const wanted = ["Valid", "Frozen", "ItemType"];
+      if (usage === "purchase") wanted.push("PurchaseItem");
+      if (usage === "sales") wanted.push("SalesItem");
+      for (const f of wanted) if (!fields.includes(f)) fields.push(f);
+      next.$select = fields.join(",");
+    }
+    return next;
+  }
   if (!ACTIVE_ONLY_ENDPOINTS.has(endpoint)) return params;
   const next: Record<string, string | number> = { ...(params || {}) };
   const existing = String(next.$filter || "");
@@ -167,7 +203,22 @@ function withActiveFilter(
   return next;
 }
 
-function filterActiveRows(endpoint: string, rows: any[]): any[] {
+const isNo = (v: any) => v === undefined || v === null || v === ""
+  ? null
+  : String(v).toLowerCase() === "tno" || v === false;
+
+function filterActiveRows(endpoint: string, rows: any[], cacheKey?: string): any[] {
+  if (endpoint === "Items") {
+    const usage = itemUsageFromCacheKey(cacheKey);
+    return rows.filter((r: any) => {
+      if (isNo(r?.Valid) === true) return false;
+      if (isNo(r?.Frozen) === false) return false; // Frozen === tYES
+      if (String(r?.ItemType || "") === "itFixedAssets") return false;
+      if (usage === "purchase" && isNo(r?.PurchaseItem) === true) return false;
+      if (usage === "sales" && isNo(r?.SalesItem) === true) return false;
+      return true;
+    });
+  }
   if (!ACTIVE_ONLY_ENDPOINTS.has(endpoint)) return rows;
   return rows.filter((r: any) => {
     const active = r?.Active;
@@ -233,7 +284,7 @@ export function useSapCachedList({
                 (r: any) => !String(r?.CenterCode || "").startsWith("Centr_"),
               );
             }
-            cachedData = filterActiveRows(endpoint, cachedData);
+            cachedData = filterActiveRows(endpoint, cachedData, cacheKey);
             setOptions(cachedData.map(mapRowRef.current));
 
             // Cache válido (ou sem sessão para revalidar): encerra aqui.
@@ -261,7 +312,7 @@ export function useSapCachedList({
         return;
       }
 
-      const effectiveParams = withActiveFilter(endpoint, paramsRef.current);
+      const effectiveParams = withActiveFilter(endpoint, paramsRef.current, cacheKey);
       let rows: any[] | null = null;
       try {
         const { data: svcData, error: svcErr } = await supabase.functions.invoke(
@@ -297,7 +348,7 @@ export function useSapCachedList({
         rows = rows.filter((r: any) => !String(r?.CenterCode || "").startsWith("Centr_"));
       }
       // Remove registros desativados no ERP (CCs/projetos inativos)
-      rows = filterActiveRows(endpoint, rows);
+      rows = filterActiveRows(endpoint, rows, cacheKey);
 
 
       // 3. Only cache non-empty results
