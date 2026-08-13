@@ -1261,6 +1261,45 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     ],
   });
 
+  // Pedido de COMPRA que já existe no SAP e foi editado + reaprovado no Flow:
+  // reenvia em modo PATCH para refletir a alteração no ERP. Antes essa etapa
+  // dependia do cliente, que apenas registrava "já existe no ERP" e parava —
+  // a alteração nunca chegava ao SAP.
+  if (String((exp as any).doc_type) !== "sales" && (exp as any).sap_doc_entry) {
+    const originStr = String((exp as any).origin || "").toLowerCase();
+    const nativeErp = ["sap", "erp", "sap_erp"].includes(originStr);
+    if (!nativeErp) {
+      try {
+        const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+        const svcUrl = Deno.env.get("SUPABASE_URL") || "";
+        const sapRes = await fetch(`${svcUrl}/functions/v1/expense-to-sap`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${svcKey}`,
+            apikey: svcKey,
+            "x-internal-retry": "1",
+          },
+          body: JSON.stringify({
+            expense_id: expenseId,
+            patch_document: true,
+            use_service_account: true,
+          }),
+        });
+        const sapBody = await sapRes.json().catch(() => ({}));
+        stageLog("purchase_to_sap_patch", sapRes.ok ? "info" : "error", {
+          requestId,
+          expenseId,
+          status: sapRes.status,
+          docEntry: (sapBody as any)?.docEntry ?? null,
+          error: (sapBody as any)?.error ?? null,
+        });
+      } catch (e) {
+        stageLog("purchase_to_sap_patch", "error", { requestId, expenseId, error: (e as Error).message });
+      }
+    }
+  }
+
   if (String((exp as any).doc_type) === "sales") {
     // Pedido de venda aprovado no ERP Flow → integra ao SAP (Orders) usando o
     // Apiuser da empresa. Não depende da sessão SAP do aprovador.
