@@ -41,13 +41,60 @@ function warnOnce(message: string) {
   }
 }
 
+/**
+ * Registra no audit_log toda tentativa de ação bloqueada pelo modo somente
+ * leitura, com a ação tentada e o motivo da negação. Nunca lança.
+ */
+const recentlyLogged = new Map<string, number>();
+function logBlockedAttempt(action: string, reason: string, surface: string) {
+  const key = `${surface}:${action}`;
+  const now = Date.now();
+  const last = recentlyLogged.get(key) || 0;
+  if (now - last < 5000) return; // evita flood do mesmo clique
+  recentlyLogged.set(key, now);
+
+  void (async () => {
+    try {
+      const [{ getImpersonation }, { logAuditAction }] = await Promise.all([
+        import("@/lib/impersonation"),
+        import("@/hooks/useAuditLog"),
+      ]);
+      const imp = getImpersonation();
+      await logAuditAction({
+        action: "impersonation_action_blocked",
+        entity_type: "erp_session",
+        actor_email: imp?.adminEmail,
+        company_db: imp?.companyDB,
+        details: {
+          blocked_action: action,
+          surface,
+          reason,
+          read_only_mode: true,
+          target_user: imp?.targetUser || null,
+          target_email: imp?.targetEmail || null,
+          route: typeof window !== "undefined" ? window.location.pathname + window.location.search : null,
+          at: new Date().toISOString(),
+        },
+      });
+    } catch {
+      /* auditoria nunca bloqueia o fluxo */
+    }
+  })();
+}
+
 /** Lança (e avisa) se a ação for uma escrita durante impersonação. */
-export function assertWriteAllowed(action?: string): void {
+export function assertWriteAllowed(action?: string, surface = "client"): void {
   if (!isReadOnlyMode()) return;
   const err = new ReadOnlyImpersonationError(action);
+  logBlockedAttempt(
+    action || "ação não identificada",
+    "Sessão em modo somente leitura (impersonação): escritas em nome do usuário são proibidas.",
+    surface,
+  );
   warnOnce(err.message);
   throw err;
 }
+
 
 /**
  * Edge Functions liberadas em modo somente leitura (consultas, diagnósticos e
@@ -92,7 +139,7 @@ export function assertFunctionAllowed(name: string): void {
   if (!isReadOnlyMode()) return;
   const fn = (name || "").split("?")[0].replace(/^\/+/, "");
   if (READ_ONLY_FUNCTIONS.has(fn)) return;
-  assertWriteAllowed(fn);
+  assertWriteAllowed(`edge function ${fn}`, "edge-function");
 }
 
 const MUTATING_METHODS = ["insert", "update", "upsert", "delete"] as const;
@@ -120,7 +167,7 @@ export function installReadOnlyGuards(client: {
       get(target, prop, receiver) {
         if (typeof prop === "string" && (MUTATING_METHODS as readonly string[]).includes(prop)) {
           return () => {
-            assertWriteAllowed(`${prop} em ${table}`);
+            assertWriteAllowed(`${prop} em ${table}`, "database");
           };
         }
         return Reflect.get(target, prop, receiver);
@@ -140,7 +187,7 @@ export function installReadOnlyGuards(client: {
           ["upload", "uploadToSignedUrl", "update", "remove", "move", "copy"].includes(prop)
         ) {
           return async () => {
-            assertWriteAllowed(`${prop} em arquivos (${bucket})`);
+            assertWriteAllowed(`${prop} em arquivos (${bucket})`, "storage");
           };
         }
         return Reflect.get(target, prop, receiver);
@@ -151,10 +198,14 @@ export function installReadOnlyGuards(client: {
   const originalRpc = client.rpc.bind(client);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (client as any).rpc = (fn: string, ...rest: any[]) => {
-    // Auditoria continua gravando (é o registro da própria sessão impersonada).
-    const allowed = /^(has_role|get_|list_|is_)/.test(fn) || fn === "insert_audit_log";
-    if (isReadOnlyMode() && !allowed) {
-      assertWriteAllowed(`função ${fn}`);
+    // Somente RPCs claramente mutantes são bloqueadas; as de leitura (feeds,
+    // grants, previews) seguem liberadas. insert_audit_log é sempre permitida
+    // porque registra a própria sessão impersonada.
+    const mutating =
+      /^(insert_|create_|update_|delete_|set_|save_|upsert_|enqueue_|move_|purge_|prune_|archive_|open_|close_|join_|reassign_|consume_|register_|revoke_|api_key_|record_|cascade_|enable_|disable_|dispatch_|run_|sync_|apply_)/.test(fn) &&
+      fn !== "insert_audit_log";
+    if (isReadOnlyMode() && mutating) {
+      assertWriteAllowed(`função ${fn}`, "database-rpc");
     }
     return originalRpc(fn, ...rest);
   };
