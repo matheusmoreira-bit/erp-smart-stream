@@ -403,7 +403,9 @@ export default function PagCorpMapping() {
   /* ── helpers ── */
   function findOption(options: SapSearchOption[], code: string): SapSearchOption | null {
     if (!code) return null;
-    return options.find((o) => o.code === code) || null;
+    // Se a lista do ERP ainda não carregou, mantém o valor salvo visível
+    // (evita "esvaziar" o campo enquanto o cache é revalidado).
+    return options.find((o) => o.code === code) || { code, name: code, extra: "" };
   }
 
   return (
