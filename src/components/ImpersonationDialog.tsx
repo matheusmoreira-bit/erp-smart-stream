@@ -18,7 +18,7 @@ import { useSap } from "@/contexts/SapContext";
 import { useSapUsers } from "@/hooks/useSapUsers";
 import { useCompanies } from "@/hooks/useCompanies";
 import { supabase } from "@/integrations/supabase/client";
-import { setImpersonation, logImpersonationServerSide } from "@/lib/impersonation";
+import { setImpersonation, logImpersonationServerSide, authorizeImpersonationStart } from "@/lib/impersonation";
 import { clearAuthCache } from "@/lib/auth-cache";
 import { logAuditAction } from "@/hooks/useAuditLog";
 import { displayUserName } from "@/lib/user-display";
@@ -86,6 +86,20 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
       const adminEmail = data.session?.user?.email || "";
       if (!adminEmail) throw new Error("Sessão Google não encontrada.");
 
+      // Autorização é do servidor: só admins (has_role) podem impersonar.
+      const authz = await authorizeImpersonationStart({
+        target_user: target,
+        target_name: selected?.UserName || null,
+        target_email: selected?.eMail || null,
+        company_db: session.companyDB,
+        with_password: !!password,
+      });
+      if (!authz.ok) {
+        toast.error(authz.error || "Apenas administradores podem atuar como outro usuário.");
+        setBusy(false);
+        return;
+      }
+
       // A partir daqui os privilégios de admin ficam suspensos.
       setImpersonation({
         targetUser: target,
@@ -108,16 +122,6 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
         // continuam funcionando durante a impersonação.
         impersonateAs(target);
       }
-
-      await logImpersonationServerSide({
-        event: "start",
-        target_user: target,
-        target_name: selected?.UserName || null,
-        target_email: selected?.eMail || null,
-        company_db: session.companyDB,
-        with_password: !!password,
-        started_at: new Date().toISOString(),
-      });
 
       await logAuditAction({
         action: "impersonation_start",

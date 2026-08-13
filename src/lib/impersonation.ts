@@ -74,6 +74,38 @@ export function clearImpersonation() {
 }
 
 /**
+ * Autorização server-side ANTES de iniciar a impersonação. A Edge Function
+ * `impersonation-audit` valida no servidor (via JWT + has_role) que quem pede
+ * é admin — o cliente não decide isso. Só com `ok: true` o app entra no modo
+ * "atuar como". Também deixa o registro de início no audit_log.
+ */
+export async function authorizeImpersonationStart(payload: {
+  target_user: string;
+  target_name?: string | null;
+  target_email?: string | null;
+  company_db?: string | null;
+  with_password?: boolean;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { authFetch } = await import("@/lib/auth-fetch");
+    const resp = await authFetch("impersonation-audit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, event: "start", started_at: new Date().toISOString() }),
+    });
+    if (resp.ok) return { ok: true };
+    let message = "Não foi possível autorizar a impersonação.";
+    try {
+      const body = await resp.json();
+      if (body?.error) message = String(body.error);
+    } catch { /* ignore */ }
+    return { ok: false, error: message };
+  } catch {
+    return { ok: false, error: "Falha ao validar permissão de impersonação no servidor." };
+  }
+}
+
+/**
  * Registro server-side da impersonação (audit_log). A identidade de quem
  * iniciou/encerrou é derivada do JWT dentro da Edge Function — o cliente não
  * consegue forjar o autor. Nunca lança: auditoria não bloqueia o fluxo.
