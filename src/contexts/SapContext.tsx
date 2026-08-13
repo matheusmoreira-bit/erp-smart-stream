@@ -125,6 +125,14 @@ export function SapProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  /**
+   * Aplica a identidade do usuário impersonado na sessão atual, sem recarregar
+   * a página (o reload fazia o app passar pelo gate do Google novamente).
+   */
+  const impersonateAs = useCallback((userName: string) => {
+    setSession((prev) => (prev ? { ...prev, userName } : prev));
+  }, [setSession]);
+
 
   const login = useCallback(async (userName: string, password: string, companyDB: string, erpType: ErpType = "sap") => {
     setIsLoading(true);
