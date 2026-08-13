@@ -325,17 +325,18 @@ Deno.serve(async (req) => {
       // ── Rateio: reconstrói trilhas independentes por (CC + projeto) ────
       // Documentos criados antes do motor de segmentos ficaram com cadeia
       // única (regra do primeiro item). Aqui geramos um fluxo por segmento.
-      // Tipo de rateio no cabeçalho força regra única → sem trilhas por CC.
-      const rateioOverride = ["folha", "imposto", "reembolso", "viagens"].includes(
-        String(doc.rateio_type || "").toLowerCase(),
-      );
+      // Folha/imposto/viagens forçam regra única → sem trilhas por CC.
+      // Reembolso roda EM PARALELO com a alçada padrão.
+      const rateioTypeNorm = String(doc.rateio_type || "").toLowerCase();
+      const isReembolso = rateioTypeNorm === "reembolso";
+      const rateioOverride = ["folha", "imposto", "viagens"].includes(rateioTypeNorm);
       const { data: segExisting } = await admin
         .from("expense_approval_segments")
         .select("id")
         .eq("expense_id", doc.id)
         .limit(1);
       if (!rateioOverride && (!segExisting || segExisting.length === 0)) {
-        const segments = await buildRateioSegments(admin, items as any, {
+        const segCtx = {
           companyDb: doc.company_db,
           docType,
           currency: doc.currency || "BRL",
@@ -344,8 +345,11 @@ Deno.serve(async (req) => {
           supplierCode: doc.supplier_code || null,
           headerCostCenter: doc.cost_center || null,
           headerProject: doc.project || null,
-          rateioType: String(doc.rateio_type || "padrao").toLowerCase(),
-        } as any);
+          rateioType: rateioTypeNorm || "padrao",
+        };
+        const segments = isReembolso
+          ? await buildReembolsoSegments(admin, items as any, segCtx as any)
+          : await buildRateioSegments(admin, items as any, segCtx as any);
         if (segments && segments.length > 1) {
           if (dryRun) {
             results.push({
