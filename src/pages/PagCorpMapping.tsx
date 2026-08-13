@@ -401,6 +401,33 @@ export default function PagCorpMapping() {
 
   const hasCardFallback = cardMappings.some((m) => m.is_fallback);
 
+  /* ── busca/filtro das linhas do mapeamento ── */
+  const [cardSearch, setCardSearch] = useState("");
+  const visibleCardRows = useMemo(() => {
+    const rows = cardMappings.map((m, index) => ({ m, index }));
+    const term = cardSearch.trim().toLowerCase();
+    if (!term) return rows;
+    const ccName = (code: string) =>
+      costCenterCache.options.find((o) => o.code === code)?.name || "";
+    const projName = (code: string) =>
+      projectCache.options.find((o) => o.code === code)?.name || "";
+    const itemName = (code: string) =>
+      itemCache.options.find((o) => o.code === code)?.name || "";
+    return rows.filter(({ m }) => {
+      if (m.isNew) return true; // linhas novas nunca somem enquanto são preenchidas
+      const haystack = [
+        m.card_identifier, m.card_label,
+        m.cost_center, ccName(m.cost_center || ""),
+        m.project, projName(m.project || ""),
+        m.item_code, itemName(m.item_code || ""),
+        m.is_fallback ? "fallback padrão da empresa" : "",
+      ].join(" ").toLowerCase();
+      return haystack.includes(term);
+    });
+  }, [cardMappings, cardSearch, costCenterCache.options, projectCache.options, itemCache.options]);
+
+
+
 
   /* ── helpers ── */
   function findOption(options: SapSearchOption[], code: string): SapSearchOption | null {
