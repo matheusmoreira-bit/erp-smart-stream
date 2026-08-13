@@ -1708,8 +1708,10 @@ export function CreateExpenseModal({
   // (mutações em refs failed/cancelled chamam schedulePersist manualmente).
   useEffect(() => { schedulePersist(); }, [schedulePersist]);
 
-  // Hidratação: ao abrir o modal, se houver estado persistido e a fila
-  // atual estiver vazia, restaura tudo. Só roda uma vez por sessão do modal.
+  // Hidratação: ao abrir o modal NÃO reanexamos nada automaticamente.
+  // Snapshots antigos (> 8h) são descartados; se houver pendências recentes,
+  // apenas oferecemos a restauração via ação no toast.
+  const QUEUE_SNAPSHOT_TTL_MS = 8 * 60 * 60 * 1000;
   useEffect(() => {
     if (!open) { queueHydratedRef.current = false; return; }
     if (queueHydratedRef.current) return;
@@ -1719,40 +1721,63 @@ export function CreateExpenseModal({
       if (cancelledFlag) return;
       queueHydratedRef.current = true;
       if (!saved) return;
+      if (!saved.savedAt || Date.now() - saved.savedAt > QUEUE_SNAPSHOT_TTL_MS) {
+        void clearQueueState(queueScope);
+        return;
+      }
       const hasInMemory =
         queueHistory.length > 0 ||
         deferredGroups.length > 0 ||
         failedGroupsRef.current.size > 0 ||
         cancelledGroupsRef.current.length > 0;
       if (hasInMemory) return;
-      const deferred = deserializeGroups(saved.deferredGroups);
-      const failed = deserializeGroups(saved.failedGroups);
-      const cancelledG = deserializeGroups(saved.cancelledGroups);
-      setQueueHistory(saved.queueHistory);
-      setDeferredGroups(deferred);
-      failedGroupsRef.current = new Map(failed.map((g) => [g.supplierKey, g]));
-      cancelledGroupsRef.current = cancelledG;
-      const seen = new Set<string>();
-      const restoredFiles: File[] = [];
-      for (const g of [...failed, ...deferred, ...cancelledG]) {
-        for (const d of g.docs) {
-          const k = `${d.file.name}::${d.file.size}::${d.file.lastModified}`;
-          if (seen.has(k)) continue;
-          seen.add(k);
-          restoredFiles.push(d.file);
+
+      const pendingCount =
+        saved.deferredGroups.length + saved.failedGroups.length + saved.cancelledGroups.length;
+      if (pendingCount === 0) {
+        // Só histórico concluído: nada a retomar, limpa para não poluir.
+        void clearQueueState(queueScope);
+        return;
+      }
+
+      const restore = () => {
+        const deferred = deserializeGroups(saved.deferredGroups);
+        const failed = deserializeGroups(saved.failedGroups);
+        const cancelledG = deserializeGroups(saved.cancelledGroups);
+        setQueueHistory(saved.queueHistory);
+        setDeferredGroups(deferred);
+        failedGroupsRef.current = new Map(failed.map((g) => [g.supplierKey, g]));
+        cancelledGroupsRef.current = cancelledG;
+        const seen = new Set<string>();
+        const restoredFiles: File[] = [];
+        for (const g of [...failed, ...deferred, ...cancelledG]) {
+          for (const d of g.docs) {
+            const k = `${d.file.name}::${d.file.size}::${d.file.lastModified}`;
+            if (seen.has(k)) continue;
+            seen.add(k);
+            restoredFiles.push(d.file);
+          }
         }
-      }
-      if (restoredFiles.length > 0) setFiles((prev) => (prev.length > 0 ? prev : restoredFiles));
-      if (saved.queueHistory.length > 0 || restoredFiles.length > 0) {
-        toast.info(
-          `Fila anterior restaurada (${saved.queueHistory.length} registro(s), ${restoredFiles.length} anexo(s)). Use "Reenviar erros" ou "Retomar fila" para continuar.`,
-          { duration: 8000 },
-        );
-      }
+        if (restoredFiles.length > 0) setFiles((prev) => (prev.length > 0 ? prev : restoredFiles));
+        toast.success(`Fila anterior restaurada (${restoredFiles.length} anexo(s)).`);
+      };
+
+      toast.info(
+        `Existem ${pendingCount} grupo(s) pendentes de um envio anterior. Os anexos não foram reanexados.`,
+        {
+          duration: 10000,
+          action: { label: "Restaurar", onClick: restore },
+          cancel: {
+            label: "Descartar",
+            onClick: () => { void clearQueueState(queueScope); },
+          },
+        },
+      );
     })();
     return () => { cancelledFlag = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, queueScope]);
+
 
   // Prepara o plano de retomada: aplica as duas verificações (já concluído
   // e duplicidade de hash) SEM alterar o estado da fila. Abre o dialog com
