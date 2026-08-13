@@ -3509,7 +3509,7 @@ export function CreateExpenseModal({
     />
 
     <AlertDialog open={!!dupConfirm} onOpenChange={(v) => { if (!v) setDupConfirm(null); }}>
-      <AlertDialogContent className="z-[60]" overlayClassName="z-[60] bg-black/40" overlayClassName="z-[60] bg-black/40">
+      <AlertDialogContent className="z-[60]" overlayClassName="z-[60] bg-black/40">
         <AlertDialogHeader>
           <AlertDialogTitle>Anexo já utilizado em outro lançamento</AlertDialogTitle>
           <AlertDialogDescription asChild>
@@ -3608,7 +3608,7 @@ export function CreateExpenseModal({
         diferentes, o usuário escolhe qual despesa criar PRIMEIRO. Os demais
         grupos ficam adiados e abrem automaticamente após a submissão. */}
     <AlertDialog open={!!supplierPicker} onOpenChange={(v) => { if (!v) setSupplierPicker(null); }}>
-      <AlertDialogContent className="z-[60]" overlayClassName="z-[60] bg-black/40" overlayClassName="z-[60] bg-black/40">
+      <AlertDialogContent className="z-[60]" overlayClassName="z-[60] bg-black/40">
         <AlertDialogHeader>
           <AlertDialogTitle>Anexos com fornecedores diferentes</AlertDialogTitle>
           <AlertDialogDescription asChild>
@@ -3699,7 +3699,7 @@ export function CreateExpenseModal({
 
     {/* Confirmação de cancelamento do processamento IA e/ou fila de fornecedores */}
     <AlertDialog open={cancelConfirm} onOpenChange={setCancelConfirm}>
-      <AlertDialogContent className="z-[60]" overlayClassName="z-[60] bg-black/40" overlayClassName="z-[60] bg-black/40">
+      <AlertDialogContent className="z-[60]" overlayClassName="z-[60] bg-black/40">
         <AlertDialogHeader>
           <AlertDialogTitle>Cancelar processamento?</AlertDialogTitle>
           <AlertDialogDescription>
@@ -4319,7 +4319,7 @@ export function CreateExpenseModal({
     {/* Confirmação antes de reenviar apenas os grupos com erro (❌).
         Evita reprocessar sem querer ao clicar no botão do resumo. */}
     <AlertDialog open={confirmRetryFailed} onOpenChange={setConfirmRetryFailed}>
-      <AlertDialogContent className="z-[60]" overlayClassName="z-[60] bg-black/40" overlayClassName="z-[60] bg-black/40">
+      <AlertDialogContent className="z-[60]" overlayClassName="z-[60] bg-black/40">
         <AlertDialogHeader>
           <AlertDialogTitle>Reenviar apenas os erros?</AlertDialogTitle>
           <AlertDialogDescription asChild>
