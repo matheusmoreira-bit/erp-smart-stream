@@ -1343,7 +1343,7 @@ export default function PagCorp() {
             <div>
               <p className="text-xs text-muted-foreground">Sem Prestação</p>
               <p className="text-xl font-bold text-foreground">
-                {transactions.filter((t) => !t.hasAccountability).length}
+                {filteredTransactions.filter((t) => !t.hasAccountability).length}
               </p>
             </div>
           </motion.div>
