@@ -72,6 +72,23 @@ Deno.serve(async (req) => {
 
     const admin = service();
 
+    // ── 0) Registro de sessão criada fora daqui (login interativo) ──────
+    const store = body.store;
+    if (store && typeof store.session_id === "string" && store.session_id.trim()) {
+      const timeout = Math.min(Math.max(Number(store.session_timeout) || 30, 1), 30);
+      const { error: storeErr } = await admin.from("erp_session_cache").upsert({
+        user_id: user.id,
+        company_db: companyDb,
+        sap_user: String(store.sap_user || user.email || "").slice(0, 200),
+        session_id: store.session_id.trim(),
+        route_id: typeof store.route_id === "string" ? store.route_id : "",
+        expires_at: new Date(Date.now() + timeout * 60 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id,company_db" });
+      if (storeErr) return json({ error: storeErr.message }, 500);
+      return json({ ok: true, stored: true });
+    }
+
     // ── 1) Sessão em cache ainda válida? ────────────────────────────────
     // Evita um /Login novo a cada integração (ex.: PagCorp em lote).
     // Margem de segurança de 2 min antes do vencimento real.
