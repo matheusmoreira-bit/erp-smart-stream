@@ -28,72 +28,8 @@ import { NfEntradaProvisionDialog } from "@/components/NfEntradaProvisionDialog"
 import { copyDocLink, readDocParam, setDocParam } from "@/lib/doc-deep-link";
 import { setPendingPurchaseFiles } from "@/lib/pending-purchase-files";
 
-type StatusVariant = "default" | "secondary" | "destructive" | "outline";
+import { nfStage, nfStagePresentation, STAGE_OPTIONS } from "@/lib/nf-entrada-status";
 
-/**
- * Os rótulos descrevem a ETAPA do documento no fluxo Master Tax → ERP Flow → SAP.
- * Antes falavam em "aprovação", o que não corresponde ao que a etapa representa.
- */
-const STATUS_LABELS: Record<NfEntradaStatus, { label: string; variant: StatusVariant; hint: string }> = {
-  pending_expense: {
-    label: "Sem pedido vinculado",
-    variant: "outline",
-    hint: "NF capturada no Master Tax, ainda sem pedido de compra correspondente no ERP Flow.",
-  },
-  awaiting_erpflow_approval: {
-    label: "Pedido em andamento no ERP Flow",
-    variant: "secondary",
-    hint: "Existe pedido de compra no ERP Flow, mas ele ainda não foi concluído/integrado ao SAP.",
-  },
-  erpflow_rejected: {
-    label: "Pedido recusado no ERP Flow",
-    variant: "destructive",
-    hint: "O pedido de compra vinculado foi recusado no ERP Flow.",
-  },
-  awaiting_sap: {
-    label: "Aguardando NF de entrada no SAP",
-    variant: "secondary",
-    hint: "Pedido de compra já existe no SAP; falta lançar a NF de entrada (esboço) contra esse pedido.",
-  },
-  sap_rejected: {
-    label: "Recusada pelo SAP",
-    variant: "destructive",
-    hint: "O SAP recusou o documento; verifique o histórico para o motivo.",
-  },
-  awaiting_invoice: {
-    label: "Aguardando NF de entrada no SAP",
-    variant: "secondary",
-    hint: "Falta lançar a NF de entrada no SAP para encerrar o fluxo.",
-  },
-  completed: {
-    label: "NF lançada no SAP",
-    variant: "default",
-    hint: "Fluxo concluído: NF de entrada registrada no SAP.",
-  },
-  integration_error: {
-    label: "Erro de integração",
-    variant: "destructive",
-    hint: "A integração falhou. Use “Tentar integração novamente” após corrigir os dados.",
-  },
-  cancelled: {
-    label: "Fluxo cancelado",
-    variant: "outline",
-    hint: "O fluxo desta NF foi cancelado manualmente.",
-  },
-};
-
-/** Rótulo efetivo da linha: reflete o esboço já lançado, quando houver. */
-function statusPresentation(it: NfEntradaImport): { label: string; variant: StatusVariant; hint: string } {
-  const base = STATUS_LABELS[it.status];
-  if (it.sap_invoice_draft_id && it.status !== "completed" && it.status !== "cancelled") {
-    return {
-      label: "Esboço de NF no SAP",
-      variant: "secondary",
-      hint: `Esboço ${it.sap_invoice_draft_id} criado no SAP, aguardando conferência/efetivação pelo fiscal.`,
-    };
-  }
-  return base;
-}
 
 
 function formatCurrency(v: number | null) {
