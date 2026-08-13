@@ -727,6 +727,54 @@ export default function PagCorpMapping() {
           </Tabs>
         </div>
       </main>
+
+      <AlertDialog open={!!cardConfirm} onOpenChange={(o) => { if (!o) setCardConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {cardConfirm?.kind === "delete" ? "Excluir mapeamento?" : "Descartar alterações?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {cardConfirm?.kind === "delete" ? (
+                <>
+                  O mapeamento
+                  {cardConfirm && (
+                    <strong>
+                      {" "}
+                      {cardMappings[cardConfirm.index]?.is_fallback
+                        ? "Fallback (padrão da empresa)"
+                        : cardMappings[cardConfirm.index]?.card_label ||
+                          cardMappings[cardConfirm.index]?.card_identifier ||
+                          "sem cartão"}
+                    </strong>
+                  )}{" "}
+                  será removido. As próximas integrações desse cartão passarão a usar o fallback da empresa. Esta ação não pode ser desfeita.
+                </>
+              ) : (
+                <>Você alterou este mapeamento e ainda não salvou. Se cancelar agora, as alterações serão perdidas.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>
+              {cardConfirm?.kind === "delete" ? "Manter" : "Continuar editando"}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className={cardConfirm?.kind === "delete" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : undefined}
+              onClick={() => {
+                if (!cardConfirm) return;
+                const { kind, index } = cardConfirm;
+                setCardConfirm(null);
+                if (kind === "delete") removeCardRow(index);
+                else cancelCardEdit(index);
+              }}
+            >
+              {cardConfirm?.kind === "delete" ? "Excluir" : "Descartar alterações"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+
   );
 }
