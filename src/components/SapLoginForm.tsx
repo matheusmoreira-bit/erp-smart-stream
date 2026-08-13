@@ -524,9 +524,39 @@ export function SapLoginForm() {
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                {fieldErrors.password && (
+                  <p className="text-xs text-destructive" role="alert">{fieldErrors.password}</p>
+                )}
               </div>
             </>
           )}
+
+          {/* Erro de autenticação — orientação acionável (evita tentativa cega) */}
+          {loginError && (
+            <Alert variant="destructive" role="alert">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>{loginError.title}</AlertTitle>
+              <AlertDescription className="space-y-1">
+                <p>{loginError.description}</p>
+                {loginError.kind === "invalid_credentials" && attemptWarning(attempts) && (
+                  <p className="font-medium">{attemptWarning(attempts)}</p>
+                )}
+                {loginError.blocking && (
+                  <p className="text-xs">
+                    Não repita a tentativa: é necessário ação do administrador do ERP.
+                  </p>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!loginError && needsCredentials && attempts === 0 && companyDB && (
+            <p className="text-xs text-muted-foreground flex items-start gap-1.5">
+              <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              Após 3 tentativas incorretas o ERP bloqueia o usuário. Em caso de dúvida sobre a senha, peça a redefinição ao administrador.
+            </p>
+          )}
+
 
           {/* SAP por identidade — sessão do Service Layer criada sob demanda */}
           {erpType === "sap" && !!cloudEmail && companyDB && (
