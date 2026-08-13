@@ -139,7 +139,7 @@ export function assertFunctionAllowed(name: string): void {
   if (!isReadOnlyMode()) return;
   const fn = (name || "").split("?")[0].replace(/^\/+/, "");
   if (READ_ONLY_FUNCTIONS.has(fn)) return;
-  assertWriteAllowed(fn);
+  assertWriteAllowed(`edge function ${fn}`, "edge-function");
 }
 
 const MUTATING_METHODS = ["insert", "update", "upsert", "delete"] as const;
@@ -167,7 +167,7 @@ export function installReadOnlyGuards(client: {
       get(target, prop, receiver) {
         if (typeof prop === "string" && (MUTATING_METHODS as readonly string[]).includes(prop)) {
           return () => {
-            assertWriteAllowed(`${prop} em ${table}`);
+            assertWriteAllowed(`${prop} em ${table}`, "database");
           };
         }
         return Reflect.get(target, prop, receiver);
@@ -187,7 +187,7 @@ export function installReadOnlyGuards(client: {
           ["upload", "uploadToSignedUrl", "update", "remove", "move", "copy"].includes(prop)
         ) {
           return async () => {
-            assertWriteAllowed(`${prop} em arquivos (${bucket})`);
+            assertWriteAllowed(`${prop} em arquivos (${bucket})`, "storage");
           };
         }
         return Reflect.get(target, prop, receiver);
@@ -198,10 +198,14 @@ export function installReadOnlyGuards(client: {
   const originalRpc = client.rpc.bind(client);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (client as any).rpc = (fn: string, ...rest: any[]) => {
-    // Auditoria continua gravando (é o registro da própria sessão impersonada).
-    const allowed = /^(has_role|get_|list_|is_)/.test(fn) || fn === "insert_audit_log";
-    if (isReadOnlyMode() && !allowed) {
-      assertWriteAllowed(`função ${fn}`);
+    // Somente RPCs claramente mutantes são bloqueadas; as de leitura (feeds,
+    // grants, previews) seguem liberadas. insert_audit_log é sempre permitida
+    // porque registra a própria sessão impersonada.
+    const mutating =
+      /^(insert_|create_|update_|delete_|set_|save_|upsert_|enqueue_|move_|purge_|prune_|archive_|open_|close_|join_|reassign_|consume_|register_|revoke_|api_key_|record_|cascade_|enable_|disable_|dispatch_|run_|sync_|apply_)/.test(fn) &&
+      fn !== "insert_audit_log";
+    if (isReadOnlyMode() && mutating) {
+      assertWriteAllowed(`função ${fn}`, "database-rpc");
     }
     return originalRpc(fn, ...rest);
   };
