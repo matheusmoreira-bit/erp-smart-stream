@@ -85,7 +85,7 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
   }, []);
 
   const initials = useMemo(() => {
-    const base = google?.name || google?.email || displayUserName(session?.userName || "");
+    const base = displayName || google?.name || google?.email || displayUserName(session?.userName || "");
     return base
       .replace(/@.*/, "")
       .split(/[\s._-]+/)
@@ -93,7 +93,7 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
       .slice(0, 2)
       .map((p) => p[0]?.toUpperCase() || "")
       .join("");
-  }, [google, session?.userName]);
+  }, [displayName, google, session?.userName]);
 
   const handleGoogleSignOut = async () => {
     setSigningOut(true);
