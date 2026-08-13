@@ -987,7 +987,31 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
       substituted_for_name: substitution?.official_name ?? null,
       action_role: actionRole,
     } as any);
-    await writeAuditLog("rejected", currentLevel);
+    await writeAuditLog("rejected", currentLevel, {
+      step: "reject_document",
+      metadata: { consolidated_reason: consolidatedReason },
+    });
+    // Um evento por TRILHA (padrão e reembolso), correlacionados pelo mesmo
+    // correlation_id do documento/reprocesso.
+    for (const s of segmentRows) {
+      const isRejected = rejectedIds.has(s.id);
+      await writeAuditLog(isRejected ? "rejected" : "rejected", s.current_level, {
+        step: isRejected ? "reject_track" : "block_track",
+        segment: {
+          segment_key: s.segment_key,
+          cost_center: s.cost_center,
+          project: s.project,
+          rule_id: s.rule_id,
+          rule_name: (s as any).rule_name ?? null,
+        },
+        metadata: {
+          previous_status: s.status,
+          previous_approver: s.current_approver,
+          blocked_by_other_track: !isRejected,
+          consolidated_reason: consolidatedReason,
+        },
+      });
+    }
     if (segmentRows.length > 0) {
       // Reprovação encerra o documento inteiro — TODAS as trilhas param
       // (padrão e reembolso), cada uma com o seu registro de motivo.
@@ -1064,7 +1088,7 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     substituted_for_name: substitution?.official_name ?? null,
     action_role: actionRole,
   } as any);
-  await writeAuditLog("approved", currentLevel);
+  await writeAuditLog("approved", currentLevel, { step: "approve_document" });
 
   // ── RATEIO: aprovação por SEGMENTO (fluxos independentes) ──────────────
   if (segmentMode) {
@@ -1098,7 +1122,17 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
           substituted_for_name: substitution?.official_name ?? null,
           action_role: actionRole,
         } as any);
-        await writeAuditLog("approved", next.current_level);
+        await writeAuditLog("approved", next.current_level, {
+          step: "approve_track_cascade",
+          segment: {
+            segment_key: cursor.segment_key,
+            cost_center: cursor.cost_center,
+            project: cursor.project,
+            rule_id: cursor.rule_id,
+            rule_name: (cursor as any).rule_name ?? null,
+          },
+          metadata: { replicated_same_approver: true },
+        });
         autoApproved.push(`${cursor.segment_key}@${next.current_level}`);
         cursor = { ...cursor, current_level: next.current_level } as SegmentRow;
         next = advanceSegment(cursor, reqName, reqEmail);
@@ -1111,6 +1145,22 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
         decided_by: actor,
         decided_at: new Date().toISOString(),
       }).eq("id", seg.id);
+      await writeAuditLog("approved", seg.current_level, {
+        step: next.finished ? "approve_track_final" : "approve_track_level",
+        segment: {
+          segment_key: seg.segment_key,
+          cost_center: seg.cost_center,
+          project: seg.project,
+          rule_id: seg.rule_id,
+          rule_name: (seg as any).rule_name ?? null,
+        },
+        metadata: {
+          track_finished: next.finished,
+          next_level: next.finished ? null : next.current_level,
+          next_approver: next.finished ? null : next.current_approver,
+          amount: Number(seg.amount || 0),
+        },
+      });
       if (!next.finished) {
         advancedNotifications.push({
           name: next.current_approver, email: next.current_approver_email, level: next.current_level, seg,
@@ -1231,7 +1281,10 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
         substituted_for_name: substitution?.official_name ?? null,
         action_role: actionRole,
       } as any);
-      await writeAuditLog("approved", p.level_order);
+      await writeAuditLog("approved", p.level_order, {
+        step: "approve_cascade",
+        metadata: { replicated_same_approver: true },
+      });
       effectiveLevel = p.level_order;
       stageLog("cascade_same_approver", "info", { requestId, expenseId, level: p.level_order });
       if (effectiveLevel >= maxLevelOrder) { cascadeFinal = true; break; }
