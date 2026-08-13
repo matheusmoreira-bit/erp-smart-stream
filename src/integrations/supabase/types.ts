@@ -7465,6 +7465,48 @@ export type Database = {
         }
         Relationships: []
       }
+      substitute_notification_preferences: {
+        Row: {
+          created_at: string
+          delay_minutes: number
+          email: boolean
+          enabled: boolean
+          id: string
+          in_app: boolean
+          min_amount: number
+          push: boolean
+          slack: boolean
+          updated_at: string
+          user_identifier: string
+        }
+        Insert: {
+          created_at?: string
+          delay_minutes?: number
+          email?: boolean
+          enabled?: boolean
+          id?: string
+          in_app?: boolean
+          min_amount?: number
+          push?: boolean
+          slack?: boolean
+          updated_at?: string
+          user_identifier: string
+        }
+        Update: {
+          created_at?: string
+          delay_minutes?: number
+          email?: boolean
+          enabled?: boolean
+          id?: string
+          in_app?: boolean
+          min_amount?: number
+          push?: boolean
+          slack?: boolean
+          updated_at?: string
+          user_identifier?: string
+        }
+        Relationships: []
+      }
       suppliers: {
         Row: {
           bill_to_block: string | null
