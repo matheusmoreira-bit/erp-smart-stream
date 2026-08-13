@@ -150,36 +150,29 @@ export default function PagCorp() {
 
   const hasSapCredentials = credentials.some((c) => c.system_name === "sap" && c.company_db === session?.companyDB);
 
+  /**
+   * Garante que existe sessão do Service Layer antes de integrar.
+   * - Sessão viva ou senha provisionada → segue silenciosamente.
+   * - Sem senha provisionada → abre o formulário de login do ERP
+   *   (usuário + senha) para gerar o sessionId e enviar o documento.
+   * Não bloqueia mais por falha transitória no GET /credentials.
+   */
   const checkSapCredentials = async (): Promise<boolean> => {
-    // Se ainda estamos carregando OU o último GET /credentials falhou, NÃO
-    // podemos afirmar "credencial não cadastrada" — tentamos revalidar antes
-    // de bloquear o usuário (evita falso alarme por erro transiente de rede,
-    // cold start da function ou 401 durante refresh do token Lovable).
-    if (!credsFetchOk || credsLoading) {
-      if (session?.companyDB) {
-        await fetchCredentials(session.companyDB, "sap");
-      }
-    }
-    // Reavalia após a possível revalidação.
-    const stillMissing = !credentials.some(
-      (c) => c.system_name === "sap" && c.company_db === session?.companyDB,
-    );
-    if (stillMissing && credsFetchOk) {
-      toast.error("Credencial SAP B1 não cadastrada", {
-        description: "Configure as credenciais do SAP Business One na tela de Credenciais antes de integrar.",
-        action: { label: "Configurar", onClick: () => navigate("/integracoes/credenciais") },
-      });
-      return false;
-    }
-    if (stillMissing) {
-      // Não conseguimos confirmar — mostra erro neutro em vez de acusar cadastro faltando.
-      toast.error("Não foi possível verificar as credenciais SAP agora", {
-        description: "Tente novamente em instantes. Se persistir, verifique sua conexão.",
-      });
-      return false;
-    }
-    return true;
+    const db = session?.companyDB || "";
+    if (!db) return false;
+    try {
+      const { resolveSapSession } = await import("@/lib/sap-session-broker");
+      const resolved = await resolveSapSession(db, true);
+      if (resolved?.sessionId) return true;
+    } catch { /* trata abaixo */ }
+    toast.error("Não foi possível autenticar no ERP", {
+      description:
+        "Informe suas credenciais do ERP para continuar ou verifique as credenciais da empresa em Integrações → Credenciais.",
+      action: { label: "Configurar", onClick: () => navigate("/integracoes/credenciais") },
+    });
+    return false;
   };
+
 
   const today = new Date();
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
