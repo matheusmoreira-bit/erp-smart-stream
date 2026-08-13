@@ -372,6 +372,24 @@ export function useApprovalRules(options?: { backfill?: boolean; enabled?: boole
     }
   }, [activeCompanyDb, backfillEnabled, enabled]);
 
+  // Escritas passam por edge function: o RLS de approval_rules exige admin do
+  // Cloud (auth.uid()), e a maioria dos usuários autentica só pelo ERP.
+  const manage = useCallback(async (payload: Record<string, unknown>) => {
+    const resp = await sapFunctionFetch("approval-rule-manage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json().catch(() => null);
+    if (!resp.ok) {
+      throw new Error(
+        (data && typeof data.error === "string" && data.error) ||
+          "Não foi possível salvar a regra de aprovação.",
+      );
+    }
+    return data;
+  }, []);
+
   const createRule = useCallback(
     async (input: CreateRuleInput, createdBy: string) => {
       if (!activeCompanyDb) {
@@ -380,140 +398,54 @@ export function useApprovalRules(options?: { backfill?: boolean; enabled?: boole
       if (!createdBy) {
         throw new Error("Usuário não identificado — faça login novamente antes de criar uma regra");
       }
-      const { data: rule, error: err } = await supabase
-        .from("approval_rules")
-        .insert({
-          name: input.name,
-          priority: input.priority || 0,
-          criteria: normalizeCriteria(input.criteria) as any,
-
-          doc_type: input.doc_type || "both",
-          created_by: createdBy,
-          company_db: activeCompanyDb,
-        })
-        .select()
-        .single();
-      if (err) throw err;
-
-      if (input.levels.length > 0) {
-        const normalizedLevels = dedupeParallelApprovers(input.levels);
-        const { error: lvlErr } = await supabase.from("approval_rule_levels").insert(
-          normalizedLevels.map((lvl) => ({
-            rule_id: (rule as any).id,
-            level_order: lvl.level_order,
-            approver_name: lvl.approver_name,
-            approver_email: lvl.approver_email || null,
-          }))
-        );
-        if (lvlErr) throw lvlErr;
-      }
-
-      await supabase.rpc("insert_audit_log", {
-        p_action: "create_approval_rule",
-        p_entity_type: "approval_rule",
-        p_entity_id: (rule as any).id,
-        p_actor_email: createdBy,
-        p_company_db: activeCompanyDb,
-        p_details: { name: input.name, doc_type: input.doc_type || "both" } as any,
+      const data = await manage({
+        action: "create",
+        company_db: activeCompanyDb,
+        actor: createdBy,
+        name: input.name,
+        priority: input.priority || 0,
+        criteria: normalizeCriteria(input.criteria),
+        doc_type: input.doc_type || "both",
+        levels: dedupeParallelApprovers(input.levels),
       });
-
       await fetchRules({ force: true });
-      return rule;
+      return data?.rule;
     },
-    [fetchRules, activeCompanyDb]
+    [fetchRules, activeCompanyDb, manage]
   );
 
   const updateRule = useCallback(
     async (id: string, input: CreateRuleInput, actor: string) => {
-      const { data: updated, error: err } = await supabase
-        .from("approval_rules")
-        .update({
-          name: input.name,
-          priority: input.priority || 0,
-          criteria: normalizeCriteria(input.criteria) as any,
-          doc_type: input.doc_type || "both",
-        })
-        .eq("id", id)
-        .select("id");
-      if (err) throw err;
-      // Sem erro e sem linhas = RLS bloqueou a escrita silenciosamente.
-      if (!updated || updated.length === 0) {
-        throw new Error(
-          "Não foi possível salvar: seu usuário não tem permissão de administrador para editar regras de aprovação.",
-        );
-      }
-
-
-      // Replace levels
-      const { error: delErr } = await supabase
-        .from("approval_rule_levels")
-        .delete()
-        .eq("rule_id", id);
-      if (delErr) throw delErr;
-
-      if (input.levels.length > 0) {
-        const normalizedLevels = dedupeParallelApprovers(input.levels);
-        const { error: insErr } = await supabase.from("approval_rule_levels").insert(
-          normalizedLevels.map((lvl) => ({
-            rule_id: id,
-            level_order: lvl.level_order,
-            approver_name: lvl.approver_name,
-            approver_email: lvl.approver_email || null,
-          }))
-        );
-        if (insErr) throw insErr;
-      }
-
-      await supabase.rpc("insert_audit_log", {
-        p_action: "update_approval_rule",
-        p_entity_type: "approval_rule",
-        p_entity_id: id,
-        p_actor_email: actor,
-        p_company_db: activeCompanyDb,
-        p_details: { name: input.name, doc_type: input.doc_type || "both" } as any,
+      await manage({
+        action: "update",
+        id,
+        company_db: activeCompanyDb,
+        actor,
+        name: input.name,
+        priority: input.priority || 0,
+        criteria: normalizeCriteria(input.criteria),
+        doc_type: input.doc_type || "both",
+        levels: dedupeParallelApprovers(input.levels),
       });
-
       await fetchRules({ force: true });
     },
-    [fetchRules, activeCompanyDb]
+    [fetchRules, activeCompanyDb, manage]
   );
 
   const toggleRule = useCallback(
     async (id: string, isActive: boolean) => {
-      const { error: err } = await supabase
-        .from("approval_rules")
-        .update({ is_active: isActive })
-        .eq("id", id);
-      if (err) throw err;
-      await supabase.rpc("insert_audit_log", {
-        p_action: isActive ? "enable_approval_rule" : "disable_approval_rule",
-        p_entity_type: "approval_rule",
-        p_entity_id: id,
-        p_company_db: activeCompanyDb,
-        p_details: {} as any,
-      });
+      await manage({ action: "toggle", id, company_db: activeCompanyDb, is_active: isActive });
       await fetchRules({ force: true });
     },
-    [fetchRules, activeCompanyDb]
+    [fetchRules, activeCompanyDb, manage]
   );
 
   const deleteRule = useCallback(
     async (id: string) => {
-      const { error: err } = await supabase
-        .from("approval_rules")
-        .delete()
-        .eq("id", id);
-      if (err) throw err;
-      await supabase.rpc("insert_audit_log", {
-        p_action: "delete_approval_rule",
-        p_entity_type: "approval_rule",
-        p_entity_id: id,
-        p_company_db: activeCompanyDb,
-        p_details: {} as any,
-      });
+      await manage({ action: "delete", id, company_db: activeCompanyDb });
       await fetchRules({ force: true });
     },
-    [fetchRules, activeCompanyDb]
+    [fetchRules, activeCompanyDb, manage]
   );
 
   useEffect(() => {
