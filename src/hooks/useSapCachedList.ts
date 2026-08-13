@@ -381,8 +381,12 @@ export function useSapCachedList({
       }
       lastLoadedAtRef.current = Date.now();
 
-
-
+      // Revalidação vazia (ERP indisponível/timeout) não apaga o que já está
+      // em tela vindo do cache.
+      if (rows.length === 0 && hadRenderedData) {
+        console.warn(`[useSapCachedList/${cacheKey}] revalidação vazia — mantendo cache em tela`);
+        return;
+      }
       setOptions(rows.map(mapRowRef.current));
     } catch (e) {
       console.error(`Failed to load cached list [${cacheKey}]:`, e);
