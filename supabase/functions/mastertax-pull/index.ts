@@ -452,10 +452,13 @@ Deno.serve(async (req) => {
 
         for (const inv of invoices) {
           try {
+            // Dedupe por chave DENTRO da base: a mesma chave pode existir
+            // legitimamente em bases distintas (ex.: TST x produção).
             const { data: existing } = await supabase
               .from("nf_entrada_imports")
               .select("id")
               .eq("chave_acesso", inv.chave_acesso)
+              .eq("sap_company_db", creds.company_db)
               .maybeSingle();
             if (existing) {
               stats.skipped++;
@@ -473,6 +476,11 @@ Deno.serve(async (req) => {
               );
             }
 
+            // Destinatário (tomador) da nota: base da segregação por empresa.
+            const rawAny = (inv.raw ?? {}) as Record<string, unknown>;
+            const destDoc = String(rawAny.tomadorDocumento ?? "").replace(/\D/g, "");
+            const destName = typeof rawAny.tomadorNome === "string" ? rawAny.tomadorNome : null;
+
             const { data: inserted, error: insErr } = await supabase
               .from("nf_entrada_imports")
               .insert({
@@ -481,6 +489,8 @@ Deno.serve(async (req) => {
                 serie: inv.serie,
                 cnpj_fornecedor: inv.cnpj_fornecedor,
                 nome_fornecedor: inv.nome_fornecedor,
+                cnpj_destinatario: destDoc || null,
+                nome_destinatario: destName,
                 data_emissao: inv.data_emissao,
                 valor_total: inv.valor_total,
                 condicao_pagamento: inv.condicao_pagamento,
@@ -493,6 +503,7 @@ Deno.serve(async (req) => {
                 status: "awaiting_erpflow_approval",
               })
               .select()
+
               .single();
             if (insErr) throw insErr;
 
