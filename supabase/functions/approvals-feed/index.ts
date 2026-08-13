@@ -17,6 +17,7 @@ import {
   canViewAllDocuments,
   identityMatches,
   personMatches,
+  personListMatches,
   resolveDirectorateBranch,
   costCenterInBranch,
 } from "../_shared/permission-groups.ts";
@@ -210,7 +211,7 @@ function ownsExpense(
   for (const c of candidates) {
     if (!c) continue;
     for (const alias of aliases) {
-      if (identityMatches(c, alias) || personMatches(c, alias)) return true;
+      if (identityMatches(c, alias) || personListMatches(c, alias)) return true;
     }
   }
   return false;
