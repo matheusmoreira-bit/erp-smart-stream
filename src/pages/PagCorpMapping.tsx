@@ -11,8 +11,10 @@ import {
   MapPin,
   CreditCard,
   Banknote,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
@@ -399,6 +401,33 @@ export default function PagCorpMapping() {
 
   const hasCardFallback = cardMappings.some((m) => m.is_fallback);
 
+  /* ── busca/filtro das linhas do mapeamento ── */
+  const [cardSearch, setCardSearch] = useState("");
+  const visibleCardRows = useMemo(() => {
+    const rows = cardMappings.map((m, index) => ({ m, index }));
+    const term = cardSearch.trim().toLowerCase();
+    if (!term) return rows;
+    const ccName = (code: string) =>
+      costCenterCache.options.find((o) => o.code === code)?.name || "";
+    const projName = (code: string) =>
+      projectCache.options.find((o) => o.code === code)?.name || "";
+    const itemName = (code: string) =>
+      itemCache.options.find((o) => o.code === code)?.name || "";
+    return rows.filter(({ m }) => {
+      if (m.isNew) return true; // linhas novas nunca somem enquanto são preenchidas
+      const haystack = [
+        m.card_identifier, m.card_label,
+        m.cost_center, ccName(m.cost_center || ""),
+        m.project, projName(m.project || ""),
+        m.item_code, itemName(m.item_code || ""),
+        m.is_fallback ? "fallback padrão da empresa" : "",
+      ].join(" ").toLowerCase();
+      return haystack.includes(term);
+    });
+  }, [cardMappings, cardSearch, costCenterCache.options, projectCache.options, itemCache.options]);
+
+
+
 
   /* ── helpers ── */
   function findOption(options: SapSearchOption[], code: string): SapSearchOption | null {
@@ -472,6 +501,30 @@ export default function PagCorpMapping() {
                 </div>
               </div>
 
+              {companyDB && cardMappings.length > 0 && (
+                <div className="flex items-center gap-3">
+                  <div className="relative w-full max-w-sm">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      value={cardSearch}
+                      onChange={(e) => setCardSearch(e.target.value)}
+                      placeholder="Buscar por centro de custo, cartão, projeto ou item…"
+                      aria-label="Buscar no mapeamento de cartões"
+                      className="pl-9"
+                    />
+                  </div>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    {visibleCardRows.length} de {cardMappings.length}
+                  </span>
+                  {cardSearch && (
+                    <Button variant="ghost" size="sm" onClick={() => setCardSearch("")} className="gap-1">
+                      <X className="w-3.5 h-3.5" /> Limpar
+                    </Button>
+                  )}
+                </div>
+              )}
+
+
               {!companyDB ? (
                 <div className="text-center py-20 text-muted-foreground">
                   <CreditCard className="w-12 h-12 mx-auto mb-4 opacity-30" />
@@ -501,7 +554,14 @@ export default function PagCorpMapping() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {cardMappings.map((m, i) => {
+                      {visibleCardRows.length === 0 && (
+                        <TableRow className="border-border hover:bg-transparent">
+                          <TableCell colSpan={5} className="text-center py-10 text-sm text-muted-foreground">
+                            Nenhum mapeamento encontrado para "{cardSearch}".
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {visibleCardRows.map(({ m, index: i }) => {
                         const cardOptions: SapSearchOption[] = cardSuggestions.map((c) => ({
                           code: c.identifier, name: c.label, extra: "",
                         }));
