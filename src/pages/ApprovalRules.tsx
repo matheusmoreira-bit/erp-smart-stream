@@ -1022,7 +1022,7 @@ function RuleFormModal({
       toast.error("Informe o nome da regra");
       return;
     }
-    if (criteria.some((c) => !c.value.trim())) {
+    if (criteria.some((c) => !String(c.value ?? "").trim())) {
       toast.error("Todos os critérios devem ter um valor");
       return;
     }
@@ -1030,7 +1030,7 @@ function RuleFormModal({
       toast.error("Adicione ao menos um nível de aprovação");
       return;
     }
-    if (levels.some((l) => !l.approver_name.trim())) {
+    if (levels.some((l) => !String(l.approver_name ?? "").trim())) {
       toast.error("Todos os níveis devem ter um aprovador");
       return;
     }
