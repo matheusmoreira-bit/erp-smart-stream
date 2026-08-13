@@ -41,13 +41,60 @@ function warnOnce(message: string) {
   }
 }
 
+/**
+ * Registra no audit_log toda tentativa de ação bloqueada pelo modo somente
+ * leitura, com a ação tentada e o motivo da negação. Nunca lança.
+ */
+const recentlyLogged = new Map<string, number>();
+function logBlockedAttempt(action: string, reason: string, surface: string) {
+  const key = `${surface}:${action}`;
+  const now = Date.now();
+  const last = recentlyLogged.get(key) || 0;
+  if (now - last < 5000) return; // evita flood do mesmo clique
+  recentlyLogged.set(key, now);
+
+  void (async () => {
+    try {
+      const [{ getImpersonation }, { logAuditAction }] = await Promise.all([
+        import("@/lib/impersonation"),
+        import("@/hooks/useAuditLog"),
+      ]);
+      const imp = getImpersonation();
+      await logAuditAction({
+        action: "impersonation_action_blocked",
+        entity_type: "erp_session",
+        actor_email: imp?.adminEmail,
+        company_db: imp?.companyDB,
+        details: {
+          blocked_action: action,
+          surface,
+          reason,
+          read_only_mode: true,
+          target_user: imp?.targetUser || null,
+          target_email: imp?.targetEmail || null,
+          route: typeof window !== "undefined" ? window.location.pathname + window.location.search : null,
+          at: new Date().toISOString(),
+        },
+      });
+    } catch {
+      /* auditoria nunca bloqueia o fluxo */
+    }
+  })();
+}
+
 /** Lança (e avisa) se a ação for uma escrita durante impersonação. */
-export function assertWriteAllowed(action?: string): void {
+export function assertWriteAllowed(action?: string, surface = "client"): void {
   if (!isReadOnlyMode()) return;
   const err = new ReadOnlyImpersonationError(action);
+  logBlockedAttempt(
+    action || "ação não identificada",
+    "Sessão em modo somente leitura (impersonação): escritas em nome do usuário são proibidas.",
+    surface,
+  );
   warnOnce(err.message);
   throw err;
 }
+
 
 /**
  * Edge Functions liberadas em modo somente leitura (consultas, diagnósticos e
