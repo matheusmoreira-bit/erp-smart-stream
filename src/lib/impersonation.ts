@@ -22,6 +22,10 @@ export interface ImpersonationState {
   targetEmail?: string;
   /** E-mail da conta Google do admin que iniciou. */
   adminEmail: string;
+  /** Usuário do ERP do admin antes da impersonação (para voltar sem reload). */
+  adminUser?: string;
+  /** true quando foi aberta uma sessão real no ERP com a senha do alvo. */
+  withPassword?: boolean;
   companyDB: string;
   startedAt: number;
 }
