@@ -77,7 +77,11 @@ export function SapCredentialsDialog({
           className="space-y-4"
           onSubmit={(e) => {
             e.preventDefault();
-            if (!userName.trim() || !password) return;
+            const errs: { userName?: string; password?: string } = {};
+            if (!userName.trim()) errs.userName = "Informe o usuário do ERP.";
+            if (!password) errs.password = "Informe a senha do ERP.";
+            setTouchedError(errs);
+            if (errs.userName || errs.password) return;
             onSubmit(userName.includes("@") ? userName.split("@")[0].trim() : userName.trim(), password, remember);
           }}
         >
@@ -87,14 +91,22 @@ export function SapCredentialsDialog({
               <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <Input
                 id="erp-user"
-                className="pl-9"
+                className={`pl-9 ${touchedError.userName ? "border-destructive" : ""}`}
                 autoComplete="username"
                 value={userName}
-                onChange={(e) => setUserName(e.target.value)}
+                onChange={(e) => { setUserName(e.target.value); setTouchedError((f) => ({ ...f, userName: undefined })); }}
+                aria-invalid={!!touchedError.userName}
                 disabled={loading}
-                required
               />
             </div>
+            {touchedError.userName && (
+              <p className="text-xs text-destructive" role="alert">{touchedError.userName}</p>
+            )}
+            {userName.includes("@") && (
+              <p className="text-xs text-muted-foreground">
+                O usuário do ERP costuma ser só <span className="font-medium">{userName.split("@")[0]}</span> — usaremos essa parte automaticamente.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -103,13 +115,13 @@ export function SapCredentialsDialog({
               <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <Input
                 id="erp-password"
-                className="pl-9 pr-10"
+                className={`pl-9 pr-10 ${touchedError.password ? "border-destructive" : ""}`}
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => { setPassword(e.target.value); setTouchedError((f) => ({ ...f, password: undefined })); }}
+                aria-invalid={!!touchedError.password}
                 disabled={loading}
-                required
               />
               <button
                 type="button"
@@ -120,6 +132,9 @@ export function SapCredentialsDialog({
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
+            {touchedError.password && (
+              <p className="text-xs text-destructive" role="alert">{touchedError.password}</p>
+            )}
           </div>
 
           <div className="flex items-start gap-2">
@@ -135,17 +150,37 @@ export function SapCredentialsDialog({
             </Label>
           </div>
 
-          {error && (
-            <p className="text-sm text-destructive" role="alert">{error}</p>
+          {info ? (
+            <Alert variant="destructive" role="alert">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>{info.title}</AlertTitle>
+              <AlertDescription className="space-y-1">
+                <p>{info.description}</p>
+                {info.kind === "invalid_credentials" && attemptWarning(attempts) && (
+                  <p className="font-medium">{attemptWarning(attempts)}</p>
+                )}
+                {info.blocking && (
+                  <p className="text-xs">Não repita a tentativa: é necessário ação do administrador do ERP.</p>
+                )}
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <p className="text-xs text-muted-foreground flex items-start gap-1.5">
+              <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              Após 3 tentativas incorretas o ERP bloqueia o usuário. Em caso de dúvida, peça a redefinição da senha ao administrador.
+            </p>
           )}
 
           <DialogFooter className="gap-2 sm:gap-2">
             <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading || !userName.trim() || !password}>
+            <Button type="submit" disabled={loading || info?.blocking === true}>
               {loading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Conectando…</>) : "Conectar"}
             </Button>
+          </DialogFooter>
+        </form>
+
           </DialogFooter>
         </form>
       </DialogContent>
