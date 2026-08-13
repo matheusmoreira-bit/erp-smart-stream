@@ -853,7 +853,28 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     ? "substitute"
     : (overrideUsed ? "admin_override" : "approver");
 
-  const writeAuditLog = async (decision: "approved" | "rejected", levelOrder: number) => {
+  // Correlação: todos os eventos gerados por ESTA ação (nas duas trilhas —
+  // padrão e reembolso) compartilham o mesmo `correlation_id`, permitindo
+  // reconstruir o pedido/reprocesso inteiro numa única consulta.
+  const correlationId = `${expenseId}:${requestId}`;
+
+  const trackOf = (segmentKey?: string | null) =>
+    segmentKey === "__reembolso__" ? "reembolso" : (segmentKey ? "padrao" : "documento");
+
+  type AuditSegCtx = {
+    segment_key?: string | null;
+    cost_center?: string | null;
+    project?: string | null;
+    rule_id?: string | null;
+    rule_name?: string | null;
+  };
+
+  const writeAuditLog = async (
+    decision: "approved" | "rejected",
+    levelOrder: number,
+    opts?: { step?: string; segment?: AuditSegCtx | null; metadata?: Record<string, unknown> },
+  ) => {
+    const seg = opts?.segment ?? null;
     try {
       await admin.from("expense_audit_log").insert({
         expense_id: expenseId,
@@ -877,11 +898,25 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
         idempotency_key: idempotencyKey || null,
         company_db: (exp as any).company_db ?? null,
         action_role: actionRole,
+        correlation_id: correlationId,
+        step: opts?.step ?? (decision === "rejected" ? "reject" : "approve"),
+        segment_key: seg?.segment_key ?? null,
+        track: trackOf(seg?.segment_key),
+        cost_center: seg?.cost_center ?? (exp as any).cost_center ?? null,
+        project: seg?.project ?? (exp as any).project ?? null,
+        rule_id: seg?.rule_id ?? (exp as any).approval_rule_id ?? null,
+        rule_name: seg?.rule_name ?? null,
+        metadata: {
+          rateio_type: String((exp as any).rateio_type || "padrao").toLowerCase(),
+          segment_mode: segmentMode,
+          ...(opts?.metadata || {}),
+        },
       } as any);
     } catch (e) {
       console.warn("[expense-approval-action] falha ao gravar audit log:", e);
     }
   };
+
 
   // ── Execute ────────────────────────────────────────────────────────────
   if (action === "reject") {
