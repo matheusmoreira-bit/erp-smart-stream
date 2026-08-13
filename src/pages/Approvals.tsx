@@ -61,7 +61,7 @@ import { ApprovalRuleExplainDialog } from "@/components/ApprovalRuleExplainDialo
 import { getRateioInfo } from "@/lib/rateio";
 import type { ExplainVariables } from "@/lib/approval-rule-explain";
 import { useApproverCostCenters } from "@/hooks/useApproverCostCenters";
-import { useActiveOfficialsForMe, useSubstituteGrantsForMe } from "@/hooks/useApproverSubstitutes";
+import { useActiveOfficialsForMe, useSubstituteGrantsForMe, SUBSTITUTES_CHANGED_EVENT } from "@/hooks/useApproverSubstitutes";
 import { useCostCenterNames } from "@/hooks/useCostCenterNames";
 import { shouldShowRateio, sumSelectedShare, type RateioInfo } from "@/lib/rateio";
 import { segmentDocByRules, segmentsForApprover, isTrulySegmented, lineSegmentKey, type ApprovalSegment } from "@/lib/approvalSegments";
@@ -2083,8 +2083,50 @@ export default function ApprovalsPage() {
 
   const companyLabel = getLabel(session?.companyDB || "");
   const { getCostCentersForEmail } = useApproverCostCenters(session?.companyDB);
-  const { officials: activeOfficials } = useActiveOfficialsForMe();
+  const { officials: activeOfficials, refresh: refreshActiveOfficials } = useActiveOfficialsForMe();
   const { grants: substituteGrants, refresh: refreshSubstituteGrants } = useSubstituteGrantsForMe();
+
+  // ── Recarregamento automático quando as permissões de substituto mudam ──
+  // 1) Mesma sessão: evento disparado ao criar/revogar uma substituição.
+  // 2) Outra sessão (o substituto está com a tela aberta): revalida os grants
+  //    ao voltar o foco na aba e a cada 60s; se a lista mudou, recarrega a fila.
+  const grantsSignature = useMemo(
+    () =>
+      substituteGrants
+        .map((g) => `${g.id}:${g.official_email}:${g.starts_at}:${g.ends_at}:${(g.cost_center_prefixes || []).join("|")}`)
+        .sort()
+        .join(";"),
+    [substituteGrants],
+  );
+  const grantsSignatureRef = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = grantsSignatureRef.current;
+    grantsSignatureRef.current = grantsSignature;
+    if (prev === null || prev === grantsSignature) return;
+    // Permissões mudaram: recarrega a fila de aprovações com os novos escopos.
+    void refreshFeed();
+    void refresh();
+    toast.info("Suas permissões de substituição foram atualizadas — lista recarregada");
+  }, [grantsSignature, refreshFeed, refresh]);
+
+  useEffect(() => {
+    const revalidate = () => {
+      void refreshSubstituteGrants();
+      void refreshActiveOfficials();
+    };
+    const onVisible = () => { if (document.visibilityState === "visible") revalidate(); };
+    window.addEventListener(SUBSTITUTES_CHANGED_EVENT, revalidate);
+    window.addEventListener("focus", revalidate);
+    document.addEventListener("visibilitychange", onVisible);
+    const timer = window.setInterval(revalidate, 60_000);
+    return () => {
+      window.removeEventListener(SUBSTITUTES_CHANGED_EVENT, revalidate);
+      window.removeEventListener("focus", revalidate);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.clearInterval(timer);
+    };
+  }, [refreshSubstituteGrants, refreshActiveOfficials]);
+
   // Somente leitura nesta tela — evita centenas de writes de backfill no load.
   // A matriz só é necessária quando o usuário abre um documento (raio-x /
   // segmentação). Carregar no mount custava centenas de regras + níveis.

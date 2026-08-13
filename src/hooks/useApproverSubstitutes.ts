@@ -3,6 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { useSap } from "@/contexts/SapContext";
 
+/** Evento disparado quando as substituições mudam (criação/revogação),
+ *  para que telas dependentes (ex.: Aprovações) recarreguem sozinhas. */
+export const SUBSTITUTES_CHANGED_EVENT = "erp:substitutes-changed";
+
+export function notifySubstitutesChanged() {
+  try { window.dispatchEvent(new CustomEvent(SUBSTITUTES_CHANGED_EVENT)); } catch { /* ignore */ }
+}
+
 async function callSubstituteFn<T>(payload: Record<string, unknown>): Promise<T> {
   const resp = await sapFunctionFetch("approver-substitute-manage", {
     method: "POST",
@@ -90,11 +98,13 @@ export function useApproverSubstitutes() {
   const create = useCallback(async (input: CreateSubstituteInput) => {
     await callSubstituteFn({ action: "create", ...input });
     await refresh();
+    notifySubstitutesChanged();
   }, [refresh]);
 
   const revoke = useCallback(async (id: string, reason?: string) => {
     await callSubstituteFn({ action: "revoke", id, reason: reason || null });
     await refresh();
+    notifySubstitutesChanged();
   }, [refresh]);
 
   return { rows, isLoading, error, refresh, create, revoke, canManageAll };
