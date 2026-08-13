@@ -1666,7 +1666,7 @@ export function CreateExpenseModal({
     groups.map((g) => ({
       supplierKey: g.supplierKey,
       supplierLabel: g.supplierLabel,
-      docs: g.docs.map((d) => ({ file: toPersistedFile(d.file), extracted: d.extracted })),
+      docs: g.docs.map((d) => ({ file: toPersistedFile(d.file), extracted: d.extracted, companion: d.companion })),
     })), []);
 
   const deserializeGroups = useCallback((groups: PersistedDocGroup[]): DocGroup[] =>
