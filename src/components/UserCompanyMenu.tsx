@@ -58,6 +58,14 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
 
   const companyLabel = getLabel(session?.companyDB || "");
 
+  // Durante a impersonação o menu mostra o usuário alvo, e não a conta Google
+  // do admin — caso contrário parece que a sessão "voltou" para o admin.
+  const impersonation = getImpersonation();
+  const displayName = impersonation
+    ? displayUserName(impersonation.targetName || impersonation.targetUser)
+    : "";
+  const displayEmail = impersonation ? impersonation.targetEmail || "" : "";
+
   // Conta Google (Lovable Cloud) — foto, nome e e-mail, padrão Google.
   useEffect(() => {
     let alive = true;
