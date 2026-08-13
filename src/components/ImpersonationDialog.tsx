@@ -15,10 +15,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSap } from "@/contexts/SapContext";
+import { useAuth } from "@/hooks/useAuth";
 import { useSapUsers } from "@/hooks/useSapUsers";
 import { useCompanies } from "@/hooks/useCompanies";
 import { supabase } from "@/integrations/supabase/client";
-import { setImpersonation, logImpersonationServerSide, authorizeImpersonationStart } from "@/lib/impersonation";
+import { setImpersonation, authorizeImpersonationStart } from "@/lib/impersonation";
 import { clearAuthCache } from "@/lib/auth-cache";
 import { logAuditAction } from "@/hooks/useAuditLog";
 import { displayUserName } from "@/lib/user-display";
@@ -35,6 +36,7 @@ interface Props {
  */
 export function ImpersonationDialog({ open, onOpenChange }: Props) {
   const { session, login, impersonateAs } = useSap();
+  const { isAdmin } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { getLabel } = useCompanies(true);
@@ -72,6 +74,10 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
   );
 
   const start = async () => {
+    if (!isAdmin) {
+      toast.error("Apenas administradores podem atuar como outro usuário");
+      return;
+    }
     if (!session?.companyDB) {
       toast.error("Entre em uma empresa antes de atuar como outro usuário");
       return;
