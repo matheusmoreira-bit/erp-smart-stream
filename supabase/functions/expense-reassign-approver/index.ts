@@ -140,6 +140,7 @@ Deno.serve(async (req) => {
           supplierCode: doc.supplier_code || null,
           headerCostCenter: doc.cost_center || null,
           headerProject: doc.project || null,
+          rateioType: String(doc.rateio_type || "padrao").toLowerCase(),
         } as any, { allowSingle: true });
         const target = (built || []).filter((sg) =>
           norm(sg.cost_center) === norm(segmentCc) &&
@@ -337,6 +338,7 @@ Deno.serve(async (req) => {
           supplierCode: doc.supplier_code || null,
           headerCostCenter: doc.cost_center || null,
           headerProject: doc.project || null,
+          rateioType: String(doc.rateio_type || "padrao").toLowerCase(),
         } as any);
         if (segments && segments.length > 1) {
           if (dryRun) {

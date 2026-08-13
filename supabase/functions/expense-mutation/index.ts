@@ -309,6 +309,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
         supplierCode: input.supplier_code || null,
         headerCostCenter: input.cost_center || null,
         headerProject: input.project || null,
+        rateioType: String(input.rateio_type || "padrao").toLowerCase(),
       })
     : null;
   if (rateioSegments && rateioSegments.length > 0) {

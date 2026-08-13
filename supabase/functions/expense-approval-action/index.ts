@@ -595,6 +595,7 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
         supplierCode: (exp as any).supplier_code || null,
         headerCostCenter: (exp as any).cost_center || null,
         headerProject: (exp as any).project || null,
+        rateioType: String((exp as any).rateio_type || "padrao").toLowerCase(),
       });
       if (segs && segs.length > 0) {
         segmentRows = await persistRateioSegments(
