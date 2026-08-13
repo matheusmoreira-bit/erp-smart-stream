@@ -14,6 +14,8 @@ import { NotificationSettingsTab } from "@/components/NotificationSettingsTab";
 import { OverdueRemindersTab } from "@/components/OverdueRemindersTab";
 import { PageTitle } from "@/components/PageTitle";
 import { DocumentMilestonesDialog } from "@/components/DocumentMilestonesDialog";
+import { SubstituteNotificationPrefsCard } from "@/components/SubstituteNotificationPrefsCard";
+
 
 
 const categoryIcon: Record<string, string> = {
@@ -186,6 +188,8 @@ export default function NotificationsPage() {
 
           <TabsContent value="preferences">
             <PushNotificationsCard />
+            <SubstituteNotificationPrefsCard />
+
             <div className="glass-card p-6">
               <h3 className="text-lg font-semibold text-foreground mb-1">Preferências de Notificação</h3>
               <p className="text-sm text-muted-foreground mb-6">

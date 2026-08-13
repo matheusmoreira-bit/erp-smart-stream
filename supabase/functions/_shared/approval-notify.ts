@@ -374,7 +374,7 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
     };
 
     // Canais habilitados para esta empresa / tipo de evento
-    const channels = await getChannelSettings(admin, input.companyDb, "approval_pending");
+    const baseChannels = await getChannelSettings(admin, input.companyDb, "approval_pending");
 
     const refId = `${input.expenseId}:${input.levelOrder ?? 0}`;
     const docLink = `/aprovacoes?doc=${encodeURIComponent(`internal:${input.expenseId}`)}`;
@@ -390,7 +390,17 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
       title: string;
       subtitle: string;
       body: string;
+      /** Sobrepõe os canais da empresa (usado pelas preferências do substituto). */
+      channelOverride?: { in_app: boolean; email: boolean; push: boolean; slack: boolean };
     }) => {
+      const channels = rcpt.channelOverride
+        ? {
+            in_app: baseChannels.in_app && rcpt.channelOverride.in_app,
+            email: baseChannels.email && rcpt.channelOverride.email,
+            push: baseChannels.push && rcpt.channelOverride.push,
+            slack: baseChannels.slack && rcpt.channelOverride.slack,
+          }
+        : baseChannels;
       const rcptEmail = (rcpt.email || "").trim().toLowerCase();
       const rcptIdentifier = rcptEmail && isEmail(rcptEmail)
         ? rcptEmail.split("@")[0]
@@ -499,6 +509,15 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
       officialName: input.approverName,
       companyDb: input.companyDb,
     })) {
+      const prefs = await substitutePrefs(admin, sub.email, sub.name);
+      if (!prefs.enabled) {
+        console.log("[approval-notify] substituto optou por não receber avisos:", sub.email);
+        continue;
+      }
+      if (prefs.min_amount > 0 && Number(input.totalAmount || 0) < prefs.min_amount) {
+        console.log("[approval-notify] valor abaixo do mínimo configurado pelo substituto:", sub.email);
+        continue;
+      }
       const officialLabel = input.approverName || email || "o aprovador titular";
       const subTitle = `${title} (em nome de ${officialLabel})`;
       const subSubtitle = `${subtitle} Você está como aprovador substituto de ${officialLabel}.`;
@@ -510,10 +529,50 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
         title: subTitle,
         subtitle: subSubtitle,
         body: [subSubtitle, ...details.filter((d) => d.value).map((d) => `${d.label}: ${d.value}`)].join(" · "),
+        channelOverride: {
+          in_app: prefs.in_app,
+          email: prefs.email,
+          push: prefs.push,
+          slack: prefs.slack,
+        },
       });
     }
   } catch (e) {
     console.warn("[approval-notify] erro inesperado:", e instanceof Error ? e.message : String(e));
+  }
+}
+
+
+/** Preferências de notificação por substituição (padrão: tudo ligado). */
+const SUBSTITUTE_PREF_DEFAULT = {
+  enabled: true, in_app: true, email: true, push: true, slack: true, min_amount: 0,
+};
+
+async function substitutePrefs(
+  admin: any,
+  email?: string | null,
+  name?: string | null,
+): Promise<typeof SUBSTITUTE_PREF_DEFAULT> {
+  const raw = String(email || name || "").trim().toLowerCase();
+  const identifier = raw.includes("@") ? raw.split("@")[0] : raw;
+  if (!identifier) return SUBSTITUTE_PREF_DEFAULT;
+  try {
+    const { data } = await admin
+      .from("substitute_notification_preferences")
+      .select("enabled,in_app,email,push,slack,min_amount")
+      .eq("user_identifier", identifier)
+      .maybeSingle();
+    if (!data) return SUBSTITUTE_PREF_DEFAULT;
+    return {
+      enabled: data.enabled !== false,
+      in_app: data.in_app !== false,
+      email: data.email !== false,
+      push: data.push !== false,
+      slack: data.slack !== false,
+      min_amount: Number(data.min_amount || 0),
+    };
+  } catch {
+    return SUBSTITUTE_PREF_DEFAULT;
   }
 }
 
