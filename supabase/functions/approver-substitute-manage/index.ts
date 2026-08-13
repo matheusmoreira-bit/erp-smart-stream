@@ -266,7 +266,63 @@ Deno.serve(async (req) => {
       },
     ]);
 
-    return json(200, { ok: true, row: created });
+    // ── Aplicação imediata aos fluxos JÁ pendentes ──────────────────────
+    // A visibilidade/autorização do substituto é resolvida em tempo de
+    // execução (expense-read, approvals-feed e expense-approval-action já
+    // consultam a janela vigente), portanto os documentos pendentes passam a
+    // aparecer para o substituto sem qualquer reprocessamento. O que faltava
+    // era o aviso: aqui notificamos o substituto, na hora, de cada documento
+    // que já está parado na alçada do titular dentro da vigência.
+    let backfilled = 0;
+    const nowMs = Date.now();
+    if (s <= nowMs && e >= nowMs) {
+      try {
+        const officialKeys = new Set(
+          [normalize(officialEmail), localPart(officialEmail), normalize(insertRow.official_name || "")]
+            .filter(Boolean),
+        );
+        let q = admin
+          .from("expenses")
+          .select("id, company_db, supplier_name, total_amount, currency, current_approver, cost_center")
+          .eq("status", "pendente_aprovacao")
+          .limit(500);
+        if (insertRow.company_db) q = q.eq("company_db", insertRow.company_db);
+        const { data: pending } = await q;
+
+        const matches = ((pending || []) as Array<Record<string, any>>).filter((d) => {
+          const appr = normalize(d.current_approver);
+          if (!appr) return false;
+          const tokens = new Set<string>([appr, localPart(appr), ...appr.split(/[,;/]+/).map((t) => normalize(t))]);
+          const hit = Array.from(officialKeys).some((k) => tokens.has(k) || appr.includes(k));
+          if (!hit) return false;
+          if (ccPrefixes.length) {
+            const cc = String(d.cost_center || "");
+            return ccPrefixes.some((p) => cc === p || cc.startsWith(`${p}.`));
+          }
+          return true;
+        });
+
+        if (matches.length > 0) {
+          const rows = matches.slice(0, 100).map((d) => ({
+            user_identifier: normalize(substituteEmail),
+            title: "Documento pendente transferido para sua alçada (substituição)",
+            body: `Você aprova em nome de ${officialLabel} · Fornecedor: ${d.supplier_name || "—"} · Valor: ${d.currency || "BRL"} ${Number(d.total_amount || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+            category: "approval",
+            company_db: d.company_db ?? insertRow.company_db,
+            link: `/aprovacoes?doc=internal%3A${encodeURIComponent(String(d.id))}`,
+            metadata: {
+              substitution_id: (created as SubstituteRow | null)?.id ?? null,
+              expense_id: d.id,
+              substituted_for_email: normalize(officialEmail),
+            },
+          }));
+          const { error: nErr } = await admin.from("notifications").insert(rows);
+          if (!nErr) backfilled = rows.length;
+        }
+      } catch { /* não bloqueia a criação da substituição */ }
+    }
+
+    return json(200, { ok: true, row: created, pending_applied: backfilled });
   }
 
   // ── REVOKE ────────────────────────────────────────────────────────────

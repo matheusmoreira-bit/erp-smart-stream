@@ -749,20 +749,25 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     if (callerCandidates.length && officialCandidates.length) {
       const { data: subs } = await admin
         .from("approver_substitutes")
-        .select("id, official_email, official_name, substitute_email, granted_by_email, starts_at, ends_at, revoked_at")
+        .select("id, official_email, official_name, substitute_email, substitute_name, granted_by_email, starts_at, ends_at, revoked_at")
         .is("revoked_at", null)
         .lte("starts_at", new Date().toISOString())
         .gte("ends_at", new Date().toISOString());
       const hit = (subs || []).find((s: any) => {
-        const subEmail = normalize(s.substitute_email);
-        const subPrefix = emailPrefix(subEmail);
-        const offEmail = normalize(s.official_email);
-        const offPrefix = emailPrefix(offEmail);
+        // Aceita grant cadastrado por e-mail OU por nome (titular e substituto).
+        const subKeys = [normalize(s.substitute_email), normalize(s.substitute_name)]
+          .filter(Boolean)
+          .flatMap((v) => [v, emailPrefix(v)])
+          .filter(Boolean);
+        const offKeys = [normalize(s.official_email), normalize(s.official_name)]
+          .filter(Boolean)
+          .flatMap((v) => [v, emailPrefix(v)])
+          .filter(Boolean);
         const callerHit = callerCandidates.some(
-          (c) => c === subEmail || c === subPrefix || emailPrefix(c) === subPrefix,
+          (c) => subKeys.includes(c) || subKeys.includes(emailPrefix(c)),
         );
         const officialHit = officialCandidates.some(
-          (o) => o === offEmail || o === offPrefix || emailPrefix(o) === offPrefix,
+          (o) => offKeys.includes(o) || offKeys.includes(emailPrefix(o)),
         );
         return callerHit && officialHit;
       });
