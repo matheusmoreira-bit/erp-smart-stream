@@ -63,6 +63,27 @@ export function personMatches(a: unknown, b: unknown): boolean {
   return false;
 }
 
+/**
+ * Campos como `expenses.current_approver` podem guardar VÁRIOS aprovadores em
+ * uma única string ("Fernando Nogueira / Jose Victor"). Comparar a string
+ * inteira falha quando o alias do caller chega colapsado ("fernandonogueira"),
+ * deixando o documento invisível para todos os aprovadores do nível. Aqui a
+ * lista é quebrada nos separadores usuais e cada parte é comparada sozinha.
+ */
+export function personListMatches(value: unknown, other: unknown): boolean {
+  if (personMatches(value, other)) return true;
+  const raw = String(value ?? "");
+  if (!raw) return false;
+  const parts = raw
+    .split(/[\/;,|]+|\s+\+\s+|\s+e\s+/i)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 1);
+  if (parts.length < 2) return false;
+  return parts.some((p) => personMatches(p, other));
+}
+
+
+
 
 /** Nomes dos grupos de permissão associados a uma identidade (exibição/diagnóstico). */
 export async function getPermissionGroups(
