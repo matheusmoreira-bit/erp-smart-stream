@@ -266,6 +266,9 @@ export function useSapCachedList({
     if (!enabled || (!forceRefresh && loadedRef.current)) return;
     setIsLoading(true);
     loadedRef.current = true;
+    // Quando já exibimos dados (cache), uma revalidação vazia/falha NÃO pode
+    // apagar a lista da tela — o combobox ficaria "Nenhum resultado".
+    let hadRenderedData = false;
 
     try {
       const companyDB = session?.companyDB;
