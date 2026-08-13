@@ -1,0 +1,1 @@
+DELETE FROM public.sap_cache WHERE company_db = 'open_gaming_sa' AND cache_key IN ('cost_centers','cost_centers_all','projects','projects_all');

@@ -7,6 +7,7 @@ import type { SapSearchOption } from "@/components/SapSearchCombobox";
 const DEFAULT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
 // Chaves com atualização mais frequente (dados que mudam com frequência no ERP)
 const FIVE_MIN_MS = 5 * 60 * 1000;
+const THIRTY_MIN_MS = 30 * 60 * 1000;
 const CACHE_TTL_OVERRIDES: Record<string, number> = {
   items_purchase_active_v3: FIVE_MIN_MS,
   items_purchase_active_v4: FIVE_MIN_MS,
@@ -15,7 +16,14 @@ const CACHE_TTL_OVERRIDES: Record<string, number> = {
   suppliers_active_v2: FIVE_MIN_MS,
   suppliers_active_v3: FIVE_MIN_MS,
   customers_active_v2: FIVE_MIN_MS,
+  // Centros de custo / projetos: ativação-desativação no ERP precisa refletir
+  // rápido nos comboboxes (antes ficavam até 7 dias em cache).
+  cost_centers: THIRTY_MIN_MS,
+  cost_centers_all: THIRTY_MIN_MS,
+  projects: THIRTY_MIN_MS,
+  projects_all: THIRTY_MIN_MS,
 };
+
 const getCacheTtlMs = (key: string) => CACHE_TTL_OVERRIDES[key] ?? DEFAULT_CACHE_TTL_MS;
 
 // -----------------------------------------------------------------------------
