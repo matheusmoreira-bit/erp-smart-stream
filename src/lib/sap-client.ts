@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { publicFunctionFetch } from "@/lib/auth-fetch";
 import { toast } from "sonner";
+import { assertWriteAllowed } from "@/lib/read-only-guard";
 import {
   assertCircuitClosed,
   recordCircuitFailure,
@@ -147,6 +148,11 @@ const INTERACTIVE_SAP_ACTIONS = new Set([
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {}): Promise<any> {
   const action = typeof body?.action === "string" ? body.action : "";
+
+  // Impersonação = somente leitura: nenhuma gravação no ERP em nome do usuário.
+  if (action === "sapAction" || action === "writeApprovalsCache") {
+    assertWriteAllowed(`gravação no ERP (${String(body?.endpoint || action)})`);
+  }
   const canRetry = RETRIABLE_ACTIONS.has(action);
   const maxAttempts = canRetry ? MAX_RETRIES + 1 : 1;
   const companyDB =

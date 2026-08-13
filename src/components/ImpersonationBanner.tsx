@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, UserCog, Undo2 } from "lucide-react";
+import { Loader2, UserCog, Undo2, Eye } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useSap } from "@/contexts/SapContext";
@@ -96,10 +96,15 @@ export function ImpersonationBanner() {
       {/* Etiqueta flutuante com o botão de sair da sessão */}
       <div className="fixed bottom-4 right-4 z-[71] flex items-center gap-3 rounded-full bg-warning/95 text-warning-foreground border border-warning shadow-lg px-4 py-2 mb-[env(safe-area-inset-bottom)]">
         <UserCog className="w-4 h-4 shrink-0" aria-hidden="true" />
-        <p className="text-sm max-w-[16rem] truncate">
-          Atuando como{" "}
-          <strong>{displayUserName(state.targetName || state.targetUser)}</strong>
-        </p>
+        <div className="min-w-0">
+          <p className="text-sm max-w-[16rem] truncate">
+            Atuando como{" "}
+            <strong>{displayUserName(state.targetName || state.targetUser)}</strong>
+          </p>
+          <p className="text-[11px] flex items-center gap-1 opacity-90">
+            <Eye className="w-3 h-3" aria-hidden="true" /> Somente leitura — ações desabilitadas
+          </p>
+        </div>
         <Button
           size="sm"
           variant="secondary"

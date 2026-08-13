@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { assertFunctionAllowed } from "@/lib/read-only-guard";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -48,6 +49,7 @@ export async function authFetch(
   path: string,
   options: RequestInit = {}
 ): Promise<Response> {
+  assertFunctionAllowed(path);
   const token = await getValidAccessToken();
   if (!token) {
     return new Response(JSON.stringify({ error: "Faça login no Backoffice para acessar esta função." }), {
@@ -71,6 +73,7 @@ export async function publicFunctionFetch(
   path: string,
   options: RequestInit = {}
 ): Promise<Response> {
+  assertFunctionAllowed(path);
   const token = await getValidAccessToken();
   const authToken = token || ANON_KEY;
   const url = path.startsWith("http") ? path : `${SUPABASE_URL}/functions/v1/${path}`;
