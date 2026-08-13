@@ -61,7 +61,7 @@ import { ApprovalRuleExplainDialog } from "@/components/ApprovalRuleExplainDialo
 import { getRateioInfo } from "@/lib/rateio";
 import type { ExplainVariables } from "@/lib/approval-rule-explain";
 import { useApproverCostCenters } from "@/hooks/useApproverCostCenters";
-import { useActiveOfficialsForMe, useSubstituteGrantsForMe } from "@/hooks/useApproverSubstitutes";
+import { useActiveOfficialsForMe, useSubstituteGrantsForMe, SUBSTITUTES_CHANGED_EVENT } from "@/hooks/useApproverSubstitutes";
 import { useCostCenterNames } from "@/hooks/useCostCenterNames";
 import { shouldShowRateio, sumSelectedShare, type RateioInfo } from "@/lib/rateio";
 import { segmentDocByRules, segmentsForApprover, isTrulySegmented, lineSegmentKey, type ApprovalSegment } from "@/lib/approvalSegments";
