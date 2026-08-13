@@ -296,7 +296,10 @@ export function SapLoginForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoginError(null);
+    setFieldErrors({});
     if (!companyDB) {
+      setFieldErrors({ companyDB: "Selecione a empresa para continuar." });
       toast.error("Selecione a empresa");
       return;
     }
@@ -310,16 +313,20 @@ export function SapLoginForm() {
 
         toast.success(`Conectado ao ${erpInfo.label}!`);
       } catch (err) {
-        toast.error("Não foi possível entrar", {
-          description: err instanceof Error ? err.message : "Falha ao entrar na empresa.",
-        });
+        const info = classifyErpLoginError(err);
+        setLoginError(info);
+        toast.error(info.title, { description: info.description });
       }
       return;
     }
-    if (needsCredentials && (!userName || !password)) {
-      toast.error("Preencha todos os campos");
+    if (needsCredentials && (!userName.trim() || !password)) {
+      setFieldErrors({
+        userName: !userName.trim() ? "Informe o usuário do ERP." : undefined,
+        password: !password ? "Informe a senha do ERP." : undefined,
+      });
       return;
     }
+
     try {
       // SAP B1 usernames are typically the local-part only (e.g. "marco.tulio"),
       // not the full email. Strip the domain automatically so users can type either.
