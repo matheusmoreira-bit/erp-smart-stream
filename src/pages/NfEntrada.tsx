@@ -511,6 +511,9 @@ export default function NfEntrada() {
                             <DetailField label="NF SAP" value={it.sap_invoice_draft_id} mono />
                             <DetailField label="Origem do status" value={statusOrigin(it).label} />
                             <DetailField label="Base SAP" value={it.sap_company_db} mono />
+                            <DetailField label="Destinatário (tomador)" value={it.nome_destinatario} />
+                            <DetailField label="CNPJ destinatário" value={it.cnpj_destinatario} mono />
+
                             <DetailField
                               label="Última varredura (last_poll_at)"
                               value={it.last_poll_at ? new Date(it.last_poll_at).toLocaleString("pt-BR") : "nunca"}
