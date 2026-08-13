@@ -180,9 +180,6 @@ export function SapCredentialsDialog({
             </Button>
           </DialogFooter>
         </form>
-
-          </DialogFooter>
-        </form>
       </DialogContent>
     </Dialog>
   );
