@@ -422,14 +422,22 @@ export default function SubstituteApproversTab({ isAdmin = false }: { isAdmin?: 
                     setOfficialName(u?.name || "");
                   }}
                 >
-                  <SelectTrigger><SelectValue placeholder="Selecione o oficial" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder={eligibleLoading ? "Carregando usuários..." : "Selecione o oficial"} />
+                  </SelectTrigger>
                   <SelectContent>
+                    {eligible.length === 0 && (
+                      <div className="px-2 py-3 text-xs text-muted-foreground">
+                        {eligibleLoading ? "Carregando usuários..." : "Nenhum usuário disponível"}
+                      </div>
+                    )}
                     {eligible.filter((u) => u.email).map((u) => (
                       <SelectItem key={`off-${u.email}`} value={u.email}>
                         {u.name} <span className="opacity-60">({u.email})</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
+
                 </Select>
               )}
             </div>
