@@ -104,7 +104,7 @@ export default function SubstituteApproversTab({ isAdmin = false }: { isAdmin?: 
   const [ccScope, setCcScope] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const eligible = useMemo(
+  const sapEligible = useMemo(
     () =>
       users.filter((u) => u.Locked !== "tYES" && (u.eMail || u.UserCode))
         .map((u) => ({
@@ -112,9 +112,59 @@ export default function SubstituteApproversTab({ isAdmin = false }: { isAdmin?: 
           name: (u.UserName || u.UserCode || "").trim(),
           code: (u.UserCode || "").trim(),
         }))
-        .filter((u) => u.email || u.name),
+        .filter((u) => u.email),
     [users],
   );
+
+  // Carrega o diretório do Cloud sempre que o ERP não devolver usuários com e-mail.
+  useEffect(() => {
+    if (usersLoading || sapEligible.length > 0) return;
+    let alive = true;
+    setDirLoading(true);
+    (async () => {
+      try {
+        const [{ data: dir }, { data: emails }] = await Promise.all([
+          supabase.from("sap_user_directory").select("user_key, sap_user_code, display_name, is_active"),
+          supabase.from("sap_user_emails").select("user_key, email, is_primary"),
+        ]);
+        if (!alive) return;
+        const byKey = new Map<string, { email: string; name: string; code: string }>();
+        for (const e of emails || []) {
+          const key = (e.user_key || "").toLowerCase();
+          const email = (e.email || "").trim();
+          if (!key || !email) continue;
+          const existing = byKey.get(key);
+          if (!existing || e.is_primary) byKey.set(key, { email, name: "", code: "" });
+        }
+        const list: Array<{ email: string; name: string; code: string }> = [];
+        for (const d of dir || []) {
+          if (d.is_active === false) continue;
+          const key = (d.user_key || "").toLowerCase();
+          const found = byKey.get(key);
+          if (!found) continue;
+          list.push({
+            email: found.email,
+            name: (d.display_name || d.sap_user_code || found.email).trim(),
+            code: (d.sap_user_code || "").trim(),
+          });
+        }
+        list.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+        setDirUsers(list);
+      } catch {
+        if (alive) setDirUsers([]);
+      } finally {
+        if (alive) setDirLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [usersLoading, sapEligible.length]);
+
+  const eligible = useMemo(
+    () => (sapEligible.length > 0 ? sapEligible : dirUsers),
+    [sapEligible, dirUsers],
+  );
+  const eligibleLoading = usersLoading || (sapEligible.length === 0 && dirLoading);
+
 
   const canManage = isAdmin || canManageAll;
 
