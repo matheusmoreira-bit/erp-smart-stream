@@ -501,6 +501,30 @@ export default function PagCorpMapping() {
                 </div>
               </div>
 
+              {companyDB && cardMappings.length > 0 && (
+                <div className="flex items-center gap-3">
+                  <div className="relative w-full max-w-sm">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      value={cardSearch}
+                      onChange={(e) => setCardSearch(e.target.value)}
+                      placeholder="Buscar por centro de custo, cartão, projeto ou item…"
+                      aria-label="Buscar no mapeamento de cartões"
+                      className="pl-9"
+                    />
+                  </div>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    {visibleCardRows.length} de {cardMappings.length}
+                  </span>
+                  {cardSearch && (
+                    <Button variant="ghost" size="sm" onClick={() => setCardSearch("")} className="gap-1">
+                      <X className="w-3.5 h-3.5" /> Limpar
+                    </Button>
+                  )}
+                </div>
+              )}
+
+
               {!companyDB ? (
                 <div className="text-center py-20 text-muted-foreground">
                   <CreditCard className="w-12 h-12 mx-auto mb-4 opacity-30" />
