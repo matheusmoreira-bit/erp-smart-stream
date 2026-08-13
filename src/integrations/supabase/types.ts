@@ -3215,6 +3215,8 @@ export type Database = {
           actor_identity: string
           actor_source: string
           company_db: string | null
+          correlation_id: string | null
+          cost_center: string | null
           created_at: string
           decision: string
           expense_id: string
@@ -3224,13 +3226,20 @@ export type Database = {
           is_cloud_admin: boolean
           is_sap_superuser: boolean
           level_order: number | null
+          metadata: Json
           override_used: boolean
+          project: string | null
           reason: string | null
           remarks: string | null
           request_id: string | null
+          rule_id: string | null
+          rule_name: string | null
+          segment_key: string | null
+          step: string | null
           substituted_for_email: string | null
           substituted_for_name: string | null
           substitution_id: string | null
+          track: string | null
           user_agent: string | null
         }
         Insert: {
@@ -3240,6 +3249,8 @@ export type Database = {
           actor_identity: string
           actor_source: string
           company_db?: string | null
+          correlation_id?: string | null
+          cost_center?: string | null
           created_at?: string
           decision: string
           expense_id: string
@@ -3249,13 +3260,20 @@ export type Database = {
           is_cloud_admin?: boolean
           is_sap_superuser?: boolean
           level_order?: number | null
+          metadata?: Json
           override_used?: boolean
+          project?: string | null
           reason?: string | null
           remarks?: string | null
           request_id?: string | null
+          rule_id?: string | null
+          rule_name?: string | null
+          segment_key?: string | null
+          step?: string | null
           substituted_for_email?: string | null
           substituted_for_name?: string | null
           substitution_id?: string | null
+          track?: string | null
           user_agent?: string | null
         }
         Update: {
@@ -3265,6 +3283,8 @@ export type Database = {
           actor_identity?: string
           actor_source?: string
           company_db?: string | null
+          correlation_id?: string | null
+          cost_center?: string | null
           created_at?: string
           decision?: string
           expense_id?: string
@@ -3274,13 +3294,20 @@ export type Database = {
           is_cloud_admin?: boolean
           is_sap_superuser?: boolean
           level_order?: number | null
+          metadata?: Json
           override_used?: boolean
+          project?: string | null
           reason?: string | null
           remarks?: string | null
           request_id?: string | null
+          rule_id?: string | null
+          rule_name?: string | null
+          segment_key?: string | null
+          step?: string | null
           substituted_for_email?: string | null
           substituted_for_name?: string | null
           substitution_id?: string | null
+          track?: string | null
           user_agent?: string | null
         }
         Relationships: [
