@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Activity, Lock, User, Database, LogIn, Loader2, Settings, Box, Server, Cloud, Building2, Layers, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { Activity, Lock, User, Database, LogIn, Loader2, Settings, Box, Server, Cloud, Building2, Layers, Eye, EyeOff, ShieldCheck, AlertTriangle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { classifyErpLoginError, attemptWarning, type ErpLoginErrorInfo } from "@/lib/erp-login-error";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSap } from "@/contexts/SapContext";
@@ -75,6 +77,11 @@ export function SapLoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [managedCompanyDbs, setManagedCompanyDbs] = useState<Set<string>>(new Set());
   const [cloudEmail, setCloudEmail] = useState<string | null>(null);
+  // Erro de autenticação classificado + validação por campo (inline, não só toast).
+  const [loginError, setLoginError] = useState<ErpLoginErrorInfo | null>(null);
+  const [attempts, setAttempts] = useState(0);
+  const [fieldErrors, setFieldErrors] = useState<{ companyDB?: string; userName?: string; password?: string }>({});
+
 
   // Filter only when we know which ERPs are enabled; otherwise show all active companies
   // so a slow/failing enabled_erp_types query never blocks the login list.
@@ -289,7 +296,10 @@ export function SapLoginForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoginError(null);
+    setFieldErrors({});
     if (!companyDB) {
+      setFieldErrors({ companyDB: "Selecione a empresa para continuar." });
       toast.error("Selecione a empresa");
       return;
     }
@@ -303,16 +313,20 @@ export function SapLoginForm() {
 
         toast.success(`Conectado ao ${erpInfo.label}!`);
       } catch (err) {
-        toast.error("Não foi possível entrar", {
-          description: err instanceof Error ? err.message : "Falha ao entrar na empresa.",
-        });
+        const info = classifyErpLoginError(err);
+        setLoginError(info);
+        toast.error(info.title, { description: info.description });
       }
       return;
     }
-    if (needsCredentials && (!userName || !password)) {
-      toast.error("Preencha todos os campos");
+    if (needsCredentials && (!userName.trim() || !password)) {
+      setFieldErrors({
+        userName: !userName.trim() ? "Informe o usuário do ERP." : undefined,
+        password: !password ? "Informe a senha do ERP." : undefined,
+      });
       return;
     }
+
     try {
       // SAP B1 usernames are typically the local-part only (e.g. "marco.tulio"),
       // not the full email. Strip the domain automatically so users can type either.
@@ -349,62 +363,29 @@ export function SapLoginForm() {
         try { sessionStorage.setItem("erp:default-password-warning", "1"); } catch { /* noop */ }
       }
       failedAttemptsRef.current.delete(attemptKey(companyDB, userName));
+      setAttempts(0);
+      setLoginError(null);
       toast.success(`Conectado ao ${erpInfo.label}!`);
     } catch (error) {
-      const raw = error instanceof Error ? error.message : String(error ?? "");
-      const lower = raw.toLowerCase();
+      const info = classifyErpLoginError(error);
+      setLoginError(info);
+      if (info.field) setFieldErrors({ [info.field]: info.title });
 
-      const isInvalidCreds =
-        lower.includes("user name or password") ||
-        lower.includes("invalid username or password") ||
-        lower.includes("invalid credentials") ||
-        lower.includes("senha incorreta") ||
-        lower.includes("usuário ou senha") ||
-        lower.includes("usuario ou senha") ||
-        lower.includes("-304") ||
-        lower.includes(" 401");
-
-      const isLocked =
-        lower.includes("locked") || lower.includes("bloquead") || lower.includes("-131");
-
-      const isNetwork =
-        lower.includes("failed to fetch") ||
-        lower.includes("networkerror") ||
-        lower.includes("timeout") ||
-        lower.includes("econn") ||
-        lower.includes("getaddrinfo");
-
-      if (isInvalidCreds) {
+      if (info.kind === "invalid_credentials") {
         const key = attemptKey(companyDB, userName);
-        const prev = failedAttemptsRef.current.get(key) || 0;
-        const next = prev + 1;
+        const next = (failedAttemptsRef.current.get(key) || 0) + 1;
         failedAttemptsRef.current.set(key, next);
-        if (next >= 2) {
-          toast.error("Usuário ou senha incorretos", {
-            description:
-              "Atenção: mais uma tentativa incorreta irá bloquear o usuário no SAP. Se não lembrar a senha, contate o administrador para redefinir.",
-            duration: 8000,
-          });
-        } else {
-          toast.error("Usuário ou senha incorretos", {
-            description: "Verifique suas credenciais e tente novamente.",
-          });
-        }
-      } else if (isLocked) {
-        toast.error("Usuário bloqueado no ERP", {
-          description: "Procure o administrador para desbloquear seu acesso.",
-        });
-      } else if (isNetwork) {
-        toast.error("Não foi possível conectar ao ERP", {
-          description: "Verifique sua conexão ou se o servidor está disponível.",
+        setAttempts(next);
+        toast.error(info.title, {
+          description: attemptWarning(next) || info.description,
+          duration: next >= 2 ? 8000 : 5000,
         });
       } else {
-        toast.error("Não foi possível entrar", {
-          description: raw || "Tente novamente em instantes.",
-        });
+        toast.error(info.title, { description: info.description });
       }
     }
   };
+
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 relative">
@@ -445,6 +426,9 @@ export function SapLoginForm() {
               setCompanyDB(val);
               setUserName("");
               setPassword("");
+              setLoginError(null);
+              setFieldErrors({});
+              setAttempts(0);
             }} disabled={companiesLoading}>
               <SelectTrigger className="bg-muted/30 border-border">
                 <SelectValue placeholder={companiesLoading ? "Carregando empresas..." : "Selecione a empresa"} />
@@ -475,6 +459,9 @@ export function SapLoginForm() {
                 </button>
               </div>
             )}
+            {fieldErrors.companyDB && (
+              <p className="text-xs text-destructive" role="alert">{fieldErrors.companyDB}</p>
+            )}
           </div>
 
 
@@ -499,9 +486,22 @@ export function SapLoginForm() {
                 <Input
                   placeholder="Seu usuário SAP"
                   value={userName}
-                  onChange={(e) => setUserName(e.target.value)}
-                  className="bg-muted/30 border-border"
+                  onChange={(e) => {
+                    setUserName(e.target.value);
+                    setFieldErrors((f) => ({ ...f, userName: undefined }));
+                    setLoginError(null);
+                  }}
+                  aria-invalid={!!fieldErrors.userName}
+                  className={`bg-muted/30 border-border ${fieldErrors.userName ? "border-destructive" : ""}`}
                 />
+                {fieldErrors.userName && (
+                  <p className="text-xs text-destructive" role="alert">{fieldErrors.userName}</p>
+                )}
+                {userName.includes("@") && (
+                  <p className="text-xs text-muted-foreground">
+                    O usuário do ERP normalmente é só <span className="font-medium">{userName.split("@")[0]}</span> (sem o domínio) — usaremos essa parte automaticamente.
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground flex items-center gap-2">
@@ -513,9 +513,15 @@ export function SapLoginForm() {
                     type={showPassword ? "text" : "password"}
                     placeholder="Sua senha SAP"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="bg-muted/30 border-border pr-10"
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setFieldErrors((f) => ({ ...f, password: undefined }));
+                      setLoginError(null);
+                    }}
+                    aria-invalid={!!fieldErrors.password}
+                    className={`bg-muted/30 border-border pr-10 ${fieldErrors.password ? "border-destructive" : ""}`}
                   />
+
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
@@ -524,9 +530,39 @@ export function SapLoginForm() {
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                {fieldErrors.password && (
+                  <p className="text-xs text-destructive" role="alert">{fieldErrors.password}</p>
+                )}
               </div>
             </>
           )}
+
+          {/* Erro de autenticação — orientação acionável (evita tentativa cega) */}
+          {loginError && (
+            <Alert variant="destructive" role="alert">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>{loginError.title}</AlertTitle>
+              <AlertDescription className="space-y-1">
+                <p>{loginError.description}</p>
+                {loginError.kind === "invalid_credentials" && attemptWarning(attempts) && (
+                  <p className="font-medium">{attemptWarning(attempts)}</p>
+                )}
+                {loginError.blocking && (
+                  <p className="text-xs">
+                    Não repita a tentativa: é necessário ação do administrador do ERP.
+                  </p>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!loginError && needsCredentials && attempts === 0 && companyDB && (
+            <p className="text-xs text-muted-foreground flex items-start gap-1.5">
+              <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              Após 3 tentativas incorretas o ERP bloqueia o usuário. Em caso de dúvida sobre a senha, peça a redefinição ao administrador.
+            </p>
+          )}
+
 
           {/* SAP por identidade — sessão do Service Layer criada sob demanda */}
           {erpType === "sap" && !!cloudEmail && companyDB && (
@@ -574,7 +610,7 @@ export function SapLoginForm() {
               {googleLoading ? "Conectando..." : "Entrar com Google"}
             </Button>
           ) : (
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full" disabled={isLoading || loginError?.blocking === true}>
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
               ) : (
