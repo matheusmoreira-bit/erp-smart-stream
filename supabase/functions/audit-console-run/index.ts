@@ -49,6 +49,11 @@ function admin() {
 async function requireAdmin(req: Request): Promise<{ userId: string; email: string }> {
   const auth = req.headers.get("Authorization");
   if (!auth?.startsWith("Bearer ")) throw new Error("UNAUTHORIZED");
+  // Chamada interna (scheduler mensal) autentica com a service role key.
+  if (auth.slice(7).trim() === SERVICE_KEY) {
+    return { userId: "system", email: "agendador@erpflow" };
+  }
+
   const sb = createClient(SERVICE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
     global: { headers: { Authorization: auth } },
   });
