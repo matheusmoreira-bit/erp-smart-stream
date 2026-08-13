@@ -27,6 +27,16 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -249,9 +259,20 @@ export default function PagCorpMapping() {
   const [isSavingCards, setIsSavingCards] = useState(false);
   /** Linhas já salvas que o usuário abriu para edição. */
   const [editingCardIds, setEditingCardIds] = useState<string[]>([]);
+  /** Snapshot dos valores no momento em que a edição foi aberta (para detectar alterações não salvas). */
+  const [cardEditBaseline, setCardEditBaseline] = useState<Record<string, string>>({});
+  /** Diálogo de confirmação (excluir / cancelar edição). */
+  const [cardConfirm, setCardConfirm] = useState<
+    { kind: "delete" | "cancel"; index: number } | null
+  >(null);
   const isCardEditing = (m: CardMappingRow) => !m.id || editingCardIds.includes(m.id);
+  const cardSnapshot = (m: CardMappingRow) =>
+    JSON.stringify([m.card_identifier || "", m.card_label || "", m.cost_center || "", m.project || "", m.item_code || ""]);
+  const isCardDirty = (m: CardMappingRow) =>
+    !!m.id && cardEditBaseline[m.id] !== undefined && cardEditBaseline[m.id] !== cardSnapshot(m);
   const toggleCardEdit = (id: string) =>
     setEditingCardIds((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+
 
   useEffect(() => {
     if (!companyDB) {
@@ -349,6 +370,37 @@ export default function PagCorpMapping() {
     if (m.id) deleteCardRow(m.id, i);
     else setCardMappings((p) => p.filter((_, idx) => idx !== i));
   }
+
+  /** Abre a edição guardando o estado atual, ou pede confirmação para descartar alterações. */
+  function handleToggleCardEdit(i: number) {
+    const m = cardMappings[i];
+    if (!m.id) return;
+    if (!editingCardIds.includes(m.id)) {
+      setCardEditBaseline((p) => ({ ...p, [m.id!]: cardSnapshot(m) }));
+      toggleCardEdit(m.id);
+      return;
+    }
+    if (isCardDirty(m)) { setCardConfirm({ kind: "cancel", index: i }); return; }
+    cancelCardEdit(i);
+  }
+
+  function cancelCardEdit(i: number) {
+    const m = cardMappings[i];
+    if (!m.id) return;
+    toggleCardEdit(m.id);
+    setCardEditBaseline((p) => { const n = { ...p }; delete n[m.id!]; return n; });
+    loadCardMappings();
+  }
+
+  /** Confirma exclusão; linhas novas não persistidas só pedem confirmação se já tiverem algum dado. */
+  function requestRemoveCardRow(i: number) {
+    const m = cardMappings[i];
+    const hasData = !!(m.card_identifier || m.cost_center || m.project || m.item_code);
+    if (!m.id && !hasData) { removeCardRow(i); return; }
+    setCardConfirm({ kind: "delete", index: i });
+  }
+
+
 
   async function deleteCardRow(id: string, i: number) {
     const { sapFunctionFetch } = await import("@/lib/auth-fetch");
@@ -662,19 +714,16 @@ export default function PagCorpMapping() {
                                     size="icon"
                                     aria-label={editingCardIds.includes(m.id) ? "Cancelar edição" : "Editar mapeamento"}
                                     title={editingCardIds.includes(m.id) ? "Cancelar edição" : "Editar mapeamento"}
-                                    onClick={() => {
-                                      const wasEditing = editingCardIds.includes(m.id!);
-                                      toggleCardEdit(m.id!);
-                                      if (wasEditing) loadCardMappings();
-                                    }}
+                                    onClick={() => handleToggleCardEdit(i)}
                                     className={editingCardIds.includes(m.id) ? "text-primary" : "text-muted-foreground hover:text-foreground"}
                                   >
                                     {editingCardIds.includes(m.id) ? <X className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
                                   </Button>
                                 )}
-                                <Button variant="ghost" size="icon" aria-label="Excluir mapeamento" title="Excluir mapeamento" onClick={() => removeCardRow(i)} className="text-destructive hover:text-destructive">
+                                <Button variant="ghost" size="icon" aria-label="Excluir mapeamento" title="Excluir mapeamento" onClick={() => requestRemoveCardRow(i)} className="text-destructive hover:text-destructive">
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
+
                               </div>
                             </TableCell>
                           </TableRow>
@@ -688,6 +737,54 @@ export default function PagCorpMapping() {
           </Tabs>
         </div>
       </main>
+
+      <AlertDialog open={!!cardConfirm} onOpenChange={(o) => { if (!o) setCardConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {cardConfirm?.kind === "delete" ? "Excluir mapeamento?" : "Descartar alterações?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {cardConfirm?.kind === "delete" ? (
+                <>
+                  O mapeamento
+                  {cardConfirm && (
+                    <strong>
+                      {" "}
+                      {cardMappings[cardConfirm.index]?.is_fallback
+                        ? "Fallback (padrão da empresa)"
+                        : cardMappings[cardConfirm.index]?.card_label ||
+                          cardMappings[cardConfirm.index]?.card_identifier ||
+                          "sem cartão"}
+                    </strong>
+                  )}{" "}
+                  será removido. As próximas integrações desse cartão passarão a usar o fallback da empresa. Esta ação não pode ser desfeita.
+                </>
+              ) : (
+                <>Você alterou este mapeamento e ainda não salvou. Se cancelar agora, as alterações serão perdidas.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>
+              {cardConfirm?.kind === "delete" ? "Manter" : "Continuar editando"}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className={cardConfirm?.kind === "delete" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : undefined}
+              onClick={() => {
+                if (!cardConfirm) return;
+                const { kind, index } = cardConfirm;
+                setCardConfirm(null);
+                if (kind === "delete") removeCardRow(index);
+                else cancelCardEdit(index);
+              }}
+            >
+              {cardConfirm?.kind === "delete" ? "Excluir" : "Descartar alterações"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+
   );
 }
