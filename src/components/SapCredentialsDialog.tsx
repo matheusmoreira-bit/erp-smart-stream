@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Eye, EyeOff, Loader2, Lock, ShieldCheck, User } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { classifyErpLoginError, attemptWarning } from "@/lib/erp-login-error";
+import { AlertTriangle, Eye, EyeOff, Info, Loader2, Lock, ShieldCheck, User } from "lucide-react";
 
 export interface SapCredentialsDialogProps {
   open: boolean;
