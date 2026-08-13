@@ -194,12 +194,50 @@ async function approverRuleIds(
   return out;
 }
 
+/**
+ * Aprovadores oficiais que o caller substitui hoje (janela vigente e não
+ * revogada). Sem isso, um substituto ativo não enxergava NENHUM documento do
+ * titular — a tela ficava vazia mesmo com o grant cadastrado.
+ */
+async function substituteOfficialAliases(
+  admin: SupabaseClient,
+  aliases: Set<string>,
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (aliases.size === 0) return out;
+  try {
+    const nowIso = new Date().toISOString();
+    const { data } = await admin
+      .from("approver_substitutes")
+      .select("official_email, official_name, substitute_email, substitute_name, starts_at, ends_at, revoked_at")
+      .is("revoked_at", null)
+      .lte("starts_at", nowIso)
+      .gte("ends_at", nowIso);
+    for (const r of (data || []) as any[]) {
+      for (const alias of aliases) {
+        if (
+          identityMatches(r.substitute_email, alias) ||
+          personMatches(r.substitute_email, alias) ||
+          identityMatches(r.substitute_name, alias) ||
+          personMatches(r.substitute_name, alias)
+        ) {
+          if (r.official_email) out.add(String(r.official_email).toLowerCase());
+          if (r.official_name) out.add(String(r.official_name).toLowerCase());
+          break;
+        }
+      }
+    }
+  } catch { /* ignore */ }
+  return out;
+}
+
 /** Uma despesa pertence ao caller quando ele é solicitante, criador ou aprovador. */
 function ownsExpense(
   row: Record<string, unknown>,
   aliases: Set<string>,
   directorateBranch: string | null = null,
   approverRules: Set<string> | null = null,
+  substituteAliases: Set<string> | null = null,
 ): boolean {
   // Grupo "Usuário Administrativo": tudo da própria diretoria (1.6.x quando o
   // IdP informa 1.6.1.2). Sem CC no IdP, cai na regra de dono abaixo.
@@ -225,8 +263,19 @@ function ownsExpense(
       if (identityMatches(c, alias) || personListMatches(c, alias)) return true;
     }
   }
+  // Substituto ativo: enxerga o que está na fila do titular (apenas colunas de
+  // aprovação — não herda os documentos que o titular solicitou).
+  if (substituteAliases && substituteAliases.size > 0) {
+    for (const c of [row.current_approver, row.original_approver]) {
+      if (!c) continue;
+      for (const alias of substituteAliases) {
+        if (identityMatches(c, alias) || personListMatches(c, alias)) return true;
+      }
+    }
+  }
   return false;
 }
+
 
 
 
