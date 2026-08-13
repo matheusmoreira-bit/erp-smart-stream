@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { Loader2, UserCog } from "lucide-react";
+import { Loader2, UserCog, Undo2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { useSap } from "@/contexts/SapContext";
 import { Button } from "@/components/ui/button";
 import {
   getImpersonation,
@@ -18,6 +21,8 @@ import { displayUserName } from "@/lib/user-display";
 export function ImpersonationBanner() {
   const [state, setState] = useState<ImpersonationState | null>(() => getImpersonation());
   const [busy, setBusy] = useState(false);
+  const queryClient = useQueryClient();
+  const { impersonateAs } = useSap();
 
   useEffect(() => {
     const sync = () => setState(getImpersonation());
@@ -40,6 +45,22 @@ export function ImpersonationBanner() {
     } catch {
       /* auditoria nunca bloqueia a saída */
     }
+
+    // Caminho preferido: volta à identidade original em memória, sem recarregar
+    // a página — a tela atual (rota, filtros, formulários) é preservada.
+    const adminUser = state.adminUser;
+    if (!state.withPassword && adminUser) {
+      clearImpersonation();
+      clearAuthCache();
+      impersonateAs(adminUser);
+      try { queryClient.invalidateQueries(); } catch { /* ignore */ }
+      setBusy(false);
+      toast.success("Você voltou ao seu usuário");
+      return;
+    }
+
+    // Fallback: houve login real no ERP com a senha do alvo, então é preciso
+    // reidratar a sessão do admin do zero.
     clearImpersonation();
     clearAuthCache();
     try {
@@ -68,9 +89,20 @@ export function ImpersonationBanner() {
           Atuando como{" "}
           <strong>{displayUserName(state.targetName || state.targetUser)}</strong>
         </p>
-        <Button size="sm" variant="secondary" className="rounded-full" onClick={stop} disabled={busy}>
-          {busy && <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />}
-          Sair
+        <Button
+          size="sm"
+          variant="secondary"
+          className="rounded-full"
+          onClick={stop}
+          disabled={busy}
+          title="Encerra a impersonação mantendo a tela atual"
+        >
+          {busy ? (
+            <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+          ) : (
+            <Undo2 className="w-3.5 h-3.5 mr-2" aria-hidden="true" />
+          )}
+          Voltar ao meu usuário
         </Button>
       </div>
     </>
