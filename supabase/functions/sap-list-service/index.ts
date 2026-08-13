@@ -134,6 +134,14 @@ Deno.serve(async (req) => {
 
     // Busca uma coleção; retorna false quando o recurso não existe (para tentar
     // o próximo candidato). Se o $select não for aceito, refaz sem parâmetros.
+    // IMPORTANTE: o retry NUNCA pode remover o $filter — senão a lista volta
+    // completa (itens inválidos/congelados, BPs bloqueados etc.) e polui o
+    // cache das telas. Só o $select é descartado na segunda tentativa.
+    const withoutSelect = (p: Record<string, string | number>) => {
+      const { $select: _drop, ...rest } = p;
+      return rest as Record<string, string | number>;
+    };
+
     const fetchCandidate = async (
       candidate: string,
       useParams: boolean,
@@ -141,7 +149,7 @@ Deno.serve(async (req) => {
       all.length = 0;
       let skip = 0;
       while (true) {
-        const qs = buildQS(useParams ? params : {}, { $top: pageSize, $skip: skip });
+        const qs = buildQS(useParams ? params : withoutSelect(params), { $top: pageSize, $skip: skip });
         const url = `${baseUrl}/${candidate}${qs}`;
         const r = await sapFetch(url, {
           method: "GET",
