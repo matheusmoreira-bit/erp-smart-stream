@@ -361,6 +361,37 @@ export default function PagCorpMapping() {
     else setCardMappings((p) => p.filter((_, idx) => idx !== i));
   }
 
+  /** Abre a edição guardando o estado atual, ou pede confirmação para descartar alterações. */
+  function handleToggleCardEdit(i: number) {
+    const m = cardMappings[i];
+    if (!m.id) return;
+    if (!editingCardIds.includes(m.id)) {
+      setCardEditBaseline((p) => ({ ...p, [m.id!]: cardSnapshot(m) }));
+      toggleCardEdit(m.id);
+      return;
+    }
+    if (isCardDirty(m)) { setCardConfirm({ kind: "cancel", index: i }); return; }
+    cancelCardEdit(i);
+  }
+
+  function cancelCardEdit(i: number) {
+    const m = cardMappings[i];
+    if (!m.id) return;
+    toggleCardEdit(m.id);
+    setCardEditBaseline((p) => { const n = { ...p }; delete n[m.id!]; return n; });
+    loadCardMappings();
+  }
+
+  /** Confirma exclusão; linhas novas não persistidas só pedem confirmação se já tiverem algum dado. */
+  function requestRemoveCardRow(i: number) {
+    const m = cardMappings[i];
+    const hasData = !!(m.card_identifier || m.cost_center || m.project || m.item_code);
+    if (!m.id && !hasData) { removeCardRow(i); return; }
+    setCardConfirm({ kind: "delete", index: i });
+  }
+
+
+
   async function deleteCardRow(id: string, i: number) {
     const { sapFunctionFetch } = await import("@/lib/auth-fetch");
     const res = await sapFunctionFetch("pagcorp-card-mapping", {
