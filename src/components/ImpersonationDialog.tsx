@@ -92,6 +92,8 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
         targetName: selected?.UserName || undefined,
         targetEmail: selected?.eMail || undefined,
         adminEmail,
+        adminUser: session.userName,
+        withPassword: !!password,
         companyDB: session.companyDB,
         startedAt: Date.now(),
       });
