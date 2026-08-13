@@ -405,7 +405,40 @@ Deno.serve(async (req) => {
             },
           });
 
+          // Auditoria por TRILHA (padrão x reembolso) — todos os eventos do
+          // mesmo reprocesso compartilham o correlation_id do documento.
+          const correlationId = `${doc.id}:reprocess:${new Date().toISOString()}`;
           for (const r of rows) {
+            try {
+              await admin.from("expense_audit_log").insert({
+                expense_id: doc.id,
+                action: "reprocess",
+                decision: "pending",
+                level_order: r.current_level || 1,
+                actor_identity: actorLabel,
+                actor_email: actorLabel?.includes("@") ? actorLabel : null,
+                actor_source: "cloud_admin",
+                company_db: doc.company_db,
+                correlation_id: correlationId,
+                step: "rebuild_track",
+                segment_key: r.segment_key,
+                track: r.segment_key === "__reembolso__" ? "reembolso" : "padrao",
+                cost_center: r.cost_center,
+                project: r.project,
+                rule_id: r.rule_id,
+                rule_name: (r as any).rule_name ?? null,
+                reason: `Trilha recriada por reprocesso (${rateioTypeNorm || "padrao"})`,
+                metadata: {
+                  amount: Number(r.amount || 0),
+                  approver: r.current_approver,
+                  from_approver: doc.current_approver,
+                  rateio_type: rateioTypeNorm || "padrao",
+                  parallel_reembolso: isReembolso,
+                },
+              } as any);
+            } catch (e) {
+              console.warn("[expense-reassign-approver] audit log falhou:", e);
+            }
             await notifyApprovalPending(admin, {
               expenseId: doc.id,
               companyDb: doc.company_db,
