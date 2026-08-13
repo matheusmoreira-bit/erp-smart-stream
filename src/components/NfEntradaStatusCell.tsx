@@ -4,7 +4,7 @@ import type { NfEntradaImport, NfEntradaStatus } from "@/hooks/useNfEntrada";
 
 type StatusVariant = "default" | "secondary" | "destructive" | "outline";
 
-export type StatusPresentation = { label: string; variant: StatusVariant; hint: string };
+export type StatusPresentation = { label: string; variant: StatusVariant; hint: string; next?: string };
 
 /** Bases de teste não são varridas pelo watcher automático (mesma regra da edge function). */
 export function isTestCompanyDb(db: string | null | undefined): boolean {
