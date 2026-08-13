@@ -316,8 +316,8 @@ export default function NfEntrada() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os status</SelectItem>
-              {Object.entries(STATUS_LABELS).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v.label}</SelectItem>
+              {STAGE_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -329,6 +329,19 @@ export default function NfEntrada() {
             <span>{filtered.length} de {items.length}</span>
           </div>
         </div>
+
+        <div className="text-xs text-muted-foreground">
+          {companyDb ? (
+            <>
+              Exibindo apenas notas em que <strong>{companyDb}</strong> é a destinatária (tomadora).
+              {foreignCount > 0 && ` ${foreignCount} nota(s) de outro CNPJ foram ocultadas.`}
+            </>
+          ) : (
+            "Selecione uma empresa para ver as notas capturadas pelo Master Tax."
+          )}
+        </div>
+
+
 
         {error && (
           <div className="rounded-md border border-destructive/30 bg-destructive/10 text-destructive text-sm px-3 py-2">
