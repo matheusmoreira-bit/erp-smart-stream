@@ -3551,6 +3551,9 @@ export function CreateExpenseModal({
 
     <AlertDialog open={closeConfirm} onOpenChange={setCloseConfirm}>
       <AlertDialogContent
+        className="z-[60]"
+        overlayClassName="z-[60] bg-black/40"
+
         role="alertdialog"
         aria-modal="true"
         onKeyDown={(e) => {
