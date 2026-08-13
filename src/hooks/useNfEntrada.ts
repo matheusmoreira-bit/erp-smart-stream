@@ -58,25 +58,62 @@ export interface NfEntradaLog {
   payload: unknown;
 }
 
+const onlyDigits = (v: string | null | undefined) => (v || "").replace(/\D/g, "");
+
 export function useNfEntrada() {
+  const { session } = useSap();
+  const companyDb = session?.companyDB ?? null;
   const [items, setItems] = useState<NfEntradaImport[]>([]);
+  const [companyTaxId, setCompanyTaxId] = useState<string | null>(null);
+  /** Notas capturadas na base ativa cujo tomador não é o CNPJ da empresa. */
+  const [foreignCount, setForeignCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     setError(null);
+    // Segregação por empresa: sem base ativa não listamos nada, para nunca
+    // misturar notas de bases distintas (ex.: TST - ANA Gaming x ANA Gaming).
+    if (!companyDb) {
+      setItems([]);
+      setForeignCount(0);
+      setLoading(false);
+      return;
+    }
+
+    const { data: company } = await supabase
+      .from("companies")
+      .select("tax_id")
+      .eq("company_db", companyDb)
+      .maybeSingle();
+    const taxId = onlyDigits(company?.tax_id);
+    setCompanyTaxId(taxId || null);
+
     const { data, error: err } = await supabase
       .from("nf_entrada_imports")
       .select("*")
+      .eq("sap_company_db", companyDb)
       .order("created_at", { ascending: false })
       .limit(500);
-    if (err) setError(err.message);
-    else setItems((data || []) as NfEntradaImport[]);
+    if (err) {
+      setError(err.message);
+      setLoading(false);
+      return;
+    }
+    const rows = (data || []) as NfEntradaImport[];
+    // Segunda barreira: quando conhecemos o CNPJ da empresa, só exibimos as
+    // notas em que ela é a tomadora/destinatária.
+    const scoped = taxId
+      ? rows.filter((r) => !r.cnpj_destinatario || onlyDigits(r.cnpj_destinatario) === taxId)
+      : rows;
+    setForeignCount(rows.length - scoped.length);
+    setItems(scoped);
     setLoading(false);
-  }, []);
+  }, [companyDb]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
 
   const reprocess = useCallback(async (id: string) => {
     const { error: err } = await supabase.functions.invoke("nf-entrada-to-sap", {
