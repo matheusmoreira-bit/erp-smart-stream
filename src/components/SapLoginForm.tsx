@@ -459,6 +459,9 @@ export function SapLoginForm() {
                 </button>
               </div>
             )}
+            {fieldErrors.companyDB && (
+              <p className="text-xs text-destructive" role="alert">{fieldErrors.companyDB}</p>
+            )}
           </div>
 
 
