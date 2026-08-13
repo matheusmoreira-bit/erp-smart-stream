@@ -506,7 +506,7 @@ export default function PagCorpMapping() {
                             <TableCell>
                               {m.is_fallback ? (
                                 <Badge variant="secondary" className="text-sm">Fallback (padrão da empresa)</Badge>
-                              ) : m.id ? (
+                              ) : !isCardEditing(m) ? (
                                 <div className="text-sm">
                                   <span className="font-medium text-foreground">{m.card_label || m.card_identifier}</span>
                                   {m.card_label && (
@@ -516,7 +516,7 @@ export default function PagCorpMapping() {
                               ) : (
                                 <>
                                   <CachedSearchCombobox
-                                    options={cardSuggestions.map((c) => ({ code: c.identifier, name: c.label, extra: "" }))}
+                                    options={cardOptions}
                                     isLoading={false}
                                     value={
                                       m.card_identifier
@@ -546,7 +546,7 @@ export default function PagCorpMapping() {
                             </TableCell>
 
                             <TableCell>
-                              {m.id ? (
+                              {!isCardEditing(m) ? (
                                 <div className="text-sm font-medium text-foreground">
                                   {m.cost_center || <span className="text-muted-foreground italic">—</span>}
                                 </div>
@@ -561,7 +561,7 @@ export default function PagCorpMapping() {
                               )}
                             </TableCell>
                             <TableCell>
-                              {m.id ? (
+                              {!isCardEditing(m) ? (
                                 <div className="text-sm font-medium text-foreground">
                                   {m.project || <span className="text-muted-foreground italic">—</span>}
                                 </div>
@@ -576,7 +576,7 @@ export default function PagCorpMapping() {
                               )}
                             </TableCell>
                             <TableCell>
-                              {m.id ? (
+                              {!isCardEditing(m) ? (
                                 <div className="text-sm font-medium text-foreground">
                                   {m.item_code || <span className="text-muted-foreground italic">—</span>}
                                 </div>
@@ -591,10 +591,29 @@ export default function PagCorpMapping() {
                               )}
                             </TableCell>
                             <TableCell>
-                              <Button variant="ghost" size="icon" onClick={() => removeCardRow(i)} className="text-destructive hover:text-destructive">
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                              <div className="flex items-center gap-1">
+                                {m.id && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={editingCardIds.includes(m.id) ? "Cancelar edição" : "Editar mapeamento"}
+                                    title={editingCardIds.includes(m.id) ? "Cancelar edição" : "Editar mapeamento"}
+                                    onClick={() => {
+                                      const wasEditing = editingCardIds.includes(m.id!);
+                                      toggleCardEdit(m.id!);
+                                      if (wasEditing) loadCardMappings();
+                                    }}
+                                    className={editingCardIds.includes(m.id) ? "text-primary" : "text-muted-foreground hover:text-foreground"}
+                                  >
+                                    {editingCardIds.includes(m.id) ? <X className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+                                  </Button>
+                                )}
+                                <Button variant="ghost" size="icon" aria-label="Excluir mapeamento" title="Excluir mapeamento" onClick={() => removeCardRow(i)} className="text-destructive hover:text-destructive">
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
                             </TableCell>
+                          </TableRow>
                           </TableRow>
                         );
                       })}
