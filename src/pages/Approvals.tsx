@@ -69,6 +69,8 @@ import { useApprovalRules, type ApprovalRule } from "@/hooks/useApprovalRules";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RelationsMap } from "@/components/RelationsMap";
 import { SegmentFallbackAlert } from "@/components/SegmentFallbackAlert";
+import { ParallelTracksPanel } from "@/components/ParallelTracksPanel";
+
 
 import SubstituteApproversTab from "@/components/SubstituteApproversTab";
 
@@ -1011,6 +1013,13 @@ function ApprovalDetailModal({
               expenseId={(doc as unknown as { __internalId?: string }).__internalId}
               formatCostCenter={formatCostCenter}
             />
+
+            {/* Status das trilhas paralelas (regra padrão + reembolso) */}
+            <ParallelTracksPanel
+              expenseId={(doc as unknown as { __internalId?: string }).__internalId}
+              formatCostCenter={formatCostCenter}
+            />
+
 
             {/* Painel de segmentação por regra */}
 
