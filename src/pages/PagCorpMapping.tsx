@@ -249,9 +249,20 @@ export default function PagCorpMapping() {
   const [isSavingCards, setIsSavingCards] = useState(false);
   /** Linhas já salvas que o usuário abriu para edição. */
   const [editingCardIds, setEditingCardIds] = useState<string[]>([]);
+  /** Snapshot dos valores no momento em que a edição foi aberta (para detectar alterações não salvas). */
+  const [cardEditBaseline, setCardEditBaseline] = useState<Record<string, string>>({});
+  /** Diálogo de confirmação (excluir / cancelar edição). */
+  const [cardConfirm, setCardConfirm] = useState<
+    { kind: "delete" | "cancel"; index: number } | null
+  >(null);
   const isCardEditing = (m: CardMappingRow) => !m.id || editingCardIds.includes(m.id);
+  const cardSnapshot = (m: CardMappingRow) =>
+    JSON.stringify([m.card_identifier || "", m.card_label || "", m.cost_center || "", m.project || "", m.item_code || ""]);
+  const isCardDirty = (m: CardMappingRow) =>
+    !!m.id && cardEditBaseline[m.id] !== undefined && cardEditBaseline[m.id] !== cardSnapshot(m);
   const toggleCardEdit = (id: string) =>
     setEditingCardIds((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+
 
   useEffect(() => {
     if (!companyDB) {
