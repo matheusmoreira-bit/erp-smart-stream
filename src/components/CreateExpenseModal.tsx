@@ -111,6 +111,8 @@ import { CurrencyField, normalizeCurrencyCode } from "@/components/CurrencyField
 // Logger tagueado — usado nas verificações de dedup e nos guards de fluxo
 // (cancelar/retentar). Sempre em `console.info`/`warn` para facilitar filtro
 // pelo DevTools ao investigar duplicações reportadas por usuários.
+import { ModalErrorBoundary } from "@/components/ModalErrorBoundary";
+
 const DEDUP_LOG = "[expense-dedupe]";
 
 function formatCurrency(value: number, currency: string = "BRL") {
@@ -2533,6 +2535,7 @@ export function CreateExpenseModal({
         ref={setDialogContainer}
         className="w-[100dvw] h-[100dvh] max-w-[100dvw] rounded-none border-0 overflow-x-hidden overflow-y-auto px-3 py-4 sm:w-[95vw] sm:h-auto sm:max-w-5xl sm:max-h-[92vh] sm:rounded-lg sm:border sm:p-8"
       >
+      <ModalErrorBoundary onClose={() => onOpenChange(false)}>
 
         <DialogHeader className="pr-8 text-left">
           <DialogTitle className="text-base sm:text-lg">{title || (isSales ? "Novo Pedido de Venda" : "Nova Despesa")}</DialogTitle>
@@ -3499,6 +3502,7 @@ export function CreateExpenseModal({
             </Button>
           </div>
         </div>
+      </ModalErrorBoundary>
       </DialogContent>
     </Dialog>
 
