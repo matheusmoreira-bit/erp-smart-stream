@@ -150,22 +150,42 @@ function ensureRealtimeInvalidation() {
 // sido gravadas por uma tela que não enviou o $filter).
 const ACTIVE_ONLY_ENDPOINTS = new Set(["CostCenters", "ProfitCenters", "Projects"]);
 
+/** "purchase" | "sales" | null, deduzido da cacheKey da lista de itens. */
+function itemUsageFromCacheKey(cacheKey?: string): "purchase" | "sales" | null {
+  const k = (cacheKey || "").toLowerCase();
+  if (k.includes("sales")) return "sales";
+  if (k.includes("purchase")) return "purchase";
+  return null;
+}
+
 function withActiveFilter(
   endpoint: string,
   params?: Record<string, string | number>,
+  cacheKey?: string,
 ): Record<string, string | number> | undefined {
   if (endpoint === "Items") {
-    // Itens inválidos/congelados no ERP nunca podem aparecer nos comboboxes.
+    // Itens inválidos/congelados, ativos imobilizados (itFixedAssets) e itens
+    // que o ERP não marca como de compra/venda não podem aparecer nos
+    // comboboxes de pedidos.
     const next: Record<string, string | number> = { ...(params || {}) };
     const existing = String(next.$filter || "");
-    if (!/Valid|Frozen/.test(existing)) {
-      const guard = "Valid eq 'tYES' and Frozen eq 'tNO'";
+    const usage = itemUsageFromCacheKey(cacheKey);
+    const guards: string[] = [];
+    if (!/Valid|Frozen/.test(existing)) guards.push("Valid eq 'tYES'", "Frozen eq 'tNO'");
+    if (!/ItemType/.test(existing)) guards.push("ItemType ne 'itFixedAssets'");
+    if (usage === "purchase" && !/PurchaseItem/.test(existing)) guards.push("PurchaseItem eq 'tYES'");
+    if (usage === "sales" && !/SalesItem/.test(existing)) guards.push("SalesItem eq 'tYES'");
+    if (guards.length) {
+      const guard = guards.join(" and ");
       next.$filter = existing ? `(${existing}) and ${guard}` : guard;
     }
     const select = String(next.$select || "");
     if (select) {
       const fields = select.split(",").map((f) => f.trim());
-      for (const f of ["Valid", "Frozen"]) if (!fields.includes(f)) fields.push(f);
+      const wanted = ["Valid", "Frozen", "ItemType"];
+      if (usage === "purchase") wanted.push("PurchaseItem");
+      if (usage === "sales") wanted.push("SalesItem");
+      for (const f of wanted) if (!fields.includes(f)) fields.push(f);
       next.$select = fields.join(",");
     }
     return next;
@@ -183,20 +203,20 @@ function withActiveFilter(
   return next;
 }
 
-function filterActiveRows(endpoint: string, rows: any[]): any[] {
+const isNo = (v: any) => v === undefined || v === null || v === ""
+  ? null
+  : String(v).toLowerCase() === "tno" || v === false;
+
+function filterActiveRows(endpoint: string, rows: any[], cacheKey?: string): any[] {
   if (endpoint === "Items") {
+    const usage = itemUsageFromCacheKey(cacheKey);
     return rows.filter((r: any) => {
-      const valid = r?.Valid;
-      const frozen = r?.Frozen;
-      const validOk =
-        valid === undefined || valid === null || valid === ""
-          ? true
-          : String(valid).toLowerCase() !== "tno" && valid !== false;
-      const frozenOk =
-        frozen === undefined || frozen === null || frozen === ""
-          ? true
-          : String(frozen).toLowerCase() !== "tyes" && frozen !== true;
-      return validOk && frozenOk;
+      if (isNo(r?.Valid) === true) return false;
+      if (isNo(r?.Frozen) === false) return false; // Frozen === tYES
+      if (String(r?.ItemType || "") === "itFixedAssets") return false;
+      if (usage === "purchase" && isNo(r?.PurchaseItem) === true) return false;
+      if (usage === "sales" && isNo(r?.SalesItem) === true) return false;
+      return true;
     });
   }
   if (!ACTIVE_ONLY_ENDPOINTS.has(endpoint)) return rows;
