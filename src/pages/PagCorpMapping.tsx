@@ -614,7 +614,6 @@ export default function PagCorpMapping() {
                               </div>
                             </TableCell>
                           </TableRow>
-                          </TableRow>
                         );
                       })}
                     </TableBody>
