@@ -480,9 +480,22 @@ export function SapLoginForm() {
                 <Input
                   placeholder="Seu usuário SAP"
                   value={userName}
-                  onChange={(e) => setUserName(e.target.value)}
-                  className="bg-muted/30 border-border"
+                  onChange={(e) => {
+                    setUserName(e.target.value);
+                    setFieldErrors((f) => ({ ...f, userName: undefined }));
+                    setLoginError(null);
+                  }}
+                  aria-invalid={!!fieldErrors.userName}
+                  className={`bg-muted/30 border-border ${fieldErrors.userName ? "border-destructive" : ""}`}
                 />
+                {fieldErrors.userName && (
+                  <p className="text-xs text-destructive" role="alert">{fieldErrors.userName}</p>
+                )}
+                {userName.includes("@") && (
+                  <p className="text-xs text-muted-foreground">
+                    O usuário do ERP normalmente é só <span className="font-medium">{userName.split("@")[0]}</span> (sem o domínio) — usaremos essa parte automaticamente.
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground flex items-center gap-2">
@@ -494,9 +507,15 @@ export function SapLoginForm() {
                     type={showPassword ? "text" : "password"}
                     placeholder="Sua senha SAP"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="bg-muted/30 border-border pr-10"
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setFieldErrors((f) => ({ ...f, password: undefined }));
+                      setLoginError(null);
+                    }}
+                    aria-invalid={!!fieldErrors.password}
+                    className={`bg-muted/30 border-border pr-10 ${fieldErrors.password ? "border-destructive" : ""}`}
                   />
+
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
