@@ -517,7 +517,9 @@ export function CreateExpenseModal({
   //      o modal se rehidrata automaticamente com o próximo grupo.
   //   3) Documentos NÃO-fiscais (classificados por IA como "outro") apenas
   //      viram anexo — não preenchem a despesa.
-  interface DocGroup { supplierKey: string; supplierLabel: string; docs: Array<{ file: File; extracted: any }>; }
+  // `companion: true` = documento de cobrança (boleto/comprovante) que acompanha
+  // a nota do mesmo pedido — vai como anexo, mas NÃO gera linhas/valores próprios.
+  interface DocGroup { supplierKey: string; supplierLabel: string; docs: Array<{ file: File; extracted: any; companion?: boolean }>; }
   const [deferredGroups, setDeferredGroups] = useState<DocGroup[]>([]);
   const [supplierPicker, setSupplierPicker] = useState<{ groups: DocGroup[]; nonFiscal: File[] } | null>(null);
   // Confirmação e controle de cancelamento do processamento IA / fila de
