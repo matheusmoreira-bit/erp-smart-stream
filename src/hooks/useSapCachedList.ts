@@ -284,7 +284,7 @@ export function useSapCachedList({
                 (r: any) => !String(r?.CenterCode || "").startsWith("Centr_"),
               );
             }
-            cachedData = filterActiveRows(endpoint, cachedData);
+            cachedData = filterActiveRows(endpoint, cachedData, cacheKey);
             setOptions(cachedData.map(mapRowRef.current));
 
             // Cache válido (ou sem sessão para revalidar): encerra aqui.
@@ -312,7 +312,7 @@ export function useSapCachedList({
         return;
       }
 
-      const effectiveParams = withActiveFilter(endpoint, paramsRef.current);
+      const effectiveParams = withActiveFilter(endpoint, paramsRef.current, cacheKey);
       let rows: any[] | null = null;
       try {
         const { data: svcData, error: svcErr } = await supabase.functions.invoke(
@@ -348,7 +348,7 @@ export function useSapCachedList({
         rows = rows.filter((r: any) => !String(r?.CenterCode || "").startsWith("Centr_"));
       }
       // Remove registros desativados no ERP (CCs/projetos inativos)
-      rows = filterActiveRows(endpoint, rows);
+      rows = filterActiveRows(endpoint, rows, cacheKey);
 
 
       // 3. Only cache non-empty results
