@@ -25,6 +25,7 @@ import {
   canViewAllDocuments,
   identityMatches,
   personMatches,
+  personListMatches,
   resolveDirectorateBranch,
   costCenterInBranch,
 } from "../_shared/permission-groups.ts";
@@ -221,7 +222,7 @@ function ownsExpense(
     for (const alias of aliases) {
       // `personMatches` cobre o caso em que a coluna guarda o NOME completo
       // ("Andresa De Carvalho") e o caller é o UserCode ("andresa.carvalho").
-      if (identityMatches(c, alias) || personMatches(c, alias)) return true;
+      if (identityMatches(c, alias) || personListMatches(c, alias)) return true;
     }
   }
   return false;
