@@ -385,9 +385,12 @@ export default function NfEntrada() {
               )}
               {!loading && filtered.length === 0 && (
                 <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                  Nenhuma NF importada ainda. Configure os secrets <code>MASTERTAX_BASE_URL</code> e <code>MASTERTAX_TOKEN</code> e clique em "Buscar Master Tax agora".
+                  {!companyDb
+                    ? "Selecione uma empresa para listar as notas capturadas pelo Master Tax."
+                    : `Nenhuma NF do Master Tax para ${companyDb} com os filtros atuais.`}
                 </TableCell></TableRow>
               )}
+
 
               {filtered.map((it) => {
                 const s = nfStagePresentation(it);
