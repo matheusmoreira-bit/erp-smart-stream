@@ -517,7 +517,9 @@ export function CreateExpenseModal({
   //      o modal se rehidrata automaticamente com o próximo grupo.
   //   3) Documentos NÃO-fiscais (classificados por IA como "outro") apenas
   //      viram anexo — não preenchem a despesa.
-  interface DocGroup { supplierKey: string; supplierLabel: string; docs: Array<{ file: File; extracted: any }>; }
+  // `companion: true` = documento de cobrança (boleto/comprovante) que acompanha
+  // a nota do mesmo pedido — vai como anexo, mas NÃO gera linhas/valores próprios.
+  interface DocGroup { supplierKey: string; supplierLabel: string; docs: Array<{ file: File; extracted: any; companion?: boolean }>; }
   const [deferredGroups, setDeferredGroups] = useState<DocGroup[]>([]);
   const [supplierPicker, setSupplierPicker] = useState<{ groups: DocGroup[]; nonFiscal: File[] } | null>(null);
   // Confirmação e controle de cancelamento do processamento IA / fila de
@@ -1235,6 +1237,35 @@ export function CreateExpenseModal({
     return name ? `name:${name}` : "unknown";
   };
 
+  // Boleto/comprovante são instrumentos de COBRANÇA da mesma compra — nunca
+  // devem virar um segundo pedido. O beneficiário costuma ser o banco, então
+  // o CNPJ diverge da NF e o agrupamento por fornecedor os separava.
+  const PAYMENT_KINDS = new Set(["boleto", "comprovante_pagamento"]);
+  const isPaymentInstrument = (doc: any): boolean =>
+    PAYMENT_KINDS.has(String(doc?.document_kind || "").toLowerCase());
+
+  const docTotalOf = (doc: any): number => {
+    const t = Number(doc?.total_amount);
+    if (Number.isFinite(t) && t > 0) return t;
+    const items = Array.isArray(doc?.items) ? doc.items : [];
+    return items.reduce((s: number, i: any) => s + (Number(i?.line_total) || 0), 0);
+  };
+
+  // Extrações que alimentam o formulário: ignora os companions (boletos) para
+  // não duplicar valores, mas aproveita o vencimento deles quando a NF não traz.
+  const fiscalPayloadOf = (docs: Array<{ extracted: any; companion?: boolean }>): any[] => {
+    const main = docs.filter((d) => !d.companion);
+    const base = (main.length > 0 ? main : docs).map((d) => d.extracted);
+    if (base.length === 0) return base;
+    if (!base[0]?.due_date) {
+      const companionDue = docs.find((d) => d.companion && d.extracted?.due_date)?.extracted?.due_date;
+      if (companionDue) base[0] = { ...base[0], due_date: companionDue };
+    }
+    return base;
+  };
+
+
+
   const processWithAI = async (filesToProcess: File[]) => {
     // Guard anti-duplicação: `isProcessing` (estado) + `aiInFlightRef` (síncrono).
     // O ref pega o intervalo entre o clique e o setState — evita 2ª chamada
@@ -1370,20 +1401,58 @@ export function CreateExpenseModal({
       }
 
       // ─── Agrupa fiscais por fornecedor ────────────────────────────────
+      // Notas primeiro; boletos/comprovantes entram depois como companions.
+      const invoiceDocs = fiscal.filter((p) => !isPaymentInstrument(p.extracted));
+      const paymentDocs = fiscal.filter((p) => isPaymentInstrument(p.extracted));
+
       const groupMap = new Map<string, DocGroup>();
-      for (const p of fiscal) {
+      for (const p of (invoiceDocs.length > 0 ? invoiceDocs : paymentDocs)) {
         const key = supplierKeyOf(p.extracted);
         const label = String(p.extracted?.supplier_name || "Fornecedor não identificado");
         const g = groupMap.get(key);
         if (g) g.docs.push(p);
         else groupMap.set(key, { supplierKey: key, supplierLabel: label, docs: [p] });
       }
+
+      // Anexa cada boleto/comprovante à nota correspondente: mesmo fornecedor,
+      // senão valor total equivalente, senão o único grupo existente.
+      let unmatchedPayments = 0;
+      if (invoiceDocs.length > 0) {
+        for (const p of paymentDocs) {
+          const key = supplierKeyOf(p.extracted);
+          let target = groupMap.get(key) ?? null;
+          if (!target) {
+            const total = docTotalOf(p.extracted);
+            if (total > 0) {
+              target = Array.from(groupMap.values()).find((g) =>
+                g.docs.some((d) => Math.abs(docTotalOf(d.extracted) - total) <= Math.max(0.02, total * 0.001)),
+              ) ?? null;
+            }
+          }
+          if (!target && groupMap.size === 1) target = Array.from(groupMap.values())[0];
+          if (target) target.docs.push({ ...p, companion: true });
+          else {
+            unmatchedPayments++;
+            groupMap.set(key, {
+              supplierKey: key,
+              supplierLabel: String(p.extracted?.supplier_name || "Cobrança não identificada"),
+              docs: [p],
+            });
+          }
+        }
+      }
       const groups = Array.from(groupMap.values());
+      if (paymentDocs.length > unmatchedPayments && invoiceDocs.length > 0) {
+        toast.info(
+          `${paymentDocs.length - unmatchedPayments} boleto(s)/comprovante(s) vinculados à nota correspondente — vão como anexo do mesmo pedido.`,
+          { duration: 6000 },
+        );
+      }
 
       // ─── Regra 1: mesmo fornecedor → mescla linhas ────────────────────
       if (groups.length === 1) {
-        applyFiscalGroup(groups[0].docs.map((d) => d.extracted));
-        const nDocs = groups[0].docs.length;
+        applyFiscalGroup(fiscalPayloadOf(groups[0].docs));
+        const nDocs = groups[0].docs.filter((d) => !d.companion).length;
         toast.success(
           nDocs > 1
             ? `${nDocs} documentos do mesmo fornecedor processados — todas as linhas foram mescladas.`
@@ -1391,6 +1460,7 @@ export function CreateExpenseModal({
         );
         return;
       }
+
 
       // ─── Regra 2: fornecedores diferentes → perguntar ao usuário ──────
       setSupplierPicker({
@@ -1596,14 +1666,14 @@ export function CreateExpenseModal({
     groups.map((g) => ({
       supplierKey: g.supplierKey,
       supplierLabel: g.supplierLabel,
-      docs: g.docs.map((d) => ({ file: toPersistedFile(d.file), extracted: d.extracted })),
+      docs: g.docs.map((d) => ({ file: toPersistedFile(d.file), extracted: d.extracted, companion: d.companion })),
     })), []);
 
   const deserializeGroups = useCallback((groups: PersistedDocGroup[]): DocGroup[] =>
     groups.map((g) => ({
       supplierKey: g.supplierKey,
       supplierLabel: g.supplierLabel,
-      docs: g.docs.map((d) => ({ file: fromPersistedFile(d.file), extracted: d.extracted })),
+      docs: g.docs.map((d) => ({ file: fromPersistedFile(d.file), extracted: d.extracted, companion: (d as { companion?: boolean }).companion })),
     })), []);
 
   // Grava snapshot (debounced 400ms) do estado inteiro da fila.
@@ -1853,7 +1923,7 @@ export function CreateExpenseModal({
     // e voltam a aparecer no modal quando reabrirmos para eles.
     const chosenFiles = chosen.docs.map((d) => d.file);
     setFiles([...chosenFiles, ...supplierPicker.nonFiscal]);
-    applyFiscalGroup(chosen.docs.map((d) => d.extracted));
+    applyFiscalGroup(fiscalPayloadOf(chosen.docs));
     setDeferredGroups(rest);
     setSupplierPicker(null);
     currentGroupRef.current = chosen;
@@ -1895,7 +1965,7 @@ export function CreateExpenseModal({
     setItems([{ description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" }]);
     setFiles(next.docs.map((d) => d.file));
     setDraftId(null);
-    applyFiscalGroup(next.docs.map((d) => d.extracted));
+    applyFiscalGroup(fiscalPayloadOf(next.docs));
     currentGroupRef.current = next;
   };
 
