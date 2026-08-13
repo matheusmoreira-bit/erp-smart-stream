@@ -677,18 +677,17 @@ export default function PagCorp() {
       return;
     }
     if (selected.length > 1) {
-      // 1) Bloqueia se houver portadores/fornecedores divergentes na seleção.
-      //    Indedutíveis usam fluxo próprio (integrateAllNondeductible), então
-      //    esta trava só se aplica ao lote genérico.
+      // 1) Portadores/cartões divergentes NÃO bloqueiam mais o lançamento
+      //    unificado — apenas avisamos o usuário. O fornecedor do PC é
+      //    escolhido no diálogo de consolidação.
       const supplierKey = (t: PagCorpTransaction) =>
         String(t.accountCode || t.accountName || t.cardName || "").trim().toLowerCase();
       const suppliers = new Set(selected.map(supplierKey).filter(Boolean));
       if (suppliers.size > 1) {
-        toast.error("Portadores divergentes na seleção", {
+        toast.warning("Portadores/cartões divergentes na seleção", {
           description:
-            "Selecione apenas transações do mesmo portador para integrar em lote. Para indedutíveis, use o botão específico.",
+            "As transações serão consolidadas em um único pedido com o fornecedor escolhido a seguir.",
         });
-        return;
       }
       // 2) Datas divergentes não bloqueiam mais: o PC consolidado permite
       //    informar a data de emissão da nota (ex.: Google Cloud cobra ao
@@ -696,6 +695,7 @@ export default function PagCorp() {
       //    real da transação.
 
     }
+
     proceedBatchUnified(selected);
   };
 
