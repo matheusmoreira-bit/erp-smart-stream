@@ -32,6 +32,8 @@ export interface PersistedDoc {
   // Guardamos como está; o modal já lida com "any".
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   extracted: any;
+  /** Boleto/comprovante que acompanha a nota (anexo, sem gerar linhas). */
+  companion?: boolean;
 }
 
 export interface PersistedDocGroup {
