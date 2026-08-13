@@ -154,6 +154,22 @@ function withActiveFilter(
   endpoint: string,
   params?: Record<string, string | number>,
 ): Record<string, string | number> | undefined {
+  if (endpoint === "Items") {
+    // Itens inválidos/congelados no ERP nunca podem aparecer nos comboboxes.
+    const next: Record<string, string | number> = { ...(params || {}) };
+    const existing = String(next.$filter || "");
+    if (!/Valid|Frozen/.test(existing)) {
+      const guard = "Valid eq 'tYES' and Frozen eq 'tNO'";
+      next.$filter = existing ? `(${existing}) and ${guard}` : guard;
+    }
+    const select = String(next.$select || "");
+    if (select) {
+      const fields = select.split(",").map((f) => f.trim());
+      for (const f of ["Valid", "Frozen"]) if (!fields.includes(f)) fields.push(f);
+      next.$select = fields.join(",");
+    }
+    return next;
+  }
   if (!ACTIVE_ONLY_ENDPOINTS.has(endpoint)) return params;
   const next: Record<string, string | number> = { ...(params || {}) };
   const existing = String(next.$filter || "");
@@ -168,6 +184,21 @@ function withActiveFilter(
 }
 
 function filterActiveRows(endpoint: string, rows: any[]): any[] {
+  if (endpoint === "Items") {
+    return rows.filter((r: any) => {
+      const valid = r?.Valid;
+      const frozen = r?.Frozen;
+      const validOk =
+        valid === undefined || valid === null || valid === ""
+          ? true
+          : String(valid).toLowerCase() !== "tno" && valid !== false;
+      const frozenOk =
+        frozen === undefined || frozen === null || frozen === ""
+          ? true
+          : String(frozen).toLowerCase() !== "tyes" && frozen !== true;
+      return validOk && frozenOk;
+    });
+  }
   if (!ACTIVE_ONLY_ENDPOINTS.has(endpoint)) return rows;
   return rows.filter((r: any) => {
     const active = r?.Active;
