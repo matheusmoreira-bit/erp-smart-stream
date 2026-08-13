@@ -554,7 +554,14 @@ export default function PagCorpMapping() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {cardMappings.map((m, i) => {
+                      {visibleCardRows.length === 0 && (
+                        <TableRow className="border-border hover:bg-transparent">
+                          <TableCell colSpan={5} className="text-center py-10 text-sm text-muted-foreground">
+                            Nenhum mapeamento encontrado para "{cardSearch}".
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {visibleCardRows.map(({ m, index: i }) => {
                         const cardOptions: SapSearchOption[] = cardSuggestions.map((c) => ({
                           code: c.identifier, name: c.label, extra: "",
                         }));
