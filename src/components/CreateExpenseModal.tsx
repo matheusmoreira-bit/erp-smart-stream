@@ -1401,20 +1401,58 @@ export function CreateExpenseModal({
       }
 
       // ─── Agrupa fiscais por fornecedor ────────────────────────────────
+      // Notas primeiro; boletos/comprovantes entram depois como companions.
+      const invoiceDocs = fiscal.filter((p) => !isPaymentInstrument(p.extracted));
+      const paymentDocs = fiscal.filter((p) => isPaymentInstrument(p.extracted));
+
       const groupMap = new Map<string, DocGroup>();
-      for (const p of fiscal) {
+      for (const p of (invoiceDocs.length > 0 ? invoiceDocs : paymentDocs)) {
         const key = supplierKeyOf(p.extracted);
         const label = String(p.extracted?.supplier_name || "Fornecedor não identificado");
         const g = groupMap.get(key);
         if (g) g.docs.push(p);
         else groupMap.set(key, { supplierKey: key, supplierLabel: label, docs: [p] });
       }
+
+      // Anexa cada boleto/comprovante à nota correspondente: mesmo fornecedor,
+      // senão valor total equivalente, senão o único grupo existente.
+      let unmatchedPayments = 0;
+      if (invoiceDocs.length > 0) {
+        for (const p of paymentDocs) {
+          const key = supplierKeyOf(p.extracted);
+          let target = groupMap.get(key) ?? null;
+          if (!target) {
+            const total = docTotalOf(p.extracted);
+            if (total > 0) {
+              target = Array.from(groupMap.values()).find((g) =>
+                g.docs.some((d) => Math.abs(docTotalOf(d.extracted) - total) <= Math.max(0.02, total * 0.001)),
+              ) ?? null;
+            }
+          }
+          if (!target && groupMap.size === 1) target = Array.from(groupMap.values())[0];
+          if (target) target.docs.push({ ...p, companion: true });
+          else {
+            unmatchedPayments++;
+            groupMap.set(key, {
+              supplierKey: key,
+              supplierLabel: String(p.extracted?.supplier_name || "Cobrança não identificada"),
+              docs: [p],
+            });
+          }
+        }
+      }
       const groups = Array.from(groupMap.values());
+      if (paymentDocs.length > unmatchedPayments && invoiceDocs.length > 0) {
+        toast.info(
+          `${paymentDocs.length - unmatchedPayments} boleto(s)/comprovante(s) vinculados à nota correspondente — vão como anexo do mesmo pedido.`,
+          { duration: 6000 },
+        );
+      }
 
       // ─── Regra 1: mesmo fornecedor → mescla linhas ────────────────────
       if (groups.length === 1) {
-        applyFiscalGroup(groups[0].docs.map((d) => d.extracted));
-        const nDocs = groups[0].docs.length;
+        applyFiscalGroup(fiscalPayloadOf(groups[0].docs));
+        const nDocs = groups[0].docs.filter((d) => !d.companion).length;
         toast.success(
           nDocs > 1
             ? `${nDocs} documentos do mesmo fornecedor processados — todas as linhas foram mescladas.`
@@ -1422,6 +1460,7 @@ export function CreateExpenseModal({
         );
         return;
       }
+
 
       // ─── Regra 2: fornecedores diferentes → perguntar ao usuário ──────
       setSupplierPicker({
