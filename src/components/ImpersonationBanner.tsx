@@ -8,6 +8,7 @@ import {
   getImpersonation,
   clearImpersonation,
   IMPERSONATION_EVENT,
+  logImpersonationServerSide,
   type ImpersonationState,
 } from "@/lib/impersonation";
 import { clearAuthCache } from "@/lib/auth-cache";
@@ -34,6 +35,16 @@ export function ImpersonationBanner() {
 
   const stop = async () => {
     setBusy(true);
+    await logImpersonationServerSide({
+      event: "stop",
+      target_user: state.targetUser,
+      target_name: state.targetName || null,
+      target_email: state.targetEmail || null,
+      company_db: state.companyDB,
+      with_password: !!state.withPassword,
+      started_at: new Date(state.startedAt).toISOString(),
+    });
+
     try {
       await logAuditAction({
         action: "impersonation_stop",

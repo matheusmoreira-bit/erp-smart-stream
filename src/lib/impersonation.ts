@@ -72,3 +72,29 @@ export function setImpersonation(state: ImpersonationState | null) {
 export function clearImpersonation() {
   persist(null);
 }
+
+/**
+ * Registro server-side da impersonação (audit_log). A identidade de quem
+ * iniciou/encerrou é derivada do JWT dentro da Edge Function — o cliente não
+ * consegue forjar o autor. Nunca lança: auditoria não bloqueia o fluxo.
+ */
+export async function logImpersonationServerSide(payload: {
+  event: "start" | "stop";
+  target_user: string;
+  target_name?: string | null;
+  target_email?: string | null;
+  company_db?: string | null;
+  with_password?: boolean;
+  started_at?: string | null;
+}): Promise<void> {
+  try {
+    const { authFetch } = await import("@/lib/auth-fetch");
+    await authFetch("impersonation-audit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    /* auditoria nunca bloqueia a impersonação */
+  }
+}
