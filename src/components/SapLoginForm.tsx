@@ -426,6 +426,9 @@ export function SapLoginForm() {
               setCompanyDB(val);
               setUserName("");
               setPassword("");
+              setLoginError(null);
+              setFieldErrors({});
+              setAttempts(0);
             }} disabled={companiesLoading}>
               <SelectTrigger className="bg-muted/30 border-border">
                 <SelectValue placeholder={companiesLoading ? "Carregando empresas..." : "Selecione a empresa"} />
