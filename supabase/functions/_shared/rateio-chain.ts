@@ -33,6 +33,8 @@ export interface RateioChainContext {
   supplierCode?: string | null;
   headerCostCenter?: string | null;
   headerProject?: string | null;
+  /** Tipo de rateio do documento (padrao/folha/imposto/reembolso/viagens). */
+  rateioType?: string | null;
 }
 
 function approverKey(name: string | null, email: string | null): string {

@@ -66,6 +66,12 @@ Deno.serve(async (req) => {
   // ── Autorização (admin apenas) ────────────────────────────────────────
   let isAdminCaller = false;
   let actorLabel = "desconhecido";
+  // Chamada interna (rotinas administrativas) autentica com a service role key.
+  const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  if (bearer && bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) {
+    isAdminCaller = true;
+    actorLabel = "sistema";
+  }
   try {
     const cloudUser = await requireUser(req);
     actorLabel = cloudUser.email || cloudUser.id;
@@ -140,6 +146,7 @@ Deno.serve(async (req) => {
           supplierCode: doc.supplier_code || null,
           headerCostCenter: doc.cost_center || null,
           headerProject: doc.project || null,
+          rateioType: String(doc.rateio_type || "padrao").toLowerCase(),
         } as any, { allowSingle: true });
         const target = (built || []).filter((sg) =>
           norm(sg.cost_center) === norm(segmentCc) &&
@@ -337,6 +344,7 @@ Deno.serve(async (req) => {
           supplierCode: doc.supplier_code || null,
           headerCostCenter: doc.cost_center || null,
           headerProject: doc.project || null,
+          rateioType: String(doc.rateio_type || "padrao").toLowerCase(),
         } as any);
         if (segments && segments.length > 1) {
           if (dryRun) {
