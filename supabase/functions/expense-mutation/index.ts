@@ -29,7 +29,7 @@ import { enforceRateLimit } from "../_shared/rate-limit.ts";
 import { findMatchingRule, pickHierarchicalFallbackRule, type RuleRow } from "../_shared/rule-match.ts";
 import { applyCcRedirect, loadCcRedirects } from "../_shared/cc-redirect.ts";
 // (buildRateioChain foi substituído por fluxos independentes por segmento)
-import { buildRateioSegments, persistRateioSegments } from "../_shared/rateio-segments.ts";
+import { buildRateioSegments, buildReembolsoSegments, persistRateioSegments } from "../_shared/rateio-segments.ts";
 
 
 
