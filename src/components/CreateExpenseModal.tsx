@@ -111,6 +111,8 @@ import { CurrencyField, normalizeCurrencyCode } from "@/components/CurrencyField
 // Logger tagueado — usado nas verificações de dedup e nos guards de fluxo
 // (cancelar/retentar). Sempre em `console.info`/`warn` para facilitar filtro
 // pelo DevTools ao investigar duplicações reportadas por usuários.
+import { ModalErrorBoundary } from "@/components/ModalErrorBoundary";
+
 const DEDUP_LOG = "[expense-dedupe]";
 
 function formatCurrency(value: number, currency: string = "BRL") {
@@ -2533,6 +2535,7 @@ export function CreateExpenseModal({
         ref={setDialogContainer}
         className="w-[100dvw] h-[100dvh] max-w-[100dvw] rounded-none border-0 overflow-x-hidden overflow-y-auto px-3 py-4 sm:w-[95vw] sm:h-auto sm:max-w-5xl sm:max-h-[92vh] sm:rounded-lg sm:border sm:p-8"
       >
+      <ModalErrorBoundary onClose={onClose}>
 
         <DialogHeader className="pr-8 text-left">
           <DialogTitle className="text-base sm:text-lg">{title || (isSales ? "Novo Pedido de Venda" : "Nova Despesa")}</DialogTitle>
@@ -3499,6 +3502,7 @@ export function CreateExpenseModal({
             </Button>
           </div>
         </div>
+      </ModalErrorBoundary>
       </DialogContent>
     </Dialog>
 
@@ -3509,7 +3513,7 @@ export function CreateExpenseModal({
     />
 
     <AlertDialog open={!!dupConfirm} onOpenChange={(v) => { if (!v) setDupConfirm(null); }}>
-      <AlertDialogContent>
+      <AlertDialogContent className="z-[60]" overlayClassName="z-[60] bg-black/40">
         <AlertDialogHeader>
           <AlertDialogTitle>Anexo já utilizado em outro lançamento</AlertDialogTitle>
           <AlertDialogDescription asChild>
@@ -3551,6 +3555,9 @@ export function CreateExpenseModal({
 
     <AlertDialog open={closeConfirm} onOpenChange={setCloseConfirm}>
       <AlertDialogContent
+        className="z-[60]"
+        overlayClassName="z-[60] bg-black/40"
+
         role="alertdialog"
         aria-modal="true"
         onKeyDown={(e) => {
@@ -3608,7 +3615,7 @@ export function CreateExpenseModal({
         diferentes, o usuário escolhe qual despesa criar PRIMEIRO. Os demais
         grupos ficam adiados e abrem automaticamente após a submissão. */}
     <AlertDialog open={!!supplierPicker} onOpenChange={(v) => { if (!v) setSupplierPicker(null); }}>
-      <AlertDialogContent>
+      <AlertDialogContent className="z-[60]" overlayClassName="z-[60] bg-black/40">
         <AlertDialogHeader>
           <AlertDialogTitle>Anexos com fornecedores diferentes</AlertDialogTitle>
           <AlertDialogDescription asChild>
@@ -3699,7 +3706,7 @@ export function CreateExpenseModal({
 
     {/* Confirmação de cancelamento do processamento IA e/ou fila de fornecedores */}
     <AlertDialog open={cancelConfirm} onOpenChange={setCancelConfirm}>
-      <AlertDialogContent>
+      <AlertDialogContent className="z-[60]" overlayClassName="z-[60] bg-black/40">
         <AlertDialogHeader>
           <AlertDialogTitle>Cancelar processamento?</AlertDialogTitle>
           <AlertDialogDescription>
@@ -3737,7 +3744,7 @@ export function CreateExpenseModal({
         if (!v) setShowQueueSummary(false);
       }}
     >
-      <AlertDialogContent className="max-w-2xl">
+      <AlertDialogContent overlayClassName="z-[60] bg-black/40" className="z-[60] max-w-2xl">
         <AlertDialogHeader>
           <AlertDialogTitle>Resumo da fila de fornecedores</AlertDialogTitle>
           <AlertDialogDescription asChild>
@@ -4319,7 +4326,7 @@ export function CreateExpenseModal({
     {/* Confirmação antes de reenviar apenas os grupos com erro (❌).
         Evita reprocessar sem querer ao clicar no botão do resumo. */}
     <AlertDialog open={confirmRetryFailed} onOpenChange={setConfirmRetryFailed}>
-      <AlertDialogContent>
+      <AlertDialogContent className="z-[60]" overlayClassName="z-[60] bg-black/40">
         <AlertDialogHeader>
           <AlertDialogTitle>Reenviar apenas os erros?</AlertDialogTitle>
           <AlertDialogDescription asChild>
@@ -4420,7 +4427,7 @@ export function CreateExpenseModal({
         motivo/ação computada (retomar / pular por já concluído / pular por
         duplicata / inalterado) para o usuário conferir antes de disparar. */}
     <AlertDialog open={!!resumePlan} onOpenChange={(v) => { if (!v) setResumePlan(null); }}>
-      <AlertDialogContent className="max-w-2xl">
+      <AlertDialogContent overlayClassName="z-[60] bg-black/40" className="z-[60] max-w-2xl">
         <AlertDialogHeader>
           <AlertDialogTitle>Retomar fila — prévia</AlertDialogTitle>
           <AlertDialogDescription asChild>
@@ -4509,7 +4516,7 @@ export function CreateExpenseModal({
         (grupo atual, deferido, cancelado ou com falha), mostra a extração
         completa; caso contrário, usa apenas o snapshot da QueueEntry. */}
     <Dialog open={!!detailsView} onOpenChange={(v) => { if (!v) setDetailsView(null); }}>
-      <DialogContent className="w-screen h-[100dvh] max-w-none rounded-none border-0 overflow-y-auto sm:w-auto sm:h-auto sm:max-w-3xl sm:max-h-[85vh] sm:rounded-lg sm:border">
+      <DialogContent overlayClassName="z-[60] bg-black/40" className="z-[60] w-screen h-[100dvh] max-w-none rounded-none border-0 overflow-y-auto sm:w-auto sm:h-auto sm:max-w-3xl sm:max-h-[85vh] sm:rounded-lg sm:border">
         <DialogHeader>
           <DialogTitle>
             Detalhes: {detailsView?.entry.supplierLabel}
