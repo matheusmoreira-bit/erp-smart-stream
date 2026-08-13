@@ -37,14 +37,26 @@ export function SapCredentialsDialog({
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
+  const [attempts, setAttempts] = useState(0);
+  const [touchedError, setTouchedError] = useState<{ userName?: string; password?: string }>({});
+
+  const info = useMemo(() => (error ? classifyErpLoginError(error) : null), [error]);
 
   useEffect(() => {
     if (open) {
       setUserName(defaultUser || "");
       setPassword("");
       setShowPassword(false);
+      setAttempts(0);
+      setTouchedError({});
     }
   }, [open, defaultUser]);
+
+  // Conta tentativas recusadas por credencial inválida para avisar antes do bloqueio.
+  useEffect(() => {
+    if (info?.kind === "invalid_credentials") setAttempts((a) => a + 1);
+  }, [info]);
+
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v && !loading) onCancel(); }}>
