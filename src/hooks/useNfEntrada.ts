@@ -178,7 +178,11 @@ export function useNfEntrada() {
     return data as { ok: boolean; draftId?: string; poEntry?: number; alreadyExists?: boolean };
   }, [fetchAll]);
 
-  return { items, loading, error, refresh: fetchAll, reprocess, rematchSap, recheckSap, cancel, pullNow, createInvoiceDraft };
+  return {
+    items, loading, error, companyDb, companyTaxId, foreignCount,
+    refresh: fetchAll, reprocess, rematchSap, recheckSap, cancel, pullNow, createInvoiceDraft,
+  };
+
 
 }
 
