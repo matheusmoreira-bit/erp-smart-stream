@@ -29,7 +29,7 @@ import { enforceRateLimit } from "../_shared/rate-limit.ts";
 import { findMatchingRule, pickHierarchicalFallbackRule, type RuleRow } from "../_shared/rule-match.ts";
 import { applyCcRedirect, loadCcRedirects } from "../_shared/cc-redirect.ts";
 // (buildRateioChain foi substituído por fluxos independentes por segmento)
-import { buildRateioSegments, persistRateioSegments } from "../_shared/rateio-segments.ts";
+import { buildRateioSegments, buildReembolsoSegments, persistRateioSegments } from "../_shared/rateio-segments.ts";
 
 
 
@@ -294,24 +294,28 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   // RATEIO entre alçadas diferentes: cada segmento (CC + projeto) tem o seu
   // PRÓPRIO fluxo, independente. Persistimos os segmentos após criar a despesa;
   // aqui só resolvemos os aprovadores iniciais (um por segmento).
-  // Tipo de rateio no cabeçalho (folha/imposto/reembolso/viagens) força uma
-  // regra única — nesse caso NÃO há trilhas independentes por CC.
-  const rateioOverride = ["folha", "imposto", "reembolso", "viagens"].includes(
-    String(input.rateio_type || "").toLowerCase(),
-  );
-  const rateioSegments = status === "pendente_aprovacao" && !rateioOverride
-    ? await buildRateioSegments(admin, items as any, {
-        companyDb,
-        docType: String(input.doc_type || "purchase"),
-        currency: input.currency || "BRL",
-        requesterName,
-        supplierName: input.supplier_name || null,
-        supplierCode: input.supplier_code || null,
-        headerCostCenter: input.cost_center || null,
-        headerProject: input.project || null,
-        rateioType: String(input.rateio_type || "padrao").toLowerCase(),
-      })
-    : null;
+  // Tipo de rateio no cabeçalho (folha/imposto/viagens) força uma regra única —
+  // nesse caso NÃO há trilhas independentes por CC.
+  // REEMBOLSO é a exceção: roda em PARALELO com a alçada padrão.
+  const rateioTypeNorm = String(input.rateio_type || "").toLowerCase();
+  const isReembolso = rateioTypeNorm === "reembolso";
+  const rateioOverride = ["folha", "imposto", "viagens"].includes(rateioTypeNorm);
+  const segCtx = {
+    companyDb,
+    docType: String(input.doc_type || "purchase"),
+    currency: input.currency || "BRL",
+    requesterName,
+    supplierName: input.supplier_name || null,
+    supplierCode: input.supplier_code || null,
+    headerCostCenter: input.cost_center || null,
+    headerProject: input.project || null,
+    rateioType: rateioTypeNorm || "padrao",
+  };
+  const rateioSegments = status !== "pendente_aprovacao" || rateioOverride
+    ? null
+    : isReembolso
+      ? await buildReembolsoSegments(admin, items as any, segCtx)
+      : await buildRateioSegments(admin, items as any, segCtx);
   if (rateioSegments && rateioSegments.length > 0) {
     const picks = rateioSegments.map((s) =>
       pickApproverSkippingRequester(s.chain, requesterName, requesterEmail, 1),

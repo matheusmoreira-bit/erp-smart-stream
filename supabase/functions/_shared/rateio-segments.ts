@@ -338,3 +338,78 @@ export async function persistSegmentSubset(
 
   return ((data || []) as unknown as SegmentRow[]);
 }
+
+/**
+ * REEMBOLSO — trilha PARALELA.
+ *
+ * Diferente dos demais tipos de rateio (folha/imposto/viagens), que forçam uma
+ * regra ÚNICA em substituição à matriz, o reembolso é ADICIONAL: o documento
+ * segue a alçada padrão (por CC + projeto) E, em paralelo, a alçada de
+ * reembolso. O documento só é aprovado quando as duas trilhas concluírem.
+ */
+export async function buildReembolsoSegments(
+  admin: SupabaseClient,
+  items: RateioItem[],
+  ctx: RateioChainContext,
+): Promise<RateioSegment[] | null> {
+  if (!ctx.companyDb) return null;
+
+  // 1) Trilhas padrão da matriz — avaliadas como se não houvesse tipo de rateio.
+  const standard = await buildRateioSegments(
+    admin,
+    items,
+    { ...ctx, rateioType: "padrao" },
+    { allowSingle: true },
+  );
+
+  // 2) Trilha específica de reembolso (regras que usam o critério rateio_type).
+  const { data: rulesRaw } = await admin
+    .from("approval_rules")
+    .select("id, name, is_active, priority, doc_type, criteria, company_db")
+    .eq("company_db", ctx.companyDb)
+    .eq("is_active", true);
+  const reembolsoRules = ((rulesRaw || []) as unknown as RuleRow[]).filter((r) =>
+    Array.isArray(r.criteria) &&
+    (r.criteria as Array<{ field?: string }>).some((c) => c?.field === "rateio_type")
+  );
+
+  const total = (items || []).reduce((s, it) => s + Number(it?.line_total || 0), 0);
+  const headerCc = String(ctx.headerCostCenter || items?.[0]?.cost_center || "").trim();
+  const headerProject = String(ctx.headerProject || items?.[0]?.project || "").trim();
+
+  const evalCtx: Record<string, unknown> = {
+    total_amount: total,
+    cost_center: headerCc,
+    project: headerProject,
+    requester_name: ctx.requesterName || "",
+    supplier_name: `${ctx.supplierName || ""} ${ctx.supplierCode || ""}`.trim(),
+    "supplier.name": String(ctx.supplierName || "").toLowerCase(),
+    "supplier.code": String(ctx.supplierCode || "").toLowerCase(),
+    currency: ctx.currency || "BRL",
+    doc_type: ctx.docType,
+    rateio_type: "reembolso",
+  };
+
+  const match = findMatchingRule(reembolsoRules, evalCtx, ctx.docType);
+  if (!match) return standard;
+  const chain = await levelsOf(admin, match.id);
+  if (chain.length === 0) return standard;
+
+  const reembolso: RateioSegment = {
+    segment_key: "__reembolso__",
+    cost_center: headerCc,
+    project: headerProject,
+    amount: total,
+    rule_id: match.id,
+    chain,
+    resolution: "direct",
+    rule_name: (match.name || "").trim() || "Reembolso",
+    fallback_branch: null,
+    fallback_from_rule_id: null,
+    fallback_from_rule_name: null,
+    resolution_note:
+      `Trilha paralela de reembolso (regra "${(match.name || "Reembolso").trim()}") — corre junto com a alçada padrão do documento.`,
+  };
+
+  return [...(standard || []), reembolso];
+}
