@@ -66,6 +66,12 @@ Deno.serve(async (req) => {
   // ── Autorização (admin apenas) ────────────────────────────────────────
   let isAdminCaller = false;
   let actorLabel = "desconhecido";
+  // Chamada interna (rotinas administrativas) autentica com a service role key.
+  const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  if (bearer && bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) {
+    isAdminCaller = true;
+    actorLabel = "sistema";
+  }
   try {
     const cloudUser = await requireUser(req);
     actorLabel = cloudUser.email || cloudUser.id;
