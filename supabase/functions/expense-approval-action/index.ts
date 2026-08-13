@@ -885,8 +885,53 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
 
   // ── Execute ────────────────────────────────────────────────────────────
   if (action === "reject") {
-    const updates: Record<string, unknown> = { status: "rejeitado" };
-    if (remarks) updates.remarks = remarks;
+    // Rótulo humano de cada trilha (padrão x reembolso) para o motivo
+    // consolidado.
+    const segLabel = (s: SegmentRow) =>
+      s.segment_key === "__reembolso__"
+        ? "Trilha de reembolso"
+        : `Trilha padrão ${s.cost_center || "—"} / ${s.project || "—"}`;
+
+    // Quais trilhas o caller de fato reprova (as demais ficam BLOQUEADAS
+    // pela reprovação — o documento inteiro para).
+    const rejectedSegs = segmentRows.length > 0
+      ? (pendingSegments.filter((s) => callerIsApprover(s.current_approver, s.current_approver_email)).length > 0
+        ? pendingSegments.filter((s) => callerIsApprover(s.current_approver, s.current_approver_email))
+        : pendingSegments)
+      : [];
+    const rejectedIds = new Set(rejectedSegs.map((s) => s.id));
+
+    // Decisões já registradas nas outras trilhas (aprovações/reprovações
+    // anteriores) entram no motivo consolidado.
+    const { data: priorLogs } = await admin
+      .from("expense_approval_log")
+      .select("decision, approver_name, level_order, remarks, created_at")
+      .eq("expense_id", expenseId)
+      .order("created_at", { ascending: true });
+
+    const parts: string[] = [];
+    parts.push(`REPROVADO por ${actor}${remarks ? `: ${remarks}` : "."}`);
+    if (segmentRows.length > 0) {
+      for (const s of segmentRows) {
+        if (rejectedIds.has(s.id)) {
+          parts.push(`• ${segLabel(s)} — REPROVADA por ${actor} (nível ${s.current_level})${remarks ? `: ${remarks}` : ""}`);
+        } else if (s.status === "pendente") {
+          parts.push(`• ${segLabel(s)} — BLOQUEADA (aguardava ${s.current_approver || "aprovador"} no nível ${s.current_level}; parada pela reprovação acima)`);
+        } else if (String(s.status) === "rejeitado") {
+          parts.push(`• ${segLabel(s)} — já REPROVADA por ${s.decided_by || "—"}`);
+        } else {
+          parts.push(`• ${segLabel(s)} — ${String(s.status).toUpperCase()}${s.decided_by ? ` por ${s.decided_by}` : ""} (sem efeito: documento reprovado)`);
+        }
+      }
+    }
+    for (const l of (priorLogs || []) as Array<any>) {
+      if (l.decision === "rejected" && l.remarks) {
+        parts.push(`• Reprovação anterior (nível ${l.level_order}) por ${l.approver_name || "—"}: ${l.remarks}`);
+      }
+    }
+    const consolidatedReason = parts.join("\n");
+
+    const updates: Record<string, unknown> = { status: "rejeitado", remarks: consolidatedReason };
     const { error: updErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
     if (updErr) {
       stageLog("update_reject", "error", { requestId, expenseId, error: updErr.message });
@@ -909,13 +954,26 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     } as any);
     await writeAuditLog("rejected", currentLevel);
     if (segmentRows.length > 0) {
-      // Reprovação encerra o documento inteiro — todos os segmentos param.
+      // Reprovação encerra o documento inteiro — TODAS as trilhas param
+      // (padrão e reembolso), cada uma com o seu registro de motivo.
+      const nowIso = new Date().toISOString();
+      if (rejectedIds.size > 0) {
+        await admin.from("expense_approval_segments").update({
+          status: "rejeitado",
+          current_approver: null,
+          current_approver_email: null,
+          decided_by: actor,
+          decided_at: nowIso,
+          resolution_note: `Reprovada por ${actor}${remarks ? `: ${remarks}` : ""}`,
+        }).in("id", Array.from(rejectedIds));
+      }
       await admin.from("expense_approval_segments").update({
-        status: "rejeitado",
+        status: "bloqueado",
         current_approver: null,
         current_approver_email: null,
         decided_by: actor,
-        decided_at: new Date().toISOString(),
+        decided_at: nowIso,
+        resolution_note: `Bloqueada: documento reprovado em outra trilha por ${actor}${remarks ? `: ${remarks}` : ""}`,
       }).eq("expense_id", expenseId).eq("status", "pendente");
     }
 
@@ -934,8 +992,10 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
         { label: "Valor", value: `${(exp as any).currency || "BRL"} ${Number((exp as any).total_amount || 0).toFixed(2)}` },
         { label: "Empresa", value: (exp as any).company_db },
         { label: "Motivo", value: remarks || null },
+        { label: "Motivo consolidado (todas as trilhas)", value: consolidatedReason },
       ],
     });
+
     stageLog("update_reject", "info", { requestId, expenseId, currentLevel });
     return await respond(200, {
       ok: true,
