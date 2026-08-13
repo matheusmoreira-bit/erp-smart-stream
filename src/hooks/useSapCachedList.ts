@@ -266,6 +266,9 @@ export function useSapCachedList({
     if (!enabled || (!forceRefresh && loadedRef.current)) return;
     setIsLoading(true);
     loadedRef.current = true;
+    // Quando já exibimos dados (cache), uma revalidação vazia/falha NÃO pode
+    // apagar a lista da tela — o combobox ficaria "Nenhum resultado".
+    let hadRenderedData = false;
 
     try {
       const companyDB = session?.companyDB;
@@ -294,6 +297,7 @@ export function useSapCachedList({
             }
             cachedData = filterActiveRows(endpoint, cachedData, cacheKey);
             setOptions(cachedData.map(mapRowRef.current));
+            hadRenderedData = cachedData.length > 0;
 
             // Cache válido (ou sem sessão para revalidar): encerra aqui.
             if (!isExpired || !session) {
@@ -377,8 +381,12 @@ export function useSapCachedList({
       }
       lastLoadedAtRef.current = Date.now();
 
-
-
+      // Revalidação vazia (ERP indisponível/timeout) não apaga o que já está
+      // em tela vindo do cache.
+      if (rows.length === 0 && hadRenderedData) {
+        console.warn(`[useSapCachedList/${cacheKey}] revalidação vazia — mantendo cache em tela`);
+        return;
+      }
       setOptions(rows.map(mapRowRef.current));
     } catch (e) {
       console.error(`Failed to load cached list [${cacheKey}]:`, e);
