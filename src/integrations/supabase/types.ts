@@ -2940,6 +2940,42 @@ export type Database = {
         }
         Relationships: []
       }
+      erp_session_cache: {
+        Row: {
+          company_db: string
+          created_at: string
+          expires_at: string
+          id: string
+          route_id: string
+          sap_user: string
+          session_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          route_id?: string
+          sap_user: string
+          session_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          route_id?: string
+          sap_user?: string
+          session_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       erp_session_revocations: {
         Row: {
           company_db: string | null
