@@ -369,7 +369,12 @@ Deno.serve(async (req) => {
 
     // Regras da matriz em que o caller é aprovador — garante que ele veja os
     // documentos mesmo quando `current_approver` guarda uma grafia diferente.
-    const myRules = scoped ? await approverRuleIds(admin, aliases) : new Set<string>();
+    // Titulares que o caller substitui hoje — o substituto precisa enxergar a
+    // fila do titular (senão a tela de aprovações fica vazia para ele).
+    const subAliases = scoped ? await substituteOfficialAliases(admin, aliases) : new Set<string>();
+    const myRules = scoped
+      ? await approverRuleIds(admin, new Set([...aliases, ...subAliases]))
+      : new Set<string>();
 
     /* ── Tabelas filhas: restringe pelos expense_ids visíveis ── */
     let allowedExpenseIds: string[] | null = null;
@@ -389,7 +394,7 @@ Deno.serve(async (req) => {
       );
       allowedExpenseIds = (parents || [])
         .filter((r: any) =>
-          ownsExpense(r, aliases, caller.directorateBranch, myRules) || byItems.has(String(r.id)),
+          ownsExpense(r, aliases, caller.directorateBranch, myRules, subAliases) || byItems.has(String(r.id)),
         )
         .map((r: any) => String(r.id));
       if (allowedExpenseIds.length === 0) return json(200, { data: [] }, cors);
@@ -452,7 +457,7 @@ Deno.serve(async (req) => {
           caller.directorateBranch,
         );
         return batch.filter(
-          (r) => ownsExpense(r, aliases, caller.directorateBranch, myRules) || byItems.has(String(r.id)),
+          (r) => ownsExpense(r, aliases, caller.directorateBranch, myRules, subAliases) || byItems.has(String(r.id)),
         );
       }
       const ids = batch.map((r) => r.id).filter(Boolean);
@@ -462,7 +467,7 @@ Deno.serve(async (req) => {
       const allowed = new Set(
         (owners || [])
           .filter((r: any) =>
-            ownsExpense(r, aliases, caller.directorateBranch, myRules) || byItems.has(String(r.id)),
+            ownsExpense(r, aliases, caller.directorateBranch, myRules, subAliases) || byItems.has(String(r.id)),
           )
           .map((r: any) => String(r.id)),
       );
