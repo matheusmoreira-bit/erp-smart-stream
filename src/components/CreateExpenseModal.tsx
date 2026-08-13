@@ -1923,7 +1923,7 @@ export function CreateExpenseModal({
     // e voltam a aparecer no modal quando reabrirmos para eles.
     const chosenFiles = chosen.docs.map((d) => d.file);
     setFiles([...chosenFiles, ...supplierPicker.nonFiscal]);
-    applyFiscalGroup(chosen.docs.map((d) => d.extracted));
+    applyFiscalGroup(fiscalPayloadOf(chosen.docs));
     setDeferredGroups(rest);
     setSupplierPicker(null);
     currentGroupRef.current = chosen;
