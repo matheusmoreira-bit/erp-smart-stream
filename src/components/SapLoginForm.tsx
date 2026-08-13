@@ -363,62 +363,29 @@ export function SapLoginForm() {
         try { sessionStorage.setItem("erp:default-password-warning", "1"); } catch { /* noop */ }
       }
       failedAttemptsRef.current.delete(attemptKey(companyDB, userName));
+      setAttempts(0);
+      setLoginError(null);
       toast.success(`Conectado ao ${erpInfo.label}!`);
     } catch (error) {
-      const raw = error instanceof Error ? error.message : String(error ?? "");
-      const lower = raw.toLowerCase();
+      const info = classifyErpLoginError(error);
+      setLoginError(info);
+      if (info.field) setFieldErrors({ [info.field]: info.title });
 
-      const isInvalidCreds =
-        lower.includes("user name or password") ||
-        lower.includes("invalid username or password") ||
-        lower.includes("invalid credentials") ||
-        lower.includes("senha incorreta") ||
-        lower.includes("usuário ou senha") ||
-        lower.includes("usuario ou senha") ||
-        lower.includes("-304") ||
-        lower.includes(" 401");
-
-      const isLocked =
-        lower.includes("locked") || lower.includes("bloquead") || lower.includes("-131");
-
-      const isNetwork =
-        lower.includes("failed to fetch") ||
-        lower.includes("networkerror") ||
-        lower.includes("timeout") ||
-        lower.includes("econn") ||
-        lower.includes("getaddrinfo");
-
-      if (isInvalidCreds) {
+      if (info.kind === "invalid_credentials") {
         const key = attemptKey(companyDB, userName);
-        const prev = failedAttemptsRef.current.get(key) || 0;
-        const next = prev + 1;
+        const next = (failedAttemptsRef.current.get(key) || 0) + 1;
         failedAttemptsRef.current.set(key, next);
-        if (next >= 2) {
-          toast.error("Usuário ou senha incorretos", {
-            description:
-              "Atenção: mais uma tentativa incorreta irá bloquear o usuário no SAP. Se não lembrar a senha, contate o administrador para redefinir.",
-            duration: 8000,
-          });
-        } else {
-          toast.error("Usuário ou senha incorretos", {
-            description: "Verifique suas credenciais e tente novamente.",
-          });
-        }
-      } else if (isLocked) {
-        toast.error("Usuário bloqueado no ERP", {
-          description: "Procure o administrador para desbloquear seu acesso.",
-        });
-      } else if (isNetwork) {
-        toast.error("Não foi possível conectar ao ERP", {
-          description: "Verifique sua conexão ou se o servidor está disponível.",
+        setAttempts(next);
+        toast.error(info.title, {
+          description: attemptWarning(next) || info.description,
+          duration: next >= 2 ? 8000 : 5000,
         });
       } else {
-        toast.error("Não foi possível entrar", {
-          description: raw || "Tente novamente em instantes.",
-        });
+        toast.error(info.title, { description: info.description });
       }
     }
   };
+
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 relative">
