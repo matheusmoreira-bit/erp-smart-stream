@@ -243,6 +243,11 @@ export default function PagCorpMapping() {
   const [cardMappings, setCardMappings] = useState<CardMappingRow[]>([]);
   const [isLoadingCards, setIsLoadingCards] = useState(true);
   const [isSavingCards, setIsSavingCards] = useState(false);
+  /** Linhas já salvas que o usuário abriu para edição. */
+  const [editingCardIds, setEditingCardIds] = useState<string[]>([]);
+  const isCardEditing = (m: CardMappingRow) => !m.id || editingCardIds.includes(m.id);
+  const toggleCardEdit = (id: string) =>
+    setEditingCardIds((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   useEffect(() => {
     if (!companyDB) {
