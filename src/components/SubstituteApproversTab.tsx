@@ -66,7 +66,11 @@ function localPart(v: string): string {
 
 export default function SubstituteApproversTab({ isAdmin = false }: { isAdmin?: boolean }) {
   const { rows, isLoading, create, revoke, refresh, canManageAll } = useApproverSubstitutes();
-  const { users } = useSapUsers();
+  const { users, isLoading: usersLoading } = useSapUsers();
+  /** Fallback: diretório de usuários no Cloud (usado quando o ERP não devolve a lista). */
+  const [dirUsers, setDirUsers] = useState<Array<{ email: string; name: string; code: string }>>([]);
+  const [dirLoading, setDirLoading] = useState(false);
+
   const { session } = useSap();
   const [authEmail, setAuthEmail] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
