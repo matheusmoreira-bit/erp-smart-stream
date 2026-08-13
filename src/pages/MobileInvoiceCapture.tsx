@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { DateInputBR } from "@/components/DateInputBR";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
@@ -188,11 +189,10 @@ export default function MobileInvoiceCapture() {
               </div>
               <div className="space-y-1">
                 <Label htmlFor="ocr-due">Vencimento</Label>
-                <Input
+                <DateInputBR
                   id="ocr-due"
-                  type="date"
                   value={data.due_date ?? ""}
-                  onChange={(e) => update({ due_date: e.target.value || null })}
+                  onChange={(v) => update({ due_date: v || null })}
                 />
               </div>
             </div>
