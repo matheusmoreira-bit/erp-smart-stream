@@ -85,6 +85,8 @@ import { savePostLoginPath } from "@/lib/post-login-redirect";
 import { useNavigate } from "react-router-dom";
 import { ExpenseEventHistory } from "@/components/ExpenseEventHistory";
 import { SegmentFallbackAlert } from "@/components/SegmentFallbackAlert";
+import { ParallelTracksPanel } from "@/components/ParallelTracksPanel";
+
 import { SapPoDetails } from "@/components/SapPoDetails";
 import { SapPullbackDialog } from "@/components/SapPullbackDialog";
 
