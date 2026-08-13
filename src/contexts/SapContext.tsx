@@ -134,6 +134,13 @@ export function SapProvider({ children }: { children: ReactNode }) {
           isSuperUser: sapSess.isSuperUser,
           expiresAt: sapSess.expiresAt ?? Date.now() + 30 * 60 * 1000,
         });
+        // Guarda a sessão no servidor para reuso das próximas integrações.
+        void import("@/lib/user-sap-credentials").then((m) => m.cacheSapSession({
+          companyDb: companyDB,
+          sessionId: sapSess.sessionId,
+          routeId: sapSess.routeId,
+          sapUser: userName,
+        }));
       } else if (erpType === "omie") {
         // OMIE login — validate credentials via edge function (requires Lovable Cloud auth)
         const { publicFunctionFetch } = await import("@/lib/auth-fetch");
@@ -362,6 +369,12 @@ export function SapProvider({ children }: { children: ReactNode }) {
         isSuperUser: sapSess.isSuperUser,
         expiresAt: sapSess.expiresAt ?? Date.now() + 30 * 60 * 1000,
       });
+      void import("@/lib/user-sap-credentials").then((m) => m.cacheSapSession({
+        companyDb: credPrompt.companyDB,
+        sessionId: sapSess.sessionId,
+        routeId: sapSess.routeId,
+        sapUser: userName,
+      }));
       if (remember) {
         try {
           const { saveUserSapCredential } = await import("@/lib/user-sap-credentials");
@@ -438,6 +451,10 @@ export function SapProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handler = () => {
       clearClientCache();
+      const db = sessionRef.current?.companyDB;
+      if (db) {
+        void import("@/lib/user-sap-credentials").then((m) => m.invalidateSapSessionCache(db));
+      }
       setSession((prev) => (
         prev ? { ...prev, sessionId: undefined, routeId: undefined, sapAuthToken: undefined, expiresAt: undefined } : prev
       ));

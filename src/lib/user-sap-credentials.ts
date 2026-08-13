@@ -50,13 +50,20 @@ export interface SapAutoLoginResult {
   companyDB: string;
   sapUser: string;
   sessionTimeout: number;
+  /** true quando a sessão veio do cache do servidor (sem novo /Login). */
+  cached?: boolean;
 }
 
-export async function sapAutoLogin(companyDb: string): Promise<SapAutoLoginResult> {
+/**
+ * Resolve a sessão do Service Layer no servidor. O backend reaproveita a
+ * sessão em cache (tabela `erp_session_cache`) enquanto ela estiver válida;
+ * use `force` para descartar o cache quando o SAP recusar a sessão.
+ */
+export async function sapAutoLogin(companyDb: string, force = false): Promise<SapAutoLoginResult> {
   const res = await authFetch("sap-auto-login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ company_db: companyDb }),
+    body: JSON.stringify({ company_db: companyDb, force }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -65,4 +72,48 @@ export async function sapAutoLogin(companyDb: string): Promise<SapAutoLoginResul
     throw err;
   }
   return data as SapAutoLoginResult;
+}
+
+/**
+ * Guarda no servidor uma sessão criada pelo login interativo (usuário + senha),
+ * para que as próximas integrações — ex.: lotes do PagCorp — reutilizem o
+ * mesmo sessionId enquanto ele estiver válido.
+ */
+export async function cacheSapSession(params: {
+  companyDb: string;
+  sessionId: string;
+  routeId?: string;
+  sapUser?: string;
+  sessionTimeout?: number;
+}): Promise<void> {
+  try {
+    await authFetch("sap-auto-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        company_db: params.companyDb,
+        store: {
+          session_id: params.sessionId,
+          route_id: params.routeId || "",
+          sap_user: params.sapUser || "",
+          session_timeout: params.sessionTimeout || 30,
+        },
+      }),
+    });
+  } catch {
+    /* cache é otimização — nunca bloqueia a ação do usuário */
+  }
+}
+
+/** Descarta a sessão em cache no servidor (sessão recusada pelo ERP). */
+export async function invalidateSapSessionCache(companyDb: string): Promise<void> {
+  try {
+    await authFetch("sap-auto-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ company_db: companyDb, invalidate: true }),
+    });
+  } catch {
+    /* melhor esforço */
+  }
 }

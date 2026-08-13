@@ -12,6 +12,9 @@ function service() {
   return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 }
 
+/** Margem antes do vencimento real da sessão do Service Layer. */
+const SAFETY_MS = 2 * 60 * 1000;
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -64,8 +67,60 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const companyDb = typeof body.company_db === "string" ? body.company_db.trim() : "";
     if (!companyDb) return json({ error: "company_db obrigatório" }, 400);
+    // `force` descarta o cache (usado quando o SAP recusou a sessão anterior).
+    const force = body.force === true;
 
     const admin = service();
+
+    // ── Invalidação explícita (sessão recusada pelo SAP) ────────────────
+    if (body.invalidate === true) {
+      await admin.from("erp_session_cache").delete()
+        .eq("user_id", user.id).eq("company_db", companyDb);
+      return json({ ok: true, invalidated: true });
+    }
+
+    // ── 0) Registro de sessão criada fora daqui (login interativo) ──────
+    const store = body.store;
+    if (store && typeof store.session_id === "string" && store.session_id.trim()) {
+      const timeout = Math.min(Math.max(Number(store.session_timeout) || 30, 1), 30);
+      const { error: storeErr } = await admin.from("erp_session_cache").upsert({
+        user_id: user.id,
+        company_db: companyDb,
+        sap_user: String(store.sap_user || user.email || "").slice(0, 200),
+        session_id: store.session_id.trim(),
+        route_id: typeof store.route_id === "string" ? store.route_id : "",
+        expires_at: new Date(Date.now() + timeout * 60 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id,company_db" });
+      if (storeErr) return json({ error: storeErr.message }, 500);
+      return json({ ok: true, stored: true });
+    }
+
+    // ── 1) Sessão em cache ainda válida? ────────────────────────────────
+    // Evita um /Login novo a cada integração (ex.: PagCorp em lote).
+    // Margem de segurança de 2 min antes do vencimento real.
+    if (!force) {
+      const { data: cached } = await admin
+        .from("erp_session_cache")
+        .select("session_id, route_id, sap_user, expires_at")
+        .eq("user_id", user.id)
+        .eq("company_db", companyDb)
+        .maybeSingle();
+      const cachedExp = cached?.expires_at ? Date.parse(cached.expires_at) : 0;
+      if (cached?.session_id && cachedExp - SAFETY_MS > Date.now()) {
+        return json({
+          sessionId: cached.session_id,
+          routeId: cached.route_id || "",
+          companyDB: companyDb,
+          sapUser: cached.sap_user,
+          sessionTimeout: Math.max(1, Math.floor((cachedExp - Date.now()) / 60000)),
+          cached: true,
+        });
+      }
+    } else {
+      await admin.from("erp_session_cache").delete()
+        .eq("user_id", user.id).eq("company_db", companyDb);
+    }
     const { data: cred, error: credErr } = await admin
       .from("user_sap_credentials")
       .select("sap_user, sap_password_encrypted")
@@ -102,6 +157,19 @@ Deno.serve(async (req) => {
     const routeMatch = /ROUTEID=([^;]+)/i.exec(setCookie);
     const routeId = routeMatch?.[1] || "";
     const sessionTimeout = Number(loginData?.SessionTimeout) > 0 ? Number(loginData.SessionTimeout) : 30;
+
+    // Guarda a sessão para reuso das próximas integrações.
+    try {
+      await admin.from("erp_session_cache").upsert({
+        user_id: user.id,
+        company_db: companyDb,
+        sap_user: cred.sap_user,
+        session_id: loginData.SessionId,
+        route_id: routeId,
+        expires_at: new Date(Date.now() + sessionTimeout * 60 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id,company_db" });
+    } catch (e) { console.error("[sap-auto-login] cache upsert", e); }
 
     try {
       await admin.from("audit_log").insert({
