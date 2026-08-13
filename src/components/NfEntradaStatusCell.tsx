@@ -73,6 +73,12 @@ export function NfEntradaStatusCell({ item, presentation }: { item: NfEntradaImp
       </div>
 
       <div className="text-[10px] text-muted-foreground leading-snug">{presentation.hint}</div>
+      {presentation.next && (
+        <div className="text-[10px] text-foreground/70 leading-snug">
+          <span className="font-medium">Próxima ação: </span>{presentation.next}
+        </div>
+      )}
+
 
       {awaitsSap && (
         <div className="flex flex-wrap items-center gap-1 text-[10px]">
