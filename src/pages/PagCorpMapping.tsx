@@ -388,6 +388,7 @@ export default function PagCorpMapping() {
       const result = await res.json().catch(() => ({}));
       if (!res.ok || result.success === false) throw new Error(result.error || `Erro ${res.status}`);
       toast.success("Mapeamento de cartões salvo");
+      setEditingCardIds([]);
       loadCardMappings();
     } catch (e: any) { toast.error(e.message || "Erro ao salvar"); }
     finally { setIsSavingCards(false); }
