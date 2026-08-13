@@ -222,16 +222,10 @@ export default function PagCorp() {
 
   const handleStartDateChange = (value: string) => {
     setStartDate(value);
+    // Períodos maiores que um mês são permitidos: a busca é feita em janelas
+    // de 30 dias encadeadas. Só garantimos que início <= fim.
     if (value && endDate) {
-      const start = new Date(value);
-      const end = new Date(endDate);
-      const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
-      if (diffDays > 30) {
-        const maxEnd = new Date(start);
-        maxEnd.setDate(maxEnd.getDate() + 30);
-        setEndDate(maxEnd.toISOString().slice(0, 10));
-      }
-      if (diffDays < 0) {
+      if (new Date(value).getTime() > new Date(endDate).getTime()) {
         setEndDate(value);
       }
     }
@@ -240,15 +234,7 @@ export default function PagCorp() {
   const handleEndDateChange = (value: string) => {
     setEndDate(value);
     if (value && startDate) {
-      const start = new Date(startDate);
-      const end = new Date(value);
-      const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
-      if (diffDays > 30) {
-        const minStart = new Date(end);
-        minStart.setDate(minStart.getDate() - 30);
-        setStartDate(minStart.toISOString().slice(0, 10));
-      }
-      if (diffDays < 0) {
+      if (new Date(value).getTime() < new Date(startDate).getTime()) {
         setStartDate(value);
       }
     }
