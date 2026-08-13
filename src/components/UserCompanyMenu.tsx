@@ -31,6 +31,7 @@ import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
 import { supabase } from "@/integrations/supabase/client";
 import { displayUserName } from "@/lib/user-display";
+import { getImpersonation } from "@/lib/impersonation";
 import { useAuth } from "@/hooks/useAuth";
 import { ImpersonationDialog } from "@/components/ImpersonationDialog";
 
