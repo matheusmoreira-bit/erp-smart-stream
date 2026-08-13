@@ -1001,6 +1001,7 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
       ok: true,
       action: "reject",
       finalized: true,
+      consolidatedReason,
       overrideUsed: isOverride && !isMatch,
       expense: {
         id: expenseId,
