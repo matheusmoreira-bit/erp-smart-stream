@@ -111,6 +111,7 @@ export async function buildRateioSegments(
       "supplier.code": String(ctx.supplierCode || "").toLowerCase(),
       currency: ctx.currency || "BRL",
       doc_type: ctx.docType,
+      rateio_type: String(ctx.rateioType || "padrao").toLowerCase(),
     };
     const direct = findMatchingRule(rules, evalCtx, ctx.docType);
     const hierMatch = pickHierarchicalFallbackRule(rules, evalCtx, ctx.docType);
