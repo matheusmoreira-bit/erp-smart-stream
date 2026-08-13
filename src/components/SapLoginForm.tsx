@@ -77,6 +77,11 @@ export function SapLoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [managedCompanyDbs, setManagedCompanyDbs] = useState<Set<string>>(new Set());
   const [cloudEmail, setCloudEmail] = useState<string | null>(null);
+  // Erro de autenticação classificado + validação por campo (inline, não só toast).
+  const [loginError, setLoginError] = useState<ErpLoginErrorInfo | null>(null);
+  const [attempts, setAttempts] = useState(0);
+  const [fieldErrors, setFieldErrors] = useState<{ companyDB?: string; userName?: string; password?: string }>({});
+
 
   // Filter only when we know which ERPs are enabled; otherwise show all active companies
   // so a slow/failing enabled_erp_types query never blocks the login list.
