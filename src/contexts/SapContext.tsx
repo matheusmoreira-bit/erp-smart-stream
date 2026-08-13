@@ -118,7 +118,8 @@ export function SapProvider({ children }: { children: ReactNode }) {
 
   const setSession = useCallback((next: ErpSession | null | ((prev: ErpSession | null) => ErpSession | null)) => {
     setSessionState((prev) => {
-      const resolved = typeof next === "function" ? (next as (p: ErpSession | null) => ErpSession | null)(prev) : next;
+      const raw = typeof next === "function" ? (next as (p: ErpSession | null) => ErpSession | null)(prev) : next;
+      const resolved = applyImpersonation(raw);
       persistSession(resolved);
       return resolved;
     });
