@@ -33,3 +33,4 @@
 - [Critério Tipo de Rateio](mem://features/criterio-tipo-rateio.md) — rateio_type como critério das regras de aprovação; regra Folha do Instituto (Ketlhenn, prioridade 999).
 - [Aprovador de contingência da matriz](mem://features/approval-matrix-fallback-approver.md) — Fallback global = Matheus Moreira; regras 1.80/1.81/1.90/1.91 na Cactus (Juliana até 300k, +Marco Tulio acima).
 - [NF de Entrada por empresa](mem://features/nf-entrada-segregacao-empresa.md) — Notas do Master Tax filtradas por base SAP ativa + CNPJ do tomador; status derivado do fluxo.
+- [Regra de reembolso é paralela](mem://features/reembolso-regra-paralela.md) — Reembolso soma uma trilha extra à alçada padrão, em vez de substituí-la.
