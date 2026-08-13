@@ -151,7 +151,9 @@ export function installReadOnlyGuards(client: {
   const originalRpc = client.rpc.bind(client);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (client as any).rpc = (fn: string, ...rest: any[]) => {
-    if (isReadOnlyMode() && !/^(has_role|get_|list_|is_)/.test(fn)) {
+    // Auditoria continua gravando (é o registro da própria sessão impersonada).
+    const allowed = /^(has_role|get_|list_|is_)/.test(fn) || fn === "insert_audit_log";
+    if (isReadOnlyMode() && !allowed) {
       assertWriteAllowed(`função ${fn}`);
     }
     return originalRpc(fn, ...rest);
