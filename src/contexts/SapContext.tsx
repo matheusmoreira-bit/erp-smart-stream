@@ -709,6 +709,7 @@ export function useSap() {
     loginManaged: ctx.loginManaged,
     loginIdentity: ctx.loginIdentity,
     logout: ctx.logout,
+    impersonateAs: ctx.impersonateAs,
   };
 }
 
