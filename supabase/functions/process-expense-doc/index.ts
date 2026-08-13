@@ -222,7 +222,7 @@ Analise os documentos enviados e extraia as seguintes informações em formato J
   "total_amount": 0.00,
   "currency": "ISO 4217 do documento — 'BRL', 'USD', 'EUR', 'GBP', etc. Use o que efetivamente aparece no documento (símbolo $, R$, €, £, ou texto explícito).",
   "document_date": "YYYY-MM-DD (data de emissão do documento)",
-  "due_date": "YYYY-MM-DD (data de vencimento, se houver; caso não exista, usar document_date + 30 dias)",
+  "due_date": "YYYY-MM-DD (data de vencimento explícita no documento; se não houver certeza, use null — NUNCA estime/calcule)",
   "document_number": "Número do documento/NF/Invoice #",
   "items": [
     {
@@ -258,7 +258,7 @@ Regras IMPORTANTES:
 - Datas no formato YYYY-MM-DD.
 - Extraia o CLIENTE (destinatário) separadamente do FORNECEDOR (emitente).
 - "document_date" é a data de emissão da nota/documento.
-- "due_date" é a data de vencimento. Se não houver, calcule como document_date + 30 dias.
+- "due_date" é a data de vencimento e só deve ser preenchida quando aparecer explicitamente no documento (boleto, "vencimento", "due date", "pagar até"). Se não houver certeza, devolva null. NUNCA calcule/estime prazos (ex.: document_date + 30 dias).
 - IMPORTANTE: Os campos supplier_email, supplier_phone1, supplier_phone2, supplier_address, supplier_country devem se referir SEMPRE ao EMISSOR (fornecedor), nunca ao destinatário/cliente.
 - Para supplier_address: extraia somente do bloco do EMITENTE.
 - supplier_address.zip: BR = apenas 8 dígitos; internacional = formato original (pode ser alfanumérico).
