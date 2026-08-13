@@ -21,6 +21,8 @@ export interface NfEntradaImport {
   serie: string | null;
   cnpj_fornecedor: string | null;
   nome_fornecedor: string | null;
+  cnpj_destinatario: string | null;
+  nome_destinatario: string | null;
   data_emissao: string | null;
   valor_total: number | null;
   status: NfEntradaStatus;
@@ -32,6 +34,9 @@ export interface NfEntradaImport {
   sap_matched_card_code: string | null;
   sap_match_reason: string | null;
   sap_invoice_draft_id: string | null;
+  erp_invoice_posted: boolean | null;
+  erp_invoice_doc_entry: string | null;
+  rejection_reason: string | null;
   xml_storage_path: string | null;
   pdf_storage_path: string | null;
   last_error: string | null;
@@ -39,6 +44,7 @@ export interface NfEntradaImport {
   created_at: string;
   updated_at: string;
 }
+
 
 export interface NfEntradaLog {
   id: string;
