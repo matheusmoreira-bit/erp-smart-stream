@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, Search, UserCog } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -32,7 +34,9 @@ interface Props {
  * permissões e visibilidade como esse usuário.
  */
 export function ImpersonationDialog({ open, onOpenChange }: Props) {
-  const { session, login } = useSap();
+  const { session, login, impersonateAs } = useSap();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { getLabel } = useCompanies(true);
   const { users, isLoading } = useSapUsers();
   const [search, setSearch] = useState("");
@@ -68,7 +72,10 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
   );
 
   const start = async () => {
-    if (!session?.companyDB) return;
+    if (!session?.companyDB) {
+      toast.error("Entre em uma empresa antes de atuar como outro usuário");
+      return;
+    }
     if (!target) {
       toast.error("Selecione o usuário");
       return;
@@ -96,21 +103,9 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
       } else {
         // Sem senha: entra por identidade, mas PRESERVA a sessão do Service
         // Layer do usuário original (o admin). Assim leituras e ações no ERP
-        // continuam funcionando durante a impersonação; se não houver sessão
-        // viva, o broker resolve depois (senha provisionada ou modal).
-        sessionStorage.setItem(
-          "erp_session_v1",
-          JSON.stringify({
-            erpType: session.erpType || "sap",
-            companyDB: session.companyDB,
-            userName: target,
-            sessionId: session.sessionId || undefined,
-            routeId: session.routeId || undefined,
-            expiresAt: session.expiresAt || undefined,
-          }),
-        );
+        // continuam funcionando durante a impersonação.
+        impersonateAs(target);
       }
-
 
       await logAuditAction({
         action: "impersonation_start",
@@ -125,8 +120,13 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
         },
       });
 
+      // Nada de reload: recarregar a página fazia o app passar de novo pelo
+      // gate do Google e reidratar a identidade do admin. Basta limpar os
+      // caches de dados e voltar para a home.
+      try { queryClient.clear(); } catch { /* ignore */ }
+      onOpenChange(false);
       toast.success(`Atuando como ${displayUserName(selected?.UserName || target)}`);
-      window.setTimeout(() => window.location.replace("/"), 400);
+      navigate("/", { replace: true });
     } catch (e) {
       // Falhou o login: desfaz a impersonação para não deixar o admin sem poderes.
       const { clearImpersonation } = await import("@/lib/impersonation");
@@ -139,6 +139,7 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
       setBusy(false);
     }
   };
+
 
 
   return (
