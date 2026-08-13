@@ -14,6 +14,8 @@ import { NotificationSettingsTab } from "@/components/NotificationSettingsTab";
 import { OverdueRemindersTab } from "@/components/OverdueRemindersTab";
 import { PageTitle } from "@/components/PageTitle";
 import { DocumentMilestonesDialog } from "@/components/DocumentMilestonesDialog";
+import { SubstituteNotificationPrefsCard } from "@/components/SubstituteNotificationPrefsCard";
+
 
 
 const categoryIcon: Record<string, string> = {
