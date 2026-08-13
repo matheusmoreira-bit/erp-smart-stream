@@ -55,9 +55,25 @@ Deno.serve(async (req) => {
     });
 
   const provided = req.headers.get("x-cron-secret") ?? "";
-  if (!CRON_SECRET || !timingSafeEqual(provided, CRON_SECRET)) {
+  const sbAuth = createClient(SERVICE_URL, SERVICE_KEY);
+  let dbSecret = "";
+  if (provided) {
+    const { data: cred } = await sbAuth
+      .from("system_credentials")
+      .select("credential_value")
+      .eq("system_name", "cron")
+      .eq("credential_key", "audit_monthly_token")
+      .maybeSingle();
+    dbSecret = cred?.credential_value ?? "";
+  }
+  const ok =
+    !!provided &&
+    ((!!CRON_SECRET && timingSafeEqual(provided, CRON_SECRET)) ||
+      (!!dbSecret && timingSafeEqual(provided, dbSecret)));
+  if (!ok) {
     return json({ error: "UNAUTHORIZED" }, 401);
   }
+
 
   let body: { dateFrom?: string; dateTo?: string; companies?: string[] } = {};
   try {
