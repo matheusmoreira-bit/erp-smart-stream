@@ -1673,7 +1673,7 @@ export function CreateExpenseModal({
     groups.map((g) => ({
       supplierKey: g.supplierKey,
       supplierLabel: g.supplierLabel,
-      docs: g.docs.map((d) => ({ file: fromPersistedFile(d.file), extracted: d.extracted })),
+      docs: g.docs.map((d) => ({ file: fromPersistedFile(d.file), extracted: d.extracted, companion: (d as { companion?: boolean }).companion })),
     })), []);
 
   // Grava snapshot (debounced 400ms) do estado inteiro da fila.
