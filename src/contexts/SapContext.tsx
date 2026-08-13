@@ -56,17 +56,41 @@ const ErpContext = createContext<ErpContextType | null>(null); // stable ref
 
 const ERP_SESSION_STORAGE_KEY = "erp_session_v1";
 
+/**
+ * Durante uma impersonação a identidade exibida/filtrada é SEMPRE a do usuário
+ * alvo, mesmo que a sessão técnica (Service Layer) tenha sido aberta com outro
+ * usuário. Sem esse override, qualquer `setSession` disparado depois do início
+ * da impersonação (keep-alive, broker, auto-login) reescrevia o `userName` de
+ * volta para o admin e a sessão "voltava" para o usuário original.
+ */
+function applyImpersonation(session: ErpSession | null): ErpSession | null {
+  if (!session) return session;
+  const imp = getImpersonation();
+  if (!imp || imp.companyDB !== session.companyDB) return session;
+  if (session.userName === imp.targetUser) return session;
+  return { ...session, userName: imp.targetUser };
+}
+
 function loadStoredSession(): ErpSession | null {
   try {
     const raw = sessionStorage.getItem(ERP_SESSION_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as ErpSession;
-    // Drop expired sessions on load so user is forced through the login screen.
+    // Sessão do ERP expirada: descartamos apenas a parte técnica (SessionID) e
+    // mantemos a identidade/empresa. O broker recria a sessão sob demanda —
+    // assim uma expiração no SAP não joga o usuário de volta para o login.
     if (parsed?.expiresAt && Date.now() >= parsed.expiresAt) {
-      sessionStorage.removeItem(ERP_SESSION_STORAGE_KEY);
-      return null;
+      const revived: ErpSession = {
+        ...parsed,
+        sessionId: undefined,
+        routeId: undefined,
+        sapAuthToken: undefined,
+        expiresAt: undefined,
+      };
+      sessionStorage.setItem(ERP_SESSION_STORAGE_KEY, JSON.stringify(revived));
+      return applyImpersonation(revived);
     }
-    return parsed;
+    return applyImpersonation(parsed);
   } catch {
     return null;
   }
