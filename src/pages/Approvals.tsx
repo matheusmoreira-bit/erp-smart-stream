@@ -1012,6 +1012,13 @@ function ApprovalDetailModal({
               formatCostCenter={formatCostCenter}
             />
 
+            {/* Status das trilhas paralelas (regra padrão + reembolso) */}
+            <ParallelTracksPanel
+              expenseId={(doc as unknown as { __internalId?: string }).__internalId}
+              formatCostCenter={formatCostCenter}
+            />
+
+
             {/* Painel de segmentação por regra */}
 
             {segmented && (
