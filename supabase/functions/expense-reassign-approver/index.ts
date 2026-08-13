@@ -21,6 +21,7 @@ import {
 } from "../_shared/rule-match.ts";
 import {
   buildRateioSegments,
+  buildReembolsoSegments,
   persistRateioSegments,
   persistSegmentSubset,
   pendingApproverLabel,
