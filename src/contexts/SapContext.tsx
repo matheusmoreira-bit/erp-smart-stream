@@ -49,6 +49,8 @@ interface ErpContextType {
    */
   loginIdentity: (companyDB: string, erpType?: ErpType) => Promise<void>;
   logout: () => Promise<void>;
+  /** Troca a identidade exibida/filtrada para o usuário impersonado. */
+  impersonateAs: (userName: string) => void;
 }
 
 const ErpContext = createContext<ErpContextType | null>(null); // stable ref
