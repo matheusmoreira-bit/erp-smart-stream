@@ -803,7 +803,7 @@ export default function PagCorp() {
 
   const handleConfirmConsolidate = async (
     supplier: SapSearchOption,
-    lineOverrides: Record<string, { costCenter?: string | null; project?: string | null }> = {},
+    lineOverrides: Record<string, { costCenter?: string | null; project?: string | null; item?: string | null }> = {},
     documentDate?: string | null,
   ) => {
     const txs = consolidateDialog.transactions;
