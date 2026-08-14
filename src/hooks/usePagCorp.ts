@@ -147,7 +147,6 @@ export interface PagCorpTransaction {
     settlementStatus: string | null;
     settlementPaymentDocNum: number | null;
     settlementError: string | null;
-    supplierName?: string | null;
   }>;
   settlementStatus?: string | null;
   settlementPaymentDocNum?: number | null;
@@ -350,10 +349,6 @@ export function usePagCorp() {
                 settlementStatus: log.settlement_status ?? null,
                 settlementPaymentDocNum: log.settlement_payment_doc_num ?? null,
                 settlementError: log.settlement_error ?? null,
-                supplierName:
-                  log.sap_payload?.CardName ??
-                  log.sap_payload?.supplier_name ??
-                  null,
               };
               const list = integratedMap.get(key);
               if (list) list.push(link);
