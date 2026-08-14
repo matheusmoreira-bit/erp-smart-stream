@@ -295,6 +295,7 @@ Deno.serve(async (req) => {
           await sb.from("nf_entrada_imports").update({
             erp_invoice_posted: !!nfe,
             erp_invoice_doc_entry: nfe?.id ?? null,
+            erp_invoice_doc_num: nfe?.numero ?? null,
             erp_invoice_checked_at: new Date().toISOString(),
           }).eq("id", row.id);
           results.push({ id: row.id, posted: !!nfe, doc: nfe?.numero ?? nfe?.id ?? null });
@@ -352,6 +353,7 @@ Deno.serve(async (req) => {
             await sb.from("nf_entrada_imports").update({
               erp_invoice_posted: true,
               erp_invoice_doc_entry: already.id,
+              erp_invoice_doc_num: already.numero ?? null,
               erp_invoice_checked_at: new Date().toISOString(),
               status: "completed",
             }).eq("id", nf.id);
