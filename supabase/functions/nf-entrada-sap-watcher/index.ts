@@ -239,6 +239,54 @@ Deno.serve(async (req) => {
   const results: Array<{ id: string; status: string; error?: string }> = [];
   let pageOffset = 0;
 
+  // Reconciliação barata (sem SAP): o cache de NF de Entrada já sabe quais
+  // PurchaseInvoices consomem cada PC. Se a NF existe lá, o registro nunca
+  // deve continuar como "PC no SAP · sem NF de entrada".
+  try {
+    let pend = sb
+      .from("nf_entrada_imports")
+      .select("id,status,sap_company_db,sap_matched_po_doc_entry,erp_invoice_posted")
+      .not("sap_matched_po_doc_entry", "is", null)
+      .neq("status", "cancelled")
+      .is("erp_invoice_posted", null)
+      .limit(500);
+    if (manualId) pend = pend.eq("id", manualId);
+    const { data: pendRows } = await pend;
+    for (const r of (pendRows || []) as Array<Record<string, string | null>>) {
+      const poEntry = Number(r.sap_matched_po_doc_entry);
+      if (!Number.isFinite(poEntry) || !r.sap_company_db) continue;
+      const { data: inv } = await sb
+        .from("sap_nf_entrada_cache")
+        .select("doc_entry,doc_num,cancelled")
+        .eq("company_db", r.sap_company_db)
+        .eq("base_po_doc_entry", poEntry)
+        .neq("cancelled", "tYES")
+        .order("doc_entry", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (!inv) continue;
+      await sb.from("nf_entrada_imports").update({
+        erp_invoice_posted: true,
+        erp_invoice_doc_entry: String(inv.doc_entry),
+        erp_invoice_doc_num: inv.doc_num != null ? String(inv.doc_num) : null,
+        status: "completed",
+        last_poll_at: new Date().toISOString(),
+        last_error: null,
+      }).eq("id", r.id as string);
+      await sb.from("nf_entrada_logs").insert({
+        import_id: r.id,
+        step: "sap_invoice_detected_cache",
+        status_from: r.status ?? null,
+        status_to: "completed",
+        message: `NF de Entrada #${inv.doc_num ?? inv.doc_entry} localizada no cache do SAP para o PC ${poEntry}`,
+        actor: "nf-entrada-sap-watcher",
+        payload: { po_doc_entry: poEntry, doc_entry: inv.doc_entry, doc_num: inv.doc_num },
+      });
+      results.push({ id: r.id as string, status: "completed" });
+    }
+  } catch (_e) { /* reconciliação é best-effort */ }
+
+
   while (Date.now() - startedAt < TIME_BUDGET_MS) {
     let q = sb.from("nf_entrada_imports").select("*");
     q = manualId
