@@ -34,64 +34,8 @@ async function sapLogin(baseUrl: string, companyDB: string, u: string, p: string
   return `B1SESSION=${sess}${route ? `; ROUTEID=${route}` : ""}`;
 }
 
-const escapeOData = (s: string) => (s || "").replace(/'/g, "''");
+import { findPoForNf, findSupplierCardCode } from "../_shared/nf-po-match.ts";
 
-async function findSapSupplierCardCode(
-  baseUrl: string, cookie: string, cnpj: string, nome: string,
-): Promise<string | null> {
-  const digits = (cnpj || "").replace(/\D/g, "");
-  if (digits) {
-    const r = await fetch(
-      `${baseUrl}/BusinessPartners?$filter=CardType eq 'cSupplier' and FederalTaxID eq '${digits}'&$select=CardCode&$top=1`,
-      { headers: { Cookie: cookie } },
-    );
-    if (r.ok) {
-      const cc = (await r.json())?.value?.[0]?.CardCode;
-      if (cc) return String(cc);
-    }
-  }
-  const n = (nome || "").trim();
-  if (n.length >= 4) {
-    const r = await fetch(
-      `${baseUrl}/BusinessPartners?$filter=CardType eq 'cSupplier' and contains(CardName,'${escapeOData(n)}')&$select=CardCode&$top=1`,
-      { headers: { Cookie: cookie } },
-    );
-    if (r.ok) {
-      const cc = (await r.json())?.value?.[0]?.CardCode;
-      if (cc) return String(cc);
-    }
-  }
-  return null;
-}
-
-async function findExistingPo(
-  baseUrl: string, cookie: string, cardCode: string, valor: number,
-): Promise<{ docEntry: string; isDraft: boolean; docTotal: number } | null> {
-  // Regra de cardinalidade N NF → 1 PO: não exigimos igualdade de DocTotal.
-  // Preferimos o PO aberto mais recente do fornecedor; se não houver, cai em Draft.
-  const poUrl = `${baseUrl}/PurchaseOrders?$filter=CardCode eq '${escapeOData(cardCode)}' and DocumentStatus eq 'bost_Open'&$select=DocEntry,DocTotal&$orderby=DocEntry desc&$top=10`;
-  const poR = await fetch(poUrl, { headers: { Cookie: cookie } });
-  if (poR.ok) {
-    const arr = (await poR.json())?.value || [];
-    if (arr.length > 0) {
-      // Match preferencial por valor (mesmo total); caso contrário, o mais recente
-      const exact = arr.find((r: any) => Math.abs(Number(r.DocTotal) - valor) < 0.01);
-      const pick = exact || arr[0];
-      return { docEntry: String(pick.DocEntry), isDraft: false, docTotal: Number(pick.DocTotal) };
-    }
-  }
-  const drUrl = `${baseUrl}/Drafts?$filter=DocObjectCode eq 'oPurchaseOrders' and CardCode eq '${escapeOData(cardCode)}'&$select=DocEntry,DocTotal&$orderby=DocEntry desc&$top=10`;
-  const drR = await fetch(drUrl, { headers: { Cookie: cookie } });
-  if (drR.ok) {
-    const arr = (await drR.json())?.value || [];
-    if (arr.length > 0) {
-      const exact = arr.find((r: any) => Math.abs(Number(r.DocTotal) - valor) < 0.01);
-      const pick = exact || arr[0];
-      return { docEntry: String(pick.DocEntry), isDraft: true, docTotal: Number(pick.DocTotal) };
-    }
-  }
-  return null;
-}
 
 async function loadSapCreds(
   supabase: ReturnType<typeof createClient>,
