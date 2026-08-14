@@ -12,6 +12,7 @@ const INTEGRATION_STATUS_CHUNK = 5000;
 
 type IntegrationStatusPayload = {
   integrations: any[];
+  relations: any[];
   nondeductibleCards: any[];
   nondeductibleExpenses: any[];
 };
@@ -45,6 +46,7 @@ async function fetchIntegrationStatus(
     const { sapFunctionFetch } = await import("@/lib/auth-fetch");
     const merged: IntegrationStatusPayload = {
       integrations: [],
+      relations: [],
       nondeductibleCards: [],
       nondeductibleExpenses: [],
     };
@@ -63,11 +65,13 @@ async function fetchIntegrationStatus(
       }
       const {
         integrations = [],
+        relations = [],
         nondeductibleCards = [],
         nondeductibleExpenses = [],
       } = await res.json();
 
       merged.integrations.push(...(integrations as any[]));
+      merged.relations.push(...(relations as any[]));
       merged.nondeductibleExpenses.push(...(nondeductibleExpenses as any[]));
       // Cartões não dependem de expenseIds; dedupe por card_identifier.
       for (const c of nondeductibleCards as any[]) {
