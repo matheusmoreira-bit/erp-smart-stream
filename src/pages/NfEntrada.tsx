@@ -28,7 +28,7 @@ import { NfEntradaProvisionDialog } from "@/components/NfEntradaProvisionDialog"
 import { copyDocLink, readDocParam, setDocParam } from "@/lib/doc-deep-link";
 import { setPendingPurchaseFiles } from "@/lib/pending-purchase-files";
 
-import { nfStage, nfStagePresentation, STAGE_OPTIONS } from "@/lib/nf-entrada-status";
+import { nfStage, nfStagePresentation, poLabel, STAGE_OPTIONS } from "@/lib/nf-entrada-status";
 
 
 
