@@ -1481,7 +1481,9 @@ export default function PagCorp() {
                               {(() => {
                                 const st = t.settlementStatus;
                                 const isRunning = settling === t.id;
-                                const settled = st === "settled";
+                                // Fatos do SAP prevalecem sobre o status interno:
+                                // NF/baixa lançadas manualmente também contam.
+                                const settled = st === "settled" || t.paymentFoundInSap === true;
                                 const settlementLabel = settled
                                   ? `Baixa ${t.settlementPaymentDocNum ? `#${t.settlementPaymentDocNum}` : "OK"}`
                                   : st === "awaiting_invoice"
@@ -1493,12 +1495,13 @@ export default function PagCorp() {
                                         : "Baixa automática";
 
                                 // Progressão: Integrado → NF lançada → Baixado
-                                const nfDone = settled || st === "awaiting_settlement";
+                                const nfDone = settled || st === "awaiting_settlement" || t.nfFoundInSap === true;
                                 const currentStep = settled ? 3 : nfDone ? 2 : 1;
+
                                 const stepClass = (idx: number) => {
                                   if (idx < currentStep) return "text-success font-medium";
                                   if (idx === currentStep)
-                                    return st === "error"
+                                    return st === "error" && !settled
                                       ? "text-destructive font-semibold"
                                       : settled
                                         ? "text-success font-semibold"
