@@ -551,6 +551,14 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Falha cedo (com mensagem clara) quando o item mapeado/escolhido está
+    // inativo ou bloqueado no SAP.
+    await assertItemsActive(
+      sap,
+      lineMappings.map((m) => (lineOverrides[String(m.tx.id)]?.item || m.itemCode) as string),
+    );
+
+
     // (Pagamento desabilitado: integração agora cria apenas o Pedido de Compra)
 
     const configuredBranch = Number(sapCreds.default_branch_id || "");
