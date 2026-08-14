@@ -4662,6 +4662,7 @@ export type Database = {
           divergence_override_reason: string | null
           erp_invoice_checked_at: string | null
           erp_invoice_doc_entry: string | null
+          erp_invoice_doc_num: string | null
           erp_invoice_posted: boolean
           expense_id: string | null
           id: string
@@ -4683,6 +4684,7 @@ export type Database = {
           sap_match_reason: string | null
           sap_matched_card_code: string | null
           sap_matched_po_doc_entry: string | null
+          sap_matched_po_doc_num: string | null
           sap_matched_po_is_draft: boolean
           sap_po_draft_id: string | null
           serie: string | null
@@ -4706,6 +4708,7 @@ export type Database = {
           divergence_override_reason?: string | null
           erp_invoice_checked_at?: string | null
           erp_invoice_doc_entry?: string | null
+          erp_invoice_doc_num?: string | null
           erp_invoice_posted?: boolean
           expense_id?: string | null
           id?: string
@@ -4727,6 +4730,7 @@ export type Database = {
           sap_match_reason?: string | null
           sap_matched_card_code?: string | null
           sap_matched_po_doc_entry?: string | null
+          sap_matched_po_doc_num?: string | null
           sap_matched_po_is_draft?: boolean
           sap_po_draft_id?: string | null
           serie?: string | null
@@ -4750,6 +4754,7 @@ export type Database = {
           divergence_override_reason?: string | null
           erp_invoice_checked_at?: string | null
           erp_invoice_doc_entry?: string | null
+          erp_invoice_doc_num?: string | null
           erp_invoice_posted?: boolean
           expense_id?: string | null
           id?: string
@@ -4771,6 +4776,7 @@ export type Database = {
           sap_match_reason?: string | null
           sap_matched_card_code?: string | null
           sap_matched_po_doc_entry?: string | null
+          sap_matched_po_doc_num?: string | null
           sap_matched_po_is_draft?: boolean
           sap_po_draft_id?: string | null
           serie?: string | null
