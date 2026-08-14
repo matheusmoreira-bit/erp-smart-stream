@@ -78,11 +78,14 @@ Deno.serve(async (req) => {
       const { data, error } = await admin
         .from("pagcorp_integration_log")
         .select(
-          "pagcorp_expense_id, id, status, sap_doc_num, sap_doc_entry, settlement_status, settlement_payment_doc_num, settlement_error",
+          "pagcorp_expense_id, id, status, sap_doc_num, sap_doc_entry, settlement_status, settlement_payment_doc_num, settlement_error, created_at",
         )
         .eq("company_db", companyDb)
         .eq("status", "success")
-        .in("pagcorp_expense_id", expenseIds);
+        .in("pagcorp_expense_id", expenseIds)
+        // Uma transação pode ter N pedidos (fornecedores diferentes no mesmo
+        // comprovante) — devolvemos todos, do mais antigo para o mais novo.
+        .order("created_at", { ascending: true });
       if (error) throw error;
       integrations = data || [];
     }

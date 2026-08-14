@@ -2282,6 +2282,13 @@ export function CreateExpenseModal({
         sales_usage: isSales ? salesUsage?.code || undefined : undefined,
         items: items.map(({ sapItem, sapCostCenter, sapProject, searchHint, ...rest }) => rest),
         files: files.length > 0 ? files : undefined,
+        // Fila multi-fornecedor: informa ao chamador quantos grupos ainda
+        // serão submetidos neste encadeamento. Origens como o PagCorp usam
+        // isso para NÃO fechar o modal entre um pedido e o próximo — assim
+        // uma mesma transação de cartão pode gerar N pedidos de compra.
+        queue_remaining: deferredGroups.length,
+        queue_total: Math.max(1, queueHistory.length),
+        queue_supplier_label: queueHistory.find((e) => e.status === "pending")?.supplierLabel,
       });
 
       // Reivindica os hashes APÓS sucesso — se o insert falhar por corrida,

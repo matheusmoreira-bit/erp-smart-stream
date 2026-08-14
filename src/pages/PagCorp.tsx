@@ -1070,9 +1070,29 @@ export default function PagCorp() {
 
       if (sapError) throw new Error(sapError);
 
-      toast.success("Despesa criada e integrada no SAP", {
-        description: sapDocNum ? `PC #${sapDocNum}` : undefined,
-      });
+      // Fila multi-fornecedor: quando os anexos trazem notas de CNPJs
+      // diferentes, o modal encadeia um pedido por fornecedor. Enquanto
+      // sobrar grupo na fila, mantemos o modal aberto — a MESMA transação
+      // do cartão passa a ter N pedidos de compra vinculados.
+      const queueRemaining = Number(input?.queue_remaining || 0);
+      toast.success(
+        queueRemaining > 0
+          ? "Pedido criado e integrado no SAP — seguindo para o próximo fornecedor"
+          : "Despesa criada e integrada no SAP",
+        {
+          description: [
+            sapDocNum ? `PC #${sapDocNum}` : null,
+            queueRemaining > 0 ? `${queueRemaining} fornecedor(es) restante(s) nesta transação` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ") || undefined,
+        },
+      );
+      if (queueRemaining > 0) {
+        // Não fecha o modal e não avança o lote: o encadeamento continua.
+        void fetchTransactions(startDate, endDate, session.companyDB);
+        return { expense };
+      }
       programmaticCloseRef.current = true;
       setAccountabilityModal({ open: false, tx: null });
       await fetchTransactions(startDate, endDate, session.companyDB);
@@ -1519,6 +1539,14 @@ export default function PagCorp() {
                                             <span className={stepClass(3)}>Baixa</span>
                                           </span>
                                         )}
+                                        {(t.integrationLinks?.length ?? 0) > 1 && (
+                                          <span
+                                            className="ml-1 rounded-sm bg-primary/15 text-primary px-1 font-medium"
+                                            title={`Esta transação gerou ${t.integrationLinks!.length} pedidos de compra (fornecedores diferentes)`}
+                                          >
+                                            {t.integrationLinks!.length} PCs
+                                          </span>
+                                        )}
                                         <MoreHorizontal className="w-3.5 h-3.5 ml-0.5 opacity-70" />
                                       </Button>
                                     </DropdownMenuTrigger>
@@ -1528,14 +1556,30 @@ export default function PagCorp() {
                                       </DropdownMenuLabel>
                                       <DropdownMenuSeparator />
 
-                                      {t.sapDocNum != null && (
-                                        <div className="px-2 py-1.5 text-[11px] flex items-center justify-between gap-2">
-                                          <span className="text-muted-foreground">Pedido de Compra</span>
-                                          <span className="font-mono font-medium text-foreground">
-                                            PC #{t.sapDocNum}
-                                          </span>
-                                        </div>
-                                      )}
+                                      {(() => {
+                                        // Uma transação pode ter N pedidos (notas de
+                                        // fornecedores/CNPJs diferentes no mesmo comprovante).
+                                        const links = t.integrationLinks?.length
+                                          ? t.integrationLinks
+                                          : t.sapDocNum != null
+                                            ? [{ logId: t.integrationLogId || "", docNum: t.sapDocNum, docEntry: t.sapDocEntry ?? null, settlementStatus: null, settlementPaymentDocNum: null, settlementError: null }]
+                                            : [];
+                                        if (links.length === 0) return null;
+                                        return (
+                                          <div className="px-2 py-1.5 text-[11px] flex items-start justify-between gap-2">
+                                            <span className="text-muted-foreground">
+                                              {links.length > 1 ? `Pedidos de Compra (${links.length})` : "Pedido de Compra"}
+                                            </span>
+                                            <span className="font-mono font-medium text-foreground text-right">
+                                              {links.map((l) => (
+                                                <span key={l.logId || l.docNum} className="block">
+                                                  PC #{l.docNum ?? "—"}
+                                                </span>
+                                              ))}
+                                            </span>
+                                          </div>
+                                        );
+                                      })()}
                                       <div className="px-2 py-1.5 text-[11px] flex items-center justify-between gap-2">
                                         <span className="text-muted-foreground">Baixa</span>
                                         <span

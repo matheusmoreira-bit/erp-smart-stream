@@ -134,6 +134,20 @@ export interface PagCorpTransaction {
   integrationLogId?: string;
   sapDocNum?: number | null;
   sapDocEntry?: number | null;
+  /**
+   * Uma transação pode gerar N pedidos de compra quando os anexos trazem
+   * notas de fornecedores/CNPJs diferentes. Aqui ficam TODOS os vínculos
+   * (o primeiro também é espelhado nos campos singulares acima, para
+   * compatibilidade com as telas que leem só um pedido).
+   */
+  integrationLinks?: Array<{
+    logId: string;
+    docNum: number | null;
+    docEntry: number | null;
+    settlementStatus: string | null;
+    settlementPaymentDocNum: number | null;
+    settlementError: string | null;
+  }>;
   settlementStatus?: string | null;
   settlementPaymentDocNum?: number | null;
   settlementError?: string | null;
@@ -321,37 +335,50 @@ export function usePagCorp() {
             nondeductibleExpenses = [],
           } = await fetchIntegrationStatus(companyDb, expenseIds);
 
-            // Marca integradas
-            const integratedMap = new Map<number, {
-              id: string;
-              docNum: number | null;
-              docEntry: number | null;
-              settlementStatus: string | null;
-              settlementPaymentDocNum: number | null;
-              settlementError: string | null;
-            }>();
+            // Marca integradas. Uma transação pode ter MAIS DE UM log
+            // (um por pedido de compra), quando os anexos trazem notas de
+            // fornecedores diferentes — por isso agrupamos em lista.
+            type Link = NonNullable<PagCorpTransaction["integrationLinks"]>[number];
+            const integratedMap = new Map<number, Link[]>();
             (integrations as any[]).forEach((log) => {
-              integratedMap.set(Number(log.pagcorp_expense_id), {
-                id: log.id,
+              const key = Number(log.pagcorp_expense_id);
+              const link: Link = {
+                logId: log.id,
                 docNum: log.sap_doc_num ?? null,
                 docEntry: log.sap_doc_entry ?? null,
                 settlementStatus: log.settlement_status ?? null,
                 settlementPaymentDocNum: log.settlement_payment_doc_num ?? null,
                 settlementError: log.settlement_error ?? null,
-              });
+              };
+              const list = integratedMap.get(key);
+              if (list) list.push(link);
+              else integratedMap.set(key, [link]);
             });
             items.forEach((t) => {
-              const hit = integratedMap.get(Number(t.id));
-              if (hit) {
+              const links = integratedMap.get(Number(t.id));
+              if (links && links.length > 0) {
+                // Ordena por nº do pedido para exibição estável.
+                links.sort((a, b) => (a.docNum ?? 0) - (b.docNum ?? 0));
+                const hit = links[0];
                 t.integrated = true;
-                t.integrationLogId = hit.id;
+                t.integrationLinks = links;
+                t.integrationLogId = hit.logId;
                 t.sapDocNum = hit.docNum;
                 t.sapDocEntry = hit.docEntry;
-                t.settlementStatus = hit.settlementStatus;
+                // Status agregado da baixa: só é "settled" se TODOS os
+                // pedidos da transação estiverem baixados; erro em qualquer
+                // um deles prevalece para não mascarar pendência.
+                const statuses = links.map((l) => l.settlementStatus);
+                t.settlementStatus = statuses.some((s) => s === "error")
+                  ? "error"
+                  : statuses.every((s) => s === "settled")
+                    ? "settled"
+                    : statuses.find((s) => s && s !== "settled") ?? hit.settlementStatus;
                 t.settlementPaymentDocNum = hit.settlementPaymentDocNum;
-                t.settlementError = hit.settlementError;
+                t.settlementError = links.find((l) => l.settlementError)?.settlementError ?? null;
               }
             });
+
 
             // Não-dedutíveis por cartão
             if ((nondeductibleCards as any[]).length) {
