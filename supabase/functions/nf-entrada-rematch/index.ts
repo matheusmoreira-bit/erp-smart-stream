@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
 
     const cookie = await sapLogin(sap.baseUrl, sap.companyDB, sap.username, sap.password);
     try {
-      const cardCode = await findSapSupplierCardCode(
+      const cardCode = await findSupplierCardCode(
         sap.baseUrl, cookie, row.cnpj_fornecedor || "", row.nome_fornecedor || "",
       );
       if (!cardCode) {
@@ -124,11 +124,17 @@ Deno.serve(async (req) => {
         });
       }
 
-      const match = await findExistingPo(sap.baseUrl, cookie, cardCode, Number(row.valor_total || 0));
+      const match = await findPoForNf(sap.baseUrl, cookie, {
+        cardCode,
+        valor: Number(row.valor_total || 0),
+        dataEmissao: row.data_emissao,
+        // No rematch manual mantemos o fallback frouxo (1 PC : N NF).
+        allowLooseFallback: true,
+      });
       if (!match) {
         await supabase.from("nf_entrada_logs").insert({
           import_id: row.id, step: "rematch_existing_po", actor: "nf-entrada-rematch",
-          message: `Nenhum PC/esboço aberto encontrado para CardCode ${cardCode} no valor ${Number(row.valor_total || 0).toFixed(2)}.`,
+          message: `Nenhum PC/esboço encontrado para CardCode ${cardCode} no valor ${Number(row.valor_total || 0).toFixed(2)}.`,
         });
         return new Response(JSON.stringify({ matched: false, cardCode, reason: "PC não localizado" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -142,7 +148,7 @@ Deno.serve(async (req) => {
         sap_matched_po_doc_entry: match.docEntry,
         sap_matched_po_is_draft: match.isDraft,
         sap_po_draft_id: match.docEntry,
-        sap_match_reason: `cnpj+fornecedor (${match.isDraft ? "draft" : "PO"}) [rematch — 1 PO : N NF]`,
+        sap_match_reason: `${match.reason} · confiança ${match.confidence} [rematch — 1 PC : N NF]`,
       }).eq("id", row.id);
 
       // Conta quantas NFs já apontam para o mesmo PC — informativo, não bloqueia
@@ -157,12 +163,15 @@ Deno.serve(async (req) => {
         step: "rematch_existing_po",
         status_to: "awaiting_sap",
         actor: "nf-entrada-rematch",
-        message: `Vínculo refeito: PC ${match.isDraft ? "esboço" : "efetivo"} DocEntry ${match.docEntry} (DocTotal ${match.docTotal.toFixed(2)}), CardCode ${cardCode}. Total de NFs vinculadas a este PC: ${shared ?? 1}.`,
+        message: `Vínculo refeito: PC ${match.isDraft ? "esboço" : "efetivo"} #${match.docNum ?? match.docEntry} (DocEntry ${match.docEntry}, total ${match.docTotal.toFixed(2)}, status ${match.status ?? "—"}), CardCode ${cardCode}. Critério: ${match.reason} (confiança ${match.confidence}). Total de NFs vinculadas a este PC: ${shared ?? 1}.`,
       });
 
       return new Response(JSON.stringify({
-        matched: true, cardCode, docEntry: match.docEntry, isDraft: match.isDraft, sharedNfCount: shared ?? 1,
+        matched: true, cardCode, docEntry: match.docEntry, docNum: match.docNum,
+        isDraft: match.isDraft, confidence: match.confidence, reason: match.reason,
+        sharedNfCount: shared ?? 1,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
     } finally {
       await fetch(`${sap.baseUrl}/Logout`, { method: "POST", headers: { Cookie: cookie } }).catch(() => {});
     }
