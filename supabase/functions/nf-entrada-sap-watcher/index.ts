@@ -319,11 +319,19 @@ Deno.serve(async (req) => {
               const existing = await findExistingPoInvoice(baseUrl, cookie, poEntry);
               if (existing) {
                 await sb.from("nf_entrada_imports").update({
-                  sap_invoice_draft_id: String(existing.docEntry),
+                  // NF efetiva → grava como NF lançada; só esboço vai para sap_invoice_draft_id.
+                  ...(existing.isDraft
+                    ? { sap_invoice_draft_id: String(existing.docEntry) }
+                    : {
+                        erp_invoice_posted: true,
+                        erp_invoice_doc_entry: String(existing.docEntry),
+                        erp_invoice_doc_num: existing.docNum != null ? String(existing.docNum) : null,
+                      }),
                   status: "completed",
                   last_poll_at: new Date().toISOString(),
                   last_error: null,
                 }).eq("id", row.id);
+
                 await sb.from("nf_entrada_logs").insert({
                   import_id: row.id,
                   step: "sap_invoice_detected",
