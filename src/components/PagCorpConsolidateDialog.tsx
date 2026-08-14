@@ -23,7 +23,10 @@ function formatCurrency(value: number, currency: string = "BRL") {
   }
 }
 
-export type LineOverrideMap = Record<string, { costCenter?: string | null; project?: string | null }>;
+export type LineOverrideMap = Record<
+  string,
+  { costCenter?: string | null; project?: string | null; item?: string | null }
+>;
 
 interface Props {
   open: boolean;
@@ -55,6 +58,8 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
   const [headerPR, setHeaderPR] = useState<SapSearchOption | null>(null);
   const [perLineCC, setPerLineCC] = useState<Record<string, SapSearchOption | null>>({});
   const [perLinePR, setPerLinePR] = useState<Record<string, SapSearchOption | null>>({});
+  const [headerIT, setHeaderIT] = useState<SapSearchOption | null>(null);
+  const [perLineIT, setPerLineIT] = useState<Record<string, SapSearchOption | null>>({});
   const [documentDate, setDocumentDate] = useState<string>("");
 
   // Meses distintos na seleção (caso Google Cloud: cobranças ao longo do mês,
@@ -74,6 +79,8 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
       setHeaderPR(null);
       setPerLineCC({});
       setPerLinePR({});
+      setHeaderIT(null);
+      setPerLineIT({});
       setDocumentDate(txDates.length > 0 ? txDates[txDates.length - 1] : "");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -82,6 +89,7 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
 
   const ccMap = useCallback((row: any) => ({ code: row.CenterCode, name: row.CenterName }), []);
   const prMap = useCallback((row: any) => ({ code: row.Code, name: row.Name }), []);
+  const itMap = useCallback((row: any) => ({ code: row.ItemCode, name: row.ItemName }), []);
   const supMap = useCallback(
     (row: any) => ({
       code: row.CardCode,
@@ -102,6 +110,13 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
     endpoint: "Projects",
     params: { $filter: "Active eq 'tYES'", $select: "Code,Name" },
     mapRow: prMap,
+  });
+  // Item do SAP — mesma lista usada nos pedidos manuais (um item por linha/nota).
+  const { options: itOptions, isLoading: itLoading } = useSapCachedList({
+    cacheKey: "items_active_v2",
+    endpoint: "Items",
+    params: { $filter: "Valid eq 'tYES' and Frozen eq 'tNO'", $select: "ItemCode,ItemName" },
+    mapRow: itMap,
   });
   const { options: supplierOptions, isLoading: suppliersLoading } = useSapCachedList({
     cacheKey: "suppliers_active_v2",
@@ -125,6 +140,7 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
   const effectiveLine = (id: string) => ({
     cc: perLineCC[id] ?? headerCC,
     pr: perLinePR[id] ?? headerPR,
+    it: perLineIT[id] ?? headerIT,
   });
 
   const handleSubmit = async () => {
@@ -135,10 +151,11 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
       transactions.forEach((t) => {
         const id = String(t.id);
         const eff = effectiveLine(id);
-        if (eff.cc || eff.pr) {
+        if (eff.cc || eff.pr || eff.it) {
           map[id] = {
             costCenter: eff.cc?.code || null,
             project: eff.pr?.code || null,
+            item: eff.it?.code || null,
           };
         }
       });
@@ -150,7 +167,7 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && !submitting && onClose()}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Layers className="w-5 h-5 text-primary" />
@@ -158,7 +175,8 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
           </DialogTitle>
           <DialogDescription>
             Será criado <strong>um único Pedido de Compra</strong> no SAP, com uma linha por
-            transação, todas para o mesmo fornecedor.
+            transação, todas para o mesmo fornecedor. Você pode escolher o item de cada linha
+            (um item por nota) — em branco, usa o mapeamento do cartão/conta.
           </DialogDescription>
         </DialogHeader>
 
@@ -249,6 +267,18 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
                 placeholder="Aplicado a todas as linhas…"
               />
             </div>
+            <div className="col-span-2">
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                Item (padrão)
+              </label>
+              <CachedSearchCombobox
+                options={itOptions}
+                isLoading={itLoading}
+                value={headerIT}
+                onChange={setHeaderIT}
+                placeholder="Aplicado a todas as linhas…"
+              />
+            </div>
             <p className="col-span-2 text-xs text-muted-foreground">
               Em branco = usa o mapeamento do cartão de cada transação (fallback automático).
               Você pode ajustar linha a linha abaixo.
@@ -272,6 +302,7 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
                   <th className="px-2 py-1.5 font-medium">Transação</th>
                   <th className="px-2 py-1.5 font-medium">Valor</th>
                   <th className="px-2 py-1.5 font-medium text-center w-16">Anexos</th>
+                  <th className="px-2 py-1.5 font-medium w-44">Item</th>
                   <th className="px-2 py-1.5 font-medium w-44">Centro de Custo</th>
                   <th className="px-2 py-1.5 font-medium w-44">Projeto</th>
                 </tr>
@@ -307,6 +338,15 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
+                      </td>
+                      <td className="px-2 py-2">
+                        <CachedSearchCombobox
+                          options={itOptions}
+                          isLoading={itLoading}
+                          value={perLineIT[id] ?? headerIT}
+                          onChange={(v) => setPerLineIT((prev) => ({ ...prev, [id]: v }))}
+                          placeholder="Herdar / mapeamento"
+                        />
                       </td>
                       <td className="px-2 py-2">
                         <CachedSearchCombobox
