@@ -134,6 +134,21 @@ export interface PagCorpTransaction {
   integrationLogId?: string;
   sapDocNum?: number | null;
   sapDocEntry?: number | null;
+  /**
+   * Uma transação pode gerar N pedidos de compra quando os anexos trazem
+   * notas de fornecedores/CNPJs diferentes. Aqui ficam TODOS os vínculos
+   * (o primeiro também é espelhado nos campos singulares acima, para
+   * compatibilidade com as telas que leem só um pedido).
+   */
+  integrationLinks?: Array<{
+    logId: string;
+    docNum: number | null;
+    docEntry: number | null;
+    settlementStatus: string | null;
+    settlementPaymentDocNum: number | null;
+    settlementError: string | null;
+    supplierName?: string | null;
+  }>;
   settlementStatus?: string | null;
   settlementPaymentDocNum?: number | null;
   settlementError?: string | null;
