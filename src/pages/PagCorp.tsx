@@ -1070,9 +1070,29 @@ export default function PagCorp() {
 
       if (sapError) throw new Error(sapError);
 
-      toast.success("Despesa criada e integrada no SAP", {
-        description: sapDocNum ? `PC #${sapDocNum}` : undefined,
-      });
+      // Fila multi-fornecedor: quando os anexos trazem notas de CNPJs
+      // diferentes, o modal encadeia um pedido por fornecedor. Enquanto
+      // sobrar grupo na fila, mantemos o modal aberto — a MESMA transação
+      // do cartão passa a ter N pedidos de compra vinculados.
+      const queueRemaining = Number(input?.queue_remaining || 0);
+      toast.success(
+        queueRemaining > 0
+          ? "Pedido criado e integrado no SAP — seguindo para o próximo fornecedor"
+          : "Despesa criada e integrada no SAP",
+        {
+          description: [
+            sapDocNum ? `PC #${sapDocNum}` : null,
+            queueRemaining > 0 ? `${queueRemaining} fornecedor(es) restante(s) nesta transação` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ") || undefined,
+        },
+      );
+      if (queueRemaining > 0) {
+        // Não fecha o modal e não avança o lote: o encadeamento continua.
+        void fetchTransactions(startDate, endDate, session.companyDB);
+        return { expense };
+      }
       programmaticCloseRef.current = true;
       setAccountabilityModal({ open: false, tx: null });
       await fetchTransactions(startDate, endDate, session.companyDB);
