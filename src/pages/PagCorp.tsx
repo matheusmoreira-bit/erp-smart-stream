@@ -1501,7 +1501,7 @@ export default function PagCorp() {
                                 const stepClass = (idx: number) => {
                                   if (idx < currentStep) return "text-success font-medium";
                                   if (idx === currentStep)
-                                    return st === "error"
+                                    return st === "error" && !settled
                                       ? "text-destructive font-semibold"
                                       : settled
                                         ? "text-success font-semibold"
