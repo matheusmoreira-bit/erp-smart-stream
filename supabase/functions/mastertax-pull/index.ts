@@ -273,57 +273,10 @@ async function loadSapCreds(
   };
 }
 
+import { findPoForNf, findSupplierCardCode } from "../_shared/nf-po-match.ts";
+
 const escapeOData = (s: string) => (s || "").replace(/'/g, "''");
 
-async function findSapSupplierCardCode(
-  baseUrl: string,
-  cookie: string,
-  cnpj: string,
-  nome: string,
-): Promise<string | null> {
-  const digits = (cnpj || "").replace(/\D/g, "");
-  if (digits) {
-    const r = await fetch(
-      `${baseUrl}/BusinessPartners?$filter=CardType eq 'cSupplier' and FederalTaxID eq '${digits}'&$select=CardCode&$top=1`,
-      { headers: { Cookie: cookie } },
-    );
-    if (r.ok) {
-      const cc = (await r.json())?.value?.[0]?.CardCode;
-      if (cc) return String(cc);
-    }
-  }
-  const n = (nome || "").trim();
-  if (n.length >= 4) {
-    const r = await fetch(
-      `${baseUrl}/BusinessPartners?$filter=CardType eq 'cSupplier' and contains(CardName,'${escapeOData(n)}')&$select=CardCode&$top=1`,
-      { headers: { Cookie: cookie } },
-    );
-    if (r.ok) {
-      const cc = (await r.json())?.value?.[0]?.CardCode;
-      if (cc) return String(cc);
-    }
-  }
-  return null;
-}
-
-async function findExistingPo(
-  baseUrl: string, cookie: string, cardCode: string, valor: number,
-): Promise<{ docEntry: string; isDraft: boolean } | null> {
-  const v = Number(valor).toFixed(2);
-  const poUrl = `${baseUrl}/PurchaseOrders?$filter=CardCode eq '${escapeOData(cardCode)}' and DocumentStatus eq 'bost_Open' and DocTotal eq ${v}&$select=DocEntry&$top=1`;
-  const poR = await fetch(poUrl, { headers: { Cookie: cookie } });
-  if (poR.ok) {
-    const de = (await poR.json())?.value?.[0]?.DocEntry;
-    if (de != null) return { docEntry: String(de), isDraft: false };
-  }
-  const drUrl = `${baseUrl}/Drafts?$filter=DocObjectCode eq 'oPurchaseOrders' and CardCode eq '${escapeOData(cardCode)}' and DocTotal eq ${v}&$select=DocEntry&$top=1`;
-  const drR = await fetch(drUrl, { headers: { Cookie: cookie } });
-  if (drR.ok) {
-    const de = (await drR.json())?.value?.[0]?.DocEntry;
-    if (de != null) return { docEntry: String(de), isDraft: true };
-  }
-  return null;
-}
 
 async function tryMatchExistingPo(
   supabase: ReturnType<typeof createClient>,
