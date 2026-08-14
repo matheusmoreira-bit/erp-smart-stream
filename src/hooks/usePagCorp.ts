@@ -340,9 +340,19 @@ export function usePagCorp() {
         try {
           const {
             integrations = [],
+            relations = [],
             nondeductibleCards = [],
             nondeductibleExpenses = [],
           } = await fetchIntegrationStatus(companyDb, expenseIds);
+
+            // Relações reais no SAP (NF de entrada / pagamento) por log.
+            const relByLog = new Map<string, { nf: boolean; pay: boolean }>();
+            (relations as any[]).forEach((r) => {
+              relByLog.set(String(r.pagcorp_log_id), {
+                nf: !!r.nf_found,
+                pay: !!r.payment_found,
+              });
+            });
 
             // Marca integradas. Uma transação pode ter MAIS DE UM log
             // (um por pedido de compra), quando os anexos trazem notas de
@@ -351,6 +361,7 @@ export function usePagCorp() {
             const integratedMap = new Map<number, Link[]>();
             (integrations as any[]).forEach((log) => {
               const key = Number(log.pagcorp_expense_id);
+              const rel = relByLog.get(String(log.id));
               const link: Link = {
                 logId: log.id,
                 docNum: log.sap_doc_num ?? null,
@@ -358,6 +369,8 @@ export function usePagCorp() {
                 settlementStatus: log.settlement_status ?? null,
                 settlementPaymentDocNum: log.settlement_payment_doc_num ?? null,
                 settlementError: log.settlement_error ?? null,
+                nfFound: rel?.nf ?? false,
+                paymentFound: rel?.pay ?? false,
               };
               const list = integratedMap.get(key);
               if (list) list.push(link);
@@ -374,19 +387,27 @@ export function usePagCorp() {
                 t.integrationLogId = hit.logId;
                 t.sapDocNum = hit.docNum;
                 t.sapDocEntry = hit.docEntry;
+                // Fatos do SAP: NF/pagamento existentes valem para todos os pedidos.
+                t.nfFoundInSap = links.every((l) => l.nfFound || l.paymentFound);
+                t.paymentFoundInSap = links.every((l) => l.paymentFound);
                 // Status agregado da baixa: só é "settled" se TODOS os
                 // pedidos da transação estiverem baixados; erro em qualquer
                 // um deles prevalece para não mascarar pendência.
                 const statuses = links.map((l) => l.settlementStatus);
-                t.settlementStatus = statuses.some((s) => s === "error")
-                  ? "error"
-                  : statuses.every((s) => s === "settled")
-                    ? "settled"
-                    : statuses.find((s) => s && s !== "settled") ?? hit.settlementStatus;
+                t.settlementStatus = t.paymentFoundInSap
+                  ? "settled"
+                  : statuses.some((s) => s === "error")
+                    ? "error"
+                    : statuses.every((s) => s === "settled")
+                      ? "settled"
+                      : statuses.find((s) => s && s !== "settled") ?? hit.settlementStatus;
                 t.settlementPaymentDocNum = hit.settlementPaymentDocNum;
-                t.settlementError = links.find((l) => l.settlementError)?.settlementError ?? null;
+                t.settlementError = t.paymentFoundInSap
+                  ? null
+                  : links.find((l) => l.settlementError)?.settlementError ?? null;
               }
             });
+
 
 
             // Não-dedutíveis por cartão
