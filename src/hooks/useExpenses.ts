@@ -279,6 +279,14 @@ export interface CreateExpenseInput {
   sales_usage?: string;
   items: Omit<ExpenseItem, "id">[];
   files?: File[];
+  /**
+   * Fila multi-fornecedor (anexos com fornecedores diferentes): quantos
+   * grupos ainda serão submetidos depois deste. Usado pelo PagCorp para
+   * manter o modal aberto e permitir N pedidos por transação de cartão.
+   */
+  queue_remaining?: number;
+  queue_total?: number;
+  queue_supplier_label?: string;
 }
 
 export type RateioType = "padrao" | "folha" | "imposto" | "reembolso" | "viagens";
