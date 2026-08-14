@@ -299,6 +299,7 @@ Deno.serve(async (req) => {
               if (resolvedFromDraft) {
                 await sb.from("nf_entrada_imports").update({
                   sap_matched_po_doc_entry: String(resolvedFromDraft.docEntry),
+                  sap_matched_po_doc_num: resolvedFromDraft.docNum != null ? String(resolvedFromDraft.docNum) : null,
                   sap_matched_po_is_draft: false,
                   sap_match_reason: `PC efetivo resolvido a partir do esboço ${poEntry} (${resolvedFromDraft.matchedBy})`,
                   last_poll_at: new Date().toISOString(),

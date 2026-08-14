@@ -30,12 +30,14 @@ export interface NfEntradaImport {
   sap_company_db: string | null;
   sap_po_draft_id: string | null;
   sap_matched_po_doc_entry: string | null;
+  sap_matched_po_doc_num: string | null;
   sap_matched_po_is_draft: boolean | null;
   sap_matched_card_code: string | null;
   sap_match_reason: string | null;
   sap_invoice_draft_id: string | null;
   erp_invoice_posted: boolean | null;
   erp_invoice_doc_entry: string | null;
+  erp_invoice_doc_num: string | null;
   rejection_reason: string | null;
   xml_storage_path: string | null;
   pdf_storage_path: string | null;

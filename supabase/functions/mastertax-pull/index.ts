@@ -329,6 +329,7 @@ async function tryMatchExistingPo(
           sap_company_db: companyDb,
           sap_matched_card_code: match.cardCode || cardCode,
           sap_matched_po_doc_entry: match.docEntry,
+          sap_matched_po_doc_num: match.docNum != null ? String(match.docNum) : null,
           sap_matched_po_is_draft: match.isDraft,
           sap_po_draft_id: match.docEntry,
           sap_match_reason: `${match.reason} · confiança ${match.confidence}`,

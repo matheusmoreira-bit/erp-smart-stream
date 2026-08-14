@@ -28,7 +28,7 @@ import { NfEntradaProvisionDialog } from "@/components/NfEntradaProvisionDialog"
 import { copyDocLink, readDocParam, setDocParam } from "@/lib/doc-deep-link";
 import { setPendingPurchaseFiles } from "@/lib/pending-purchase-files";
 
-import { nfStage, nfStagePresentation, STAGE_OPTIONS } from "@/lib/nf-entrada-status";
+import { nfStage, nfStagePresentation, poLabel, STAGE_OPTIONS } from "@/lib/nf-entrada-status";
 
 
 
@@ -432,7 +432,7 @@ export default function NfEntrada() {
                           <span>{it.numero_nf || "—"}</span>
                           {hasPoLink && (
                             <span
-                              title={`Vinculada ao ${it.sap_matched_po_is_draft ? "esboço" : "PC"} ${it.sap_matched_po_doc_entry} do SAP`}
+                              title={`Vinculada ao ${poLabel(it)} do SAP (DocEntry ${it.sap_matched_po_doc_entry})`}
                               className="inline-flex items-center gap-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 text-[9px] font-sans font-medium"
                             >
                               <Link2 className="w-2.5 h-2.5" /> PC
@@ -507,8 +507,8 @@ export default function NfEntrada() {
                             <DetailField label="CNPJ" value={it.cnpj_fornecedor} mono />
                             <DetailField label="Importação" value={formatDate(it.created_at)} />
                             <DetailField label="Despesa" value={it.expense_id?.slice(0, 8) || null} mono />
-                            <DetailField label="PO SAP" value={it.sap_po_draft_id} mono />
-                            <DetailField label="NF SAP" value={it.sap_invoice_draft_id} mono />
+                            <DetailField label="PO SAP (nº)" value={poLabel(it) ?? it.sap_po_draft_id} mono />
+                            <DetailField label="NF SAP" value={it.erp_invoice_doc_num ?? it.sap_invoice_draft_id} mono />
                             <DetailField label="Origem do status" value={statusOrigin(it).label} />
                             <DetailField label="Base SAP" value={it.sap_company_db} mono />
                             <DetailField label="Destinatário (tomador)" value={it.nome_destinatario} />
@@ -539,7 +539,7 @@ export default function NfEntrada() {
                                       {it.sap_matched_card_code}
                                       {it.sap_matched_po_doc_entry && (
                                         <span className="text-muted-foreground">
-                                          {" "}· {it.sap_matched_po_is_draft ? "esboço" : "PC"} {it.sap_matched_po_doc_entry}
+                                          {" "}· {poLabel(it)}
                                         </span>
                                       )}
                                     </span>
@@ -645,9 +645,7 @@ export default function NfEntrada() {
                 <div>
                   PC vinculado:{" "}
                   <span className="font-mono">
-                    {detail.sap_matched_po_doc_entry
-                      ? `${detail.sap_matched_po_is_draft ? "esboço" : "PC"} ${detail.sap_matched_po_doc_entry}`
-                      : "—"}
+                    {poLabel(detail) ?? "—"}
                   </span>
                 </div>
                 <div>

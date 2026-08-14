@@ -43,6 +43,28 @@ export const STAGE_OPTIONS: Array<{ value: NfStage; label: string }> = (
   ["sem_pedido", "pedido_erpflow", "pc_no_sap", "esboco_nf", "nf_lancada", "recusada", "erro", "cancelada"] as NfStage[]
 ).map((s) => ({ value: s, label: STAGE_META[s].label }));
 
+/**
+ * Número do pedido de compra como o usuário vê no SAP (DocNum).
+ * O DocEntry é apenas a chave interna e NÃO deve ser exibido como "PC".
+ */
+export function poDocNumber(it: NfEntradaImport): string | null {
+  return it.sap_matched_po_doc_num ?? null;
+}
+
+/** Rótulo pronto: "PC #8031" / "esboço #123" (com o DocEntry só como apoio). */
+export function poLabel(it: NfEntradaImport): string | null {
+  if (!it.sap_matched_po_doc_entry) return null;
+  const kind = it.sap_matched_po_is_draft ? "esboço" : "PC";
+  const num = poDocNumber(it);
+  return num ? `${kind} #${num}` : `${kind} (interno ${it.sap_matched_po_doc_entry})`;
+}
+
+/** Número da NF de entrada lançada no SAP, preferindo o DocNum. */
+export function nfDocLabel(it: NfEntradaImport): string | null {
+  if (!it.erp_invoice_doc_entry && !it.erp_invoice_doc_num) return null;
+  return it.erp_invoice_doc_num ? `#${it.erp_invoice_doc_num}` : `interno ${it.erp_invoice_doc_entry}`;
+}
+
 export function nfStage(it: NfEntradaImport): NfStage {
   if (it.status === "cancelled") return "cancelada";
   if (it.erp_invoice_posted || it.status === "completed") return "nf_lancada";
@@ -60,19 +82,19 @@ export function nfStagePresentation(it: NfEntradaImport): StagePresentation {
   let hint = "";
   switch (stage) {
     case "nf_lancada":
-      hint = it.erp_invoice_doc_entry
-        ? `NF de entrada ${it.erp_invoice_doc_entry} registrada no SAP.`
+      hint = nfDocLabel(it)
+        ? `NF de entrada ${nfDocLabel(it)} registrada no SAP.`
         : "NF de entrada registrada no SAP.";
       break;
     case "esboco_nf":
       hint = `Esboço ${it.sap_invoice_draft_id} criado no SAP, aguardando conferência do fiscal.`;
       break;
     case "pc_no_sap":
-      hint = `Pedido ${it.sap_matched_po_doc_entry} existe no SAP; falta lançar a NF de entrada contra ele.`;
+      hint = `Pedido ${poLabel(it)} existe no SAP; falta lançar a NF de entrada contra ele.`;
       break;
     case "pedido_erpflow":
       hint = it.sap_matched_po_is_draft
-        ? `Pedido em esboço no SAP (${it.sap_matched_po_doc_entry}), ainda não efetivado.`
+        ? `Pedido em esboço no SAP (${poLabel(it)}), ainda não efetivado.`
         : "Existe pedido de compra no ERP Flow que ainda não foi integrado ao SAP.";
       break;
     case "recusada":
