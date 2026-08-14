@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
     const { data: rows, error } = await supabase
       .from("nf_entrada_imports")
       .select("id")
-      .in("status", ["awaiting_erpflow_approval", "integration_error"])
+      .in("status", ["pending_expense", "awaiting_erpflow_approval", "integration_error"])
       .is("sap_matched_po_doc_entry", null)
       .is("sap_invoice_draft_id", null)
       .not("sap_company_db", "is", null)

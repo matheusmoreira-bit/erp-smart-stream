@@ -273,7 +273,7 @@ async function loadSapCreds(
   };
 }
 
-import { findPoForNf, findSupplierCardCode } from "../_shared/nf-po-match.ts";
+import { findPoForNf, findSupplierCardCode, poCandidatesFromCache, cardCodeFromCache } from "../_shared/nf-po-match.ts";
 
 
 
@@ -299,28 +299,35 @@ async function tryMatchExistingPo(
   try {
     const { data: rows } = await supabase
       .from("nf_entrada_imports")
-      .select("id, cnpj_fornecedor, nome_fornecedor, valor_total, data_emissao")
+      .select("id, cnpj_fornecedor, nome_fornecedor, valor_total, data_emissao, numero_nf, chave_acesso")
       .in("id", insertedIds);
-    for (const row of (rows || []) as Array<{ id: string; cnpj_fornecedor: string | null; nome_fornecedor: string | null; valor_total: number | null; data_emissao: string | null }>) {
+    for (const row of (rows || []) as Array<{ id: string; cnpj_fornecedor: string | null; nome_fornecedor: string | null; valor_total: number | null; data_emissao: string | null; numero_nf: string | null; chave_acesso: string | null }>) {
       checked++;
       try {
-        const cardCode = await findSupplierCardCode(
+        let cardCode = await findSupplierCardCode(
           sap.baseUrl, cookie, row.cnpj_fornecedor || "", row.nome_fornecedor || "",
         );
+        if (!cardCode) cardCode = await cardCodeFromCache(supabase, companyDb, row.nome_fornecedor || "");
         if (!cardCode) continue;
+        const extraCandidates = await poCandidatesFromCache(supabase, companyDb, {
+          cardCode, nome: row.nome_fornecedor,
+        });
         // Vínculo automático só com confiança alta/média (valor exato ou ~1%),
         // mas agora considerando também PCs já fechados no SAP.
         const match = await findPoForNf(sap.baseUrl, cookie, {
           cardCode,
           valor: Number(row.valor_total || 0),
           dataEmissao: row.data_emissao,
+          nfNumero: row.numero_nf,
+          chaveAcesso: row.chave_acesso,
+          extraCandidates,
           allowLooseFallback: false,
         });
         if (!match) continue;
         await supabase.from("nf_entrada_imports").update({
           status: "awaiting_sap",
           sap_company_db: companyDb,
-          sap_matched_card_code: cardCode,
+          sap_matched_card_code: match.cardCode || cardCode,
           sap_matched_po_doc_entry: match.docEntry,
           sap_matched_po_is_draft: match.isDraft,
           sap_po_draft_id: match.docEntry,
