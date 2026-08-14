@@ -90,6 +90,20 @@ Deno.serve(async (req) => {
       integrations = data || [];
     }
 
+    // 1b. Relações reais no SAP (NF de entrada e pagamento) por pedido —
+    // cobre documentos lançados/baixados manualmente fora do ERP Flow.
+    let relations: any[] = [];
+    if (integrations.length > 0) {
+      const logIds = integrations.map((l: any) => l.id);
+      const { data: rel, error: relErr } = await admin
+        .from("pagcorp_document_relations")
+        .select("pagcorp_log_id, nf_found, payment_found, nf_doc_entries, payment_doc_entries")
+        .in("pagcorp_log_id", logIds);
+      if (relErr) throw relErr;
+      relations = rel || [];
+
+    }
+
     // 2. Cartões marcados como não-dedutíveis (por company_db).
     const { data: ndCards, error: ndCardsErr } = await admin
       .from("pagcorp_nondeductible_cards")
