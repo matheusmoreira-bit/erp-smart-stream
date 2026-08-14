@@ -217,3 +217,17 @@
     margin: 14mm 12mm;
   }
 }
+
+/* ── Empilhamento de modais ────────────────────────────────────────────────
+   Cada overlay do Radix pinta um scrim de 80%. Quando dois ou mais modais
+   ficam abertos (dialog dentro de sheet, alert-dialog de confirmação, etc.)
+   os scrims se somam e a tela fica praticamente preta. Aqui só o overlay
+   mais recente pinta o fundo; os anteriores ficam transparentes. */
+.app-overlay {
+  background-color: hsl(0 0% 0% / 0.6);
+}
+.app-overlay[data-state="open"] ~ .app-overlay[data-state="open"],
+body > div:has(> .app-overlay[data-state="open"]) ~ div .app-overlay[data-state="open"],
+body > div:has(.app-overlay[data-state="open"]) ~ div .app-overlay[data-state="open"] {
+  background-color: transparent;
+}
