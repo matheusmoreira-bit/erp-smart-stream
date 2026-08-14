@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
 
     const { data: row, error: rowErr } = await supabase
       .from("nf_entrada_imports")
-      .select("id, cnpj_fornecedor, nome_fornecedor, valor_total, sap_company_db, status, sap_invoice_draft_id")
+      .select("id, cnpj_fornecedor, nome_fornecedor, valor_total, data_emissao, sap_company_db, status, sap_invoice_draft_id")
       .eq("id", importId)
       .maybeSingle();
     if (rowErr || !row) {
