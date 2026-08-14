@@ -507,8 +507,8 @@ export default function NfEntrada() {
                             <DetailField label="CNPJ" value={it.cnpj_fornecedor} mono />
                             <DetailField label="Importação" value={formatDate(it.created_at)} />
                             <DetailField label="Despesa" value={it.expense_id?.slice(0, 8) || null} mono />
-                            <DetailField label="PO SAP" value={it.sap_po_draft_id} mono />
-                            <DetailField label="NF SAP" value={it.sap_invoice_draft_id} mono />
+                            <DetailField label="PO SAP (nº)" value={poLabel(it) ?? it.sap_po_draft_id} mono />
+                            <DetailField label="NF SAP" value={it.erp_invoice_doc_num ?? it.sap_invoice_draft_id} mono />
                             <DetailField label="Origem do status" value={statusOrigin(it).label} />
                             <DetailField label="Base SAP" value={it.sap_company_db} mono />
                             <DetailField label="Destinatário (tomador)" value={it.nome_destinatario} />
