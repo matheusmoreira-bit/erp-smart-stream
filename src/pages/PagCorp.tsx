@@ -1548,14 +1548,30 @@ export default function PagCorp() {
                                       </DropdownMenuLabel>
                                       <DropdownMenuSeparator />
 
-                                      {t.sapDocNum != null && (
-                                        <div className="px-2 py-1.5 text-[11px] flex items-center justify-between gap-2">
-                                          <span className="text-muted-foreground">Pedido de Compra</span>
-                                          <span className="font-mono font-medium text-foreground">
-                                            PC #{t.sapDocNum}
-                                          </span>
-                                        </div>
-                                      )}
+                                      {(() => {
+                                        // Uma transação pode ter N pedidos (notas de
+                                        // fornecedores/CNPJs diferentes no mesmo comprovante).
+                                        const links = t.integrationLinks?.length
+                                          ? t.integrationLinks
+                                          : t.sapDocNum != null
+                                            ? [{ logId: t.integrationLogId || "", docNum: t.sapDocNum, docEntry: t.sapDocEntry ?? null, settlementStatus: null, settlementPaymentDocNum: null, settlementError: null }]
+                                            : [];
+                                        if (links.length === 0) return null;
+                                        return (
+                                          <div className="px-2 py-1.5 text-[11px] flex items-start justify-between gap-2">
+                                            <span className="text-muted-foreground">
+                                              {links.length > 1 ? `Pedidos de Compra (${links.length})` : "Pedido de Compra"}
+                                            </span>
+                                            <span className="font-mono font-medium text-foreground text-right">
+                                              {links.map((l) => (
+                                                <span key={l.logId || l.docNum} className="block">
+                                                  PC #{l.docNum ?? "—"}
+                                                </span>
+                                              ))}
+                                            </span>
+                                          </div>
+                                        );
+                                      })()}
                                       <div className="px-2 py-1.5 text-[11px] flex items-center justify-between gap-2">
                                         <span className="text-muted-foreground">Baixa</span>
                                         <span
