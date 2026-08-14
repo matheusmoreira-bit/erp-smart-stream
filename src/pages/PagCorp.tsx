@@ -1539,6 +1539,14 @@ export default function PagCorp() {
                                             <span className={stepClass(3)}>Baixa</span>
                                           </span>
                                         )}
+                                        {(t.integrationLinks?.length ?? 0) > 1 && (
+                                          <span
+                                            className="ml-1 rounded-sm bg-primary/15 text-primary px-1 font-medium"
+                                            title={`Esta transação gerou ${t.integrationLinks!.length} pedidos de compra (fornecedores diferentes)`}
+                                          >
+                                            {t.integrationLinks!.length} PCs
+                                          </span>
+                                        )}
                                         <MoreHorizontal className="w-3.5 h-3.5 ml-0.5 opacity-70" />
                                       </Button>
                                     </DropdownMenuTrigger>
