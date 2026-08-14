@@ -314,7 +314,13 @@ export function usePagCorp() {
         if (cached?.data?.length) {
           setTransactions(cached.data);
           hadCache = true;
+          // O cache guarda os dados do PagCorp, mas o status de integração /
+          // NF / baixa muda no SAP a qualquer momento: revalida já na pintura.
+          void applyIntegrationStatus(cached.data, companyDb).then(() => {
+            setTransactions([...cached.data]);
+          });
         }
+
       } catch {/* ignore cache errors */}
     }
     if (!hadCache) setIsLoading(true);
