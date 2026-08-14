@@ -34,64 +34,8 @@ async function sapLogin(baseUrl: string, companyDB: string, u: string, p: string
   return `B1SESSION=${sess}${route ? `; ROUTEID=${route}` : ""}`;
 }
 
-const escapeOData = (s: string) => (s || "").replace(/'/g, "''");
+import { findPoForNf, findSupplierCardCode } from "../_shared/nf-po-match.ts";
 
-async function findSapSupplierCardCode(
-  baseUrl: string, cookie: string, cnpj: string, nome: string,
-): Promise<string | null> {
-  const digits = (cnpj || "").replace(/\D/g, "");
-  if (digits) {
-    const r = await fetch(
-      `${baseUrl}/BusinessPartners?$filter=CardType eq 'cSupplier' and FederalTaxID eq '${digits}'&$select=CardCode&$top=1`,
-      { headers: { Cookie: cookie } },
-    );
-    if (r.ok) {
-      const cc = (await r.json())?.value?.[0]?.CardCode;
-      if (cc) return String(cc);
-    }
-  }
-  const n = (nome || "").trim();
-  if (n.length >= 4) {
-    const r = await fetch(
-      `${baseUrl}/BusinessPartners?$filter=CardType eq 'cSupplier' and contains(CardName,'${escapeOData(n)}')&$select=CardCode&$top=1`,
-      { headers: { Cookie: cookie } },
-    );
-    if (r.ok) {
-      const cc = (await r.json())?.value?.[0]?.CardCode;
-      if (cc) return String(cc);
-    }
-  }
-  return null;
-}
-
-async function findExistingPo(
-  baseUrl: string, cookie: string, cardCode: string, valor: number,
-): Promise<{ docEntry: string; isDraft: boolean; docTotal: number } | null> {
-  // Regra de cardinalidade N NF → 1 PO: não exigimos igualdade de DocTotal.
-  // Preferimos o PO aberto mais recente do fornecedor; se não houver, cai em Draft.
-  const poUrl = `${baseUrl}/PurchaseOrders?$filter=CardCode eq '${escapeOData(cardCode)}' and DocumentStatus eq 'bost_Open'&$select=DocEntry,DocTotal&$orderby=DocEntry desc&$top=10`;
-  const poR = await fetch(poUrl, { headers: { Cookie: cookie } });
-  if (poR.ok) {
-    const arr = (await poR.json())?.value || [];
-    if (arr.length > 0) {
-      // Match preferencial por valor (mesmo total); caso contrário, o mais recente
-      const exact = arr.find((r: any) => Math.abs(Number(r.DocTotal) - valor) < 0.01);
-      const pick = exact || arr[0];
-      return { docEntry: String(pick.DocEntry), isDraft: false, docTotal: Number(pick.DocTotal) };
-    }
-  }
-  const drUrl = `${baseUrl}/Drafts?$filter=DocObjectCode eq 'oPurchaseOrders' and CardCode eq '${escapeOData(cardCode)}'&$select=DocEntry,DocTotal&$orderby=DocEntry desc&$top=10`;
-  const drR = await fetch(drUrl, { headers: { Cookie: cookie } });
-  if (drR.ok) {
-    const arr = (await drR.json())?.value || [];
-    if (arr.length > 0) {
-      const exact = arr.find((r: any) => Math.abs(Number(r.DocTotal) - valor) < 0.01);
-      const pick = exact || arr[0];
-      return { docEntry: String(pick.DocEntry), isDraft: true, docTotal: Number(pick.DocTotal) };
-    }
-  }
-  return null;
-}
 
 async function loadSapCreds(
   supabase: ReturnType<typeof createClient>,
@@ -134,7 +78,7 @@ Deno.serve(async (req) => {
 
     const { data: row, error: rowErr } = await supabase
       .from("nf_entrada_imports")
-      .select("id, cnpj_fornecedor, nome_fornecedor, valor_total, sap_company_db, status, sap_invoice_draft_id")
+      .select("id, cnpj_fornecedor, nome_fornecedor, valor_total, data_emissao, sap_company_db, status, sap_invoice_draft_id")
       .eq("id", importId)
       .maybeSingle();
     if (rowErr || !row) {
@@ -167,7 +111,7 @@ Deno.serve(async (req) => {
 
     const cookie = await sapLogin(sap.baseUrl, sap.companyDB, sap.username, sap.password);
     try {
-      const cardCode = await findSapSupplierCardCode(
+      const cardCode = await findSupplierCardCode(
         sap.baseUrl, cookie, row.cnpj_fornecedor || "", row.nome_fornecedor || "",
       );
       if (!cardCode) {
@@ -180,11 +124,17 @@ Deno.serve(async (req) => {
         });
       }
 
-      const match = await findExistingPo(sap.baseUrl, cookie, cardCode, Number(row.valor_total || 0));
+      const match = await findPoForNf(sap.baseUrl, cookie, {
+        cardCode,
+        valor: Number(row.valor_total || 0),
+        dataEmissao: row.data_emissao,
+        // No rematch manual mantemos o fallback frouxo (1 PC : N NF).
+        allowLooseFallback: true,
+      });
       if (!match) {
         await supabase.from("nf_entrada_logs").insert({
           import_id: row.id, step: "rematch_existing_po", actor: "nf-entrada-rematch",
-          message: `Nenhum PC/esboço aberto encontrado para CardCode ${cardCode} no valor ${Number(row.valor_total || 0).toFixed(2)}.`,
+          message: `Nenhum PC/esboço encontrado para CardCode ${cardCode} no valor ${Number(row.valor_total || 0).toFixed(2)}.`,
         });
         return new Response(JSON.stringify({ matched: false, cardCode, reason: "PC não localizado" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -198,7 +148,7 @@ Deno.serve(async (req) => {
         sap_matched_po_doc_entry: match.docEntry,
         sap_matched_po_is_draft: match.isDraft,
         sap_po_draft_id: match.docEntry,
-        sap_match_reason: `cnpj+fornecedor (${match.isDraft ? "draft" : "PO"}) [rematch — 1 PO : N NF]`,
+        sap_match_reason: `${match.reason} · confiança ${match.confidence} [rematch — 1 PC : N NF]`,
       }).eq("id", row.id);
 
       // Conta quantas NFs já apontam para o mesmo PC — informativo, não bloqueia
@@ -213,12 +163,15 @@ Deno.serve(async (req) => {
         step: "rematch_existing_po",
         status_to: "awaiting_sap",
         actor: "nf-entrada-rematch",
-        message: `Vínculo refeito: PC ${match.isDraft ? "esboço" : "efetivo"} DocEntry ${match.docEntry} (DocTotal ${match.docTotal.toFixed(2)}), CardCode ${cardCode}. Total de NFs vinculadas a este PC: ${shared ?? 1}.`,
+        message: `Vínculo refeito: PC ${match.isDraft ? "esboço" : "efetivo"} #${match.docNum ?? match.docEntry} (DocEntry ${match.docEntry}, total ${match.docTotal.toFixed(2)}, status ${match.status ?? "—"}), CardCode ${cardCode}. Critério: ${match.reason} (confiança ${match.confidence}). Total de NFs vinculadas a este PC: ${shared ?? 1}.`,
       });
 
       return new Response(JSON.stringify({
-        matched: true, cardCode, docEntry: match.docEntry, isDraft: match.isDraft, sharedNfCount: shared ?? 1,
+        matched: true, cardCode, docEntry: match.docEntry, docNum: match.docNum,
+        isDraft: match.isDraft, confidence: match.confidence, reason: match.reason,
+        sharedNfCount: shared ?? 1,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
     } finally {
       await fetch(`${sap.baseUrl}/Logout`, { method: "POST", headers: { Cookie: cookie } }).catch(() => {});
     }

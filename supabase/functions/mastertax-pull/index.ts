@@ -273,57 +273,10 @@ async function loadSapCreds(
   };
 }
 
-const escapeOData = (s: string) => (s || "").replace(/'/g, "''");
+import { findPoForNf, findSupplierCardCode } from "../_shared/nf-po-match.ts";
 
-async function findSapSupplierCardCode(
-  baseUrl: string,
-  cookie: string,
-  cnpj: string,
-  nome: string,
-): Promise<string | null> {
-  const digits = (cnpj || "").replace(/\D/g, "");
-  if (digits) {
-    const r = await fetch(
-      `${baseUrl}/BusinessPartners?$filter=CardType eq 'cSupplier' and FederalTaxID eq '${digits}'&$select=CardCode&$top=1`,
-      { headers: { Cookie: cookie } },
-    );
-    if (r.ok) {
-      const cc = (await r.json())?.value?.[0]?.CardCode;
-      if (cc) return String(cc);
-    }
-  }
-  const n = (nome || "").trim();
-  if (n.length >= 4) {
-    const r = await fetch(
-      `${baseUrl}/BusinessPartners?$filter=CardType eq 'cSupplier' and contains(CardName,'${escapeOData(n)}')&$select=CardCode&$top=1`,
-      { headers: { Cookie: cookie } },
-    );
-    if (r.ok) {
-      const cc = (await r.json())?.value?.[0]?.CardCode;
-      if (cc) return String(cc);
-    }
-  }
-  return null;
-}
 
-async function findExistingPo(
-  baseUrl: string, cookie: string, cardCode: string, valor: number,
-): Promise<{ docEntry: string; isDraft: boolean } | null> {
-  const v = Number(valor).toFixed(2);
-  const poUrl = `${baseUrl}/PurchaseOrders?$filter=CardCode eq '${escapeOData(cardCode)}' and DocumentStatus eq 'bost_Open' and DocTotal eq ${v}&$select=DocEntry&$top=1`;
-  const poR = await fetch(poUrl, { headers: { Cookie: cookie } });
-  if (poR.ok) {
-    const de = (await poR.json())?.value?.[0]?.DocEntry;
-    if (de != null) return { docEntry: String(de), isDraft: false };
-  }
-  const drUrl = `${baseUrl}/Drafts?$filter=DocObjectCode eq 'oPurchaseOrders' and CardCode eq '${escapeOData(cardCode)}' and DocTotal eq ${v}&$select=DocEntry&$top=1`;
-  const drR = await fetch(drUrl, { headers: { Cookie: cookie } });
-  if (drR.ok) {
-    const de = (await drR.json())?.value?.[0]?.DocEntry;
-    if (de != null) return { docEntry: String(de), isDraft: true };
-  }
-  return null;
-}
+
 
 async function tryMatchExistingPo(
   supabase: ReturnType<typeof createClient>,
@@ -346,16 +299,23 @@ async function tryMatchExistingPo(
   try {
     const { data: rows } = await supabase
       .from("nf_entrada_imports")
-      .select("id, cnpj_fornecedor, nome_fornecedor, valor_total")
+      .select("id, cnpj_fornecedor, nome_fornecedor, valor_total, data_emissao")
       .in("id", insertedIds);
-    for (const row of (rows || []) as Array<{ id: string; cnpj_fornecedor: string | null; nome_fornecedor: string | null; valor_total: number | null }>) {
+    for (const row of (rows || []) as Array<{ id: string; cnpj_fornecedor: string | null; nome_fornecedor: string | null; valor_total: number | null; data_emissao: string | null }>) {
       checked++;
       try {
-        const cardCode = await findSapSupplierCardCode(
+        const cardCode = await findSupplierCardCode(
           sap.baseUrl, cookie, row.cnpj_fornecedor || "", row.nome_fornecedor || "",
         );
         if (!cardCode) continue;
-        const match = await findExistingPo(sap.baseUrl, cookie, cardCode, Number(row.valor_total || 0));
+        // Vínculo automático só com confiança alta/média (valor exato ou ~1%),
+        // mas agora considerando também PCs já fechados no SAP.
+        const match = await findPoForNf(sap.baseUrl, cookie, {
+          cardCode,
+          valor: Number(row.valor_total || 0),
+          dataEmissao: row.data_emissao,
+          allowLooseFallback: false,
+        });
         if (!match) continue;
         await supabase.from("nf_entrada_imports").update({
           status: "awaiting_sap",
@@ -364,15 +324,16 @@ async function tryMatchExistingPo(
           sap_matched_po_doc_entry: match.docEntry,
           sap_matched_po_is_draft: match.isDraft,
           sap_po_draft_id: match.docEntry,
-          sap_match_reason: `cnpj+valor (${match.isDraft ? "draft" : "PO"})`,
+          sap_match_reason: `${match.reason} · confiança ${match.confidence}`,
         }).eq("id", row.id);
         await supabase.from("nf_entrada_logs").insert({
           import_id: row.id,
           step: "match_existing_po",
           status_to: "awaiting_sap",
-          message: `PC ${match.isDraft ? "esboço" : "efetiva"} já existente no SAP (DocEntry ${match.docEntry}, CardCode ${cardCode}) — aprovação ERP Flow ignorada`,
+          message: `PC ${match.isDraft ? "esboço" : "efetivo"} #${match.docNum ?? match.docEntry} já existente no SAP (DocEntry ${match.docEntry}, status ${match.status ?? "—"}, CardCode ${cardCode}) — critério: ${match.reason} (confiança ${match.confidence})`,
           actor: "mastertax-pull",
         });
+
         matched++;
       } catch (e) {
         console.error(`[mastertax-pull][${companyDb}] match err id=${row.id}:`, (e as Error).message);
