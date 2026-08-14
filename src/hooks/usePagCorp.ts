@@ -172,7 +172,131 @@ export interface PagCorpTransaction {
   [key: string]: unknown;
 }
 
+/**
+ * Aplica (in-place) o status de integração/baixa e as marcações de
+ * não-dedutibilidade em uma lista de transações. Usado tanto no fetch novo
+ * quanto na pintura a partir do cache — assim o cache nunca "congela" um
+ * status antigo (ex.: NF/baixa lançadas manualmente no SAP depois).
+ */
+async function applyIntegrationStatus(
+  items: PagCorpTransaction[],
+  companyDb: string,
+): Promise<void> {
+  const expenseIds = items
+    .map((t) => Number(t.id))
+    .filter((id) => Number.isFinite(id) && !Number.isNaN(id));
+  try {
+    const {
+      integrations = [],
+      relations = [],
+      nondeductibleCards = [],
+      nondeductibleExpenses = [],
+    } = await fetchIntegrationStatus(companyDb, expenseIds);
+
+    // Relações reais no SAP (NF de entrada / pagamento) por log.
+    const relByLog = new Map<string, { nf: boolean; pay: boolean }>();
+    (relations as any[]).forEach((r) => {
+      relByLog.set(String(r.pagcorp_log_id), { nf: !!r.nf_found, pay: !!r.payment_found });
+    });
+
+    type Link = NonNullable<PagCorpTransaction["integrationLinks"]>[number];
+    const integratedMap = new Map<number, Link[]>();
+    (integrations as any[]).forEach((log) => {
+      const key = Number(log.pagcorp_expense_id);
+      const rel = relByLog.get(String(log.id));
+      const link: Link = {
+        logId: log.id,
+        docNum: log.sap_doc_num ?? null,
+        docEntry: log.sap_doc_entry ?? null,
+        settlementStatus: log.settlement_status ?? null,
+        settlementPaymentDocNum: log.settlement_payment_doc_num ?? null,
+        settlementError: log.settlement_error ?? null,
+        nfFound: rel?.nf ?? false,
+        paymentFound: rel?.pay ?? false,
+      };
+      const list = integratedMap.get(key);
+      if (list) list.push(link);
+      else integratedMap.set(key, [link]);
+    });
+
+    items.forEach((t) => {
+      const links = integratedMap.get(Number(t.id));
+      if (!links || links.length === 0) {
+        // Sem log nesta empresa: limpa qualquer resíduo vindo do cache.
+        t.integrated = false;
+        t.integrationLinks = undefined;
+        t.nfFoundInSap = false;
+        t.paymentFoundInSap = false;
+        return;
+      }
+      links.sort((a, b) => (a.docNum ?? 0) - (b.docNum ?? 0));
+      const hit = links[0];
+      t.integrated = true;
+      t.integrationLinks = links;
+      t.integrationLogId = hit.logId;
+      t.sapDocNum = hit.docNum;
+      t.sapDocEntry = hit.docEntry;
+      // Fatos do SAP: NF/pagamento existentes valem para todos os pedidos.
+      t.nfFoundInSap = links.every((l) => l.nfFound || l.paymentFound);
+      t.paymentFoundInSap = links.every((l) => l.paymentFound);
+      const statuses = links.map((l) => l.settlementStatus);
+      t.settlementStatus = t.paymentFoundInSap
+        ? "settled"
+        : statuses.some((s) => s === "error")
+          ? "error"
+          : statuses.every((s) => s === "settled")
+            ? "settled"
+            : statuses.find((s) => s && s !== "settled") ?? hit.settlementStatus;
+      t.settlementPaymentDocNum = hit.settlementPaymentDocNum;
+      t.settlementError = t.paymentFoundInSap
+        ? null
+        : links.find((l) => l.settlementError)?.settlementError ?? null;
+    });
+
+    // Não-dedutíveis por cartão
+    if ((nondeductibleCards as any[]).length) {
+      const map = new Map<string, { code: string; name?: string }>();
+      (nondeductibleCards as any[]).forEach((c) =>
+        map.set(String(c.card_identifier), { code: c.supplier_code, name: c.supplier_name }),
+      );
+      items.forEach((t) => {
+        const key = (t.cardLastDigits && String(t.cardLastDigits).trim()) ||
+          (t.cardName && String(t.cardName).trim()) || "";
+        const hit = key ? map.get(key) : undefined;
+        if (hit) {
+          t.isNondeductible = true;
+          t.nondeductibleSupplierCode = hit.code;
+          t.nondeductibleSupplierName = hit.name;
+        }
+      });
+    }
+
+    // Overrides por expense (prevalece sobre o do cartão)
+    if ((nondeductibleExpenses as any[]).length) {
+      const map = new Map<number, { code?: string; name?: string }>();
+      (nondeductibleExpenses as any[]).forEach((r) =>
+        map.set(Number(r.pagcorp_expense_id), {
+          code: r.supplier_code || undefined,
+          name: r.supplier_name || undefined,
+        }),
+      );
+      items.forEach((t) => {
+        const hit = map.get(Number(t.id));
+        if (hit) {
+          t.isNondeductible = true;
+          t.nondeductibleAtExpense = true;
+          if (hit.code) t.nondeductibleSupplierCode = hit.code;
+          if (hit.name) t.nondeductibleSupplierName = hit.name;
+        }
+      });
+    }
+  } catch (e) {
+    console.warn("PagCorp integration-status fetch failed:", e);
+  }
+}
+
 export function usePagCorp() {
+
   const [transactions, setTransactions] = useState<PagCorpTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -190,7 +314,13 @@ export function usePagCorp() {
         if (cached?.data?.length) {
           setTransactions(cached.data);
           hadCache = true;
+          // O cache guarda os dados do PagCorp, mas o status de integração /
+          // NF / baixa muda no SAP a qualquer momento: revalida já na pintura.
+          void applyIntegrationStatus(cached.data, companyDb).then(() => {
+            setTransactions([...cached.data]);
+          });
         }
+
       } catch {/* ignore cache errors */}
     }
     if (!hadCache) setIsLoading(true);
@@ -334,127 +464,10 @@ export function usePagCorp() {
 
       // Busca status de integração + marcações de não-dedutibilidade via
       // Edge Function (usa service_role internamente, valida sessão SAP).
-      // Assim as tabelas `pagcorp_integration_log`,
-      // `pagcorp_nondeductible_cards` e `pagcorp_nondeductible_expenses`
-      // não precisam de acesso `anon`.
       if (companyDb) {
-        const expenseIds = items
-          .map((t) => Number(t.id))
-          .filter((id) => Number.isFinite(id) && !Number.isNaN(id));
-        try {
-          const {
-            integrations = [],
-            relations = [],
-            nondeductibleCards = [],
-            nondeductibleExpenses = [],
-          } = await fetchIntegrationStatus(companyDb, expenseIds);
-
-            // Relações reais no SAP (NF de entrada / pagamento) por log.
-            const relByLog = new Map<string, { nf: boolean; pay: boolean }>();
-            (relations as any[]).forEach((r) => {
-              relByLog.set(String(r.pagcorp_log_id), {
-                nf: !!r.nf_found,
-                pay: !!r.payment_found,
-              });
-            });
-
-            // Marca integradas. Uma transação pode ter MAIS DE UM log
-            // (um por pedido de compra), quando os anexos trazem notas de
-            // fornecedores diferentes — por isso agrupamos em lista.
-            type Link = NonNullable<PagCorpTransaction["integrationLinks"]>[number];
-            const integratedMap = new Map<number, Link[]>();
-            (integrations as any[]).forEach((log) => {
-              const key = Number(log.pagcorp_expense_id);
-              const rel = relByLog.get(String(log.id));
-              const link: Link = {
-                logId: log.id,
-                docNum: log.sap_doc_num ?? null,
-                docEntry: log.sap_doc_entry ?? null,
-                settlementStatus: log.settlement_status ?? null,
-                settlementPaymentDocNum: log.settlement_payment_doc_num ?? null,
-                settlementError: log.settlement_error ?? null,
-                nfFound: rel?.nf ?? false,
-                paymentFound: rel?.pay ?? false,
-              };
-              const list = integratedMap.get(key);
-              if (list) list.push(link);
-              else integratedMap.set(key, [link]);
-            });
-            items.forEach((t) => {
-              const links = integratedMap.get(Number(t.id));
-              if (links && links.length > 0) {
-                // Ordena por nº do pedido para exibição estável.
-                links.sort((a, b) => (a.docNum ?? 0) - (b.docNum ?? 0));
-                const hit = links[0];
-                t.integrated = true;
-                t.integrationLinks = links;
-                t.integrationLogId = hit.logId;
-                t.sapDocNum = hit.docNum;
-                t.sapDocEntry = hit.docEntry;
-                // Fatos do SAP: NF/pagamento existentes valem para todos os pedidos.
-                t.nfFoundInSap = links.every((l) => l.nfFound || l.paymentFound);
-                t.paymentFoundInSap = links.every((l) => l.paymentFound);
-                // Status agregado da baixa: só é "settled" se TODOS os
-                // pedidos da transação estiverem baixados; erro em qualquer
-                // um deles prevalece para não mascarar pendência.
-                const statuses = links.map((l) => l.settlementStatus);
-                t.settlementStatus = t.paymentFoundInSap
-                  ? "settled"
-                  : statuses.some((s) => s === "error")
-                    ? "error"
-                    : statuses.every((s) => s === "settled")
-                      ? "settled"
-                      : statuses.find((s) => s && s !== "settled") ?? hit.settlementStatus;
-                t.settlementPaymentDocNum = hit.settlementPaymentDocNum;
-                t.settlementError = t.paymentFoundInSap
-                  ? null
-                  : links.find((l) => l.settlementError)?.settlementError ?? null;
-              }
-            });
-
-
-
-            // Não-dedutíveis por cartão
-            if ((nondeductibleCards as any[]).length) {
-              const map = new Map<string, { code: string; name?: string }>();
-              (nondeductibleCards as any[]).forEach((c) =>
-                map.set(String(c.card_identifier), { code: c.supplier_code, name: c.supplier_name }),
-              );
-              items.forEach((t) => {
-                const key = (t.cardLastDigits && String(t.cardLastDigits).trim()) ||
-                  (t.cardName && String(t.cardName).trim()) || "";
-                const hit = key ? map.get(key) : undefined;
-                if (hit) {
-                  t.isNondeductible = true;
-                  t.nondeductibleSupplierCode = hit.code;
-                  t.nondeductibleSupplierName = hit.name;
-                }
-              });
-            }
-
-            // Overrides por expense (prevalece sobre o do cartão)
-            if ((nondeductibleExpenses as any[]).length) {
-              const map = new Map<number, { code?: string; name?: string }>();
-              (nondeductibleExpenses as any[]).forEach((r) =>
-                map.set(Number(r.pagcorp_expense_id), {
-                  code: r.supplier_code || undefined,
-                  name: r.supplier_name || undefined,
-                }),
-              );
-              items.forEach((t) => {
-                const hit = map.get(Number(t.id));
-                if (hit) {
-                  t.isNondeductible = true;
-                  t.nondeductibleAtExpense = true;
-                  if (hit.code) t.nondeductibleSupplierCode = hit.code;
-                  if (hit.name) t.nondeductibleSupplierName = hit.name;
-                }
-              });
-            }
-        } catch (e) {
-          console.warn("PagCorp integration-status fetch failed:", e);
-        }
+        await applyIntegrationStatus(items, companyDb);
       }
+
 
 
       setTransactions(items);
