@@ -34,7 +34,7 @@ async function sapLogin(baseUrl: string, companyDB: string, u: string, p: string
   return `B1SESSION=${sess}${route ? `; ROUTEID=${route}` : ""}`;
 }
 
-import { findPoForNf, findSupplierCardCode } from "../_shared/nf-po-match.ts";
+import { findPoForNf, findSupplierCardCode, poCandidatesFromCache, cardCodeFromCache } from "../_shared/nf-po-match.ts";
 
 
 async function loadSapCreds(
@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
 
     const { data: row, error: rowErr } = await supabase
       .from("nf_entrada_imports")
-      .select("id, cnpj_fornecedor, nome_fornecedor, valor_total, data_emissao, sap_company_db, status, sap_invoice_draft_id")
+      .select("id, cnpj_fornecedor, nome_fornecedor, valor_total, data_emissao, numero_nf, chave_acesso, sap_company_db, status, sap_invoice_draft_id")
       .eq("id", importId)
       .maybeSingle();
     if (rowErr || !row) {
@@ -111,9 +111,13 @@ Deno.serve(async (req) => {
 
     const cookie = await sapLogin(sap.baseUrl, sap.companyDB, sap.username, sap.password);
     try {
-      const cardCode = await findSupplierCardCode(
+      let cardCode = await findSupplierCardCode(
         sap.baseUrl, cookie, row.cnpj_fornecedor || "", row.nome_fornecedor || "",
       );
+      // Rede de segurança: resolve pelo cache local de PCs quando o SL não acha.
+      if (!cardCode) {
+        cardCode = await cardCodeFromCache(supabase, companyDb, row.nome_fornecedor || "");
+      }
       if (!cardCode) {
         await supabase.from("nf_entrada_logs").insert({
           import_id: row.id, step: "rematch_existing_po", actor: "nf-entrada-rematch",
@@ -124,13 +128,21 @@ Deno.serve(async (req) => {
         });
       }
 
+      const extraCandidates = await poCandidatesFromCache(supabase, companyDb, {
+        cardCode, nome: row.nome_fornecedor,
+      });
+
       const match = await findPoForNf(sap.baseUrl, cookie, {
         cardCode,
         valor: Number(row.valor_total || 0),
         dataEmissao: row.data_emissao,
+        nfNumero: row.numero_nf,
+        chaveAcesso: row.chave_acesso,
+        extraCandidates,
         // No rematch manual mantemos o fallback frouxo (1 PC : N NF).
         allowLooseFallback: true,
       });
+
       if (!match) {
         await supabase.from("nf_entrada_logs").insert({
           import_id: row.id, step: "rematch_existing_po", actor: "nf-entrada-rematch",
@@ -144,7 +156,7 @@ Deno.serve(async (req) => {
       await supabase.from("nf_entrada_imports").update({
         status: "awaiting_sap",
         sap_company_db: companyDb,
-        sap_matched_card_code: cardCode,
+        sap_matched_card_code: match.cardCode || cardCode,
         sap_matched_po_doc_entry: match.docEntry,
         sap_matched_po_is_draft: match.isDraft,
         sap_po_draft_id: match.docEntry,
