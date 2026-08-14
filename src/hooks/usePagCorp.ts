@@ -147,10 +147,19 @@ export interface PagCorpTransaction {
     settlementStatus: string | null;
     settlementPaymentDocNum: number | null;
     settlementError: string | null;
+    /** NF de entrada encontrada no SAP para o pedido (mesmo lançada manualmente). */
+    nfFound?: boolean;
+    /** Pagamento (baixa) encontrado no SAP para o pedido. */
+    paymentFound?: boolean;
   }>;
   settlementStatus?: string | null;
   settlementPaymentDocNum?: number | null;
   settlementError?: string | null;
+  /** Verdadeiro quando todos os pedidos da transação já têm NF no SAP. */
+  nfFoundInSap?: boolean;
+  /** Verdadeiro quando todos os pedidos da transação já têm pagamento no SAP. */
+  paymentFoundInSap?: boolean;
+
   isReversed?: boolean;
   isNondeductible?: boolean;
   nondeductibleAtExpense?: boolean;
