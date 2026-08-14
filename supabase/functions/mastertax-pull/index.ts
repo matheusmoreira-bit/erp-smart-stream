@@ -275,7 +275,7 @@ async function loadSapCreds(
 
 import { findPoForNf, findSupplierCardCode } from "../_shared/nf-po-match.ts";
 
-const escapeOData = (s: string) => (s || "").replace(/'/g, "''");
+
 
 
 async function tryMatchExistingPo(
