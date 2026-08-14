@@ -137,6 +137,35 @@ async function postSapDocument(
   return { docEntry: body.DocEntry, docNum: body.DocNum, response: body };
 }
 
+/**
+ * Valida no SAP se os itens usados nas linhas estão ativos (Valid/Frozen).
+ * Sem isso, o Service Layer devolve apenas "Item X is inactive" [400], sem
+ * dizer qual transação/mapeamento precisa ser corrigido.
+ */
+async function assertItemsActive(sap: SapSession, itemCodes: string[]): Promise<void> {
+  const codes = Array.from(new Set(itemCodes.filter(Boolean)));
+  if (codes.length === 0) return;
+  const filter = codes.map((c) => `ItemCode eq '${c.replace(/'/g, "''")}'`).join(" or ");
+  const url = `${sap.baseUrl}/Items?$select=ItemCode,ItemName,Valid,Frozen&$filter=${encodeURIComponent(filter)}`;
+  const res = await fetch(url, { headers: { Cookie: sap.cookies } });
+  if (!res.ok) return; // não bloqueia a integração se a checagem falhar
+  const body = await res.json().catch(() => null);
+  const rows: any[] = Array.isArray(body?.value) ? body.value : [];
+  const problems: string[] = [];
+  for (const code of codes) {
+    const row = rows.find((r) => String(r.ItemCode) === code);
+    if (!row) { problems.push(`${code} (não existe nesta base)`); continue; }
+    if (row.Valid === "tNO") problems.push(`${code} — ${row.ItemName || ""} (inativo)`);
+    else if (row.Frozen === "tYES") problems.push(`${code} — ${row.ItemName || ""} (bloqueado)`);
+  }
+  if (problems.length > 0) {
+    throw new Error(
+      `Item indisponível no SAP: ${problems.join("; ")}. Escolha outro item no diálogo de integração ou atualize o Mapeamento PagCorp.`,
+    );
+  }
+}
+
+
 async function uploadAttachmentsToSap(
   sap: SapSession,
   files: { name: string; blob: Blob }[],
