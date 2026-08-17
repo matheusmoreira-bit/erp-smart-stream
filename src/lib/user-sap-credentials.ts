@@ -1,4 +1,7 @@
 import { authFetch } from "@/lib/auth-fetch";
+import { runtime } from "@/config/runtime";
+import { supabase } from "@/integrations/supabase/client";
+import { getFakeAuthEmail } from "@/lib/fake-auth";
 
 export interface UserSapCredential {
   company_db: string;
@@ -12,7 +15,29 @@ export function defaultSapUserFromEmail(email: string | null | undefined): strin
   return local.toLowerCase().slice(0, 20);
 }
 
+async function listStandaloneCredentials(companyDb?: string): Promise<UserSapCredential[]> {
+  const sapUser = defaultSapUserFromEmail(getFakeAuthEmail()) || "matheus.moreira";
+  const updatedAt = new Date().toISOString();
+
+  if (companyDb) {
+    return [{ company_db: companyDb, sap_user: sapUser, updated_at: updatedAt }];
+  }
+
+  const { data } = await supabase
+    .from("companies")
+    .select("company_db")
+    .eq("is_active", true);
+
+  return (data || []).map((row: any) => ({
+    company_db: row.company_db,
+    sap_user: sapUser,
+    updated_at: updatedAt,
+  }));
+}
+
 export async function listUserSapCredentials(companyDb?: string): Promise<UserSapCredential[]> {
+  if (runtime.isStandaloneLocal) return listStandaloneCredentials(companyDb);
+
   const qs = companyDb ? `?company_db=${encodeURIComponent(companyDb)}` : "";
   const res = await authFetch(`sap-user-credentials${qs}`);
   if (!res.ok) return [];
@@ -21,6 +46,8 @@ export async function listUserSapCredentials(companyDb?: string): Promise<UserSa
 }
 
 export async function saveUserSapCredential(companyDb: string, sapUser: string, sapPassword: string): Promise<void> {
+  if (runtime.isStandaloneLocal) return;
+
   const res = await authFetch("sap-user-credentials", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -33,6 +60,8 @@ export async function saveUserSapCredential(companyDb: string, sapUser: string, 
 }
 
 export async function deleteUserSapCredential(companyDb: string): Promise<void> {
+  if (runtime.isStandaloneLocal) return;
+
   const res = await authFetch("sap-user-credentials", {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
@@ -60,6 +89,18 @@ export interface SapAutoLoginResult {
  * use `force` para descartar o cache quando o SAP recusar a sessão.
  */
 export async function sapAutoLogin(companyDb: string, force = false): Promise<SapAutoLoginResult> {
+  if (runtime.isStandaloneLocal) {
+    const sapUser = defaultSapUserFromEmail(getFakeAuthEmail()) || "matheus.moreira";
+    return {
+      sessionId: `standalone-${companyDb}-${Date.now()}`,
+      routeId: "standalone-local",
+      companyDB: companyDb,
+      sapUser,
+      sessionTimeout: 30,
+      cached: !force,
+    };
+  }
+
   const res = await authFetch("sap-auto-login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -86,6 +127,8 @@ export async function cacheSapSession(params: {
   sapUser?: string;
   sessionTimeout?: number;
 }): Promise<void> {
+  if (runtime.isStandaloneLocal) return;
+
   try {
     await authFetch("sap-auto-login", {
       method: "POST",
@@ -107,6 +150,8 @@ export async function cacheSapSession(params: {
 
 /** Descarta a sessão em cache no servidor (sessão recusada pelo ERP). */
 export async function invalidateSapSessionCache(companyDb: string): Promise<void> {
+  if (runtime.isStandaloneLocal) return;
+
   try {
     await authFetch("sap-auto-login", {
       method: "POST",

@@ -14,6 +14,7 @@ export const runtime = {
   publicKey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
   projectId: import.meta.env.VITE_SUPABASE_PROJECT_ID as string | undefined,
   functionsBase: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`,
+  isStandaloneLocal: import.meta.env.VITE_SUPABASE_PROJECT_ID === "standalone-local",
   // Flag para futura troca — quando true, backend/impl carrega AWS impl.
   target: (import.meta.env.VITE_BACKEND_TARGET ?? "supabase") as "supabase" | "aws",
 } as const;

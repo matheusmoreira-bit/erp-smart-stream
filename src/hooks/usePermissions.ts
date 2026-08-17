@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { runtime } from "@/config/runtime";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import { canonicalUserKey } from "@/lib/user-identity";
@@ -303,6 +304,12 @@ export function useUserAssignments(_companyDb?: string) {
 
   const fetch = useCallback(async () => {
     setLoading(true);
+    if (runtime.isStandaloneLocal) {
+      setAssignments([]);
+      setLoading(false);
+      return;
+    }
+
     const { data } = await supabase
       .from("user_group_assignments")
       .select("*, permission_groups(name)")

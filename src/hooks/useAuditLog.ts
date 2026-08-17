@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { runtime } from "@/config/runtime";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface AuditLogEntry {
@@ -56,6 +57,8 @@ export async function logAuditAction(params: {
   company_db?: string;
   details?: Record<string, unknown>;
 }) {
+  if (runtime.isStandaloneLocal) return;
+
   try {
     // Durante uma impersonação toda ação registra quem está por trás dela.
     const { getImpersonation } = await import("@/lib/impersonation");

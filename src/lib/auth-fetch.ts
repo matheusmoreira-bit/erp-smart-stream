@@ -1,3 +1,4 @@
+import { runtime } from "@/config/runtime";
 import { supabase } from "@/integrations/supabase/client";
 import { assertFunctionAllowed } from "@/lib/read-only-guard";
 
@@ -45,11 +46,26 @@ function mergeHeaders(...headersList: Array<HeadersInit | undefined>): Record<st
   return Object.fromEntries(headers.entries());
 }
 
+function standaloneFunctionResponse(path: string): Response {
+  const cleanPath = path.split("?")[0].replace(/^.*\/functions\/v1\//, "");
+  const payload =
+    cleanPath === "sap-users-admin"
+      ? { users: [], standalone: true }
+      : { data: [], items: [], results: [], success: true, standalone: true };
+
+  return new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 export async function authFetch(
   path: string,
   options: RequestInit = {}
 ): Promise<Response> {
   assertFunctionAllowed(path);
+  if (runtime.isStandaloneLocal) return standaloneFunctionResponse(path);
+
   const token = await getValidAccessToken();
   if (!token) {
     return new Response(JSON.stringify({ error: "Faça login no Backoffice para acessar esta função." }), {
@@ -74,6 +90,8 @@ export async function publicFunctionFetch(
   options: RequestInit = {}
 ): Promise<Response> {
   assertFunctionAllowed(path);
+  if (runtime.isStandaloneLocal) return standaloneFunctionResponse(path);
+
   const token = await getValidAccessToken();
   const authToken = token || ANON_KEY;
   const url = path.startsWith("http") ? path : `${SUPABASE_URL}/functions/v1/${path}`;
@@ -129,6 +147,8 @@ export async function sapFunctionFetch(
   path: string,
   options: RequestInit = {}
 ): Promise<Response> {
+  if (runtime.isStandaloneLocal) return standaloneFunctionResponse(path);
+
   const sapHeaders = readSapHeaders(path);
   const hasSapSession = !!sapHeaders["x-sap-session"];
   const erpType = getCurrentErpType();
@@ -151,5 +171,4 @@ export async function sapFunctionFetch(
     headers: mergeHeaders(sapHeaders, options.headers),
   });
 }
-
 

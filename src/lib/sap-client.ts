@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { runtime } from "@/config/runtime";
 import { publicFunctionFetch } from "@/lib/auth-fetch";
 import { toast } from "sonner";
 import { assertWriteAllowed } from "@/lib/read-only-guard";
@@ -29,6 +30,40 @@ const RETRIABLE_ACTIONS = new Set([
   "downloadAttachment",
   "readApprovalsCache",
 ]);
+
+function standaloneProxyResponse(body: Record<string, unknown>, companyDB: string) {
+  const action = typeof body?.action === "string" ? body.action : "";
+  const now = Date.now();
+
+  if (action === "login") {
+    const userName = (body.credentials as { UserName?: string } | undefined)?.UserName || "matheus.moreira";
+    return {
+      sessionId: `standalone-${companyDB}-${now}`,
+      routeId: "standalone-local",
+      sessionTimeout: 30,
+      sapAuthToken: `standalone-token-${now}`,
+      data: { UserName: userName, CompanyDB: companyDB },
+    };
+  }
+
+  if (action === "queryAll") {
+    return { data: { value: [], totalCount: 0 }, fromCache: false };
+  }
+
+  if (action === "query" || action === "queryView") {
+    return { data: [], fromCache: false, hanaDisabled: true };
+  }
+
+  if (action === "readApprovalsCache") {
+    return { data: null, updatedAt: null, expiresAt: null };
+  }
+
+  if (action === "downloadAttachment") {
+    return { data: "", contentType: "application/octet-stream", filename: body.filename || "standalone.bin" };
+  }
+
+  return { data: { standalone: true }, fromCache: false };
+}
 
 export interface SapSession {
   sessionId: string;
@@ -159,6 +194,10 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
     (typeof body?.companyDB === "string" && body.companyDB) ||
     (typeof body?.database === "string" && body.database) ||
     "";
+
+  if (runtime.isStandaloneLocal) {
+    return standaloneProxyResponse(body, companyDB);
+  }
 
   // Circuit breaker por empresa: se a base está em cooldown, falha rápido
   // para não travar filas e telas que dependem de outras bases.
@@ -413,6 +452,7 @@ export async function sapQuery(
 export async function sapKeepAlive(session: SapSession): Promise<boolean> {
   if (session.erpType && session.erpType !== "sap") return true;
   if (!session.sessionId) return false;
+  if (runtime.isStandaloneLocal) return true;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15_000);

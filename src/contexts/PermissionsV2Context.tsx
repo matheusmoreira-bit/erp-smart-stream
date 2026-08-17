@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { runtime } from "@/config/runtime";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import type { PermissionAction, PermissionMode } from "@/lib/permissions-v2";
@@ -106,6 +107,15 @@ export function PermissionsV2Provider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+
+    if (runtime.isStandaloneLocal) {
+      const localSnap: Snapshot = { ...INITIAL, loaded: true };
+      snapshotRef = localSnap;
+      setSnap(localSnap);
+      return () => {
+        cancelled = true;
+      };
+    }
 
     async function loadAll() {
       const [{ data: flags }, { data: scope, error: scopeError }] = await Promise.all([

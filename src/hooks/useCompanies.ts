@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { runtime } from "@/config/runtime";
 import { isTestCompanyDb } from "@/lib/test-company";
 import { canViewTestCompanies, subscribeTestCompanyVisibility } from "@/lib/test-company-visibility";
 
@@ -66,6 +67,7 @@ async function loadFromSupabase(): Promise<void> {
 }
 
 function ensureRealtime() {
+  if (runtime.isStandaloneLocal) return;
   if (realtimeSubscribed) return;
   realtimeSubscribed = true;
   const channel = supabase.channel(`companies-sync-shared`);

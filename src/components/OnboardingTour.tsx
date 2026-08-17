@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { runtime } from "@/config/runtime";
 import {
   Dialog,
   DialogContent,
@@ -169,6 +170,11 @@ export function OnboardingTour() {
       setGroupName(null);
       return;
     }
+    if (runtime.isStandaloneLocal) {
+      setGroupName(null);
+      return;
+    }
+
     let cancelled = false;
     (async () => {
       const { data } = await supabase

@@ -1,3 +1,4 @@
+import { runtime } from "@/config/runtime";
 import { supabase } from "@/integrations/supabase/client";
 import { isFakeAuthAdmin, isFakeAuthEnabled } from "@/lib/fake-auth";
 import { isImpersonating } from "@/lib/impersonation";
@@ -85,6 +86,8 @@ export interface GroupAssignmentRow {
 
 /** Vínculos usuário × grupo (tabela pequena, lida uma vez por TTL). */
 export function getGroupAssignments(): Promise<GroupAssignmentRow[]> {
+  if (runtime.isStandaloneLocal) return Promise.resolve([]);
+
   return memo("group-assignments", async () => {
     const { data } = await supabase
       .from("user_group_assignments")

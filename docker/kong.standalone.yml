@@ -12,8 +12,23 @@ services:
       - name: cors
         config:
           origins: ["*"]
-          methods: [GET, POST, PATCH, PUT, DELETE, OPTIONS]
-          headers: [Accept, Authorization, Content-Type, apikey, x-client-info, prefer]
+          methods: [GET, POST, PATCH, PUT, DELETE, OPTIONS, HEAD]
+          headers:
+            [
+              Accept,
+              Accept-Language,
+              Authorization,
+              Content-Type,
+              apikey,
+              x-client-info,
+              x-supabase-api-version,
+              x-retry-count,
+              accept-profile,
+              content-profile,
+              prefer,
+              range,
+            ]
+          exposed_headers: [Content-Range, Content-Location]
           credentials: true
 
   - name: auth
@@ -26,6 +41,17 @@ services:
       - name: cors
         config:
           origins: ["*"]
-          methods: [GET, POST, PATCH, PUT, DELETE, OPTIONS]
-          headers: [Accept, Authorization, Content-Type, apikey, x-client-info]
+          methods: [GET, POST, PATCH, PUT, DELETE, OPTIONS, HEAD]
+          headers:
+            [
+              Accept,
+              Accept-Language,
+              Authorization,
+              Content-Type,
+              apikey,
+              x-client-info,
+              x-supabase-api-version,
+              x-retry-count,
+            ]
+          exposed_headers: [Content-Range, Content-Location]
           credentials: true
