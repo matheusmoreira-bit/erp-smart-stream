@@ -371,8 +371,8 @@ Deno.serve(async (req) => {
     attachment_upload: "skipped",
     purchase_order: "pending",
   };
-  let sapPayloads: Record<string, unknown> = {};
-  let sapResponses: Record<string, unknown> = {};
+  const sapPayloads: Record<string, unknown> = {};
+  const sapResponses: Record<string, unknown> = {};
 
   // For consolidated mode we need to update multiple log rows on error
   const consolidatedLogIds: string[] = [];

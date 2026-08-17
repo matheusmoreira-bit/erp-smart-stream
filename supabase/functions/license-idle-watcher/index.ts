@@ -422,7 +422,7 @@ Deno.serve(async (req) => {
   };
 
   if (isAsync) {
-    // @ts-ignore EdgeRuntime is available in Supabase Edge Functions
+    // @ts-expect-error EdgeRuntime is provided by the Supabase runtime.
     if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(work());
     else work();
     return new Response(JSON.stringify({ ok: true, queued: true }), {

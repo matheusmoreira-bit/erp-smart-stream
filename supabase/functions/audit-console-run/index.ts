@@ -539,7 +539,7 @@ Deno.serve(async (req) => {
     if (error || !run) throw new Error(error?.message ?? "Falha ao criar run");
 
     // background processing
-    // @ts-ignore EdgeRuntime is provided by Supabase runtime
+    // @ts-expect-error EdgeRuntime is provided by the Supabase runtime.
     EdgeRuntime.waitUntil(processRun(run.id, companyDB, from, to));
 
     return new Response(JSON.stringify({ runId: run.id, status: "pending" }), {

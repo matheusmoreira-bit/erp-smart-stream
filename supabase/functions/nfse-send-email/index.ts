@@ -56,13 +56,13 @@ function esc(value: string): string {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function asArray(value: any): any[] {
   if (value === undefined || value === null) return [];
   return Array.isArray(value) ? value : [value];
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function textOf(node: any): string {
   if (node === undefined || node === null) return "";
   if (typeof node === "string" || typeof node === "number") return String(node);
@@ -89,7 +89,7 @@ interface RecipientRule {
  * </destinatarios>
  */
 function parseRecipientsXml(xml: string): RecipientRule[] {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const doc = parseXml(xml) as any;
   const root = doc?.destinatarios ?? doc?.recipients ?? doc?.root ?? doc;
   const rules: RecipientRule[] = [];
@@ -316,7 +316,7 @@ Deno.serve(async (req) => {
           auth: { username: settings.smtp_user, password },
         },
       });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const opts: Record<string, any> = {
         from: `${settings.from_name} <${settings.from_email}>`,
         to,

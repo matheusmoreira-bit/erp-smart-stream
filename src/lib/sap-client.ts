@@ -180,7 +180,7 @@ const INTERACTIVE_SAP_ACTIONS = new Set([
   "issueSapAuthToken",
 ]);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {}): Promise<any> {
   const action = typeof body?.action === "string" ? body.action : "";
 
@@ -266,7 +266,7 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
     }
 
     // Server responded — try to parse body
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     let data: any = null;
     try {
       data = await resp.json();

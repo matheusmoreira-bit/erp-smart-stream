@@ -1,9 +1,9 @@
-FROM node:18-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 
 # install deps
 COPY package.json package-lock.json* ./
-RUN npm ci --ignore-scripts --no-audit --no-fund || npm install
+RUN npm ci --ignore-scripts --no-audit --no-fund
 
 # copy sources and build
 COPY . .
@@ -11,6 +11,7 @@ ENV NODE_ENV=production
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_PUBLISHABLE_KEY
 ARG VITE_SUPABASE_PROJECT_ID
+ARG VITE_ENABLE_FAKE_AUTH
 ARG VITE_FAKE_AUTH_EMAIL
 ARG VITE_FAKE_AUTH_PASSWORD
 ARG VITE_FAKE_AUTH_IS_ADMIN
@@ -20,6 +21,7 @@ ARG VITE_FAKE_AUTH_IS_ADMIN
 RUN if [ -z "${VITE_SUPABASE_URL:-}" ]; then unset VITE_SUPABASE_URL; fi; \
     if [ -z "${VITE_SUPABASE_PUBLISHABLE_KEY:-}" ]; then unset VITE_SUPABASE_PUBLISHABLE_KEY; fi; \
     if [ -z "${VITE_SUPABASE_PROJECT_ID:-}" ]; then unset VITE_SUPABASE_PROJECT_ID; fi; \
+    if [ -z "${VITE_ENABLE_FAKE_AUTH:-}" ]; then unset VITE_ENABLE_FAKE_AUTH; fi; \
     if [ -z "${VITE_FAKE_AUTH_EMAIL:-}" ]; then unset VITE_FAKE_AUTH_EMAIL; fi; \
     if [ -z "${VITE_FAKE_AUTH_PASSWORD:-}" ]; then unset VITE_FAKE_AUTH_PASSWORD; fi; \
     if [ -z "${VITE_FAKE_AUTH_IS_ADMIN:-}" ]; then unset VITE_FAKE_AUTH_IS_ADMIN; fi; \

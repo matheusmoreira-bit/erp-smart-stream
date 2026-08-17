@@ -539,7 +539,7 @@ export async function exportDetailReportPdf(opts: DetailReportOptions): Promise<
       },
       margin: { left: 8, right: 8 },
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     cursorY = (doc as any).lastAutoTable.finalY + 6;
   }
 
@@ -598,7 +598,7 @@ export async function exportDetailReportPdf(opts: DetailReportOptions): Promise<
         doc.setTextColor(0, 0, 0);
       },
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     cursorY = (doc as any).lastAutoTable.finalY + 6;
   }
 
@@ -626,7 +626,7 @@ export async function exportDetailReportPdf(opts: DetailReportOptions): Promise<
     doc.setFont("helvetica", "italic");
     doc.setFontSize(8);
     doc.setTextColor(100, 116, 139);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const y = (doc as any).lastAutoTable.finalY + 3;
     doc.text("Os arquivos anexos devem ser baixados diretamente pelo aplicativo (links protegidos).", 10, y);
   }
@@ -1086,7 +1086,7 @@ function drawEvidenceSection(
     margin: { left: 8, right: 8 },
     showHead: "everyPage",
   });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   let finalY: number = (doc as any).lastAutoTable?.finalY ?? y;
 
   // Legenda de "Motivo do status" logo abaixo da tabela de evidências, para
@@ -1116,7 +1116,7 @@ function drawEvidenceSection(
     margin: { left: 8, right: 8 },
     showHead: "everyPage",
   });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   return (doc as any).lastAutoTable?.finalY ?? finalY;
 }
 
@@ -1209,7 +1209,7 @@ export async function exportQueueSummaryPdf(opts: QueueSummaryOptions): Promise<
     (e) => e.aiWarnings.length > 0 || e.errorMessage || e.fileNames.length > 0,
   );
   if (relevant.length > 0) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     let y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 8 : cursorY + 8;
     const pageH = doc.internal.pageSize.getHeight();
     doc.setFont("helvetica", "bold");
@@ -1255,7 +1255,7 @@ export async function exportQueueSummaryPdf(opts: QueueSummaryOptions): Promise<
   // Seção de evidências: contagem e nomes dos anexos por fornecedor + IDs de
   // evento. Sempre incluída (mesmo sem alertas), para servir de anexo de
   // auditoria do resumo.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const evStart = ((doc as any).lastAutoTable?.finalY ?? 24) + 8;
   drawEvidenceSection(doc, entries, evStart);
 
@@ -1334,7 +1334,7 @@ export async function exportLowConfidenceReviewPdf(opts: LowConfidenceReviewOpti
     margin: { left: 8, right: 8 },
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   let y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 8 : cursorY + 8;
   const pageH = doc.internal.pageSize.getHeight();
   doc.setFont("helvetica", "bold");
@@ -1656,7 +1656,7 @@ export async function exportPurchaseFlowReportPdf(opts: PurchaseFlowReportOption
   });
 
   // Tabela: tempos por grupo (só os que têm ao menos uma etapa medida).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   let y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 8 : cursorY + 8;
   doc.setFont("helvetica", "bold"); doc.setFontSize(10);
   doc.text("Tempos por grupo", 10, y); y += 4;
@@ -1694,7 +1694,7 @@ export async function exportPurchaseFlowReportPdf(opts: PurchaseFlowReportOption
   });
 
   // Classificações e alertas dos deferredGroups.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 8 : y + 8;
   const pageH = doc.internal.pageSize.getHeight();
   if (y > pageH - 30) { doc.addPage(); y = 15; }

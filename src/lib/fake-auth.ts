@@ -1,8 +1,10 @@
 import type { Session, User } from "@supabase/supabase-js";
+import { runtime } from "@/config/runtime";
 
 const rawEmail = (import.meta.env.VITE_FAKE_AUTH_EMAIL as string | undefined)?.trim().toLowerCase() || "";
 const rawPassword = (import.meta.env.VITE_FAKE_AUTH_PASSWORD as string | undefined)?.trim() || "";
 const rawAdmin = String(import.meta.env.VITE_FAKE_AUTH_IS_ADMIN ?? "").trim().toLowerCase();
+const rawEnabled = String(import.meta.env.VITE_ENABLE_FAKE_AUTH ?? "").trim().toLowerCase();
 
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
 const FAKE_USER_ID = "00000000-0000-4000-8000-000000000001";
@@ -31,7 +33,7 @@ function fakeAccessToken(email: string): string {
 }
 
 export function isFakeAuthEnabled(): boolean {
-  return !!rawEmail;
+  return runtime.isStandaloneLocal && TRUE_VALUES.has(rawEnabled) && !!rawEmail;
 }
 
 export function getFakeAuthEmail(): string {

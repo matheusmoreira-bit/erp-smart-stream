@@ -127,8 +127,8 @@ export function useAdvancePayments() {
       if (err) throw err;
 
       const ids = (data || []).map((r: any) => r.id);
-      let attMap: Record<string, AdvanceAttachment[]> = {};
-      let itemMap: Record<string, AdvanceItem[]> = {};
+      const attMap: Record<string, AdvanceAttachment[]> = {};
+      const itemMap: Record<string, AdvanceItem[]> = {};
       if (ids.length) {
         const [{ data: atts }, { data: lines }] = await Promise.all([
           (supabase.from("advance_payment_attachments") as any).select("*").in("advance_id", ids),

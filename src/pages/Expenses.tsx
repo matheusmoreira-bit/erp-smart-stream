@@ -1024,7 +1024,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       openExpense(found);
       deepLinkHandledRef.current = true;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [expenses]);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -1763,7 +1763,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     }
   };
 
-  
+
 
   const handleCreate = async (input: any) => {
     const result = await createExpense(input) as any;

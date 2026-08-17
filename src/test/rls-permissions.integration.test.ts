@@ -6,8 +6,7 @@
  * não Supabase Auth, então grande parte das leituras acontece com a
  * chave `anon`). Também valida que dados sensíveis continuam protegidos.
  *
- * Estes testes são READ-ONLY contra o banco real. Rodam apenas quando
- * VITE_SUPABASE_URL + VITE_SUPABASE_PUBLISHABLE_KEY estão presentes.
+ * Estes testes só rodam com opt-in explícito e credenciais próprias de QA.
  * Não fazem INSERT/UPDATE/DELETE em tabelas de produção — as tentativas
  * de escrita são feitas apenas contra dados fake que devem ser rejeitados
  * pela RLS e nunca chegar a persistir.
@@ -16,10 +15,12 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+const url = import.meta.env.VITE_RLS_TEST_URL as string | undefined;
+const anonKey = import.meta.env.VITE_RLS_TEST_PUBLISHABLE_KEY as string | undefined;
+const explicitlyEnabled = import.meta.env.VITE_RUN_RLS_TESTS === "true";
+const productionProject = "ryxlofwbyhkqcvzavbwn.supabase.co";
 
-const enabled = Boolean(url && anonKey);
+const enabled = Boolean(explicitlyEnabled && url && anonKey && !url.includes(productionProject));
 const d = enabled ? describe : describe.skip;
 
 let anon: SupabaseClient;
@@ -171,8 +172,8 @@ d("RLS: função has_role está callable e é conservadora", () => {
 });
 
 if (!enabled) {
-  // eslint-disable-next-line no-console
+
   console.warn(
-    "[rls-permissions] pulando testes: VITE_SUPABASE_URL/VITE_SUPABASE_PUBLISHABLE_KEY ausentes",
+    "[rls-permissions] pulando testes: configure VITE_RUN_RLS_TESTS=true e credenciais de QA não produtivas",
   );
 }

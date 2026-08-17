@@ -73,7 +73,7 @@ export function useLicenseAnalysis(periodDays: number) {
     setLoading(false);
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [companyDb, normalizedDb]);
+  useEffect(() => { load();   }, [companyDb, normalizedDb]);
 
   const rows: LicenseRow[] = useMemo(() => {
     const cutoff = new Date();

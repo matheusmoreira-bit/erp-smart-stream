@@ -194,7 +194,7 @@ Deno.serve(async (req) => {
       });
     }
     void email;
-    // @ts-ignore EdgeRuntime provided by Supabase
+    // @ts-expect-error EdgeRuntime is provided by the Supabase runtime.
     EdgeRuntime.waitUntil(analyze(doc.id, doc.audit_run_id, doc.company_db, doc.storage_path, doc.doc_type));
     return new Response(JSON.stringify({ status: "started" }), {
       status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" },

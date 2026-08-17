@@ -152,14 +152,14 @@ let installed = false;
 export function installReadOnlyGuards(client: {
   from: (table: string) => unknown;
   storage: { from: (bucket: string) => unknown };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   rpc: (...args: any[]) => any;
 }): void {
   if (installed) return;
   installed = true;
 
   const originalFrom = client.from.bind(client);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   (client as any).from = (table: string) => {
     const builder = originalFrom(table) as Record<string, unknown>;
     if (!isReadOnlyMode()) return builder;
@@ -176,7 +176,7 @@ export function installReadOnlyGuards(client: {
   };
 
   const originalStorageFrom = client.storage.from.bind(client.storage);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   (client.storage as any).from = (bucket: string) => {
     const api = originalStorageFrom(bucket) as Record<string, unknown>;
     if (!isReadOnlyMode()) return api;
@@ -196,7 +196,7 @@ export function installReadOnlyGuards(client: {
   };
 
   const originalRpc = client.rpc.bind(client);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   (client as any).rpc = (fn: string, ...rest: any[]) => {
     // Somente RPCs claramente mutantes são bloqueadas; as de leitura (feeds,
     // grants, previews) seguem liberadas. insert_audit_log é sempre permitida

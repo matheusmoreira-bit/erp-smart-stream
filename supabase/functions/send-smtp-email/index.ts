@@ -1,10 +1,10 @@
 // Send email via SMTP (Gmail) — generic endpoint used by notification pipes
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import {
+  authErrorResponse,
+  requireServiceRoleOrUserOrSapSession,
+} from "../_shared/auth.ts";
+import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 const SMTP_HOST = "smtp.gmail.com";
 const SMTP_PORT = 465;
@@ -13,6 +13,18 @@ const SMTP_USER = "system@anagaming.com.br";
 // Total cap for attachment payload after base64 (~ Gmail allows ~25MB).
 const MAX_TOTAL_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 const MAX_SINGLE_ATTACHMENT_BYTES = 15 * 1024 * 1024;
+const MAX_RECIPIENTS = 20;
+const USER_RATE_LIMIT_PER_MINUTE = 20;
+const DEFAULT_USER_RECIPIENT_DOMAINS = [
+  "cactuscorporation.com",
+  "anagaming.com.br",
+  "cactusgaming.net",
+  "institutoconectacactus.org.br",
+  "opengaming.com.br",
+  "banana.games",
+  "lotusblanca.net",
+];
+const rateWindows = new Map<string, { startedAt: number; count: number }>();
 
 interface AttachmentInput {
   url?: string;
@@ -20,6 +32,62 @@ interface AttachmentInput {
   name?: string;
   contentType?: string;
   content?: string; // base64 if no URL
+}
+
+function csvEnv(name: string): string[] {
+  return (Deno.env.get(name) || "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function normalizeRecipients(value: unknown): string[] {
+  const input = Array.isArray(value) ? value : value ? [value] : [];
+  const unique = new Set<string>();
+  for (const item of input) {
+    const email = String(item || "").trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error(`Destinatário inválido: ${email || "vazio"}`);
+    }
+    unique.add(email);
+  }
+  return Array.from(unique);
+}
+
+function assertUserRecipientDomains(recipients: string[]) {
+  const allowed = new Set([
+    ...DEFAULT_USER_RECIPIENT_DOMAINS,
+    ...csvEnv("SMTP_USER_ALLOWED_RECIPIENT_DOMAINS"),
+  ]);
+  const denied = recipients.find((email) => !allowed.has(email.split("@")[1] || ""));
+  if (denied) throw new Error(`Domínio de destinatário não permitido: ${denied}`);
+}
+
+function enforceUserRateLimit(identity: string) {
+  const now = Date.now();
+  const current = rateWindows.get(identity);
+  if (!current || now - current.startedAt >= 60_000) {
+    rateWindows.set(identity, { startedAt: now, count: 1 });
+    return;
+  }
+  current.count += 1;
+  if (current.count > USER_RATE_LIMIT_PER_MINUTE) {
+    throw new Error("Limite de envios por minuto excedido");
+  }
+  if (rateWindows.size > 1_000) rateWindows.clear();
+}
+
+function isAllowedAttachmentUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:") return false;
+    const allowedOrigins = new Set(csvEnv("SMTP_ATTACHMENT_ALLOWED_ORIGINS"));
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    if (supabaseUrl) allowedOrigins.add(new URL(supabaseUrl).origin.toLowerCase());
+    return allowedOrigins.has(url.origin.toLowerCase());
+  } catch {
+    return false;
+  }
 }
 
 function guessContentType(name: string, fallback?: string): string {
@@ -107,6 +175,10 @@ async function downloadAttachment(att: AttachmentInput): Promise<
       };
     }
     if (!att.url) return null;
+    if (!isAllowedAttachmentUrl(att.url)) {
+      console.warn("attachment origin rejected", new URL(att.url).origin);
+      return null;
+    }
     const res = await fetch(att.url);
     if (!res.ok) {
       console.warn("attachment fetch failed", att.url, res.status);
@@ -126,7 +198,33 @@ async function downloadAttachment(att: AttachmentInput): Promise<
 }
 
 Deno.serve(async (req) => {
+  const foreignOrigin = rejectForeignOrigin(req);
+  if (foreignOrigin) return foreignOrigin;
+  const corsHeaders = corsFor(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  let caller: Awaited<ReturnType<typeof requireServiceRoleOrUserOrSapSession>>;
+  try {
+    caller = await requireServiceRoleOrUserOrSapSession(req);
+  } catch (error) {
+    return authErrorResponse(error, corsHeaders) ?? new Response(
+      JSON.stringify({ error: "Falha ao autenticar" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
+  if ((Deno.env.get("INTEGRATIONS_MODE") || "enabled").toLowerCase() === "disabled") {
+    return new Response(JSON.stringify({ error: "Integrações externas desabilitadas neste ambiente" }), {
+      status: 503,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   try {
     const { to, cc, bcc, subject, html, text, attachments, replyTo } = await req.json();
@@ -135,6 +233,21 @@ Deno.serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    const recipients = normalizeRecipients(to);
+    const ccRecipients = normalizeRecipients(cc);
+    const bccRecipients = normalizeRecipients(bcc);
+    const allRecipients = [...recipients, ...ccRecipients, ...bccRecipients];
+    if (allRecipients.length === 0 || allRecipients.length > MAX_RECIPIENTS) {
+      return new Response(JSON.stringify({ error: `Informe entre 1 e ${MAX_RECIPIENTS} destinatários` }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (caller.source !== "service_role") {
+      enforceUserRateLimit(caller.email || caller.id);
+      assertUserRecipientDomains(allRecipients);
     }
 
     const password = Deno.env.get("SMTP_PASSWORD");
@@ -171,7 +284,6 @@ Deno.serve(async (req) => {
       },
     });
 
-    const recipients = Array.isArray(to) ? to : [to];
     const sendOpts: Record<string, unknown> = {
       from: `Sistema Ana Gaming <${SMTP_USER}>`,
       to: recipients,
@@ -180,8 +292,8 @@ Deno.serve(async (req) => {
 
       html: html || undefined,
     };
-    if (cc) sendOpts.cc = Array.isArray(cc) ? cc : [cc];
-    if (bcc) sendOpts.bcc = Array.isArray(bcc) ? bcc : [bcc];
+    if (ccRecipients.length) sendOpts.cc = ccRecipients;
+    if (bccRecipients.length) sendOpts.bcc = bccRecipients;
     if (replyTo) sendOpts.replyTo = replyTo;
     if (resolvedAttachments.length > 0) sendOpts.attachments = resolvedAttachments;
 

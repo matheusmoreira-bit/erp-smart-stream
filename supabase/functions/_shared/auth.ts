@@ -43,9 +43,9 @@ const SAP_HEADER_PATTERNS = {
   // UserCode SAP: alfa-numérico + . _ - @ (aceita e-mails intercompany).
   sapUser: /^[A-Za-z0-9._@-]{1,128}$/,
   // B1SESSION cookie: hex/base64/UUID-like.
-  sapSession: /^[A-Za-z0-9+/=_.\-]{8,512}$/,
+  sapSession: /^[A-Za-z0-9+/=_.-]{8,512}$/,
   // ROUTEID pode vir vazio; quando presente, mesmo charset da sessão.
-  routeId: /^[A-Za-z0-9+/=_.\-]{0,256}$/,
+  routeId: /^[A-Za-z0-9+/=_.-]{0,256}$/,
   // Token assinado: "<payload_b64url>.<signature_b64url>".
   authToken: /^[A-Za-z0-9_-]{4,4096}\.[A-Za-z0-9_-]{16,512}$/,
 } as const;
@@ -554,6 +554,33 @@ export async function requireUserOrSapSessionHeaders(req: Request) {
     if (sap) return sap;
     throw err;
   }
+}
+
+/**
+ * Aceita chamadas internas assinadas com a service role ou uma identidade de
+ * usuário comprovada. Use somente em funções de infraestrutura chamadas tanto
+ * por outras Edge Functions quanto pela aplicação autenticada.
+ */
+export async function requireServiceRoleOrUserOrSapSession(req: Request) {
+  const authHeader = req.headers.get("Authorization") || "";
+  const token = authHeader.toLowerCase().startsWith("bearer ")
+    ? authHeader.slice(7).trim()
+    : "";
+  const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+
+  if (token && serviceRole) {
+    const received = encoder.encode(token);
+    const expected = encoder.encode(serviceRole);
+    if (timingSafeEqual(received, expected)) {
+      return {
+        id: "service_role",
+        email: "service-role@internal",
+        source: "service_role" as const,
+      };
+    }
+  }
+
+  return await requireUserOrSapSession(req);
 }
 
 

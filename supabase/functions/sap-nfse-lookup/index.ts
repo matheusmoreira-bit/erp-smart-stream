@@ -50,7 +50,7 @@ async function sapLogout(baseUrl: string, s: { sessionId: string; routeId: strin
   } catch { /* ignore */ }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 async function loadCreds(sb: any, companyDb: string): Promise<Record<string, string> | null> {
   const { data, error } = await sb
     .from("system_credentials")
@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
     const schema = resolveHanaSchema(companyDb, dbName);
     const session = await sapLogin(baseUrl, creds.username, creds.password, dbName);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const map: Record<string, any> = {};
     try {
       // 1) Entidades fiscais (TaxOne) vinculadas ao schema/base da empresa.

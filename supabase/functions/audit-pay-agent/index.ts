@@ -265,7 +265,7 @@ Deno.serve(async (req) => {
     }
 
     // ---- Camada LLM: prioriza, correlaciona e narra (saída JSON estrita) ----
-    let enriched = signals;
+    const enriched = signals;
     if (LOVABLE_API_KEY && signals.length) {
       try {
         const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {

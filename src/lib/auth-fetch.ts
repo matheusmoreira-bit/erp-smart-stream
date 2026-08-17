@@ -1,6 +1,7 @@
 import { runtime } from "@/config/runtime";
 import { supabase } from "@/integrations/supabase/client";
 import { assertFunctionAllowed } from "@/lib/read-only-guard";
+import { standaloneFunctionResponse } from "@/lib/standalone-functions";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -46,25 +47,12 @@ function mergeHeaders(...headersList: Array<HeadersInit | undefined>): Record<st
   return Object.fromEntries(headers.entries());
 }
 
-function standaloneFunctionResponse(path: string): Response {
-  const cleanPath = path.split("?")[0].replace(/^.*\/functions\/v1\//, "");
-  const payload =
-    cleanPath === "sap-users-admin"
-      ? { users: [], standalone: true }
-      : { data: [], items: [], results: [], success: true, standalone: true };
-
-  return new Response(JSON.stringify(payload), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
 export async function authFetch(
   path: string,
   options: RequestInit = {}
 ): Promise<Response> {
   assertFunctionAllowed(path);
-  if (runtime.isStandaloneLocal) return standaloneFunctionResponse(path);
+  if (runtime.isStandaloneLocal) return standaloneFunctionResponse(path, options);
 
   const token = await getValidAccessToken();
   if (!token) {
@@ -90,7 +78,7 @@ export async function publicFunctionFetch(
   options: RequestInit = {}
 ): Promise<Response> {
   assertFunctionAllowed(path);
-  if (runtime.isStandaloneLocal) return standaloneFunctionResponse(path);
+  if (runtime.isStandaloneLocal) return standaloneFunctionResponse(path, options);
 
   const token = await getValidAccessToken();
   const authToken = token || ANON_KEY;
@@ -147,7 +135,7 @@ export async function sapFunctionFetch(
   path: string,
   options: RequestInit = {}
 ): Promise<Response> {
-  if (runtime.isStandaloneLocal) return standaloneFunctionResponse(path);
+  if (runtime.isStandaloneLocal) return standaloneFunctionResponse(path, options);
 
   const sapHeaders = readSapHeaders(path);
   const hasSapSession = !!sapHeaders["x-sap-session"];
@@ -171,4 +159,3 @@ export async function sapFunctionFetch(
     headers: mergeHeaders(sapHeaders, options.headers),
   });
 }
-

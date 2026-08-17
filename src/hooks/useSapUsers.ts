@@ -287,7 +287,7 @@ export function useSapUsers() {
     }
 
     // 2. Find other companies with same ERP type, filtered by selection
-    let q = supabase
+    const q = supabase
       .from("companies")
       .select("company_db, display_name, erp_type")
       .eq("erp_type", erpType)
@@ -371,7 +371,9 @@ export function useSapUsers() {
         company_db: session.companyDB,
         details: { userData: { UserCode: userData.UserCode, UserName: userData.UserName, eMail: userData.eMail }, replicationResults: results, targetCompanyDbs },
       });
-    } catch {}
+    } catch {
+      // Audit logging is best effort and must not invalidate a created SAP user.
+    }
 
     return { created: createInCurrent, replicationResults: results };
   }, [session, fetchUsers]);

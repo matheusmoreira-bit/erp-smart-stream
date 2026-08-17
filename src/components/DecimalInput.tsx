@@ -46,7 +46,7 @@ export const DecimalInput = forwardRef<HTMLInputElement, DecimalInputProps>(
       const raw = e.target.value;
       // Permite dígitos, um único separador (, ou .) e sinal negativo opcional.
       const cleaned = raw
-        .replace(/[^\d,.\-]/g, "")
+        .replace(/[^\d,.-]/g, "")
         .replace(/(?!^)-/g, "");
       // Um único separador
       const firstSep = cleaned.search(/[,.]/);

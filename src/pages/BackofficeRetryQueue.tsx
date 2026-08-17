@@ -129,7 +129,7 @@ export default function BackofficeRetryQueue() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [statusFilter, windowHours]);
+  useEffect(() => { load();   }, [statusFilter, windowHours]);
 
   useEffect(() => {
     const channel = supabase

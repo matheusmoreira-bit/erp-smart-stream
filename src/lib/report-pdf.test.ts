@@ -176,8 +176,8 @@ describe("exportExpenseDetailPdf — despesa (compra)", () => {
 
     // Título e subtítulo
     expect(hasText(/^Despesa — Fornecedor Teste LTDA$/)).toBe(true);
-    expect(hasText("#abcdef12")).toBe(true); // id truncado
-    expect(hasText(/ERP 999/)).toBe(true);
+    expect(hasText("#ABCDEF12")).toBe(true); // id truncado padronizado
+    expect(hasText(/ERP #999/)).toBe(true);
 
     // Rótulos de cabeçalho — compras usa "Fornecedor"
     expect(hasText("Fornecedor")).toBe(true);

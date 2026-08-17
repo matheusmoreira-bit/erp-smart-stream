@@ -312,7 +312,7 @@ export function useApprovalRules(options?: { backfill?: boolean; enabled?: boole
       if (err) throw err;
 
       const ruleIds = (data || []).map((r: any) => r.id);
-      let levelsMap: Record<string, ApprovalRuleLevel[]> = {};
+      const levelsMap: Record<string, ApprovalRuleLevel[]> = {};
       if (ruleIds.length > 0) {
         // Chunk the .in() query to avoid URL length limits when there are many rules.
         // Os chunks são buscados em paralelo — com centenas de regras, o modo

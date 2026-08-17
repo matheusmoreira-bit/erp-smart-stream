@@ -3,10 +3,14 @@
 // remover caracteres de controle e barras invasoras. Este helper normaliza
 // o nome preservando a extensão.
 
-const FORBIDDEN = /[\\/:*?"<>|\x00-\x1F]/g;
+const FORBIDDEN = /[\\/:*?"<>|]/g;
+
+function replaceControlCharacters(value: string): string {
+  return Array.from(value, (char) => (char.charCodeAt(0) <= 31 ? "_" : char)).join("");
+}
 
 export function sanitizeSapFileName(raw: string | null | undefined): string {
-  const original = (raw ?? "").toString();
+  const original = replaceControlCharacters((raw ?? "").toString()).replace(FORBIDDEN, "_");
   // Separa nome + extensão para preservar ".pdf" mesmo se houver espaço antes.
   const dot = original.lastIndexOf(".");
   let base = dot > 0 ? original.slice(0, dot) : original;

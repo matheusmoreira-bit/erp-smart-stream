@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -7,62 +8,6 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { SapProvider } from "@/contexts/SapContext";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { PermissionsV2Provider } from "@/contexts/PermissionsV2Context";
-import Index from "./pages/Index.tsx";
-import ApprovalLink from "./pages/ApprovalLink.tsx";
-import AnalyticsPage from "./pages/Analytics.tsx";
-import ApprovalsHub from "./pages/ApprovalsHub.tsx";
-import MobileApprovals from "./pages/MobileApprovals.tsx";
-import MobileInvoiceCapture from "./pages/MobileInvoiceCapture.tsx";
-import Expenses from "./pages/Expenses.tsx";
-import SalesHub from "./pages/SalesHub.tsx";
-import BaixasHistory from "./pages/BaixasHistory.tsx";
-import ApprovalRules from "./pages/ApprovalRules.tsx";
-import ApprovalMatrix from "./pages/ApprovalMatrix.tsx";
-
-import PagCorp from "./pages/PagCorp.tsx";
-import PagCorpMapping from "./pages/PagCorpMapping.tsx";
-import PagCorpNondeductible from "./pages/PagCorpNondeductible.tsx";
-import PagCorpSettlements from "./pages/PagCorpSettlements.tsx";
-import IntegrationHistory from "./pages/IntegrationHistory.tsx";
-import UsersHub from "./pages/UsersHub.tsx";
-import UserProductivity from "./pages/UserProductivity.tsx";
-import Suppliers from "./pages/Suppliers.tsx";
-import Items from "./pages/Items.tsx";
-import RegistrationRequests from "./pages/RegistrationRequests.tsx";
-import Intercompany from "./pages/Intercompany.tsx";
-import FinancialReview from "./pages/FinancialReview.tsx";
-import CashflowForecast from "./pages/CashflowForecast.tsx";
-import AdvancePayments from "./pages/AdvancePayments.tsx";
-import NfEntrada from "./pages/NfEntrada.tsx";
-
-import AuditHub from "./pages/AuditHub.tsx";
-import IntegrationsHub from "./pages/IntegrationsHub.tsx";
-import Notifications from "./pages/Notifications.tsx";
-import NotificationGovernance from "./pages/NotificationGovernance.tsx";
-import Profile from "./pages/Profile.tsx";
-import NotFound from "./pages/NotFound.tsx";
-import BackofficeLogin from "./pages/AdminLogin.tsx";
-import Backoffice from "./pages/Admin.tsx";
-import SapUsersReplicate from "./pages/SapUsersReplicate.tsx";
-import AuditTrail from "./pages/AuditTrail.tsx";
-import TransferApprovalsHistory from "./pages/TransferApprovalsHistory.tsx";
-import SapStatusSync from "./pages/SapStatusSync.tsx";
-import SapSyncRuns from "./pages/SapSyncRuns.tsx";
-import BackofficeCopilot from "./pages/BackofficeCopilot.tsx";
-import InfraHealth from "./pages/InfraHealth.tsx";
-import DbPerformance from "./pages/DbPerformance.tsx";
-import FlowPerformance from "./pages/FlowPerformance.tsx";
-import IntegrationHealth from "./pages/IntegrationHealth.tsx";
-import AuditTimeline from "./pages/AuditTimeline.tsx";
-import AccessReview from "./pages/AccessReview.tsx";
-import ApiKeys from "./pages/ApiKeys.tsx";
-
-import SlaEscalation from "./pages/SlaEscalation.tsx";
-import SlaDashboard from "./pages/SlaDashboard.tsx";
-import BackofficeRetryQueue from "./pages/BackofficeRetryQueue.tsx";
-import BackofficeRoadmap from "./pages/BackofficeRoadmap.tsx";
-
-import PagCorpSettlementAudit from "./pages/PagCorpSettlementAudit.tsx";
 import { AdminRoute } from "./components/AdminRoute.tsx";
 import { GlobalAiChat } from "./components/GlobalAiChat.tsx";
 import { WhatsNewWizard } from "./components/WhatsNewWizard.tsx";
@@ -75,10 +20,70 @@ import { TestCompanyVisibilityGate } from "./components/TestCompanyVisibilityGat
 import { DefaultPasswordWarning } from "./components/DefaultPasswordWarning.tsx";
 import { MobileBottomNav } from "./components/MobileBottomNav.tsx";
 import { RequireAuth } from "./components/RequireAuth.tsx";
-import Login from "./pages/Login.tsx";
+import { Loader2 } from "lucide-react";
+
+const Index = lazy(() => import("./pages/Index.tsx"));
+const ApprovalLink = lazy(() => import("./pages/ApprovalLink.tsx"));
+const AnalyticsPage = lazy(() => import("./pages/Analytics.tsx"));
+const ApprovalsHub = lazy(() => import("./pages/ApprovalsHub.tsx"));
+const MobileApprovals = lazy(() => import("./pages/MobileApprovals.tsx"));
+const MobileInvoiceCapture = lazy(() => import("./pages/MobileInvoiceCapture.tsx"));
+const Expenses = lazy(() => import("./pages/Expenses.tsx"));
+const SalesHub = lazy(() => import("./pages/SalesHub.tsx"));
+const BaixasHistory = lazy(() => import("./pages/BaixasHistory.tsx"));
+const ApprovalRules = lazy(() => import("./pages/ApprovalRules.tsx"));
+const ApprovalMatrix = lazy(() => import("./pages/ApprovalMatrix.tsx"));
+const PagCorp = lazy(() => import("./pages/PagCorp.tsx"));
+const PagCorpMapping = lazy(() => import("./pages/PagCorpMapping.tsx"));
+const PagCorpNondeductible = lazy(() => import("./pages/PagCorpNondeductible.tsx"));
+const PagCorpSettlements = lazy(() => import("./pages/PagCorpSettlements.tsx"));
+const IntegrationHistory = lazy(() => import("./pages/IntegrationHistory.tsx"));
+const UsersHub = lazy(() => import("./pages/UsersHub.tsx"));
+const UserProductivity = lazy(() => import("./pages/UserProductivity.tsx"));
+const Suppliers = lazy(() => import("./pages/Suppliers.tsx"));
+const Items = lazy(() => import("./pages/Items.tsx"));
+const RegistrationRequests = lazy(() => import("./pages/RegistrationRequests.tsx"));
+const Intercompany = lazy(() => import("./pages/Intercompany.tsx"));
+const FinancialReview = lazy(() => import("./pages/FinancialReview.tsx"));
+const CashflowForecast = lazy(() => import("./pages/CashflowForecast.tsx"));
+const AdvancePayments = lazy(() => import("./pages/AdvancePayments.tsx"));
+const NfEntrada = lazy(() => import("./pages/NfEntrada.tsx"));
+const AuditHub = lazy(() => import("./pages/AuditHub.tsx"));
+const IntegrationsHub = lazy(() => import("./pages/IntegrationsHub.tsx"));
+const Notifications = lazy(() => import("./pages/Notifications.tsx"));
+const NotificationGovernance = lazy(() => import("./pages/NotificationGovernance.tsx"));
+const Profile = lazy(() => import("./pages/Profile.tsx"));
+const NotFound = lazy(() => import("./pages/NotFound.tsx"));
+const BackofficeLogin = lazy(() => import("./pages/AdminLogin.tsx"));
+const Backoffice = lazy(() => import("./pages/Admin.tsx"));
+const SapUsersReplicate = lazy(() => import("./pages/SapUsersReplicate.tsx"));
+const AuditTrail = lazy(() => import("./pages/AuditTrail.tsx"));
+const TransferApprovalsHistory = lazy(() => import("./pages/TransferApprovalsHistory.tsx"));
+const SapStatusSync = lazy(() => import("./pages/SapStatusSync.tsx"));
+const SapSyncRuns = lazy(() => import("./pages/SapSyncRuns.tsx"));
+const BackofficeCopilot = lazy(() => import("./pages/BackofficeCopilot.tsx"));
+const InfraHealth = lazy(() => import("./pages/InfraHealth.tsx"));
+const DbPerformance = lazy(() => import("./pages/DbPerformance.tsx"));
+const FlowPerformance = lazy(() => import("./pages/FlowPerformance.tsx"));
+const IntegrationHealth = lazy(() => import("./pages/IntegrationHealth.tsx"));
+const AuditTimeline = lazy(() => import("./pages/AuditTimeline.tsx"));
+const AccessReview = lazy(() => import("./pages/AccessReview.tsx"));
+const ApiKeys = lazy(() => import("./pages/ApiKeys.tsx"));
+const SlaEscalation = lazy(() => import("./pages/SlaEscalation.tsx"));
+const SlaDashboard = lazy(() => import("./pages/SlaDashboard.tsx"));
+const BackofficeRetryQueue = lazy(() => import("./pages/BackofficeRetryQueue.tsx"));
+const BackofficeRoadmap = lazy(() => import("./pages/BackofficeRoadmap.tsx"));
+const PagCorpSettlementAudit = lazy(() => import("./pages/PagCorpSettlementAudit.tsx"));
+const Login = lazy(() => import("./pages/Login.tsx"));
 
 
 const queryClient = new QueryClient();
+
+const RouteFallback = () => (
+  <div className="min-h-screen flex items-center justify-center bg-background">
+    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+  </div>
+);
 
 const App = () => (
   <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="erp-theme">
@@ -93,6 +98,7 @@ const App = () => (
             <StickyHeaderMeasure />
             <ModuleSubmenu />
             <RequireAuth>
+            <Suspense fallback={<RouteFallback />}>
             <Routes>
               <Route path="/" element={<Index />} />
 
@@ -219,6 +225,7 @@ const App = () => (
 
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </Suspense>
             </RequireAuth>
             <MobileBottomNav />
           </BrowserRouter>

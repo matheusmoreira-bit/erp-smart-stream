@@ -1,0 +1,47 @@
+name: Quality
+
+on:
+  pull_request:
+    branches: [main, stand-alone]
+  push:
+    branches: [main, stand-alone]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: http://127.0.0.1:8000
+          VITE_SUPABASE_PUBLISHABLE_KEY: ci-placeholder
+          VITE_SUPABASE_PROJECT_ID: ci
+
+  standalone-e2e:
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: docker compose -f docker/docker-compose.standalone.yml --env-file docker/.env.standalone up -d --build
+      - run: npm run test:e2e
+      - if: failure()
+        run: docker compose -f docker/docker-compose.standalone.yml --env-file docker/.env.standalone logs --no-color
+      - if: always()
+        run: docker compose -f docker/docker-compose.standalone.yml --env-file docker/.env.standalone down

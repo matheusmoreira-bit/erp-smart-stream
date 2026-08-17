@@ -75,7 +75,7 @@ export function personListMatches(value: unknown, other: unknown): boolean {
   const raw = String(value ?? "");
   if (!raw) return false;
   const parts = raw
-    .split(/[\/;,|]+|\s+\+\s+|\s+e\s+/i)
+    .split(/[/;,|]+|\s+\+\s+|\s+e\s+/i)
     .map((p) => p.trim())
     .filter((p) => p.length > 1);
   if (parts.length < 2) return false;

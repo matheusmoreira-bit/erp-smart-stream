@@ -14,7 +14,7 @@ import type { BackendClient } from "./types";
 
 export const backend: BackendClient =
   runtime.target === "aws"
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     ? (undefined as any) // TODO: importar ./aws-impl quando migrar
     : supabaseBackend;
 

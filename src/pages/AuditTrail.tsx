@@ -118,7 +118,7 @@ export default function AuditTrailPage() {
 
   const applyFilters = useCallback(
     <T,>(q: T): T => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       let b = q as any;
       if (tableFilter !== "all") b = b.eq("table_name", tableFilter);
       if (opFilter !== "all") b = b.eq("op", opFilter);

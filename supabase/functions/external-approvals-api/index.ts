@@ -127,7 +127,7 @@ async function getCompanyConfig(companyDB: string) {
   const username = map.get("username");
   const password = map.get("password");
   let url = map.get("service_layer_url");
-  let sapCompanyDb = map.get("company_db") || companyDB;
+  const sapCompanyDb = map.get("company_db") || companyDB;
 
   if (!url) {
     const { data: row } = await client

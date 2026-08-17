@@ -7,7 +7,7 @@ project_id = "ryxlofwbyhkqcvzavbwn"
     verify_jwt = true
 
 [functions.send-smtp-email]
-verify_jwt = false
+verify_jwt = true
 
 [functions.synapse-po-notify]
 verify_jwt = false
@@ -16,16 +16,16 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.fornecedor-save]
-verify_jwt = false
+verify_jwt = true
 
 [functions.cnpj-lookup]
 verify_jwt = false
 
 [functions.supplier-sync]
-verify_jwt = false
+verify_jwt = true
 
 [functions.item-save]
-verify_jwt = false
+verify_jwt = true
 
 
 

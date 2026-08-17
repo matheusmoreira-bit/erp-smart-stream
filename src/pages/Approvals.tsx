@@ -115,7 +115,7 @@ function parseDateFlexible(dateStr: string): Date | null {
   if (!dateStr) return null;
   const s = String(dateStr).trim();
   // DD/MM/YYYY ou DD-MM-YYYY
-  const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  const dmy = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
   if (dmy) {
     const d = parseInt(dmy[1], 10);
     const m = parseInt(dmy[2], 10);
@@ -1431,12 +1431,10 @@ function ApprovalDetailModal({
                     <span className="text-muted-foreground">Tipo</span>
                     <span className="font-medium">{doc?.docTypeName}</span>
                   </div>
-                  {true ? (
-                    <div className="flex justify-between gap-3">
-                      <span className="text-muted-foreground">Documento</span>
-                      <span className="font-mono">{docNumberLabel(doc)}</span>
-                    </div>
-                  ) : null}
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Documento</span>
+                    <span className="font-mono">{docNumberLabel(doc)}</span>
+                  </div>
                   <div className="flex justify-between gap-3">
                     <span className="text-muted-foreground">Fornecedor</span>
                     <span className="font-medium text-right break-words">{doc?.cardName || "—"}</span>
@@ -2005,6 +2003,8 @@ function MyRequestsTab() {
 
 export default function ApprovalsPage() {
   const { session, logout } = useSap();
+  const sessionUserName = session?.userName || "";
+  const sessionCompanyDB = session?.companyDB || "";
   const { isAdmin: isLovableAdmin } = useAuth();
   const navigate = useNavigate();
   const { approvals, isLoading, isRefreshing, error, lastUpdatedAt, refresh, refreshCache, removeLocal: removeApprovalLocal } = useApprovals();
@@ -2362,22 +2362,20 @@ export default function ApprovalsPage() {
   useEffect(() => {
     if (!session) { savePostLoginPath(); navigate("/"); }
   }, [session, navigate]);
-  if (!session) return null;
-
   // Filter: por padrão mostra apenas aprovações em que o usuário é aprovador OU solicitante.
   // Admin pode usar o toggle "Ver todas" para visualizar todos os lançamentos.
   // Se o usuário tem substituição ativa, os documentos dos aprovadores oficiais também aparecem.
   const effectiveShowAll = canToggleShowAll && showAll;
-  const sessionUser = (session.userName || "").toLowerCase().trim();
+  const sessionUser = sessionUserName.toLowerCase().trim();
   const impersonation = getImpersonation();
   // Uma pessoa pode ter UserCode, nome e e-mails em domínios diferentes. Na
   // impersonação, a sessão técnica pode ser do admin, portanto o alvo salvo é
   // parte obrigatória da identidade usada para filtrar e autorizar.
   const currentUserIdentities = [
-    session.userName,
-    impersonation?.companyDB === session.companyDB ? impersonation.targetUser : null,
-    impersonation?.companyDB === session.companyDB ? impersonation.targetEmail : null,
-    impersonation?.companyDB === session.companyDB ? impersonation.targetName : null,
+    sessionUserName,
+    impersonation?.companyDB === sessionCompanyDB ? impersonation.targetUser : null,
+    impersonation?.companyDB === sessionCompanyDB ? impersonation.targetEmail : null,
+    impersonation?.companyDB === sessionCompanyDB ? impersonation.targetName : null,
   ];
   const isCurrentUserApprover = (doc: ApprovalDoc): boolean =>
     matchesApproverIdentity(
@@ -2449,8 +2447,8 @@ export default function ApprovalsPage() {
     if (
       directCode(d.approverCode) ||
       directCode(d.requesterCode) ||
-      approverMatches(d.currentApprover, session.userName) ||
-      approverMatches(d.requester, session.userName)
+      approverMatches(d.currentApprover, sessionUserName) ||
+      approverMatches(d.requester, sessionUserName)
     ) return null;
     const approver = (d.currentApprover || "").toLowerCase().trim();
     const email = (d.approverEmail || "").toLowerCase().trim();
@@ -2471,7 +2469,7 @@ export default function ApprovalsPage() {
       }
     }
     return null;
-  }, [officialsForDoc, sessionUser, session.userName]);
+  }, [officialsForDoc, sessionUser, sessionUserName]);
 
   /**
    * Recomputa se o usuário logado pode aprovar/rejeitar o documento dado —
@@ -2487,7 +2485,7 @@ export default function ApprovalsPage() {
       if (!doc) return false;
       const isRequester =
         codeEq(doc.requesterCode, doc) ||
-        approverMatches(doc.requester, session.userName) ||
+        approverMatches(doc.requester, sessionUserName) ||
         currentUserIdentities.some((id) =>
           isSameAsRequester(doc.requester, doc.requester, id, id),
         );
@@ -2496,7 +2494,7 @@ export default function ApprovalsPage() {
       // demais aprovadores do nível ou escala para o próximo.
       if (isRequester) return false;
 
-      const sessionCodeLower = (session.userName || "").toLowerCase().trim();
+      const sessionCodeLower = sessionUserName.toLowerCase().trim();
       const isDirectApprover = isCurrentUserApprover(doc);
       if (isDirectApprover) return true;
 
@@ -2543,7 +2541,7 @@ export default function ApprovalsPage() {
       });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [session.userName, sessionUser, identifiersForDoc, ccScopeAllows, isSuperUser],
+    [sessionUserName, sessionUser, identifiersForDoc, ccScopeAllows, isSuperUser],
   );
   const userApprovals = effectiveShowAll
     ? allApprovals
@@ -2551,7 +2549,7 @@ export default function ApprovalsPage() {
         (a) =>
           isCurrentUserApprover(a) ||
           codeEq(a.requesterCode, a) ||
-          approverMatches(a.requester, session.userName) ||
+          approverMatches(a.requester, sessionUserName) ||
           // Aprovadores paralelos do nível atual (mesmo `level_order`).
           ((a as unknown as { __levelApprovers?: Array<{ name: string; email: string }> }).__levelApprovers || []).some(
             (l) =>
@@ -2562,7 +2560,7 @@ export default function ApprovalsPage() {
 
           (a.approverEmail && identifiersForDoc(a).includes(a.approverEmail.toLowerCase())) ||
           // Aprovador original ainda vê o documento que delegou (mesmo sem "Ver todas").
-          (a.delegatedFrom && approverMatches(a.delegatedFrom, session.userName)) ||
+          (a.delegatedFrom && approverMatches(a.delegatedFrom, sessionUserName)) ||
           // Diretoria do usuário administrativo (CC 1.6.% para quem é 1.6.1.2).
           docCostCenters(a).some((c) => inMyDirectorate(c)),
       );
@@ -2644,7 +2642,7 @@ export default function ApprovalsPage() {
     return Array.from(set)
       .sort((a, b) => a.localeCompare(b))
       .map((v) => ({ value: v, label: formatCostCenter(v) || v }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [userApprovals, formatCostCenter]);
 
   const projectOptions = useMemo(() => {
@@ -2728,7 +2726,7 @@ export default function ApprovalsPage() {
       await refreshSubstituteGrants();
       const { data: userData } = await supabase.auth.getUser();
       const authEmail = (userData.user?.email || "").toLowerCase();
-      const sapUser = (session.userName || "").toLowerCase().trim();
+      const sapUser = sessionUserName.toLowerCase().trim();
       const identifiers = Array.from(
         new Set(
           [authEmail, sapUser, authEmail.split("@")[0], sapUser.split("@")[0]].filter(Boolean),
@@ -2802,7 +2800,7 @@ export default function ApprovalsPage() {
           .limit(1);
         const row = (audit || [])[0] as any;
         const det = row?.details || {};
-        const me = (session.userName || "").toLowerCase().trim();
+        const me = sessionUserName.toLowerCase().trim();
         const newEmail = (det.newApproverEmail || "").toLowerCase();
         const newName = (det.newApproverName || "").toLowerCase();
         if (me && (me === newEmail || me === newName || (newEmail && me === newEmail.split("@")[0]))) {
@@ -2821,8 +2819,8 @@ export default function ApprovalsPage() {
           action: "approval_attempt_denied",
           entity_type: doc && (doc as any).__internalId ? "expense" : "approval_request",
           entity_id: String((doc as any)?.__internalId || code),
-          actor_email: session.userName,
-          company_db: session.companyDB,
+          actor_email: sessionUserName,
+          company_db: sessionCompanyDB,
           details: {
             attemptedAction: action,
             attemptedRole,
@@ -2881,11 +2879,11 @@ export default function ApprovalsPage() {
           // mesmo após a decisão sincronizar via `approval_history`.
           const onBehalfOf = doc ? getSubstitutedOfficial(doc) : null;
           const substitutionNote = onBehalfOf
-            ? `Ação executada por SUBSTITUTO (${session.userName}) em nome de ${onBehalfOf.name}${onBehalfOf.email ? ` <${onBehalfOf.email}>` : ""}.`
+            ? `Ação executada por SUBSTITUTO (${sessionUserName}) em nome de ${onBehalfOf.name}${onBehalfOf.email ? ` <${onBehalfOf.email}>` : ""}.`
             : null;
           const roleNote =
             actingRole === "delegation"
-              ? `Ação executada por DELEGAÇÃO (${session.userName}).`
+              ? `Ação executada por DELEGAÇÃO (${sessionUserName}).`
               : actingRole === "approver" && !substitutionNote
                 ? null
                 : null;
@@ -2917,8 +2915,8 @@ export default function ApprovalsPage() {
                 action: action === "approve" ? "approve" : "reject",
                 entity_type: "approval_request",
                 entity_id: String(code),
-                actor_email: session.userName,
-                company_db: session.companyDB,
+                actor_email: sessionUserName,
+                company_db: sessionCompanyDB,
                 details: {
                   docNum: doc?.docNum,
                   docType: doc?.docTypeName,
@@ -3121,7 +3119,7 @@ export default function ApprovalsPage() {
     }
   };
 
-
+  if (!session) return null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -3592,7 +3590,7 @@ export default function ApprovalsPage() {
                   onOpen={() => setSelectedDoc(doc)}
                   approverCCs={getCostCentersForEmail(doc.approverEmail)}
                   formatCostCenter={formatCostCenter}
-                  substituteName={displayUserName(session.userName)}
+                  substituteName={displayUserName(sessionUserName)}
                   onBehalfOf={getSubstitutedOfficial(doc)}
                   onRelationsMap={(() => {
                     const internalId = (doc as any).__internalId as string | undefined;
@@ -3752,8 +3750,8 @@ export default function ApprovalsPage() {
         isActioning={isActioning}
         actionPhase={actionPhase}
         isSuperUser={isSuperUser}
-        currentUserName={session.userName}
-        currentUserEmail={session.userName}
+        currentUserName={sessionUserName}
+        currentUserEmail={sessionUserName}
         approverCCs={getCostCentersForEmail(selectedDoc?.approverEmail || "")}
         formatCostCenter={formatCostCenter}
         rules={rules}

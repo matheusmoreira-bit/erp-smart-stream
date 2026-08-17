@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
+import { runItemOperation } from "@/lib/catalog-service";
 import { useSap } from "@/contexts/SapContext";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { createItem } from "@/hooks/useItems";
@@ -94,23 +94,19 @@ export function NewItemWizardDialog({
         toast.error("Código de Serviço deve estar no formato com pontos, ex: 1.05");
         return;
       }
-      const { data, error } = await supabase.functions.invoke("item-save", {
-        body: {
+      const { data, error } = await runItemOperation({
           action: "findOrCreateBase",
           tipo,
           ncm: tipo === "produto" ? ncm : null,
           codigo_servico: tipo === "servico" ? codigoServico : null,
           grupo: grupo || null,
           unidade: unidade || null,
-        },
       });
       if (error) throw error;
       if (!data?.ok) throw new Error(data?.error || "Falha ao preparar item-base");
       const row = data.base as ItemBase;
       setBase(row);
-      const { data: prev, error: e3 } = await supabase.functions.invoke("item-save", {
-        body: { action: "previewCode", item_base_id: row.id },
-      });
+      const { data: prev, error: e3 } = await runItemOperation({ action: "previewCode", item_base_id: row.id });
       if (e3) throw e3;
       if (!prev?.ok) throw new Error(prev?.error || "Falha ao prever código");
       setPreviewCode(prev.code as string);
@@ -130,12 +126,10 @@ export function NewItemWizardDialog({
     }
     setBusy(true);
     try {
-      const { data, error } = await supabase.functions.invoke("item-save", {
-        body: {
+      const { data, error } = await runItemOperation({
           action: "createVariante",
           item_base_id: base.id,
           descricao: descricao.trim(),
-        },
       });
       if (error) throw error;
       if (!data?.ok) throw new Error(data?.error || "Falha ao salvar variante");

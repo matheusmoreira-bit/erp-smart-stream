@@ -52,6 +52,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    networks: [internal, ingress]
 
   # ------------------------------- REST -------------------------------------
   rest:
@@ -69,6 +70,7 @@ services:
       PGRST_JWT_SECRET: ${JWT_SECRET}
       PGRST_JWT_AUD: authenticated
       PGRST_APP_SETTINGS_JWT_EXP: 3600
+    networks: [internal, ingress]
 
   # ------------------------------- AUTH -------------------------------------
   auth:
@@ -92,6 +94,7 @@ services:
       GOTRUE_DISABLE_SIGNUP: "true"       # QA: sem self-signup
       GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
       GOTRUE_MAILER_AUTOCONFIRM: "true"   # QA: sem envio de email
+    networks: [internal, ingress]
 
   # ----------------------------- STORAGE ------------------------------------
   storage:
@@ -116,14 +119,13 @@ services:
       GLOBAL_S3_BUCKET: qa-local
     volumes:
       - qa-storage-data:/var/lib/storage
+    networks: [internal, ingress]
 
   # ---------------------------- EDGE RUNTIME --------------------------------
   functions:
     image: supabase/edge-runtime:v1.67.0
     container_name: erp-qa-functions
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:54325:9000"
     depends_on:
       db: { condition: service_healthy }
     environment:
@@ -155,6 +157,7 @@ services:
       - start
       - --main-service
       - /home/deno/functions/_main
+    networks: [internal]
 
   # ------------------------------ REALTIME ----------------------------------
   realtime:
@@ -177,6 +180,7 @@ services:
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
       APP_NAME: realtime
       ERL_AFLAGS: "-proto_dist inet_tcp"
+    networks: [internal, ingress]
 
   # -------------------------------- KONG ------------------------------------
   # Proxy que expõe /rest/v1, /auth/v1, /storage/v1, /realtime/v1, /functions/v1
@@ -196,6 +200,7 @@ services:
       KONG_PLUGINS: request-transformer,cors,key-auth
     volumes:
       - ./kong.yml:/var/lib/kong/kong.yml:ro
+    networks: [internal, ingress]
 
   # -------------------------------- STUDIO ----------------------------------
   studio:
@@ -214,6 +219,7 @@ services:
       SUPABASE_PUBLIC_URL: http://localhost:8000
       SUPABASE_ANON_KEY: ${ANON_KEY}
       SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+    networks: [internal, ingress]
 
   meta:
     image: supabase/postgres-meta:v0.84.2
@@ -228,7 +234,15 @@ services:
       PG_META_DB_NAME: postgres
       PG_META_DB_USER: postgres
       PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+    networks: [internal]
 
 volumes:
   qa-db-data:
   qa-storage-data:
+
+# O runtime de Edge Functions fica apenas na rede interna, sem rota de saída.
+# A rede de ingresso preserva as portas localhost dos demais serviços.
+networks:
+  internal:
+    internal: true
+  ingress:

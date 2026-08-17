@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sapAction, sapQuery, type SapSession } from "@/lib/sap-client";
 import { useSapCachedList, invalidateSapCache } from "@/hooks/useSapCachedList";
+import { syncSupplierLocal } from "@/lib/catalog-service";
 
 /**
  * Chaves de cache derivadas de BusinessPartners que precisam ser invalidadas
@@ -272,8 +273,7 @@ export async function createSupplier(
   // caso uma despesa futura seja lançada com esse código.
   const persistedCardCode = sapStatus === "synced" ? cardCode : null;
 
-  const { data: resp, error } = await supabase.functions.invoke("supplier-sync", {
-    body: {
+  const { data: resp, error } = await syncSupplierLocal({
       action: "insert",
       row: {
         ...input,
@@ -282,7 +282,6 @@ export async function createSupplier(
         sap_sync_error: sapError,
         sap_last_synced_at: syncedAt,
       },
-    },
   });
   if (error) throw error;
   if ((resp as any)?.error) throw new Error((resp as any).error);
@@ -472,9 +471,7 @@ export async function findSupplierByTaxId(
 ): Promise<Supplier | null> {
   const trimmed = taxId.trim();
   if (!trimmed) return null;
-  const { data: resp, error } = await supabase.functions.invoke("supplier-sync", {
-    body: { action: "findByTaxId", taxId: trimmed, companyDb },
-  });
+  const { data: resp, error } = await syncSupplierLocal({ action: "findByTaxId", taxId: trimmed, companyDb });
   if (error) return null;
   return ((resp as any)?.supplier ?? null) as Supplier | null;
 }
@@ -539,5 +536,4 @@ export async function retrySupplierToSap(
   invalidateBusinessPartnerCaches(supplier.company_db || session?.companyDB);
   return data as Supplier;
 }
-
 

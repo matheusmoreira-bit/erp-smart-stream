@@ -1089,8 +1089,8 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     const today = new Date().toISOString().slice(0, 10);
 
     // Parse custom fields (UDFs) from credentials: header / line scope
-    let headerCustom: Record<string, unknown> = {};
-    let lineCustom: Record<string, unknown> = {};
+    const headerCustom: Record<string, unknown> = {};
+    const lineCustom: Record<string, unknown> = {};
     if (sapCreds.custom_fields) {
       try {
         const parsed = JSON.parse(sapCreds.custom_fields);

@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { runtime } from "@/config/runtime";
+import { saveFornecedor } from "@/lib/catalog-service";
 import type { SapSession } from "@/lib/sap-client";
 import { syncFornecedorToSap } from "@/lib/promote-fornecedor";
 
@@ -61,6 +63,12 @@ export function NewFornecedorDialog({
     }
     setBusy(true);
     try {
+      if (runtime.isStandaloneLocal) {
+        setForm({ tipo_pessoa: "pj", cnpj: d });
+        setHydrated(true);
+        toast.info("Modo local", { description: "Preencha os dados cadastrais manualmente." });
+        return;
+      }
       const { data, error } = await supabase.functions.invoke("cnpj-lookup", { body: { cnpj: d } });
       if (error) throw error;
       if (data?.exists) {
@@ -121,7 +129,7 @@ export function NewFornecedorDialog({
     setBusy(true);
     try {
       const payload = { ...form, tipo_pessoa: "pj", cnpj: digits(form.cnpj || cnpj) };
-      const { data, error } = await supabase.functions.invoke("fornecedor-save", { body: { payload } });
+      const { data, error } = await saveFornecedor(payload);
       if (error) {
         const msg = (data as any)?.error || error.message || "Falha ao cadastrar";
         toast.error(msg);
@@ -150,7 +158,7 @@ export function NewFornecedorDialog({
     setBusy(true);
     try {
       const payload = { ...form, tipo_pessoa: "pf", cpf: d };
-      const { data, error } = await supabase.functions.invoke("fornecedor-save", { body: { payload } });
+      const { data, error } = await saveFornecedor(payload);
       if (error) {
         const msg = (data as any)?.error || error.message || "Falha ao cadastrar";
         toast.error(msg);

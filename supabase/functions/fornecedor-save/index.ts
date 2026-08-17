@@ -1,26 +1,25 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
-import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
+import { authErrorResponse, requireUserOrSapSession } from "../_shared/auth.ts";
+import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 const digits = (s: string) => (s || "").replace(/\D+/g, "");
 
 Deno.serve(async (req) => {
   const foreignOrigin = rejectForeignOrigin(req);
   if (foreignOrigin) return foreignOrigin;
+  const corsHeaders = corsFor(req);
+  const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+
+  try {
+    await requireUserOrSapSession(req);
+  } catch (error) {
+    return authErrorResponse(error, corsHeaders) ?? json({ error: "Falha ao autenticar" }, 500);
+  }
 
   try {
     const body = await req.json().catch(() => ({}));

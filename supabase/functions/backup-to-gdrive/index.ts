@@ -322,7 +322,6 @@ async function runBackup(supabase: Sup, log: (m: string) => void) {
 
 }
 
-// @ts-ignore - EdgeRuntime é disponível no runtime Deno da Supabase
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
 async function requireAdmin(req: Request): Promise<boolean> {
@@ -440,4 +439,3 @@ Deno.serve(async (req) => {
 
   return json({ ok: true, started: true, trigger, message: "Backup em execução em segundo plano." });
 });
-

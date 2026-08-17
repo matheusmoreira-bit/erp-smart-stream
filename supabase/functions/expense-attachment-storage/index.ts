@@ -251,7 +251,7 @@ async function actionUpload(admin: SupabaseClient, caller: Caller, req: Request)
     return json(403, { error: "Você não pode anexar arquivos a este documento" });
   }
 
-  const safeName = (file.name || "arquivo").replace(/[^\w.\-]+/g, "_");
+  const safeName = (file.name || "arquivo").replace(/[^\w.-]+/g, "_");
   const path = expenseId
     ? `${expenseId}/${Date.now()}_${safeName}`
     : `advances/${advanceId}/${Date.now()}_${safeName}`;

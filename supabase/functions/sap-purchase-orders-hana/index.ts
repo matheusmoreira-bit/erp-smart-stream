@@ -424,7 +424,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    let rows = Array.from(byKey.values())
+    const rows = Array.from(byKey.values())
       .map(({ _payments, ...r }) => ({ ...r, payments_count: _payments }))
       .sort((a, b) => {
         const at = new Date(a.doc_date || a.created_at).getTime();

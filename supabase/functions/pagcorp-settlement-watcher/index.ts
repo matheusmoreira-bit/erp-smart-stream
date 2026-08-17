@@ -155,7 +155,7 @@ function parseIsoDate(raw: unknown): string | null {
   }
 
   // DD/MM/YYYY ou DD-MM-YYYY
-  const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  const dmy = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
   if (dmy) {
     let y = parseInt(dmy[3], 10);
     if (y < 100) y += 2000;

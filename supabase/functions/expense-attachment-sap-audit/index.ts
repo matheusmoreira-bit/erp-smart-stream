@@ -457,7 +457,7 @@ Deno.serve(async (req) => {
   if (body?.wait === true) {
     await work();
   } else {
-    // @ts-ignore EdgeRuntime
+    // @ts-expect-error EdgeRuntime is provided by the Supabase runtime.
     if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(work());
     else work();
   }

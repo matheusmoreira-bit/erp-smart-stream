@@ -112,7 +112,9 @@ async function notifyExhausted(admin: any, row: any) {
         .order("updated_at", { ascending: false }).limit(1).maybeSingle();
       const to = normalizePhone(ph?.phone);
       if (to) await sendWhatsApp(to, message);
-    } catch {}
+    } catch {
+      // Notification delivery is best effort.
+    }
   }
 }
 
@@ -208,9 +210,9 @@ Deno.serve(async (req) => {
     };
 
     const first = await invoke(dispatch.body);
-    let ok = first.ok;
-    let errText = first.error;
-    let httpStatus = first.status;
+    const ok = first.ok;
+    const errText = first.error;
+    const httpStatus = first.status;
 
     if (ok) {
       await admin.from("sap_retry_queue").update({

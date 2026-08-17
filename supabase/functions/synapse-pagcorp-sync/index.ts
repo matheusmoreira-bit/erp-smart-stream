@@ -600,7 +600,9 @@ async function sendValidationNotificationEmail(
         company_db: companyDB,
         details: { issues, notification_email: notificationEmail, email_failed: true },
       } as any);
-    } catch {}
+    } catch {
+      // Audit logging is best effort.
+    }
   }
 }
 
@@ -991,12 +993,16 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro desconhecido";
-    try { await logExecution(supabase, "error", { error: message }, 0); } catch {}
+    try { await logExecution(supabase, "error", { error: message }, 0); } catch {
+      // Preserve the original integration error when telemetry also fails.
+    }
     try {
       await supabase.from("synapse_integrations")
         .update({ last_run_at: new Date().toISOString(), last_run_status: "error", last_run_message: message })
         .eq("integration_key", "pagcorp_erp_sync");
-    } catch {}
+    } catch {
+      // Preserve the original integration error when status persistence fails.
+    }
 
     return new Response(JSON.stringify({ error: message }), {
       status: 500,

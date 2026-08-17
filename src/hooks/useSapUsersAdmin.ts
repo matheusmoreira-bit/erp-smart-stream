@@ -74,7 +74,7 @@ export function useSapUsersAdmin() {
   }, [companyDb, loadUsers]);
 
   useEffect(() => { loadCompanies(); }, [loadCompanies]);
-  useEffect(() => { if (companyDb) loadUsers(companyDb); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [companyDb]);
+  useEffect(() => { if (companyDb) loadUsers(companyDb);   }, [companyDb]);
 
   return {
     companies, companyDb, setCompanyDb,

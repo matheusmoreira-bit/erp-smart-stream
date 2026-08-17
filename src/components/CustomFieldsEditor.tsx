@@ -39,7 +39,7 @@ export function CustomFieldsEditor({ value, onChange }: Props) {
   // Re-sync when parent value changes (e.g., dialog reopens)
   useEffect(() => {
     setFields(parseFields(value));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [value]);
 
   const update = (next: CustomField[]) => {

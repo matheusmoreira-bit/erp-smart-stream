@@ -1,4 +1,4 @@
-/* eslint-disable */
+
 // Service Worker de mensageria (Web Push) do ERP Flow.
 // NÃO faz cache de app shell — apenas recebe notificações push e abre o app.
 

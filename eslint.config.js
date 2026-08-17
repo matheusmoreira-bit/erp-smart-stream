@@ -21,6 +21,9 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/no-unused-vars": "off",
+      // O projeto ainda está migrando gradualmente para strict mode. Manter
+      // `any` permitido torna o lint um gate útil para erros comportamentais.
+      "@typescript-eslint/no-explicit-any": "off",
     },
   },
 );
