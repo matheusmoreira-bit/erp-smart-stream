@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getIsCloudAdmin } from "@/lib/auth-cache";
+import { createFakeAuthSession, createFakeAuthUser, isFakeAuthAdmin, isFakeAuthEnabled } from "@/lib/fake-auth";
 import { syncKeepAlive } from "@/lib/session-keepalive";
 
 import type { User, Session } from "@supabase/supabase-js";
@@ -13,6 +14,14 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (isFakeAuthEnabled()) {
+      setSession(createFakeAuthSession());
+      setUser(createFakeAuthUser());
+      setIsAdmin(isFakeAuthAdmin());
+      setLoading(false);
+      return;
+    }
+
     // Mantém a sessão renovando quando o usuário optou por "manter conectado".
     syncKeepAlive();
 
@@ -105,11 +114,13 @@ export function useAuth() {
   }, []);
 
   const signIn = async (email: string, password: string) => {
+    if (isFakeAuthEnabled()) return { error: null };
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error };
   };
 
   const signUp = async (email: string, password: string) => {
+    if (isFakeAuthEnabled()) return { error: null };
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -119,6 +130,7 @@ export function useAuth() {
   };
 
   const signOut = async () => {
+    if (isFakeAuthEnabled()) return;
     await supabase.auth.signOut();
   };
 

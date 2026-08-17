@@ -5,6 +5,7 @@ import { sapLogin, sapLogout, ensureSapAuthToken, sapKeepAlive, type SapSession,
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { clearErpLocalState } from "@/lib/clear-erp-local-state";
+import { getCurrentAuthSession } from "@/lib/fake-auth";
 import { registerSapSessionResolver, type ResolvedSapSession } from "@/lib/sap-session-broker";
 import { SapCredentialsDialog } from "@/components/SapCredentialsDialog";
 import {
@@ -277,7 +278,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     setError(null);
     try {
-      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const { data: { session: authSession } } = await getCurrentAuthSession(() => supabase.auth.getSession());
       const email = authSession?.user?.email || "";
       if (!email) throw new Error("Sessão de identidade não encontrada. Entre com sua conta Google.");
 

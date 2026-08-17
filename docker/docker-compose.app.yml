@@ -1,0 +1,19 @@
+version: '3.8'
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: docker/app.Dockerfile
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY}
+        VITE_SUPABASE_PROJECT_ID: ${VITE_SUPABASE_PROJECT_ID}
+        VITE_FAKE_AUTH_EMAIL: ${VITE_FAKE_AUTH_EMAIL}
+        VITE_FAKE_AUTH_IS_ADMIN: ${VITE_FAKE_AUTH_IS_ADMIN}
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - ../.env
+    ports:
+      - "8080:80"
+    restart: unless-stopped

@@ -6,6 +6,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import { toast } from "sonner";
+import { isFakeAuthEnabled } from "@/lib/fake-auth";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 
 const ALLOWED_DOMAINS = [
@@ -38,6 +39,11 @@ function sessionAgeMs(user: { last_sign_in_at?: string | null; created_at?: stri
 
 
 export function GoogleAuthGate({ children }: { children: React.ReactNode }) {
+  if (isFakeAuthEnabled()) return <>{children}</>;
+  return <RealGoogleAuthGate>{children}</RealGoogleAuthGate>;
+}
+
+function RealGoogleAuthGate({ children }: { children: React.ReactNode }) {
   const [checking, setChecking] = useState(true);
   const [allowed, setAllowed] = useState(false);
   const [signingIn, setSigningIn] = useState(false);

@@ -18,11 +18,14 @@ import { toast } from "sonner";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
 import { assertIdpBinding, assertSapLoginIdpBinding, upsertGoogleIdpMapping, upsertLocalAdminMapping } from "@/lib/idp-binding";
+import { getCurrentAuthSession } from "@/lib/fake-auth";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 
 
 
 const OMIE_PENDING_KEY = "omie_google_pending_company_db";
+
+const readAuthSession = () => getCurrentAuthSession(() => supabase.auth.getSession());
 
 async function isEmailAllowedForOmieCompany(email: string, companyDb: string): Promise<boolean> {
   // Server-side check via SECURITY DEFINER RPC — the client no longer reads
@@ -119,7 +122,7 @@ export function SapLoginForm() {
         .eq("is_active", true)
         .order("display_name");
       if (error) throw error;
-      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const { data: { session: authSession } } = await readAuthSession();
       const canSeeTest = await resolveTestCompanyVisibility({
         identifier: authSession?.user?.email || null,
       });
@@ -150,7 +153,7 @@ export function SapLoginForm() {
     let cancelled = false;
     (async () => {
       try {
-        const { data: { session: authSession } } = await supabase.auth.getSession();
+        const { data: { session: authSession } } = await readAuthSession();
         const email = authSession?.user?.email || null;
         if (cancelled) return;
         setCloudEmail(email);
@@ -181,10 +184,10 @@ export function SapLoginForm() {
       setGoogleLoading(true);
       try {
         // Wait briefly for the Lovable auth wrapper to hydrate the session after redirect.
-        let authSession = (await supabase.auth.getSession()).data.session;
+        let authSession = (await readAuthSession()).data.session;
         for (let i = 0; !authSession && i < 20; i++) {
           await new Promise((r) => setTimeout(r, 150));
-          authSession = (await supabase.auth.getSession()).data.session;
+          authSession = (await readAuthSession()).data.session;
         }
         const email = authSession?.user?.email || "";
         if (!email) {
@@ -243,7 +246,7 @@ export function SapLoginForm() {
       setGoogleLoading(true);
 
       // Reuse existing Google session (from the gate) when available.
-      const { data: { session: existing } } = await supabase.auth.getSession();
+      const { data: { session: existing } } = await readAuthSession();
       if (existing?.user?.email) {
         const email = existing.user.email;
         const allowed = await isEmailAllowedForOmieCompany(email, companyDB);

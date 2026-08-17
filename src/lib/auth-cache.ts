@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { isFakeAuthAdmin, isFakeAuthEnabled } from "@/lib/fake-auth";
 import { isImpersonating } from "@/lib/impersonation";
 
 /**
@@ -52,6 +53,7 @@ try {
  */
 export function getIsCloudAdmin(): Promise<boolean> {
   if (isImpersonating()) return Promise.resolve(false);
+  if (isFakeAuthEnabled()) return Promise.resolve(isFakeAuthAdmin());
   return memo("cloud-admin", async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return false;
