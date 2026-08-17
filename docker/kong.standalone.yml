@@ -1,0 +1,31 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  - name: rest
+    url: http://rest:3000/
+    routes:
+      - name: rest-all
+        paths: [/rest/v1/]
+        strip_path: true
+    plugins:
+      - name: cors
+        config:
+          origins: ["*"]
+          methods: [GET, POST, PATCH, PUT, DELETE, OPTIONS]
+          headers: [Accept, Authorization, Content-Type, apikey, x-client-info, prefer]
+          credentials: true
+
+  - name: auth
+    url: http://auth:9999/
+    routes:
+      - name: auth-all
+        paths: [/auth/v1/]
+        strip_path: true
+    plugins:
+      - name: cors
+        config:
+          origins: ["*"]
+          methods: [GET, POST, PATCH, PUT, DELETE, OPTIONS]
+          headers: [Accept, Authorization, Content-Type, apikey, x-client-info]
+          credentials: true

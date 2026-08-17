@@ -1,7 +1,7 @@
 # ============================================================================
 # Makefile — atalhos para o stack QA local (Fase 3).
 # ============================================================================
-.PHONY: qa-up qa-down qa-nuke qa-logs qa-seed qa-jwt qa-migrate qa-shell qa-status
+.PHONY: qa-up qa-down qa-nuke qa-logs qa-seed qa-jwt qa-migrate qa-shell qa-status standalone-up standalone-down standalone-nuke standalone-seed standalone-logs standalone-status
 
 qa-up: ## Sobe o stack QA local (Supabase self-hosted)
 	@test -f docker/.env || (echo "ERRO: copie docker/.env.example para docker/.env"; exit 1)
@@ -39,6 +39,25 @@ qa-migrate: ## Reaplica migrations do repo (útil após alterar schema)
 qa-shell: ## psql no banco QA
 	PGPASSWORD=$$(grep '^POSTGRES_PASSWORD=' docker/.env | cut -d= -f2) \
 	psql -h 127.0.0.1 -p 54322 -U postgres -d postgres
+
+standalone-up: ## Sobe app + Supabase local com dados sinteticos
+	docker compose -f docker/docker-compose.standalone.yml --env-file docker/.env.standalone up -d --build
+	bash scripts/standalone-seed.sh
+
+standalone-down: ## Para o standalone mantendo volumes locais
+	docker compose -f docker/docker-compose.standalone.yml --env-file docker/.env.standalone down
+
+standalone-nuke: ## Para o standalone e apaga volumes locais
+	docker compose -f docker/docker-compose.standalone.yml --env-file docker/.env.standalone down -v
+
+standalone-seed: ## Reaplica migrations e seed sintetico local
+	bash scripts/standalone-seed.sh
+
+standalone-logs: ## Tail dos logs standalone
+	docker compose -f docker/docker-compose.standalone.yml --env-file docker/.env.standalone logs -f --tail=100
+
+standalone-status: ## Status dos containers standalone
+	docker compose -f docker/docker-compose.standalone.yml --env-file docker/.env.standalone ps
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \

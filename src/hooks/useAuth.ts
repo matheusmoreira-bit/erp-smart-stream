@@ -1,7 +1,13 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getIsCloudAdmin } from "@/lib/auth-cache";
-import { createFakeAuthSession, createFakeAuthUser, isFakeAuthAdmin, isFakeAuthEnabled } from "@/lib/fake-auth";
+import {
+  createFakeAuthSession,
+  createFakeAuthUser,
+  ensureFakeSupabaseSession,
+  isFakeAuthAdmin,
+  isFakeAuthEnabled,
+} from "@/lib/fake-auth";
 import { syncKeepAlive } from "@/lib/session-keepalive";
 
 import type { User, Session } from "@supabase/supabase-js";
@@ -15,11 +21,22 @@ export function useAuth() {
 
   useEffect(() => {
     if (isFakeAuthEnabled()) {
-      setSession(createFakeAuthSession());
-      setUser(createFakeAuthUser());
-      setIsAdmin(isFakeAuthAdmin());
-      setLoading(false);
-      return;
+      let cancelled = false;
+      (async () => {
+        const localSession = await ensureFakeSupabaseSession(
+          () => supabase.auth.getSession(),
+          (credentials) => supabase.auth.signInWithPassword(credentials),
+        );
+        if (cancelled) return;
+        const activeSession = localSession ?? createFakeAuthSession();
+        setSession(activeSession);
+        setUser(activeSession.user ?? createFakeAuthUser());
+        setIsAdmin(isFakeAuthAdmin());
+        setLoading(false);
+      })();
+      return () => {
+        cancelled = true;
+      };
     }
 
     // Mantém a sessão renovando quando o usuário optou por "manter conectado".
@@ -130,7 +147,10 @@ export function useAuth() {
   };
 
   const signOut = async () => {
-    if (isFakeAuthEnabled()) return;
+    if (isFakeAuthEnabled()) {
+      await supabase.auth.signOut().catch(() => {});
+      return;
+    }
     await supabase.auth.signOut();
   };
 

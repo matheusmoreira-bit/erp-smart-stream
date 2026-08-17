@@ -12,7 +12,8 @@
 //     .limit(100);
 
 import { sapFunctionFetch } from "@/lib/auth-fetch";
-import { isFakeAuthEnabled } from "@/lib/fake-auth";
+import { isFakeAuthBackedBySupabase, isFakeAuthEnabled } from "@/lib/fake-auth";
+import { supabase } from "@/integrations/supabase/client";
 
 export type ExpenseReadTable = "expenses" | "expense_items" | "expense_attachments";
 
@@ -60,6 +61,29 @@ function isAuthSessionError(message: string): boolean {
     normalized.includes("nao autenticado") ||
     normalized.includes("auth session missing")
   );
+}
+
+function hasEmptyInFilter(filters: Filter[]): boolean {
+  return filters.some((filter) => filter.op === "in" && Array.isArray(filter.value) && filter.value.length === 0);
+}
+
+function applyLocalFilters(query: any, filters: Filter[]) {
+  return filters.reduce((q, filter) => {
+    switch (filter.op) {
+      case "eq": return q.eq(filter.column, filter.value);
+      case "neq": return q.neq(filter.column, filter.value);
+      case "gt": return q.gt(filter.column, filter.value);
+      case "gte": return q.gte(filter.column, filter.value);
+      case "lt": return q.lt(filter.column, filter.value);
+      case "lte": return q.lte(filter.column, filter.value);
+      case "like": return q.like(filter.column, filter.value);
+      case "ilike": return q.ilike(filter.column, filter.value);
+      case "in": return q.in(filter.column, filter.value);
+      case "is": return q.is(filter.column, filter.value);
+      case "not_is": return q.not(filter.column, "is", filter.value);
+      default: return q;
+    }
+  }, query);
 }
 
 class ExpenseReadBuilder<T = any> implements PromiseLike<ExpenseReadResult<T>> {
@@ -131,7 +155,85 @@ class ExpenseReadBuilder<T = any> implements PromiseLike<ExpenseReadResult<T>> {
     };
   }
 
+  private async runLocal(): Promise<ExpenseReadResult<T>> {
+    if (hasEmptyInFilter(this.spec.filters)) return this.standaloneEmptyResult();
+
+    const countMode = this.spec.count ? "exact" : undefined;
+    let query: any = (supabase as any)
+      .from(this.spec.table)
+      .select(this.spec.select, { count: countMode });
+    query = applyLocalFilters(query, this.spec.filters);
+    if (this.spec.or) query = query.or(this.spec.or);
+    if (this.spec.order) {
+      query = query.order(this.spec.order.column, {
+        ascending: this.spec.order.ascending,
+        nullsFirst: this.spec.order.nullsFirst,
+      });
+    }
+    if (this.spec.range) query = query.range(this.spec.range[0], this.spec.range[1]);
+    else if (this.spec.limit !== undefined) query = query.limit(this.spec.limit);
+
+    const { data, error, count } = await query;
+    if (error) return { data: null, error: { message: error.message } };
+
+    const rows = (data ?? []) as T[];
+    const result: ExpenseReadResult<T> = {
+      data: rows,
+      error: null,
+      scoped: true,
+      privileged: true,
+      count: this.spec.count ? count ?? rows.length : null,
+      hasMore: false,
+      truncated: false,
+      items: [],
+      attachments: [],
+    };
+
+    const knownCount = typeof result.count === "number" ? result.count : null;
+    if (knownCount !== null) {
+      if (this.spec.range) result.hasMore = this.spec.range[1] + 1 < knownCount;
+      else if (this.spec.limit !== undefined) result.hasMore = this.spec.limit < knownCount;
+    }
+
+    const rowsAny = rows as any[];
+    const expenseIds = rowsAny.map((row) => row?.id).filter(Boolean);
+    if (expenseIds.length > 0 && this.spec.include?.includes("items")) {
+      const child = await (supabase as any)
+        .from("expense_items")
+        .select("*")
+        .in("expense_id", expenseIds);
+      if (child.error) return { data: null, error: { message: child.error.message } };
+      result.items = child.data ?? [];
+    }
+    if (expenseIds.length > 0 && this.spec.include?.includes("attachments")) {
+      const child = await (supabase as any)
+        .from("expense_attachments")
+        .select("*")
+        .in("expense_id", expenseIds);
+      if (child.error) return { data: null, error: { message: child.error.message } };
+      result.attachments = child.data ?? [];
+    }
+    if (this.spec.keys) {
+      let keysQuery: any = (supabase as any)
+        .from(this.spec.table)
+        .select("company_db,sap_doc_entry,sap_doc_num");
+      keysQuery = applyLocalFilters(keysQuery, this.spec.filters);
+      if (this.spec.or) keysQuery = keysQuery.or(this.spec.or);
+      const keyRows = await keysQuery.limit(5000);
+      if (keyRows.error) return { data: null, error: { message: keyRows.error.message } };
+      result.keys = (keyRows.data ?? []).map((row: any) => ({
+        company_db: row.company_db ?? null,
+        sap_doc_entry: row.sap_doc_entry ?? null,
+        sap_doc_num: row.sap_doc_num ?? null,
+      }));
+    }
+
+    return result;
+  }
+
   async run(): Promise<ExpenseReadResult<T>> {
+    if (isFakeAuthBackedBySupabase()) return this.runLocal();
+
     try {
       const res = await sapFunctionFetch("expense-read", {
         method: "POST",

@@ -1,6 +1,7 @@
 import type { Session, User } from "@supabase/supabase-js";
 
 const rawEmail = (import.meta.env.VITE_FAKE_AUTH_EMAIL as string | undefined)?.trim().toLowerCase() || "";
+const rawPassword = (import.meta.env.VITE_FAKE_AUTH_PASSWORD as string | undefined)?.trim() || "";
 const rawAdmin = String(import.meta.env.VITE_FAKE_AUTH_IS_ADMIN ?? "").trim().toLowerCase();
 
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
@@ -37,8 +38,16 @@ export function getFakeAuthEmail(): string {
   return rawEmail;
 }
 
+export function getFakeAuthPassword(): string {
+  return rawPassword;
+}
+
 export function isFakeAuthAdmin(): boolean {
   return isFakeAuthEnabled() && TRUE_VALUES.has(rawAdmin);
+}
+
+export function isFakeAuthBackedBySupabase(): boolean {
+  return isFakeAuthEnabled() && !!rawPassword;
 }
 
 export function createFakeAuthUser(): User {
@@ -81,7 +90,36 @@ export async function getCurrentAuthSession(
   getRealSession: () => Promise<{ data: { session: Session | null } }>,
 ): Promise<{ data: { session: Session | null } }> {
   if (isFakeAuthEnabled()) {
+    if (isFakeAuthBackedBySupabase()) {
+      const real = await getRealSession().catch(() => ({ data: { session: null } }));
+      const email = real.data.session?.user?.email?.toLowerCase();
+      if (email && email === rawEmail) return real;
+    }
     return { data: { session: createFakeAuthSession() } };
   }
   return getRealSession();
+}
+
+export async function ensureFakeSupabaseSession(
+  getRealSession: () => Promise<{ data: { session: Session | null } }>,
+  signInWithPassword: (credentials: { email: string; password: string }) => Promise<{
+    data?: { session: Session | null };
+    error?: { message: string } | null;
+  }>,
+): Promise<Session | null> {
+  if (!isFakeAuthBackedBySupabase()) return null;
+
+  const current = await getRealSession().catch(() => ({ data: { session: null } }));
+  const currentEmail = current.data.session?.user?.email?.toLowerCase();
+  if (currentEmail && currentEmail === rawEmail) return current.data.session;
+
+  const result = await signInWithPassword({ email: rawEmail, password: rawPassword }).catch((error) => ({
+    data: { session: null },
+    error: { message: error instanceof Error ? error.message : String(error) },
+  }));
+  if (result.error) {
+    console.warn("[fake-auth] Supabase local sign-in failed:", result.error.message);
+    return null;
+  }
+  return result.data?.session ?? null;
 }

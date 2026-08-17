@@ -9,11 +9,10 @@ services:
         VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY}
         VITE_SUPABASE_PROJECT_ID: ${VITE_SUPABASE_PROJECT_ID}
         VITE_FAKE_AUTH_EMAIL: ${VITE_FAKE_AUTH_EMAIL}
+        VITE_FAKE_AUTH_PASSWORD: ${VITE_FAKE_AUTH_PASSWORD}
         VITE_FAKE_AUTH_IS_ADMIN: ${VITE_FAKE_AUTH_IS_ADMIN}
     environment:
       - NODE_ENV=production
-    env_file:
-      - ../.env
     ports:
       - "8080:80"
     restart: unless-stopped
