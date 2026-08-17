@@ -12,6 +12,7 @@
 //     .limit(100);
 
 import { sapFunctionFetch } from "@/lib/auth-fetch";
+import { isFakeAuthEnabled } from "@/lib/fake-auth";
 
 export type ExpenseReadTable = "expenses" | "expense_items" | "expense_attachments";
 
@@ -48,6 +49,17 @@ export interface ExpenseReadResult<T = any> {
   /** A varredura foi interrompida pelo teto de linhas — total é aproximado. */
   truncated?: boolean;
   keys?: Array<{ company_db: string | null; sap_doc_entry: number | null; sap_doc_num: number | null }>;
+}
+
+function isAuthSessionError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("sessão sap não encontrada") ||
+    normalized.includes("sessao sap nao encontrada") ||
+    normalized.includes("não autenticado") ||
+    normalized.includes("nao autenticado") ||
+    normalized.includes("auth session missing")
+  );
 }
 
 class ExpenseReadBuilder<T = any> implements PromiseLike<ExpenseReadResult<T>> {
@@ -104,6 +116,21 @@ class ExpenseReadBuilder<T = any> implements PromiseLike<ExpenseReadResult<T>> {
     return this;
   }
 
+  private standaloneEmptyResult(): ExpenseReadResult<T> {
+    return {
+      data: [],
+      error: null,
+      scoped: true,
+      privileged: true,
+      items: [],
+      attachments: [],
+      count: this.spec.count ? 0 : null,
+      hasMore: false,
+      truncated: false,
+      keys: this.spec.keys ? [] : undefined,
+    };
+  }
+
   async run(): Promise<ExpenseReadResult<T>> {
     try {
       const res = await sapFunctionFetch("expense-read", {
@@ -113,7 +140,11 @@ class ExpenseReadBuilder<T = any> implements PromiseLike<ExpenseReadResult<T>> {
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
-        return { data: null, error: { message: body?.error || `expense-read ${res.status}` } };
+        const message = body?.error || `expense-read ${res.status}`;
+        if (isFakeAuthEnabled() && res.status === 401 && isAuthSessionError(message)) {
+          return this.standaloneEmptyResult();
+        }
+        return { data: null, error: { message } };
       }
       return {
         data: (body?.data ?? []) as T[],
@@ -128,7 +159,11 @@ class ExpenseReadBuilder<T = any> implements PromiseLike<ExpenseReadResult<T>> {
         keys: body?.keys,
       };
     } catch (e) {
-      return { data: null, error: { message: e instanceof Error ? e.message : String(e) } };
+      const message = e instanceof Error ? e.message : String(e);
+      if (isFakeAuthEnabled() && isAuthSessionError(message)) {
+        return this.standaloneEmptyResult();
+      }
+      return { data: null, error: { message } };
     }
   }
 
