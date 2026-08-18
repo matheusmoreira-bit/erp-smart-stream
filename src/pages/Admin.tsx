@@ -853,6 +853,15 @@ export default function Admin() {
                           <span>{c.is_active ? "Ativa" : "Desativada"}</span>
                         </label>
                         <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => navigate(`/usuarios/lista?company=${encodeURIComponent(c.company_db)}`)}
+                            aria-label="Gerenciar acessos"
+                          >
+                            <Users className="w-4 h-4" />
+                          </Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditCompany(c)} aria-label="Editar">
                             <Pencil className="w-4 h-4" />
                           </Button>

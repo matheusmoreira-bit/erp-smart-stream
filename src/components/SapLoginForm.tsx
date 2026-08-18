@@ -39,6 +39,18 @@ async function isEmailAllowedForOmieCompany(email: string, companyDb: string): P
   return data === true;
 }
 
+async function isEmailAllowedForCompany(email: string, companyDb: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("is_email_allowed_for_company", {
+    _email: email,
+    _company_db: companyDb,
+  });
+  if (error) {
+    console.error("[company-allowlist] rpc failed:", error);
+    return false;
+  }
+  return data === true;
+}
+
 interface CompanyOption {
   label: string;
   value: string;
@@ -128,24 +140,33 @@ export function SapLoginForm() {
         .order("display_name");
       if (error) throw error;
       const { data: { session: authSession } } = await supabase.auth.getSession();
+      const email = authSession?.user?.email || null;
       const canSeeTest = await resolveTestCompanyVisibility({
-        identifier: authSession?.user?.email || null,
+        identifier: email,
       });
-      setAllCompanies(
-        ((data || []) as CompanyRow[])
-          .filter((c) => canSeeTest || !isTestCompanyDb(c.company_db))
-          .map((c) => ({
-            label: c.display_name,
-            value: c.company_db,
-            erp_type: c.erp_type || "sap",
-          })),
-      );
+      let rows = ((data || []) as CompanyRow[])
+        .filter((c) => canSeeTest || !isTestCompanyDb(c.company_db));
+      if (!isAdmin) {
+        if (!email) rows = [];
+        else {
+          const allowed = await Promise.all(rows.map(async (c) => ({
+            row: c,
+            ok: await isEmailAllowedForCompany(email, c.company_db),
+          })));
+          rows = allowed.filter((r) => r.ok).map((r) => r.row);
+        }
+      }
+      setAllCompanies(rows.map((c) => ({
+        label: c.display_name,
+        value: c.company_db,
+        erp_type: c.erp_type || "sap",
+      })));
     } catch (e) {
       setCompaniesError(e instanceof Error ? e.message : "Falha ao carregar empresas");
     } finally {
       setCompaniesLoading(false);
     }
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
     loadCompanies();
@@ -317,6 +338,12 @@ export function SapLoginForm() {
     // provisionada; senão, o modal de credenciais aparece na hora da ação).
     if (erpType === "sap" && cloudEmail) {
       try {
+        if (!isAdmin && !(await isEmailAllowedForCompany(cloudEmail, companyDB))) {
+          toast.error("Acesso não liberado", {
+            description: "Seu usuário não está autorizado a entrar nesta empresa.",
+          });
+          return;
+        }
         await loginIdentity(companyDB, "sap");
 
         toast.success(`Conectado ao ${erpInfo.label}!`);

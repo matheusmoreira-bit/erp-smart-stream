@@ -57,7 +57,7 @@ interface Props {
   groups: PermissionGroupOption[];
   onClose: () => void;
   onSetSegment: (identity: string, segment: ManagementSegment) => Promise<void>;
-  onSetGroup: (opts: { userCode: string; email?: string | null; groupId: string | null }) => Promise<void>;
+  onSetGroup: (opts: { userCode: string; email?: string | null; groupId: string | null; companyDb?: string | null }) => Promise<void>;
   onToggleLock: (user: SapUser) => Promise<void>;
   onResetPassword: (user: SapUser) => void;
   onEditPhone: (user: SapUser) => void;
@@ -142,14 +142,14 @@ export default function UserDetailDrawer({
         });
         toast.success(`Gestão alterada para ${MANAGEMENT_SEGMENT_LABEL[pending.value]}`);
       } else if (pending.kind === "group") {
-        await onSetGroup({ userCode: data.user.UserCode, email: data.user.eMail, groupId: pending.value });
+        await onSetGroup({ userCode: data.user.UserCode, email: data.user.eMail, groupId: pending.value, companyDb: companyDb || null });
         await logAuditAction({
           action: "user_permission_group_changed",
           entity_type: "user",
           entity_id: identity,
           details: { from: data.groupName, to: groups.find((g) => g.id === pending.value)?.name ?? null },
         });
-        toast.success("Grupo de permissão atualizado em todas as empresas");
+        toast.success(companyDb ? "Grupo de permissão atualizado nesta empresa" : "Grupo de permissão atualizado");
       } else {
         await onToggleLock(data.user);
         await logAuditAction({
@@ -293,7 +293,7 @@ export default function UserDetailDrawer({
                   </SelectContent>
                 </Select>
                 <p className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs text-warning">
-                  A permissão vale para todas as empresas, independente do ERP.
+                  A permissão define se o usuário pode entrar nesta empresa e quais módulos enxerga.
                 </p>
               </div>
 
@@ -402,7 +402,7 @@ export default function UserDetailDrawer({
               {pending?.kind === "segment" &&
                 `A gestão de ${data.user.UserName || data.user.UserCode} passará para ${MANAGEMENT_SEGMENT_LABEL[pending.value]}, alterando o escopo de projetos visíveis.`}
               {pending?.kind === "group" &&
-                `O grupo de permissão passará para "${groups.find((g) => g.id === pending.value)?.name ?? "Sem grupo"}" em todas as empresas.`}
+                `O grupo de permissão passará para "${groups.find((g) => g.id === pending.value)?.name ?? "Sem grupo"}" nesta empresa.`}
               {pending?.kind === "lock" &&
                 (isLocked
                   ? "O acesso do usuário será desbloqueado no ERP."

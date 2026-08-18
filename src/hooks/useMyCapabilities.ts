@@ -61,7 +61,10 @@ export function useMyCapabilities(): MyCapabilities {
 
         const assignments = await getGroupAssignments();
 
-        const mine = assignments.filter((a) => identityMatches(a.sap_email, identifier));
+        const mine = assignments.filter((a) =>
+          (a.company_db === null || a.company_db === session?.companyDB) &&
+          identityMatches(a.sap_email, identifier),
+        );
         names = mine.map((a) => String(a.permission_groups?.name || "")).filter(Boolean);
 
         const groupIds = Array.from(new Set(mine.map((a) => a.group_id))).filter(
@@ -89,7 +92,7 @@ export function useMyCapabilities(): MyCapabilities {
     return () => {
       cancelled = true;
     };
-  }, [session?.userName, session?.isSuperUser, session?.erpType]);
+  }, [session?.companyDB, session?.userName, session?.isSuperUser, session?.erpType]);
 
   return {
     capabilities,

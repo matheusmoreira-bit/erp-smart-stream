@@ -341,9 +341,8 @@ export function useUserAssignments(_companyDb?: string) {
       .in("sap_email", keys);
     if (delError) throw new Error(delError.message);
 
-    const { error: insError } = await supabase.from("user_group_assignments").upsert(
+    const { error: insError } = await supabase.from("user_group_assignments").insert(
       { sap_email: email, group_id, company_db: null },
-      { onConflict: "sap_email,group_id" }
     );
     if (insError) throw new Error(insError.message);
     await fetch();
@@ -415,12 +414,14 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
       // SAP admin (matched by email/prefix)?
       if (await getIsSapUserAdmin(identifier)) { grantAll(); return; }
 
-      // Global assignments — one row per (sap_email, group_id).
+      // Assignments globais ou específicos da empresa atual.
       const allAssignments = await getGroupAssignments();
 
       const myKey = canonicalUserKey(identifier);
       const mine = (allAssignments || []).filter(
-        (a: any) => canonicalUserKey(a.sap_email) === myKey,
+        (a: any) =>
+          (a.company_db === null || a.company_db === session.companyDB) &&
+          canonicalUserKey(a.sap_email) === myKey,
       );
 
       if (cancelled) return;

@@ -6,11 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import { PasswordPolicyChecklist } from "@/components/PasswordPolicyChecklist";
 import { checkPasswordPolicy, generateStrongPassword } from "@/lib/password-policy";
+import { canonicalUserKey } from "@/lib/user-identity";
 
 type PasswordMode = "auto" | "manual";
 
@@ -28,15 +30,22 @@ interface CompanyOption {
   is_current: boolean;
 }
 
+interface PermissionGroupOption {
+  id: string;
+  name: string;
+  company_db: string | null;
+}
+
 interface CreateUserDialogProps {
   onCreateUser: (
     userData: { UserCode: string; UserName: string; eMail: string; Password: string },
     targetCompanyDbs?: string[],
   ) => Promise<{ created: boolean; replicationResults: ReplicationResult[] }>;
   isLoading?: boolean;
+  adminMode?: boolean;
 }
 
-export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUserDialogProps) {
+export default function CreateUserDialog({ onCreateUser, isLoading, adminMode = false }: CreateUserDialogProps) {
   const { session } = useSap();
   const [open, setOpen] = useState(false);
   const [userCode, setUserCode] = useState("");
@@ -54,10 +63,39 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [selectedDbs, setSelectedDbs] = useState<Set<string>>(new Set());
   const [loadingCompanies, setLoadingCompanies] = useState(false);
+  const [groups, setGroups] = useState<PermissionGroupOption[]>([]);
+  const [accessGroupId, setAccessGroupId] = useState<string>("");
 
   // Load eligible companies (same erp_type) when dialog opens
   useEffect(() => {
-    if (!open || !session) return;
+    if (!open) return;
+    supabase
+      .from("permission_groups")
+      .select("id, name, company_db")
+      .order("name")
+      .then(({ data }) => {
+        const list = (data || []) as PermissionGroupOption[];
+        setGroups(list);
+        setAccessGroupId((current) => current || list[0]?.id || "");
+      });
+    if (adminMode) {
+      setLoadingCompanies(true);
+      supabase.functions.invoke("sap-users-admin", { body: { action: "list_companies" } })
+        .then(({ data, error }) => {
+          if (error) throw error;
+          const list: CompanyOption[] = ((data?.companies || []) as { company_db: string; display_name: string }[]).map((c) => ({
+            company_db: c.company_db,
+            display_name: c.display_name,
+            is_current: false,
+          }));
+          setCompanies(list);
+          setSelectedDbs(new Set(list.map((c) => c.company_db)));
+        })
+        .catch((e) => toast.error(e instanceof Error ? e.message : "Falha ao carregar empresas"))
+        .finally(() => setLoadingCompanies(false));
+      return;
+    }
+    if (!session) return;
     const erpType = session.erpType || "sap";
     const currentDb = session.companyDB;
     setLoadingCompanies(true);
@@ -78,7 +116,7 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
         setSelectedDbs(new Set(list.map((c) => c.company_db)));
         setLoadingCompanies(false);
       });
-  }, [open, session]);
+  }, [adminMode, open, session]);
 
   const resetForm = () => {
     setUserCode("");
@@ -89,6 +127,7 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
     setShowPassword(false);
     setSendCredentials(true);
     setResults(null);
+    setAccessGroupId("");
   };
 
   const applyMode = (mode: PasswordMode) => {
@@ -130,6 +169,10 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
       toast.error("Selecione ao menos uma empresa");
       return;
     }
+    if (!accessGroupId) {
+      toast.error("Selecione o grupo de acesso do usuário");
+      return;
+    }
     setSubmitting(true);
     setResults(null);
     try {
@@ -146,14 +189,27 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
       const createdInCurrent = !!currentDb && selectedDbs.has(currentDb) && res.created;
       const createdElsewhere = res.replicationResults.filter((r) => r.status === "success").length;
       const totalCreated = (createdInCurrent ? 1 : 0) + createdElsewhere;
+      const createdDbs = [
+        ...(createdInCurrent && currentDb ? [currentDb] : []),
+        ...res.replicationResults.filter((r) => r.status === "success").map((r) => r.companyDB),
+      ];
       if (totalCreated > 0) {
         toast.success(`Usuário ${userName} criado em ${totalCreated} empresa(s)`);
+        const key = canonicalUserKey(userCode.trim() || email.trim());
+        if (key) {
+          const { error: delError } = await supabase
+            .from("user_group_assignments")
+            .delete()
+            .eq("sap_email", key)
+            .in("company_db", createdDbs);
+          if (delError) throw new Error(delError.message);
+          const { error: accessError } = await supabase.from("user_group_assignments").insert(
+            createdDbs.map((db) => ({ sap_email: key, group_id: accessGroupId, company_db: db })),
+          );
+          if (accessError) throw new Error(accessError.message);
+        }
 
         if (email.trim()) {
-          const createdDbs = [
-            ...(createdInCurrent && currentDb ? [currentDb] : []),
-            ...res.replicationResults.filter((r) => r.status === "success").map((r) => r.companyDB),
-          ];
           const { data: mail, error: mailError } = await supabase.functions.invoke(
             "user-credentials-email",
             {
@@ -300,6 +356,25 @@ export default function CreateUserDialog({ onCreateUser, isLoading }: CreateUser
             </div>
 
 
+
+            <div className="space-y-2">
+              <Label>Grupo de acesso *</Label>
+              <Select value={accessGroupId} onValueChange={setAccessGroupId}>
+                <SelectTrigger className="bg-card">
+                  <SelectValue placeholder="Selecione o grupo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {groups.map((g) => (
+                    <SelectItem key={g.id} value={g.id}>
+                      {g.name}{g.company_db ? ` · ${g.company_db}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Este grupo libera o login nas empresas selecionadas abaixo.
+              </p>
+            </div>
 
             <div className="space-y-2 pt-1">
               <div className="flex items-center justify-between">

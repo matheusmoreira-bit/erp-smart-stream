@@ -78,6 +78,7 @@ export function getIsSapUserAdmin(identifier: string): Promise<boolean> {
 export interface GroupAssignmentRow {
   sap_email: string | null;
   group_id: string | null;
+  company_db: string | null;
   permission_groups?: { name?: string | null } | null;
 }
 
@@ -86,7 +87,7 @@ export function getGroupAssignments(): Promise<GroupAssignmentRow[]> {
   return memo("group-assignments", async () => {
     const { data } = await supabase
       .from("user_group_assignments")
-      .select("sap_email, group_id, permission_groups(name)");
+      .select("sap_email, group_id, company_db, permission_groups(name)");
     return (data || []) as unknown as GroupAssignmentRow[];
   });
 }

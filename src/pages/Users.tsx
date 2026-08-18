@@ -58,6 +58,8 @@ import { useUsersDirectoryState } from "@/hooks/useUsersDirectoryState";
 import { deriveUserAlerts, alertSeverityScore, IDP_STATE_LABEL, type UserAlert } from "@/lib/user-state";
 import UserDetailDrawer, { type UserDrawerData } from "@/components/users/UserDetailDrawer";
 import { logAuditAction } from "@/hooks/useAuditLog";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 type SegmentKey = "all" | "admins" | "sap" | "blocked" | "divergences";
 
@@ -92,12 +94,95 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const { session } = useSap();
+  const { isAdmin: isCloudAdmin } = useAuth();
   const { users, isLoading, error, actionLoading, refresh, toggleLock, resetPassword, createUser } = useSapUsers();
   const { phones, upsertPhone } = useUserPhones();
   const { isPrivileged } = useMyPermissionGroups();
   const { groups: permissionGroups, groupOf, setGroup } = useUserGroupAdmin();
   const { segmentOf, setSegment, refresh: refreshSegments } = useManagementSegments(session?.companyDB);
   const directory = useUsersDirectoryState(session?.companyDB);
+  const backofficeMode = !session && isCloudAdmin;
+  const [adminUsers, setAdminUsers] = useState<SapUser[]>([]);
+  const [adminUserCompanies, setAdminUserCompanies] = useState<Record<string, string[]>>({});
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState<string | null>(null);
+
+  const loadBackofficeUsers = useCallback(async () => {
+    if (!backofficeMode) return;
+    setAdminLoading(true);
+    setAdminError(null);
+    try {
+      const { data: companiesPayload, error: companiesError } = await supabase.functions.invoke("sap-users-admin", {
+        body: { action: "list_companies" },
+      });
+      if (companiesError) throw companiesError;
+      const companies = ((companiesPayload?.companies || []) as { company_db: string; display_name: string }[]);
+      const merged = new Map<string, SapUser>();
+      const byCompany: Record<string, Set<string>> = {};
+      await Promise.all(companies.map(async (company) => {
+        const { data, error: listError } = await supabase.functions.invoke("sap-users-admin", {
+          body: { action: "list_users", company_db: company.company_db },
+        });
+        if (listError) throw listError;
+        for (const raw of ((data?.users || []) as Record<string, unknown>[])) {
+          const user: SapUser = {
+            InternalKey: Number(raw.InternalKey || 0),
+            UserCode: String(raw.UserCode || ""),
+            UserName: String(raw.UserName || ""),
+            eMail: raw.eMail ? String(raw.eMail) : undefined,
+            Locked: raw.Locked === "tYES" ? "tYES" : "tNO",
+            LastLoginDate: raw.LastLoginDate ? String(raw.LastLoginDate) : undefined,
+            LastLoginTime: raw.LastLoginTime ? String(raw.LastLoginTime) : undefined,
+          };
+          const key = (user.UserCode || user.eMail || "").toLowerCase();
+          if (!key) continue;
+          if (!merged.has(key)) merged.set(key, user);
+          (byCompany[key] ||= new Set()).add(company.company_db);
+        }
+      }));
+      setAdminUsers(Array.from(merged.values()));
+      setAdminUserCompanies(Object.fromEntries(Object.entries(byCompany).map(([key, set]) => [key, Array.from(set)])));
+    } catch (e) {
+      setAdminError(e instanceof Error ? e.message : "Erro ao carregar usuários agregados");
+    } finally {
+      setAdminLoading(false);
+    }
+  }, [backofficeMode]);
+
+  useEffect(() => {
+    loadBackofficeUsers();
+  }, [loadBackofficeUsers]);
+
+  const createUserForBackoffice = useCallback(async (
+    userData: { UserCode: string; UserName: string; eMail: string; Password: string },
+    targetCompanyDbs?: string[],
+  ) => {
+    const results = await Promise.all((targetCompanyDbs || []).map(async (db) => {
+      try {
+        const { data, error: createError } = await supabase.functions.invoke("sap-users-admin", {
+          body: {
+            action: "create_user",
+            company_db: db,
+            user_code: userData.UserCode,
+            user_name: userData.UserName,
+            email: userData.eMail,
+            password: userData.Password,
+          },
+        });
+        if (createError || data?.error) throw new Error(data?.error || createError?.message || "Erro");
+        return { companyDB: db, displayName: db, status: "success" as const };
+      } catch (e) {
+        return {
+          companyDB: db,
+          displayName: db,
+          status: "error" as const,
+          message: e instanceof Error ? e.message : "Erro desconhecido",
+        };
+      }
+    }));
+    await loadBackofficeUsers();
+    return { created: false, replicationResults: results };
+  }, [loadBackofficeUsers]);
 
   const segment = (params.get("seg") as SegmentKey) || "all";
   const setSegmentKey = (key: SegmentKey) => {
@@ -110,7 +195,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<string>("recentes");
   const [managementFilter, setManagementFilter] = useState<string>("all");
-  const [companyFilter, setCompanyFilter] = useState<string>("all");
+  const [companyFilter, setCompanyFilter] = useState<string>(params.get("company") || "all");
   const [groupFilter, setGroupFilter] = useState<string>("all");
   const [alertFilter, setAlertFilter] = useState<string>("all");
 
@@ -167,9 +252,13 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
 
   /** Estado composto por usuário — calculado a partir dos dados do ERP Flow. */
   const rows = useMemo(() => {
-    return users.map((user) => {
+    const sourceUsers = backofficeMode ? adminUsers : users;
+    return sourceUsers.map((user) => {
       const ids = [user.UserCode, user.eMail];
-      const group = groupOf(...ids);
+      const group = groupOf(
+        session?.companyDB || (backofficeMode && companyFilter !== "all" ? companyFilter : undefined),
+        ...ids,
+      );
       const mgmt = segmentOf(...ids);
       const idp = directory.idpOf(...ids);
       const license = directory.licenseOf(...ids);
@@ -193,11 +282,13 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
         license,
         isAdmin,
         lastLogin: login?.lastLogin ?? null,
-        companies: directory.companiesOf(...ids),
+        companies: backofficeMode
+          ? (adminUserCompanies[(user.UserCode || user.eMail || "").toLowerCase()] || [])
+          : directory.companiesOf(...ids),
         alerts,
       };
     });
-  }, [users, groupOf, segmentOf, directory]);
+  }, [adminUserCompanies, adminUsers, backofficeMode, companyFilter, directory, groupOf, segmentOf, session?.companyDB, users]);
 
   const counts = useMemo(
     () => ({
@@ -208,6 +299,13 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
       divergences: rows.filter((r) => r.alerts.length > 0).length,
     }),
     [rows],
+  );
+
+  const companyOptions = useMemo(
+    () => backofficeMode
+      ? Array.from(new Set(Object.values(adminUserCompanies).flat())).sort()
+      : directory.sapCompanies,
+    [adminUserCompanies, backofficeMode, directory.sapCompanies],
   );
 
   const filtered = useMemo(() => {
@@ -280,7 +378,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
         if (bulk.kind === "segment") {
           await setSegment(row.user.UserCode || row.user.eMail, bulk.value);
         } else if (bulk.kind === "group") {
-          await setGroup({ userCode: row.user.UserCode, email: row.user.eMail, groupId: bulk.value });
+          await setGroup({ userCode: row.user.UserCode, email: row.user.eMail, groupId: bulk.value, companyDb: session?.companyDB ?? null });
         } else if (bulk.kind === "lock") {
           if (row.locked !== bulk.value) await toggleLock(row.user);
         } else if (bulk.kind === "license") {
@@ -324,7 +422,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
     if (!bulk) return "";
     if (bulk.kind === "segment") return `Você vai reatribuir ${n} usuário(s) para a gestão ${MANAGEMENT_SEGMENT_LABEL[bulk.value]}.`;
     if (bulk.kind === "group")
-      return `Você vai atribuir o grupo "${permissionGroups.find((g) => g.id === bulk.value)?.name ?? "Sem grupo"}" a ${n} usuário(s), em todas as empresas.`;
+      return `Você vai atribuir o grupo "${permissionGroups.find((g) => g.id === bulk.value)?.name ?? "Sem grupo"}" a ${n} usuário(s) nesta empresa.`;
     if (bulk.kind === "lock") return `Você vai ${bulk.value ? "bloquear" : "desbloquear"} o acesso de ${n} usuário(s) no ERP.`;
     return `Você vai ${bulk.value ? "atribuir" : "remover"} licença de ${n} usuário(s) em ${session?.companyDB || "—"}.`;
   };
@@ -365,6 +463,17 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
     }
   };
 
+  const pageLoading = backofficeMode ? adminLoading : isLoading;
+  const pageError = backofficeMode ? adminError : error;
+  const scopedCompanyDb = session?.companyDB || (backofficeMode && companyFilter !== "all" ? companyFilter : undefined);
+  const refreshPage = () => {
+    if (backofficeMode) void loadBackofficeUsers();
+    else {
+      refresh();
+      directory.refresh();
+    }
+  };
+
   return (
     <div className={embedded ? "" : "min-h-screen bg-background"}>
       {!embedded && <PageTitle title="Usuários" />}
@@ -382,19 +491,23 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
                 Usuários
               </h1>
               <p className="text-sm text-muted-foreground">
-                {counts.all} usuários · {session?.companyDB || "sem empresa ativa"}
+                {counts.all} usuários · {backofficeMode ? "todas as bases" : session?.companyDB || "sem empresa ativa"}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {!embedded && <ThemeToggle />}
-            <CreateUserDialog onCreateUser={createUser} isLoading={isLoading} />
+            <CreateUserDialog
+              onCreateUser={backofficeMode ? createUserForBackoffice : createUser}
+              isLoading={pageLoading}
+              adminMode={backofficeMode}
+            />
             <Button variant="outline" size="sm" onClick={() => setInviteOpen(true)}>
               <UserPlus className="w-4 h-4 mr-2" />
               Convidar admin
             </Button>
-            <Button variant="outline" size="sm" onClick={() => { refresh(); directory.refresh(); }} disabled={isLoading}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            <Button variant="outline" size="sm" onClick={refreshPage} disabled={pageLoading}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${pageLoading ? "animate-spin" : ""}`} />
               Atualizar
             </Button>
           </div>
@@ -420,9 +533,9 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
       </header>
 
       <main className={embedded ? "max-w-6xl mx-auto space-y-4" : "max-w-6xl mx-auto px-6 py-6 space-y-4"}>
-        {error && (
+        {pageError && (
           <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">
-            {error}
+            {pageError}
           </div>
         )}
 
@@ -458,7 +571,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
             <SelectTrigger className="w-[170px] bg-card"><SelectValue placeholder="Empresa SAP" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas as empresas</SelectItem>
-              {directory.sapCompanies.map((c) => (
+              {companyOptions.map((c) => (
                 <SelectItem key={c} value={c}>{c}</SelectItem>
               ))}
             </SelectContent>
@@ -500,7 +613,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
           </ToggleGroup>
         </div>
 
-        {isLoading ? (
+        {pageLoading ? (
           <div className="rounded-xl border border-border bg-card divide-y divide-border">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="flex items-center gap-4 p-4">
@@ -797,7 +910,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
 
       <UserDetailDrawer
         data={drawerData}
-        companyDb={session?.companyDB}
+        companyDb={scopedCompanyDb}
         groups={permissionGroups}
         onClose={() => setDrawerUser(null)}
         onSetSegment={(identity, seg) => setSegment(identity, seg)}
@@ -805,7 +918,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
         onToggleLock={toggleLock}
         onResetPassword={(u) => { setDrawerUser(null); setPwdUser(u); }}
         onEditPhone={(u) => { setDrawerUser(null); setPhoneUser(u); }}
-        onChanged={() => { refresh(); directory.refresh(); refreshSegments(); }}
+        onChanged={() => { refreshPage(); directory.refresh(); refreshSegments(); }}
       />
 
       {provisionUser?.eMail && (

@@ -48,7 +48,10 @@ export function useMyPermissionGroups(): MyPermissionGroups {
         const assignments = await getGroupAssignments();
 
         names = assignments
-          .filter((a) => identityMatches(a.sap_email, identifier))
+          .filter((a) =>
+            (a.company_db === null || a.company_db === session?.companyDB) &&
+            identityMatches(a.sap_email, identifier),
+          )
           .map((a) => String(a.permission_groups?.name || ""))
           .filter(Boolean);
 
@@ -64,7 +67,7 @@ export function useMyPermissionGroups(): MyPermissionGroups {
     })();
 
     return () => { cancelled = true; };
-  }, [session?.userName, session?.isSuperUser, session?.erpType]);
+  }, [session?.companyDB, session?.userName, session?.isSuperUser, session?.erpType]);
 
   return { groups, isPrivileged, loading };
 }
