@@ -97,7 +97,6 @@ import {
   saveAiResponseCacheEntries,
   clearAiResponseCache,
 } from "@/lib/ai-response-cache-persist";
-import { notifyFiscalMissingAttachment } from "@/lib/notify-fiscal-missing-attachment";
 import {
   validateAttachments,
   ALLOWED_ATTACHMENT_ACCEPT,
@@ -2199,6 +2198,10 @@ export function CreateExpenseModal({
 
     // Centro de custo padrão é opcional — se o usuário tiver CC via IdP,
     // já é pré-preenchido; caso contrário, cada linha pode ter seu próprio CC.
+    if (files.length === 0) {
+      toast.error("Anexo obrigatório: documentos devem ser criados com ao menos 1 anexo.");
+      return;
+    }
 
     // Guard duro anti-double-submit: `isCreating` (estado) protege a UI, mas
     // um duplo clique rápido cabe na janela entre o clique e o setState —
@@ -2325,50 +2328,6 @@ export function CreateExpenseModal({
       }
       toast.success(isSales ? "Pedido de venda criado com sucesso!" : "Despesa criada com sucesso!");
 
-      // Documento integrado ao ERP SEM anexo → notifica fiscal@anagaming.com.br
-      // com o resumo do lançamento para que o time solicite o anexo depois.
-      // Pedidos de venda podem ser integrados sem anexo → não notificar.
-      // Best-effort: falha aqui NÃO deve reverter a criação já concluída.
-      if (!isSales && (!files || files.length === 0)) {
-        try {
-          const { data: userRes } = await supabase.auth.getUser();
-          const requester = userRes?.user;
-          const requesterName =
-            (requester?.user_metadata?.full_name as string | undefined) ||
-            (requester?.user_metadata?.name as string | undefined) ||
-            null;
-          await notifyFiscalMissingAttachment({
-            docType: mode,
-            supplierName: supplier.name,
-            supplierCode: supplier.code || undefined,
-            currency: currency || undefined,
-            docDate: docDate || undefined,
-            dueDate: dueDate || undefined,
-            costCenter: headerCostCenter?.code || undefined,
-            project: headerProject?.code || undefined,
-            remarks: remarks || undefined,
-            origin,
-            companyDb: sapSession?.companyDB ?? null,
-            requesterName,
-            requesterEmail: requester?.email ?? null,
-            items: items.map((it) => ({
-              description: it.description,
-              quantity: Number(it.quantity) || 0,
-              unit_price: Number(it.unit_price) || 0,
-              line_total: Number(it.line_total) || 0,
-              cost_center: it.cost_center || undefined,
-              project: it.project || undefined,
-            })),
-          });
-          toast.info("Documento sem anexo — fiscal@anagaming.com.br foi notificado.", { duration: 6000 });
-        } catch (notifyErr) {
-          console.warn("[fiscal-notify] Falha ao notificar fiscal sobre lançamento sem anexo:", notifyErr);
-          toast.warning(
-            "Lançamento criado, mas não foi possível notificar o fiscal por e-mail. Encaminhe manualmente se necessário.",
-            { duration: 8000 },
-          );
-        }
-      }
       if (draftId) {
         void deleteDraft(draftId);
         setDraftId(null);

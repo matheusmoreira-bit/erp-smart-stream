@@ -170,7 +170,7 @@ Deno.serve(async (req) => {
 
   let q = supabase
     .from("pagcorp_integration_log")
-    .select("id, company_db, sap_doc_entry, sap_payload, sap_response, pagcorp_data, integration_type")
+    .select("id, company_db, status, sap_doc_entry, sap_payload, sap_response, pagcorp_data, integration_type")
     .not("sap_doc_entry", "is", null);
   if (companyDbFilter) q = q.eq("company_db", companyDbFilter);
   if (logIdsFilter?.length) q = q.in("id", logIdsFilter);
@@ -271,7 +271,13 @@ Deno.serve(async (req) => {
         patchedResp.attachment_backfilled_at = new Date().toISOString();
 
         await supabase.from("pagcorp_integration_log")
-          .update({ sap_payload: patched, sap_response: patchedResp, updated_at: new Date().toISOString() })
+          .update({
+            status: "success",
+            error_message: null,
+            sap_payload: patched,
+            sap_response: patchedResp,
+            updated_at: new Date().toISOString(),
+          })
           .eq("id", r.id);
 
         results.push({

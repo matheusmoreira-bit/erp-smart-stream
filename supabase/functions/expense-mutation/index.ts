@@ -28,6 +28,8 @@ import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { enforceRateLimit } from "../_shared/rate-limit.ts";
 import { findMatchingRule, pickHierarchicalFallbackRule, type RuleRow } from "../_shared/rule-match.ts";
 import { applyCcRedirect, loadCcRedirects } from "../_shared/cc-redirect.ts";
+import { buildSapBaseUrl, loadSapCreds, sapCookieLogin, sapLogout } from "../_shared/sap-cache.ts";
+import { sapFetch } from "../_shared/sap-fetch.ts";
 // (buildRateioChain foi substituído por fluxos independentes por segmento)
 import { buildRateioSegments, buildReembolsoSegments, persistRateioSegments } from "../_shared/rateio-segments.ts";
 
@@ -186,6 +188,64 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
   return { identity, email, isCloudAdmin, isSuperUser, companyDB };
 }
 
+function isSapNo(value: unknown): boolean {
+  return String(value ?? "").toLowerCase() === "tno" || value === false;
+}
+
+function isSapYes(value: unknown): boolean {
+  return String(value ?? "").toLowerCase() === "tyes" || value === true;
+}
+
+async function validateActiveSapItems(
+  admin: SupabaseClient,
+  companyDb: string,
+  items: Array<{ item_code?: string | null }>,
+  docType: string,
+): Promise<string | null> {
+  const codes = Array.from(
+    new Set(
+      (items || [])
+        .map((it) => String(it?.item_code || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  if (codes.length === 0 || docType === "sales") return null;
+
+  const creds = await loadSapCreds(admin as unknown as ReturnType<typeof createClient>, companyDb, { requireApiuser: false });
+  if (!creds) {
+    return "Não foi possível validar os itens no ERP: credenciais SAP não configuradas para esta empresa.";
+  }
+  const baseUrl = buildSapBaseUrl(creds.service_layer_url);
+  const cookie = await sapCookieLogin(baseUrl, creds.company_db || companyDb, creds.username, creds.password);
+  try {
+    const invalid: string[] = [];
+    for (const code of codes) {
+      const escaped = code.replace(/'/g, "''");
+      const url = `${baseUrl}/Items('${encodeURIComponent(escaped)}')?$select=ItemCode,ItemName,Valid,Frozen,ItemType,PurchaseItem`;
+      const res = await sapFetch(url, { headers: { Cookie: cookie }, timeoutMs: 20_000 });
+      if (!res.ok) {
+        invalid.push(`${code} (não encontrado na empresa ${companyDb})`);
+        continue;
+      }
+      const row = await res.json().catch(() => ({}));
+      const inactive =
+        isSapNo(row.Valid) ||
+        isSapYes(row.Frozen) ||
+        String(row.ItemType || "") === "itFixedAssets" ||
+        isSapNo(row.PurchaseItem);
+      if (inactive) {
+        invalid.push(`${code}${row.ItemName ? ` - ${row.ItemName}` : ""}`);
+      }
+    }
+    if (invalid.length > 0) {
+      return `Item inativo ou não liberado para compras no ERP (${companyDb}): ${invalid.join(", ")}. Selecione um item ativo para esta empresa.`;
+    }
+    return null;
+  } finally {
+    await sapLogout(baseUrl, cookie);
+  }
+}
+
 /* ───────────────────────── Actions ───────────────────────── */
 
 const ALLOWED_CREATE_STATUS = new Set(["rascunho", "pendente_aprovacao"]);
@@ -219,6 +279,12 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   // Data de vencimento é obrigatória para todo pedido criado via ERP Flow.
   const dueDate = input.due_date ? String(input.due_date).trim() : "";
   if (!dueDate) return json(400, { error: "Data de vencimento é obrigatória" });
+  const docType = String(input.doc_type || "purchase");
+  if (Number(input.attachment_count || 0) < 1) {
+    return json(400, { error: "Anexo obrigatório: documentos devem ser criados com ao menos 1 anexo." });
+  }
+  const itemValidationError = await validateActiveSapItems(admin, companyDb, items, docType);
+  if (itemValidationError) return json(400, { error: itemValidationError });
 
   // Centros de custo desativados são redirecionados para a alçada ativa
   // equivalente (CC + projeto) antes de resolver o aprovador.
@@ -265,7 +331,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   if (ccRedirected || !ruleId) {
     const rematched = await rematchRuleFromMatrix(admin, {
       companyDb,
-      docType: String(input.doc_type || "purchase"),
+      docType,
       totalAmount,
       costCenter: String(input.cost_center || items[0]?.cost_center || "").trim(),
       project: String(input.project || items[0]?.project || "").trim(),
@@ -302,7 +368,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   const rateioOverride = ["folha", "imposto", "viagens"].includes(rateioTypeNorm);
   const segCtx = {
     companyDb,
-    docType: String(input.doc_type || "purchase"),
+    docType,
     currency: input.currency || "BRL",
     requesterName,
     supplierName: input.supplier_name || null,
@@ -329,7 +395,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
 
     const picked = await resolveApproverWithEscalation(admin, ruleId, {
       companyDb,
-      docType: String(input.doc_type || "purchase"),
+      docType,
       totalAmount,
       costCenter: input.cost_center || items[0]?.cost_center || null,
       project: input.project || items[0]?.project || null,
@@ -369,7 +435,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     origin: input.origin || "manual",
     company_db: companyDb,
     branch_id: input.branch_id ?? 1,
-    doc_type: input.doc_type || "purchase",
+    doc_type: docType,
     doc_date: input.doc_date || null,
     due_date: input.due_date || null,
     rateio_type: input.rateio_type || null,
@@ -574,6 +640,14 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
 
   const items: any[] | undefined = Array.isArray(input.items) ? input.items : undefined;
   if (items && items.length > 0) {
+    const itemValidationError = await validateActiveSapItems(
+      admin,
+      String(current.company_db || ""),
+      items,
+      String(current.doc_type || "purchase"),
+    );
+    if (itemValidationError) return json(400, { error: itemValidationError });
+
     // Redireciona CCs desativados também na edição (cabeçalho + linhas).
     const ccRedirects = await loadCcRedirects(admin, String(current.company_db || ""));
     if (ccRedirects.size > 0) {

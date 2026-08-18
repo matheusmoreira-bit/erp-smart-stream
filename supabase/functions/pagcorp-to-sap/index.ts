@@ -376,8 +376,8 @@ Deno.serve(async (req) => {
     attachment_upload: "skipped",
     purchase_order: "pending",
   };
-  let sapPayloads: Record<string, unknown> = {};
-  let sapResponses: Record<string, unknown> = {};
+  const sapPayloads: Record<string, unknown> = {};
+  const sapResponses: Record<string, unknown> = {};
 
   // For consolidated mode we need to update multiple log rows on error
   const consolidatedLogIds: string[] = [];
@@ -792,33 +792,40 @@ Deno.serve(async (req) => {
       } as any)
       .in("id", consolidatedLogIds);
 
-    // Audit
-    await supabase.rpc("insert_audit_log", {
-      p_action: isConsolidated ? "pagcorp_integrated_consolidated" : "pagcorp_integrated",
-      p_entity_type: "pagcorp_transaction",
-      p_entity_id: transactions.map((t) => String(t.id)).join(","),
-      p_company_db: companyDb,
-      p_actor_email: integratedBy || undefined,
-      p_details: {
-        integration_type: integrationType,
-        purchase_order: poResult,
-        stages,
-        consolidated_ids: transactions.map((t) => t.id),
-      } as any,
-    });
+    try {
+      await supabase.rpc("insert_audit_log", {
+        p_action: isConsolidated ? "pagcorp_integrated_consolidated" : "pagcorp_integrated",
+        p_entity_type: "pagcorp_transaction",
+        p_entity_id: transactions.map((t) => String(t.id)).join(","),
+        p_company_db: companyDb,
+        p_actor_email: integratedBy || undefined,
+        p_details: {
+          integration_type: integrationType,
+          purchase_order: poResult,
+          stages,
+          consolidated_ids: transactions.map((t) => t.id),
+        } as any,
+      });
+    } catch (auditErr) {
+      console.warn("pagcorp-to-sap audit log failed after SAP success:", auditErr);
+    }
 
-    await notifyErpIntegration({
-      status: "success",
-      entityIds: snapshot.txIds,
-      companyDb: snapshot.companyDb,
-      docEntry: poResult.docEntry,
-      docNum: poResult.docNum,
-      supplierCode: snapshot.supplierCode,
-      supplierName: snapshot.supplierName,
-      totalAmount: snapshot.totalAmount,
-      currency: snapshot.currency,
-      integratedBy: snapshot.integratedBy,
-    });
+    try {
+      await notifyErpIntegration({
+        status: "success",
+        entityIds: snapshot.txIds,
+        companyDb: snapshot.companyDb,
+        docEntry: poResult.docEntry,
+        docNum: poResult.docNum,
+        supplierCode: snapshot.supplierCode,
+        supplierName: snapshot.supplierName,
+        totalAmount: snapshot.totalAmount,
+        currency: snapshot.currency,
+        integratedBy: snapshot.integratedBy,
+      });
+    } catch (notifyErr) {
+      console.warn("pagcorp-to-sap notification failed after SAP success:", notifyErr);
+    }
 
     return new Response(
       JSON.stringify({
@@ -832,13 +839,25 @@ Deno.serve(async (req) => {
     const msg = e instanceof Error ? e.message : "Erro desconhecido";
     console.error("pagcorp-to-sap error:", msg);
     if (supabase && consolidatedLogIds.length > 0) {
+      const po = sapResponses.purchase_order as { DocEntry?: number | null; DocNum?: number | null } | undefined;
+      const materialSuccess = stages.purchase_order === "success" && Number(po?.DocEntry || 0) > 0;
       await supabase
         .from("pagcorp_integration_log")
         .update({
-          status: "error",
-          error_message: msg,
+          status: materialSuccess ? "success" : "error",
+          error_message: materialSuccess ? null : msg,
+          ...(materialSuccess
+            ? {
+                sap_doc_entry: po?.DocEntry ?? null,
+                sap_doc_num: po?.DocNum ?? null,
+              }
+            : {}),
           sap_payload: sapPayloads as any,
-          sap_response: { stages, ...sapResponses } as any,
+          sap_response: {
+            stages,
+            ...sapResponses,
+            ...(materialSuccess ? { recovered_after_non_sap_error: msg } : {}),
+          } as any,
         } as any)
         .in("id", consolidatedLogIds);
     }

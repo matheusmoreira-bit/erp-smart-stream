@@ -709,6 +709,10 @@ export function useExpenses(
 
       const totalAmount = input.items.reduce((sum, item) => sum + item.line_total, 0);
       const origin: ExpenseOrigin = input.origin || "manual";
+      const effectiveDocType = input.doc_type || docType;
+      if (!input.files || input.files.length === 0) {
+        throw new Error("Anexo obrigatório: documentos devem ser criados com ao menos 1 anexo.");
+      }
 
       // Determine initial status
       // Regra de negócio: despesas com origem PagCorp (gastos de cartão) NÃO
@@ -902,24 +906,51 @@ export function useExpenses(
           origin,
           company_db: session.companyDB,
           branch_id: input.branch_id ?? 1,
-          doc_type: input.doc_type || docType,
+          doc_type: effectiveDocType,
           doc_date: input.doc_date || null,
           due_date: input.due_date || null,
           rateio_type: input.rateio_type || null,
           nfse_split_mode: input.nfse_split_mode || "unified",
           sales_usage: input.sales_usage || null,
+          attachment_count: input.files?.length || 0,
           items: enrichedItems,
         },
       });
       const expense = createResp.expense;
       const createdId = expense.id as string;
 
-      // ─── Fast path ────────────────────────────────────────────────────
-      // A despesa já foi PERSISTIDA no servidor. Retornamos imediatamente
-      // para o chamador (modal) fechar e o usuário ver o feedback. As
-      // etapas restantes (notificar aprovador, enviar anexos, refresh da
-      // lista) rodam em segundo plano com toasts próprios em caso de
-      // falha — assim o tempo percebido de lançamento cai drasticamente.
+      const files = input.files || [];
+      const results = await Promise.allSettled(
+        files.map((file) => uploadExpenseAttachment({ expenseId: createdId }, file)),
+      );
+
+      const uploaded = results
+        .map((r, i) => ({ r, name: files[i].name }))
+        .filter((x) => x.r.status === "fulfilled")
+        .map((x) => (x.r as PromiseFulfilledResult<{ file_path: string; file_name: string; file_size: number; mime_type: string }>).value);
+      const failed = results
+        .map((r, i) => ({ r, name: files[i].name }))
+        .filter((x) => x.r.status === "rejected")
+        .map((x) => `${x.name}: ${((x.r as PromiseRejectedResult).reason instanceof Error ? ((x.r as PromiseRejectedResult).reason as Error).message : String((x.r as PromiseRejectedResult).reason))}`);
+
+      if (failed.length > 0 || uploaded.length !== files.length) {
+        throw new Error(`Despesa criada, mas o upload de anexo falhou. Reabra a despesa e reanexe antes de aprovar/integrar. ${failed.join("; ")}`);
+      }
+
+      try {
+        await invokeExpenseMutation({
+          action: "attachments_add",
+          expense_id: createdId,
+          attachments: uploaded,
+        });
+      } catch (attErr) {
+        throw new Error(
+          `Despesa criada, mas falhou ao registrar anexo(s) no servidor: ${attErr instanceof Error ? attErr.message : String(attErr)}. Reabra a despesa e reanexe antes de aprovar/integrar.`,
+        );
+      }
+
+      // A despesa e os anexos obrigatórios já foram persistidos. As etapas
+      // restantes (notificar aprovador e atualizar lista) rodam em segundo plano.
       const finalize = async () => {
         // 1) Notificar TODOS os aprovadores do nível 1 (paralelo: primeiro que decidir encerra)
         if (status === "pendente_aprovacao" && matchedRuleId) {
@@ -968,56 +999,7 @@ export function useExpenses(
           }).catch((err) => console.warn("Notificação ao aprovador falhou:", err));
         }
 
-
-        // 2) Upload de anexos em PARALELO (era serial → gargalo principal)
-        if (input.files && input.files.length > 0) {
-          const results = await Promise.allSettled(
-            input.files.map((file) => uploadExpenseAttachment({ expenseId: createdId }, file)),
-          );
-
-          const uploaded = results
-            .map((r, i) => ({ r, name: input.files![i].name }))
-            .filter((x) => x.r.status === "fulfilled")
-            .map((x) => (x.r as PromiseFulfilledResult<{ file_path: string; file_name: string; file_size: number; mime_type: string }>).value);
-          const failed = results
-            .map((r, i) => ({ r, name: input.files![i].name }))
-            .filter((x) => x.r.status === "rejected")
-            .map((x) => `${x.name}: ${((x.r as PromiseRejectedResult).reason instanceof Error ? ((x.r as PromiseRejectedResult).reason as Error).message : String((x.r as PromiseRejectedResult).reason))}`);
-
-          if (uploaded.length > 0) {
-            try {
-              await invokeExpenseMutation({
-                action: "attachments_add",
-                expense_id: createdId,
-                attachments: uploaded,
-              });
-            } catch (attErr) {
-              console.error("Falha ao registrar anexos:", attErr);
-              toast.error(
-                `Despesa criada, mas falhou ao registrar ${uploaded.length} anexo(s) no servidor: ${attErr instanceof Error ? attErr.message : String(attErr)}. Reabra a despesa e reanexe os arquivos.`,
-                { duration: 10000 },
-              );
-            }
-          }
-          if (failed.length > 0) {
-            // Um toast por arquivo (até 3), depois consolida o restante,
-            // sempre nomeando o arquivo para o usuário poder reanexar.
-            const shown = failed.slice(0, 3);
-            for (const f of shown) {
-              toast.error(`Falha ao enviar anexo "${f}". Reabra a despesa criada e reanexe o arquivo.`, {
-                duration: 9000,
-              });
-            }
-            if (failed.length > shown.length) {
-              toast.error(
-                `+ ${failed.length - shown.length} outro(s) anexo(s) falharam ao enviar. Reabra a despesa para reanexá-los.`,
-                { duration: 9000 },
-              );
-            }
-          }
-        }
-
-        // 3) Refresh final para a lista refletir o novo item
+        // 2) Refresh final para a lista refletir o novo item
         fetchExpenses().catch((err) => console.warn("refresh pós-criação falhou:", err));
       };
 

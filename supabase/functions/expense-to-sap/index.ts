@@ -90,236 +90,6 @@ ${rows.map(([k, v]) => `<tr><td style="padding:4px 8px;border:1px solid #ddd;bac
   }
 }
 
-// Fire-and-forget contingência: avisa via WhatsApp quando um pedido é
-// integrado no SAP sem nenhum anexo, para lançamento manual do arquivo.
-const CONTINGENCY_WHATSAPP_URL = "http://63.177.171.140/sender_wpp";
-const CONTINGENCY_WHATSAPP_TOKEN = "777a5756-d6b3-4295-a031-e5c210998766";
-const CONTINGENCY_WHATSAPP_TO = "5531972665309";
-
-async function notifyMissingAttachmentWhatsApp(params: {
-  companyDb?: string | null;
-  entityId: string | number;
-  docEntry?: number | null;
-  docNum?: number | null;
-  requester?: string | null;
-  supplier?: string | null;
-  amount?: number | null;
-  currency?: string | null;
-  reason: "no_attachment_uploaded" | "integration_attachments_disabled" | "manual_skip_attachment";
-  attachments?: Array<{ file_name: string; url: string }>;
-}): Promise<void> {
-  try {
-    const cur = (params.currency || "BRL").trim();
-    let amountStr = "-";
-    if (params.amount != null) {
-      try {
-        amountStr = new Intl.NumberFormat("pt-BR", { style: "currency", currency: cur })
-          .format(Number(params.amount));
-      } catch {
-        amountStr = `${cur} ${Number(params.amount).toFixed(2)}`;
-      }
-    }
-    const reasonLabel = params.reason === "integration_attachments_disabled"
-      ? "Integração de anexos desligada para a empresa"
-      : params.reason === "manual_skip_attachment"
-      ? "Integração reprocessada manualmente SEM anexo (falha de anexo no SAP)"
-      : "Pedido aprovado sem nenhum anexo vinculado no SAP";
-    const lines = [
-      "🚨 *Contingência — Anexo pendente no SAP*",
-      "",
-      `*Empresa:* ${params.companyDb || "-"}`,
-      `*SAP DocNum:* ${params.docNum ?? "-"}`,
-      `*SAP DocEntry:* ${params.docEntry ?? "-"}`,
-      `*Solicitante:* ${params.requester || "-"}`,
-      `*Fornecedor:* ${params.supplier || "-"}`,
-      `*Valor:* ${amountStr}`,
-      `*ID interno:* ${params.entityId}`,
-      `*Motivo:* ${reasonLabel}`,
-    ];
-    const atts = params.attachments || [];
-    if (atts.length > 0) {
-      lines.push("");
-      lines.push(`*Anexo(s) para lançamento manual (${atts.length}):*`);
-      for (const a of atts) {
-        lines.push(`• ${a.file_name}`);
-        lines.push(a.url);
-      }
-      lines.push("");
-      lines.push("_Links válidos por 7 dias._ Favor lançar o anexo manualmente no pedido do SAP.");
-    } else {
-      lines.push("");
-      lines.push("Nenhum anexo foi enviado no ERP Flow — o lançamento seguiu sem arquivo.");
-    }
-    const body = new URLSearchParams({
-      to: CONTINGENCY_WHATSAPP_TO,
-      message: lines.join("\n"),
-    });
-    fetch(CONTINGENCY_WHATSAPP_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${CONTINGENCY_WHATSAPP_TOKEN}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: body.toString(),
-    }).catch((e) => console.warn("notifyMissingAttachmentWhatsApp send failed:", e));
-  } catch (e) {
-    console.warn("notifyMissingAttachmentWhatsApp error:", e);
-  }
-}
-
-// Fire-and-forget: envia email da contingência (sem anexo) para o time
-// fiscal da empresa (fiscal@<domínio do solicitante>) e responsáveis.
-// Inclui os anexos internos (arquivo + link assinado) para lançamento manual.
-const MISSING_ATTACHMENT_EMAIL_TO = [
-  "fiscal@anagaming.com.br",
-  "leonardo.oliveira@anagaming.com.br",
-];
-
-// fiscal@{dominio_da_empresa} — derivado do email do solicitante.
-function fiscalRecipients(requesterEmail?: string | null): string[] {
-  const domain = String(requesterEmail || "").split("@")[1]?.trim().toLowerCase();
-  const list = [...MISSING_ATTACHMENT_EMAIL_TO];
-  if (domain && /^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) list.unshift(`fiscal@${domain}`);
-  return Array.from(new Set(list));
-}
-
-type MissingAttachmentReason =
-  | "no_attachment_uploaded"
-  | "integration_attachments_disabled"
-  | "manual_skip_attachment";
-
-async function notifyMissingAttachmentEmail(params: {
-  supabase: ReturnType<typeof createClient>;
-  companyDb?: string | null;
-  entityId: string | number;
-  docEntry?: number | null;
-  docNum?: number | null;
-  requester?: string | null;
-  requesterEmail?: string | null;
-  supplier?: string | null;
-  amount?: number | null;
-  currency?: string | null;
-  reason: MissingAttachmentReason;
-  attachments?: Array<{ file_name: string; url: string }>;
-}): Promise<void> {
-  try {
-    const cur = (params.currency || "BRL").trim();
-    let amountStr = "-";
-    if (params.amount != null) {
-      try {
-        amountStr = new Intl.NumberFormat("pt-BR", { style: "currency", currency: cur })
-          .format(Number(params.amount));
-      } catch {
-        amountStr = `${cur} ${Number(params.amount).toFixed(2)}`;
-      }
-    }
-    const reasonLabel = params.reason === "integration_attachments_disabled"
-      ? "Integração de anexos desligada para a empresa"
-      : params.reason === "manual_skip_attachment"
-      ? "Integração reprocessada manualmente SEM anexo (falha de anexo no SAP) — anexo segue neste email"
-      : "Pedido aprovado sem nenhum anexo vinculado no SAP";
-
-    const esc = (s: string) =>
-      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-
-    const atts = params.attachments || [];
-    const attsHtml = atts.length > 0
-      ? `<h4 style="margin:12px 0 6px">Anexos internos (${atts.length}) — links válidos por 7 dias</h4>
-         <ul style="padding-left:18px;margin:0">${atts
-           .map((a) => `<li><a href="${esc(a.url)}">${esc(a.file_name)}</a></li>`).join("")}</ul>`
-      : `<p style="color:#a00;margin:8px 0">Nenhum anexo interno foi enviado no ERP Flow.</p>`;
-
-    const subject = `[SEM ANEXO] Despesa integrada ao SAP — ${params.supplier || "-"} (DocNum ${params.docNum ?? "-"})`;
-
-    const html = `
-      <div style="font-family:Arial,sans-serif;font-size:14px;color:#222">
-        <p style="background:#fff3cd;border:1px solid #ffe69c;padding:10px 12px;border-radius:6px;margin:0 0 12px">
-          <strong>⚠️ Contingência — Despesa integrada ao SAP sem anexo do documento original.</strong><br>
-          ${esc(reasonLabel)}. Providencie o lançamento manual do anexo no pedido.
-        </p>
-        <table style="border-collapse:collapse">
-          <tr><td style="padding:4px 10px;color:#666">Empresa</td><td style="padding:4px 10px">${esc(params.companyDb || "-")}</td></tr>
-          <tr><td style="padding:4px 10px;color:#666">SAP DocNum</td><td style="padding:4px 10px">${params.docNum ?? "-"}</td></tr>
-          <tr><td style="padding:4px 10px;color:#666">SAP DocEntry</td><td style="padding:4px 10px">${params.docEntry ?? "-"}</td></tr>
-          <tr><td style="padding:4px 10px;color:#666">Fornecedor</td><td style="padding:4px 10px"><strong>${esc(params.supplier || "-")}</strong></td></tr>
-          <tr><td style="padding:4px 10px;color:#666">Valor</td><td style="padding:4px 10px"><strong>${esc(amountStr)}</strong></td></tr>
-          <tr><td style="padding:4px 10px;color:#666">Solicitante</td><td style="padding:4px 10px">${esc(params.requester || "-")}${params.requesterEmail ? ` &middot; ${esc(params.requesterEmail)}` : ""}</td></tr>
-          <tr><td style="padding:4px 10px;color:#666">ID interno</td><td style="padding:4px 10px">${esc(String(params.entityId))}</td></tr>
-        </table>
-        ${attsHtml}
-      </div>
-    `;
-
-    const textLines = [
-      "Contingência — Despesa integrada ao SAP sem anexo do documento original.",
-      reasonLabel,
-      "",
-      `Empresa: ${params.companyDb || "-"}`,
-      `SAP DocNum: ${params.docNum ?? "-"} / DocEntry: ${params.docEntry ?? "-"}`,
-      `Fornecedor: ${params.supplier || "-"}`,
-      `Valor: ${amountStr}`,
-      `Solicitante: ${params.requester || "-"}${params.requesterEmail ? ` (${params.requesterEmail})` : ""}`,
-      `ID interno: ${params.entityId}`,
-      "",
-      atts.length > 0 ? `Anexos internos (links por 7 dias):` : "Nenhum anexo interno enviado no ERP Flow.",
-      ...atts.map((a) => `- ${a.file_name}: ${a.url}`),
-    ];
-
-    const { error } = await params.supabase.functions.invoke("send-smtp-email", {
-      body: {
-        to: fiscalRecipients(params.requesterEmail),
-        replyTo: params.requesterEmail || undefined,
-        subject,
-        html,
-        text: textLines.join("\n"),
-        attachments: atts.map((a) => ({ filename: a.file_name, url: a.url })),
-      },
-    });
-    if (error) console.warn("notifyMissingAttachmentEmail send failed:", error);
-  } catch (e) {
-    console.warn("notifyMissingAttachmentEmail error:", e);
-  }
-}
-
-
-
-// Gera URLs assinadas (7 dias) para os anexos internos da despesa, para
-// que o admin possa baixar e lançar manualmente no SAP em caso de
-// contingência.
-async function getExpenseAttachmentLinks(
-  supabase: ReturnType<typeof createClient>,
-  expenseId: string,
-): Promise<Array<{ file_name: string; url: string }>> {
-  try {
-    const { data: rows, error } = await supabase
-      .from("expense_attachments")
-      .select("file_name, file_path")
-      .eq("expense_id", expenseId);
-    if (error || !Array.isArray(rows) || rows.length === 0) return [];
-    const bucket = "expense-attachments";
-    const ttl = 60 * 60 * 24 * 7; // 7 dias
-    const results: Array<{ file_name: string; url: string }> = [];
-    for (const r of rows as Array<{ file_name: string; file_path: string }>) {
-      if (!r?.file_path) continue;
-      try {
-        const { data, error: sErr } = await supabase
-          .storage.from(bucket)
-          .createSignedUrl(r.file_path, ttl);
-        if (!sErr && data?.signedUrl) {
-          results.push({ file_name: r.file_name || r.file_path.split("/").pop() || "anexo", url: data.signedUrl });
-        }
-      } catch (e) {
-        console.warn("[contingency] signed URL failed for", r.file_path, e);
-      }
-    }
-    return results;
-  } catch (e) {
-    console.warn("[contingency] getExpenseAttachmentLinks failed:", e);
-    return [];
-  }
-}
-
 async function getSapCredentials(
   supabase: ReturnType<typeof createClient>,
   companyDb?: string,
@@ -364,6 +134,55 @@ async function postSapDocument(
     throw new Error(`SAP ${endpoint} failed [${res.status}]: ${msg}`);
   }
   return { docEntry: body.DocEntry, docNum: body.DocNum, response: body };
+}
+
+function sapFlagNo(value: unknown): boolean {
+  return String(value ?? "").toLowerCase() === "tno" || value === false;
+}
+
+function sapFlagYes(value: unknown): boolean {
+  return String(value ?? "").toLowerCase() === "tyes" || value === true;
+}
+
+async function validatePurchaseItemsActive(
+  sapBaseUrl: string,
+  cookies: string,
+  companyDb: string,
+  items: Array<{ item_code?: string | null }>,
+) {
+  const codes = Array.from(
+    new Set(
+      (items || [])
+        .map((it) => String(it?.item_code || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  if (codes.length === 0) return;
+
+  const invalid: string[] = [];
+  for (const code of codes) {
+    const escaped = code.replace(/'/g, "''");
+    const res = await fetch(
+      `${sapBaseUrl}/Items('${encodeURIComponent(escaped)}')?$select=ItemCode,ItemName,Valid,Frozen,ItemType,PurchaseItem`,
+      { headers: { Cookie: cookies } },
+    );
+    if (!res.ok) {
+      invalid.push(`${code} (não encontrado na empresa ${companyDb})`);
+      continue;
+    }
+    const row = await res.json().catch(() => ({} as any));
+    const inactive =
+      sapFlagNo(row.Valid) ||
+      sapFlagYes(row.Frozen) ||
+      String(row.ItemType || "") === "itFixedAssets" ||
+      sapFlagNo(row.PurchaseItem);
+    if (inactive) invalid.push(`${code}${row.ItemName ? ` - ${row.ItemName}` : ""}`);
+  }
+  if (invalid.length > 0) {
+    throw new Error(
+      `Item inativo ou não liberado para compras no ERP (${companyDb}): ${invalid.join(", ")}. Selecione um item ativo para esta empresa.`,
+    );
+  }
 }
 
 /**
@@ -766,8 +585,8 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
   let supabase: ReturnType<typeof createClient> | null = null;
   let pagcorpLog: any = null;
   let pagcorpLogWritten = false;
-  // Reprocessamento manual "integrar sem anexo": ignora o estágio de anexos
-  // no SAP e envia o arquivo por email para o fiscal da empresa.
+  // Payloads antigos ainda podem enviar skip_attachments, mas integração sem
+  // anexo não é mais permitida; a flag passa pela trava antes do POST/PATCH.
   let skipAttachments = false;
   let expenseSnapshot: any = null;
   // Captured outside the try/catch so the error path can return the same
@@ -983,6 +802,9 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       sapCookies = buildSapCookies(sapSessionId, sapRouteId);
     }
     const sap = { baseUrl: sapBaseUrl, cookies: sapCookies };
+    if (!isSales) {
+      await validatePurchaseItemsActive(sap.baseUrl, sap.cookies, String(expense.company_db || ""), items as any[]);
+    }
 
     // 2.5 SAFETY CHECK — o CardCode existente em SAP deve pertencer ao MESMO
     // fornecedor (mesmo CNPJ) esperado pelo ERP Flow. Se o cache local
@@ -1035,9 +857,87 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     const isPatchMode = !!expense.sap_doc_entry
       && (body.patch_document === true || String((expense as any).status || "") === "aprovado");
 
-    if (expense.sap_doc_entry && !isPatchMode) {
+    const ensureAttachmentEntryUploaded = async (): Promise<number> => {
       const existingAttachmentEntry = Number(expense.sap_attachment_entry || 0);
       if (existingAttachmentEntry > 0) {
+        attachmentStatus = "success";
+        console.log(`Reaproveitando anexo já enviado ao SAP — AbsoluteEntry=${existingAttachmentEntry}`);
+        return existingAttachmentEntry;
+      }
+
+      const attachmentsEnabled = (sapCreds.integrate_attachments || "").toLowerCase() === "true";
+      if (skipAttachments) {
+        attachmentStatus = "failed";
+        throw new Error("Documentos não podem ser integrados sem anexo.");
+      }
+      if (!attachmentsEnabled) {
+        attachmentStatus = "failed";
+        throw new Error("Integração de anexos está desativada para esta empresa. Ative anexos para criar documentos no SAP.");
+      }
+
+      attachmentStatus = "pending";
+      try {
+        const { data: atts, error: attErr } = await supabase
+          .from("expense_attachments")
+          .select("file_path, file_name")
+          .eq("expense_id", expenseId);
+        if (attErr) throw new Error(`Erro ao listar anexos: ${attErr.message}`);
+
+        const storedAttachments = Array.isArray(atts) ? atts : [];
+        if (storedAttachments.length === 0) {
+          throw new Error("Documento sem anexo interno. Anexe ao menos 1 arquivo antes de integrar ao SAP.");
+        }
+
+        const files: { name: string; blob: Blob }[] = [];
+        const failedDownloads: string[] = [];
+        for (const a of storedAttachments) {
+          const { data: blob, error: dlErr } = await supabase.storage
+            .from("expense-attachments")
+            .download(a.file_path);
+          if (dlErr || !blob) {
+            console.warn(`Falha ao baixar anexo ${a.file_path}:`, dlErr?.message);
+            failedDownloads.push(a.file_name || a.file_path);
+            continue;
+          }
+          files.push({ name: a.file_name, blob });
+        }
+        if (failedDownloads.length > 0) {
+          throw new Error(`Falha ao baixar anexo(s) obrigatório(s): ${failedDownloads.join(", ")}`);
+        }
+
+        // Sempre incluir o "Comprovante de Aprovação (ERP Flow)" como anexo
+        // adicional para deixar rastro do fluxo interno de aprovação dentro do
+        // documento do ERP, além dos anexos enviados pelo usuário.
+        const approvalPdf = await buildApprovalReportPdf(supabase, expense as any, items as any[]);
+        if (approvalPdf) files.push(approvalPdf);
+
+        const uploadedEntry = await uploadAttachmentsToSap(sap.baseUrl, sap.cookies, files);
+        if (uploadedEntry === null) {
+          throw new Error("SAP retornou AbsoluteEntry nulo no upload de anexos");
+        }
+
+        attachmentStatus = "success";
+        await supabase
+          .from("expenses")
+          .update({
+            sap_attachment_entry: uploadedEntry,
+            sap_attachment_status: attachmentStatus,
+          })
+          .eq("id", expenseId);
+        console.log(`Anexos enviados ao SAP — AbsoluteEntry=${uploadedEntry}`);
+        return uploadedEntry;
+      } catch (e) {
+        attachmentStatus = "failed";
+        const msg = e instanceof Error ? e.message : String(e);
+        await persistStatus({ sap_integration_error: `Falha no envio do anexo: ${msg}` });
+        throw e;
+      }
+    };
+
+    if (expense.sap_doc_entry && !isPatchMode) {
+      let existingAttachmentEntry = 0;
+      try {
+        existingAttachmentEntry = await ensureAttachmentEntryUploaded();
         attachmentStatus = "success";
         purchaseOrderStatus = "success";
         attachmentLinkStatus = "pending";
@@ -1050,6 +950,11 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         );
         attachmentLinkStatus = "success";
         await persistStatus({ sap_integration_error: null });
+      } catch (e) {
+        attachmentLinkStatus = "failed";
+        const msg = e instanceof Error ? e.message : String(e);
+        await persistStatus({ sap_integration_error: msg });
+        throw e;
       }
 
       return new Response(
@@ -1089,8 +994,8 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     const today = new Date().toISOString().slice(0, 10);
 
     // Parse custom fields (UDFs) from credentials: header / line scope
-    let headerCustom: Record<string, unknown> = {};
-    let lineCustom: Record<string, unknown> = {};
+    const headerCustom: Record<string, unknown> = {};
+    const lineCustom: Record<string, unknown> = {};
     if (sapCreds.custom_fields) {
       try {
         const parsed = JSON.parse(sapCreds.custom_fields);
@@ -1107,79 +1012,9 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     }
 
     // 3.1 Attachments stage — upload first and link via AttachmentEntry.
-    // Reuse sap_attachment_entry if a previous attempt already uploaded them
-    // to avoid duplicating attachments in SAP when retrying after a failure.
-    let attachmentEntry: number | null = skipAttachments ? null : (expense.sap_attachment_entry ?? null);
-    const integrateAttachments = !skipAttachments
-      && (sapCreds.integrate_attachments || "").toLowerCase() === "true";
-
-    if (integrateAttachments) {
-      if (attachmentEntry !== null) {
-        // Already uploaded in a previous run — nothing to do at this stage.
-        attachmentStatus = "success";
-        console.log(`Reaproveitando anexo já enviado ao SAP — AbsoluteEntry=${attachmentEntry}`);
-      } else {
-        attachmentStatus = "pending";
-        try {
-          const { data: atts, error: attErr } = await supabase
-            .from("expense_attachments")
-            .select("file_path, file_name")
-            .eq("expense_id", expenseId);
-          if (attErr) console.warn("Erro ao listar anexos:", attErr.message);
-
-          const files: { name: string; blob: Blob }[] = [];
-          for (const a of atts || []) {
-            const { data: blob, error: dlErr } = await supabase.storage
-              .from("expense-attachments")
-              .download(a.file_path);
-            if (dlErr || !blob) {
-              console.warn(`Falha ao baixar anexo ${a.file_path}:`, dlErr?.message);
-              continue;
-            }
-            files.push({ name: a.file_name, blob });
-          }
-
-          // Sempre incluir o "Comprovante de Aprovação (ERP Flow)" como anexo
-          // adicional para deixar rastro do fluxo interno de aprovação
-          // dentro do documento do ERP, além dos anexos enviados pelo usuário.
-          const approvalPdf = await buildApprovalReportPdf(supabase, expense as any, items as any[]);
-          if (approvalPdf) {
-            files.push(approvalPdf);
-          }
-
-          if (files.length === 0) {
-            // No attachments to upload — feature is enabled but nothing to send.
-            attachmentStatus = "not_applicable";
-          } else {
-            attachmentEntry = await uploadAttachmentsToSap(sap.baseUrl, sap.cookies, files);
-            console.log(`Anexos enviados ao SAP — AbsoluteEntry=${attachmentEntry}`);
-            if (attachmentEntry !== null) {
-              attachmentStatus = "success";
-              // Persist the SAP attachment reference + status immediately so a
-              // retry after a later failure won't re-upload.
-              await supabase
-                .from("expenses")
-                .update({
-                  sap_attachment_entry: attachmentEntry,
-                  sap_attachment_status: attachmentStatus,
-                })
-                .eq("id", expenseId);
-            } else {
-              attachmentStatus = "failed";
-              await persistStatus({
-                sap_integration_error: "SAP retornou AbsoluteEntry nulo no upload de anexos",
-              });
-              throw new Error("SAP retornou AbsoluteEntry nulo no upload de anexos");
-            }
-          }
-        } catch (e) {
-          attachmentStatus = "failed";
-          const msg = e instanceof Error ? e.message : String(e);
-          await persistStatus({ sap_integration_error: `Falha no envio do anexo: ${msg}` });
-          throw e;
-        }
-      }
-    }
+    // Documento SAP sem AttachmentEntry não é mais uma contingência válida:
+    // o pedido só pode ser criado/atualizado depois que o anexo foi integrado.
+    const attachmentEntry = await ensureAttachmentEntryUploaded();
 
     // Branch resolution: company-configured default ALWAYS wins unless the
     // expense explicitly stored a different branch_id. We treat branch_id of
@@ -1193,7 +1028,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
 
     // If we have an attachment to link, mark the link stage as pending so it
     // shows up in audit even if the PO creation fails.
-    if (attachmentEntry !== null) attachmentLinkStatus = "pending";
+    attachmentLinkStatus = "pending";
 
     // Normalize dates to YYYY-MM-DD for SAP. Fallback to today when absent.
     // The expense stores dates as ISO strings from a date input (already YYYY-MM-DD)
@@ -1260,7 +1095,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       // Campo dedicado no SAP (UDF) — quando existir na base, permite filtrar
       // pelos pedidos criados por um usuário específico sem depender do texto.
       ...(requesterCode ? { U_FGR_SOLICITANTE: truncateSapText(requesterCode, 50) } : {}),
-      ...(attachmentEntry !== null ? { AttachmentEntry: attachmentEntry } : {}),
+      AttachmentEntry: attachmentEntry,
       // Moeda do documento: sem DocCurrency, o SAP assume moeda local (BRL/R$).
       // Só enviamos DocCurrency para moedas estrangeiras — algumas bases do SAP
       // rejeitam "BRL" como código válido quando a moeda local está cadastrada
@@ -1417,16 +1252,14 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
 
       lastSapResponse = sapResult.response;
       purchaseOrderStatus = "success";
-      if (attachmentEntry !== null) {
-        await ensureSapDocumentAttachmentLinked(sap.baseUrl, sap.cookies, sapEndpoint, sapResult.docEntry, attachmentEntry);
-        attachmentLinkStatus = "success";
-      }
+      await ensureSapDocumentAttachmentLinked(sap.baseUrl, sap.cookies, sapEndpoint, sapResult.docEntry, attachmentEntry);
+      attachmentLinkStatus = "success";
     } catch (e) {
       purchaseOrderStatus = "failed";
       // If the PO failed, the attachment was uploaded but never linked to a
       // document — surface that explicitly instead of leaving the stage as
       // "pending" forever.
-      if (attachmentEntry !== null) attachmentLinkStatus = "failed";
+      attachmentLinkStatus = "failed";
       const msg = e instanceof Error ? e.message : String(e);
       await persistStatus({
         sap_integration_error: `${isPatchMode ? "Falha ao atualizar o documento no ERP" : "Falha ao criar Pedido de Compra"}: ${msg}`,
@@ -1485,41 +1318,6 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       amount: expenseSnapshot?.total_amount,
       currency: expenseSnapshot?.currency,
     });
-
-    // Contingência: se o pedido foi integrado sem nenhum anexo vinculado
-    // (integração de anexos desligada ou nenhum arquivo enviado), avisa via
-    // WhatsApp para lançamento manual.
-    if (attachmentEntry === null) {
-      const attachmentLinks = expenseId
-        ? await getExpenseAttachmentLinks(supabase, expenseId)
-        : [];
-      await notifyMissingAttachmentWhatsApp({
-        companyDb: expenseSnapshot?.company_db,
-        entityId: expenseId || "",
-        docEntry: sapResult.docEntry,
-        docNum: sapResult.docNum,
-        requester: expenseSnapshot?.requester_name,
-        supplier: expenseSnapshot?.supplier_name,
-        amount: expenseSnapshot?.total_amount,
-        currency: expenseSnapshot?.currency,
-        reason: skipAttachments ? "manual_skip_attachment" : integrateAttachments ? "no_attachment_uploaded" : "integration_attachments_disabled",
-        attachments: attachmentLinks,
-      });
-      await notifyMissingAttachmentEmail({
-        supabase,
-        companyDb: expenseSnapshot?.company_db,
-        entityId: expenseId || "",
-        docEntry: sapResult.docEntry,
-        docNum: sapResult.docNum,
-        requester: expenseSnapshot?.requester_name,
-        requesterEmail: expenseSnapshot?.requester_email,
-        supplier: expenseSnapshot?.supplier_name,
-        amount: expenseSnapshot?.total_amount,
-        currency: expenseSnapshot?.currency,
-        reason: skipAttachments ? "manual_skip_attachment" : integrateAttachments ? "no_attachment_uploaded" : "integration_attachments_disabled",
-        attachments: attachmentLinks,
-      });
-    }
 
     return new Response(
       JSON.stringify({

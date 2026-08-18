@@ -112,7 +112,9 @@ async function notifyExhausted(admin: any, row: any) {
         .order("updated_at", { ascending: false }).limit(1).maybeSingle();
       const to = normalizePhone(ph?.phone);
       if (to) await sendWhatsApp(to, message);
-    } catch {}
+    } catch (e) {
+      console.warn("[sap-retry-worker] Falha ao notificar admin sobre retry esgotado:", e);
+    }
   }
 }
 
@@ -208,9 +210,9 @@ Deno.serve(async (req) => {
     };
 
     const first = await invoke(dispatch.body);
-    let ok = first.ok;
-    let errText = first.error;
-    let httpStatus = first.status;
+    const ok = first.ok;
+    const errText = first.error;
+    const httpStatus = first.status;
 
     if (ok) {
       await admin.from("sap_retry_queue").update({
@@ -223,9 +225,8 @@ Deno.serve(async (req) => {
     const cls = classifySapError(httpStatus, errText);
     const isLastAttempt = !cls.retryable || attempts >= (row.max_attempts || 5);
 
-    // NÃO integrar automaticamente sem anexo. Falha de anexo é encerrada como
-    // "exhausted" e fica aguardando a decisão manual ("Integrar sem anexo" na
-    // fila de retentativas), já que isso exige lançamento manual do anexo no ERP.
+    // NÃO integrar sem anexo. Falha de anexo é encerrada como "exhausted"
+    // para o documento ser corrigido com anexo e reenviado.
 
 
     // Not retryable or attempts exhausted → mark exhausted + notify.

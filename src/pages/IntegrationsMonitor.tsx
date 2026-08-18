@@ -79,6 +79,38 @@ interface UnifiedIntegration {
   raw: Record<string, unknown>;
 }
 
+interface ExpenseIntegrationRow extends Record<string, unknown> {
+  id: string;
+  created_at: string;
+  company_db: string | null;
+  supplier_name: string | null;
+  total_amount: number | string | null;
+  currency: string | null;
+  requester_name: string | null;
+  sap_doc_entry: number | null;
+  sap_doc_num: number | null;
+  sap_attachment_entry: number | null;
+  sap_attachment_status: StageStatus;
+  sap_purchase_order_status: StageStatus;
+  sap_attachment_link_status: StageStatus;
+  sap_integration_error: string | null;
+  sap_integration_last_attempt_at: string | null;
+  sap_status_last_check_at: string | null;
+}
+
+interface PagCorpIntegrationRow extends Record<string, unknown> {
+  id: string;
+  created_at: string;
+  company_db: string | null;
+  pagcorp_expense_id: number | string;
+  pagcorp_data: Record<string, unknown> | null;
+  status: string | null;
+  integrated_by: string | null;
+  sap_doc_entry: number | null;
+  sap_doc_num: number | null;
+  integration_type: string | null;
+}
+
 /* ───────────────── Helpers ───────────────── */
 
 function formatDate(dateStr: string) {
@@ -113,6 +145,69 @@ function formatCurrency(value: number | null, currency: string | null = "BRL") {
   } catch {
     return `${currency ?? ""} ${value.toFixed(2)}`.trim();
   }
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function asNumber(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function nestedRecord(root: Record<string, unknown>, key: string): Record<string, unknown> {
+  return asRecord(root[key]);
+}
+
+function resolvePagCorpSapFacts(p: Record<string, unknown>) {
+  const payload = asRecord(p.sap_payload);
+  const response = asRecord(p.sap_response);
+  const payloadPo = nestedRecord(payload, "purchase_order");
+  const responsePo = nestedRecord(response, "purchase_order");
+  const stages = asRecord(response.stages);
+
+  const docEntry =
+    asNumber(p.sap_doc_entry) ||
+    asNumber(responsePo.DocEntry) ||
+    asNumber(response.DocEntry) ||
+    asNumber(response.docEntry);
+  const docNum =
+    asNumber(p.sap_doc_num) ||
+    asNumber(responsePo.DocNum) ||
+    asNumber(response.DocNum) ||
+    asNumber(response.docNum);
+  const attachmentEntry =
+    asNumber(p.attachment_entry) ||
+    asNumber(payload.AttachmentEntry) ||
+    asNumber(payloadPo.AttachmentEntry) ||
+    asNumber(response.attachmentEntry) ||
+    asNumber(response.attachment_entry) ||
+    asNumber(responsePo.AttachmentEntry);
+
+  const purchaseOrderStage = String(stages.purchase_order || "");
+  const attachmentStage = String(stages.attachment_upload || "");
+
+  return {
+    docEntry,
+    docNum,
+    attachmentEntry,
+    purchaseOrderStatus: docEntry || purchaseOrderStage === "success"
+      ? "success" as StageStatus
+      : purchaseOrderStage === "failed"
+        ? "failed" as StageStatus
+        : purchaseOrderStage === "pending"
+          ? "pending" as StageStatus
+          : null,
+    attachmentStatus: attachmentEntry || attachmentStage === "success"
+      ? "success" as StageStatus
+      : attachmentStage === "failed"
+        ? "failed" as StageStatus
+        : attachmentStage === "pending"
+          ? "pending" as StageStatus
+          : null,
+    attachmentLinkStatus: attachmentEntry && docEntry ? "success" as StageStatus : null,
+  };
 }
 
 function StageBadge({
@@ -217,11 +312,11 @@ export default function IntegrationsMonitor() {
         if (expRes.error) throw expRes.error;
         if (pagRes.error) throw pagRes.error;
 
-        const expenseRows: UnifiedIntegration[] = (expRes.data || []).map((e: any) => {
+        const expenseRows: UnifiedIntegration[] = ((expRes.data || []) as ExpenseIntegrationRow[]).map((e) => {
           const hasError = !!e.sap_integration_error;
           const hasDoc = !!e.sap_doc_entry;
           let status: UnifiedIntegration["status"];
-          if (hasDoc && !hasError) status = "success";
+          if (hasDoc) status = "success";
           else if (hasError) status = "failed";
           else if (e.sap_purchase_order_status === "pending" || e.sap_attachment_status === "pending") status = "pending";
           else status = "skipped";
@@ -248,13 +343,14 @@ export default function IntegrationsMonitor() {
           };
         });
 
-        const pagcorpRows: UnifiedIntegration[] = (pagRes.data || []).map((p: any) => {
+        const pagcorpRows: UnifiedIntegration[] = ((pagRes.data || []) as PagCorpIntegrationRow[]).map((p) => {
+          const facts = resolvePagCorpSapFacts(p);
           let status: UnifiedIntegration["status"];
-          if (p.status === "success") status = "success";
+          if (facts.docEntry || p.status === "success") status = "success";
           else if (p.status === "error" || p.status === "failed") status = "failed";
           else status = "pending";
 
-          const data = (p.pagcorp_data || {}) as Record<string, unknown>;
+          const data = p.pagcorp_data || {};
           const desc =
             (data.description as string) ||
             (data.merchant_name as string) ||
@@ -273,8 +369,12 @@ export default function IntegrationsMonitor() {
             currency: (data.currency as string) || "BRL",
             initiated_by: p.integrated_by,
             status,
-            sap_doc_entry: p.sap_doc_entry,
-            sap_doc_num: p.sap_doc_num,
+            sap_doc_entry: facts.docEntry,
+            sap_doc_num: facts.docNum,
+            attachment_status: facts.attachmentStatus,
+            purchase_order_status: facts.purchaseOrderStatus,
+            attachment_link_status: facts.attachmentLinkStatus,
+            attachment_entry: facts.attachmentEntry,
             integration_type: p.integration_type,
             raw: p,
           };
@@ -362,7 +462,7 @@ export default function IntegrationsMonitor() {
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-4">
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">
-          <Tabs value={sourceFilter} onValueChange={(v) => setSourceFilter(v as any)}>
+          <Tabs value={sourceFilter} onValueChange={(v) => setSourceFilter(v as "all" | Source)}>
             <TabsList>
               <TabsTrigger value="all">Todas ({counts.all})</TabsTrigger>
               <TabsTrigger value="expense" className="gap-1.5">
@@ -374,7 +474,7 @@ export default function IntegrationsMonitor() {
             </TabsList>
           </Tabs>
 
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | UnifiedIntegration["status"])}>
             <SelectTrigger className="w-44">
               <SelectValue />
             </SelectTrigger>
@@ -459,11 +559,14 @@ export default function IntegrationsMonitor() {
                       <StatusBadge status={it.status} />
                     </TableCell>
                     <TableCell>
-                      {it.source === "expense" ? (
+                      {it.source === "expense" || it.attachment_status || it.purchase_order_status || it.attachment_link_status ? (
                         <div className="flex items-center gap-1.5">
                           <StageBadge status={it.attachment_status ?? null} icon={Paperclip} label="Envio do anexo" />
                           <StageBadge status={it.purchase_order_status ?? null} icon={FileText} label="Pedido de Compra" />
                           <StageBadge status={it.attachment_link_status ?? null} icon={Link2} label="Vínculo do anexo" />
+                          {it.source === "pagcorp" && (
+                            <span className="text-[11px] text-muted-foreground ml-1">{it.integration_type || "—"}</span>
+                          )}
                         </div>
                       ) : (
                         <span className="text-[11px] text-muted-foreground">{it.integration_type || "—"}</span>
@@ -530,7 +633,7 @@ export default function IntegrationsMonitor() {
                 <Field label="SAP DocNum">{selected.sap_doc_num ?? "—"}</Field>
               </div>
 
-              {selected.source === "expense" && (
+              {(selected.source === "expense" || selected.attachment_status || selected.purchase_order_status || selected.attachment_link_status) && (
                 <div>
                   <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                     Estágios da integração SAP
@@ -572,34 +675,34 @@ export default function IntegrationsMonitor() {
                 </div>
               )}
 
-              {(selected.raw as any).sap_integration_error && (
+              {selected.raw.sap_integration_error && (
                 <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
                   <h3 className="text-xs font-medium text-destructive uppercase tracking-wide mb-1">
                     Erro de integração
                   </h3>
                   <pre className="text-xs whitespace-pre-wrap break-words text-destructive">
-                    {String((selected.raw as any).sap_integration_error)}
+                    {String(selected.raw.sap_integration_error)}
                   </pre>
                 </div>
               )}
 
-              {(selected.raw as any).error_message && (
+              {selected.raw.error_message && (
                 <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
                   <h3 className="text-xs font-medium text-destructive uppercase tracking-wide mb-1">
                     Mensagem de erro
                   </h3>
                   <pre className="text-xs whitespace-pre-wrap break-words text-destructive">
-                    {String((selected.raw as any).error_message)}
+                    {String(selected.raw.error_message)}
                   </pre>
                 </div>
               )}
 
               {selected.source === "pagcorp" && (
                 <>
-                  <PtaxBlock raw={selected.raw as any} />
-                  <RawBlock title="Dados do PagCorp" data={(selected.raw as any).pagcorp_data} />
-                  <RawBlock title="Payload enviado ao SAP" data={(selected.raw as any).sap_payload} />
-                  <RawBlock title="Resposta do SAP" data={(selected.raw as any).sap_response} />
+                  <PtaxBlock raw={selected.raw} />
+                  <RawBlock title="Dados do PagCorp" data={selected.raw.pagcorp_data} />
+                  <RawBlock title="Payload enviado ao SAP" data={selected.raw.sap_payload} />
+                  <RawBlock title="Resposta do SAP" data={selected.raw.sap_response} />
                 </>
               )}
 
