@@ -1,5 +1,7 @@
 // Send email via SMTP (Gmail) — generic endpoint used by notification pipes
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { requireSchedulerAdminOrUserSession } from "../_shared/automation-auth.ts";
+import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,6 +16,14 @@ const SMTP_USER = "system@anagaming.com.br";
 const MAX_TOTAL_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 const MAX_SINGLE_ATTACHMENT_BYTES = 15 * 1024 * 1024;
 
+const DEFAULT_ALLOWED_EMAIL_DOMAINS = [
+  "anagaming.com.br",
+  "cactuscorporation.com",
+  "cactusgaming.com.br",
+  "cactusproviders.com.br",
+  "opengaming.com.br",
+];
+
 interface AttachmentInput {
   url?: string;
   filename?: string;
@@ -21,6 +31,8 @@ interface AttachmentInput {
   contentType?: string;
   content?: string; // base64 if no URL
 }
+
+class RequestValidationError extends Error {}
 
 function guessContentType(name: string, fallback?: string): string {
   if (fallback) return fallback;
@@ -89,6 +101,75 @@ function htmlToText(html: string): string {
     .trim();
 }
 
+function uniqueStrings(value: unknown): string[] {
+  const arr = Array.isArray(value) ? value : value ? [value] : [];
+  return Array.from(new Set(arr.map((v) => String(v || "").trim()).filter(Boolean)));
+}
+
+function allowedEmailDomains(): string[] {
+  const raw = Deno.env.get("SMTP_ALLOWED_DOMAINS");
+  const domains = raw
+    ? raw.split(",").map((d) => d.trim().toLowerCase()).filter(Boolean)
+    : DEFAULT_ALLOWED_EMAIL_DOMAINS;
+  return Array.from(new Set(domains));
+}
+
+function assertSafeEmailList(label: string, value: unknown): string[] {
+  const domains = allowedEmailDomains();
+  const emails = uniqueStrings(value);
+  const invalid = emails.filter((email) => {
+    if (/[\r\n]/.test(email)) return true;
+    const match = email.toLowerCase().match(/^[^@\s<>]+@([^@\s<>]+)$/);
+    if (!match) return true;
+    const domain = match[1];
+    return !domains.some((allowed) => domain === allowed || domain.endsWith(`.${allowed}`));
+  });
+  if (invalid.length > 0) {
+    throw new RequestValidationError(`${label} contém destinatário não permitido: ${invalid.join(", ")}`);
+  }
+  return emails;
+}
+
+function sanitizeHeaderEmail(value: unknown): string | undefined {
+  const email = String(value || "").trim();
+  if (!email) return undefined;
+  if (/[\r\n]/.test(email)) throw new RequestValidationError("replyTo inválido");
+  return assertSafeEmailList("replyTo", email)[0];
+}
+
+function allowedAttachmentHosts(): Set<string> {
+  const hosts = new Set<string>();
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+  try {
+    if (supabaseUrl) hosts.add(new URL(supabaseUrl).hostname.toLowerCase());
+  } catch { /* ignore */ }
+  for (const raw of (Deno.env.get("SMTP_ATTACHMENT_ALLOWED_HOSTS") || "").split(",")) {
+    const h = raw.trim().toLowerCase();
+    if (h) hosts.add(h);
+  }
+  return hosts;
+}
+
+function assertSafeAttachmentUrl(raw: string): URL {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new RequestValidationError("URL de anexo inválida");
+  }
+  const allowedHosts = allowedAttachmentHosts();
+  const hostname = url.hostname.toLowerCase();
+  if (!allowedHosts.has(hostname)) {
+    throw new RequestValidationError(`Host de anexo não permitido: ${hostname}`);
+  }
+  if (url.protocol !== "https:" && hostname !== "localhost" && hostname !== "127.0.0.1") {
+    throw new RequestValidationError("URL de anexo deve usar HTTPS");
+  }
+  if (!url.pathname.includes("/storage/v1/object/")) {
+    throw new RequestValidationError("URL de anexo deve apontar para storage Supabase");
+  }
+  return url;
+}
 
 async function downloadAttachment(att: AttachmentInput): Promise<
   { filename: string; contentType: string; encoding: "base64"; content: string } | null
@@ -107,7 +188,8 @@ async function downloadAttachment(att: AttachmentInput): Promise<
       };
     }
     if (!att.url) return null;
-    const res = await fetch(att.url);
+    const url = assertSafeAttachmentUrl(att.url);
+    const res = await fetch(url, { redirect: "error" });
     if (!res.ok) {
       console.warn("attachment fetch failed", att.url, res.status);
       return null;
@@ -127,6 +209,11 @@ async function downloadAttachment(att: AttachmentInput): Promise<
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const disabled = blockIfIntegrationsDisabled(corsHeaders);
+  if (disabled) return disabled;
+
+  const auth = await requireSchedulerAdminOrUserSession(req, corsHeaders);
+  if (!auth.ok) return auth.response;
 
   try {
     const { to, cc, bcc, subject, html, text, attachments, replyTo } = await req.json();
@@ -135,6 +222,16 @@ Deno.serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    const recipients = assertSafeEmailList("to", to);
+    const ccRecipients = cc ? assertSafeEmailList("cc", cc) : [];
+    const bccRecipients = bcc ? assertSafeEmailList("bcc", bcc) : [];
+    const safeReplyTo = sanitizeHeaderEmail(replyTo);
+    if (Array.isArray(attachments)) {
+      for (const att of attachments) {
+        if (att?.url) assertSafeAttachmentUrl(att.url);
+      }
     }
 
     const password = Deno.env.get("SMTP_PASSWORD");
@@ -171,7 +268,6 @@ Deno.serve(async (req) => {
       },
     });
 
-    const recipients = Array.isArray(to) ? to : [to];
     const sendOpts: Record<string, unknown> = {
       from: `Sistema Ana Gaming <${SMTP_USER}>`,
       to: recipients,
@@ -180,9 +276,9 @@ Deno.serve(async (req) => {
 
       html: html || undefined,
     };
-    if (cc) sendOpts.cc = Array.isArray(cc) ? cc : [cc];
-    if (bcc) sendOpts.bcc = Array.isArray(bcc) ? bcc : [bcc];
-    if (replyTo) sendOpts.replyTo = replyTo;
+    if (ccRecipients.length > 0) sendOpts.cc = ccRecipients;
+    if (bccRecipients.length > 0) sendOpts.bcc = bccRecipients;
+    if (safeReplyTo) sendOpts.replyTo = safeReplyTo;
     if (resolvedAttachments.length > 0) sendOpts.attachments = resolvedAttachments;
 
     await client.send(sendOpts as any);
@@ -200,7 +296,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     console.error("send-smtp-email error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
-      status: 500,
+      status: e instanceof RequestValidationError ? 400 : 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

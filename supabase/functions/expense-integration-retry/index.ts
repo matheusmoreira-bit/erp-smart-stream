@@ -10,6 +10,7 @@ import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause
 import { isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
+import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -71,6 +72,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const auth = await requireSchedulerOrAdmin(req, corsHeaders);
   if (!auth.ok) return auth.response;
+  const disabled = blockIfIntegrationsDisabled(corsHeaders);
+  if (disabled) return disabled;
   { const _pause = await getIntegrationPause("sap_b1"); if (_pause) return pauseResponse(_pause, corsHeaders); }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

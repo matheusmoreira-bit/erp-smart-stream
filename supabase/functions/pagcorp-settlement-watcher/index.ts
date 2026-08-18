@@ -18,6 +18,7 @@ import { logIntegrationCall } from "../_shared/integration-log.ts";
 import { linkNfToAp } from "../_shared/link-nf-ap.ts";
 import { notifyPagcorpSettlementPending } from "../_shared/pagcorp-settlement-notify.ts";
 import { requireSchedulerAdminOrUserSession, requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
+import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
 
 const sapCorsHeaders = {
   ...baseCorsHeaders,
@@ -539,6 +540,8 @@ Deno.serve(async (req) => {
     safeWarn(requestId, "unauthorized", { manualLogId, hasAuthorization: Boolean(req.headers.get("authorization")) });
     return auth.response;
   }
+  const disabled = blockIfIntegrationsDisabled(sapCorsHeaders);
+  if (disabled) return disabled;
 
   safeLog(requestId, "request_received", {
     method: req.method,

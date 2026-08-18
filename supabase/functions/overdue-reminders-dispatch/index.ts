@@ -8,6 +8,7 @@ import { logNotificationAudit } from "../_shared/approval-notify.ts";
 import { getChannelSettings } from "../_shared/notification-channels.ts";
 import { normalizeText } from "../_shared/text-normalize.ts";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
+import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
 
 
 const corsHeaders = {
@@ -220,6 +221,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   const auth = await requireSchedulerOrAdmin(req, corsHeaders);
   if (!auth.ok) return auth.response;
+  const disabled = blockIfIntegrationsDisabled(corsHeaders);
+  if (disabled) return disabled;
 
   const t0 = Date.now();
   const sb = createClient(

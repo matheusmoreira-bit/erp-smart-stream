@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
+import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,8 +16,15 @@ function json(body: unknown, status = 200) {
 }
 
 Deno.serve(async (req) => {
+  const foreignOrigin = rejectForeignOrigin(req);
+  if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  try {
+    await requireUserOrSapSession(req);
+  } catch (err) {
+    return authErrorResponse(err, corsHeaders);
+  }
 
   try {
     const body = await req.json().catch(() => ({}));
