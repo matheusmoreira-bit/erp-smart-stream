@@ -60,6 +60,9 @@ verify_jwt = false
 [functions.pagcorp-settlement-watcher]
 verify_jwt = false
 
+[functions.sap-document-link-watcher]
+verify_jwt = false
+
 [functions.sap-purchase-orders-hana]
 verify_jwt = false
 
