@@ -280,6 +280,11 @@ function truncateSapText(value: unknown, maxLength: number): string {
   return text.length > maxLength ? text.slice(0, maxLength) : text;
 }
 
+function formatPagCorpComments(details: string, maxLength: number): string {
+  const cleanDetails = truncateSapText(details, Math.max(0, maxLength - "PagCorp - ".length));
+  return truncateSapText(`PagCorp - ${cleanDetails}`, maxLength);
+}
+
 async function resolveAccountMapping(
   supabase: ReturnType<typeof createClient>,
   accountCode: string | null,
@@ -664,13 +669,12 @@ Deno.serve(async (req) => {
       .filter((s) => !!s);
     const accountabilitySuffix = accountabilityTexts.length > 0 ? ` | PC: ${accountabilityTexts.join(" ; ")}` : "";
 
-    const description = truncateSapText(
-      (isConsolidated
-        ? `PagCorp${holderName ? ` ${holderName}` : ""} — consolidado ${transactions.length} transações`
-        : `PagCorp${holderName ? ` ${holderName}` : ""} — ${transaction.description || ""}`) +
-        accountabilitySuffix,
-      190,
-    );
+    const descriptionDetails = (
+      isConsolidated
+        ? `${holderName ? `${holderName} - ` : ""}consolidado ${transactions.length} transações`
+        : `${holderName ? `${holderName} - ` : ""}${transaction.description || ""}`
+    ) + accountabilitySuffix;
+    const description = formatPagCorpComments(descriptionDetails, 190);
 
 
     const toIsoDate = (v: unknown): string | null => {

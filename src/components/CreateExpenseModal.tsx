@@ -140,6 +140,12 @@ export interface PagCorpPrefill {
   cardName?: string;
 }
 
+function ensurePagCorpRemarksPrefix(value: string): string {
+  const text = value.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!text) return "PagCorp -";
+  return /^PagCorp\s*-\s*/i.test(text) ? text : `PagCorp - ${text}`;
+}
+
 export type ExpenseMode = "purchase" | "sales";
 
 export interface ExpenseDraftHydration {
@@ -797,7 +803,7 @@ export function CreateExpenseModal({
     if (open && prefill && !initialized) {
       setInitialized(true);
       if (prefill.description) {
-        setRemarks(prefill.description);
+        setRemarks(origin === "pagcorp" ? ensurePagCorpRemarksPrefix(prefill.description) : prefill.description);
         setItems([{
           description: prefill.description,
           quantity: 1,

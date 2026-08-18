@@ -10,6 +10,16 @@ const corsHeaders = {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
+function truncateSapText(value: unknown, maxLength: number): string {
+  const text = String(value ?? "").replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+  return text.length > maxLength ? text.slice(0, maxLength) : text;
+}
+
+function formatPagCorpComments(details: string, maxLength: number): string {
+  const cleanDetails = truncateSapText(details, Math.max(0, maxLength - "PagCorp - ".length));
+  return truncateSapText(`PagCorp - ${cleanDetails}`, maxLength);
+}
+
 function base64ToUint8Array(b64: string): Uint8Array {
   const binary = atob(b64);
   const bytes = new Uint8Array(binary.length);
@@ -851,7 +861,10 @@ Deno.serve(async (req) => {
           U_FGR_CONTRATO: "N",
           ...(docCurrency ? { DocCurrency: docCurrency } : {}),
           ...(docRate > 0 ? { DocRate: docRate } : {}),
-          Comments: `${employeeName} - ${description} - Integração PagCorp${aiUsed ? " [IA]" : ""}`,
+          Comments: formatPagCorpComments(
+            `${employeeName} - ${description} - Integração${aiUsed ? " [IA]" : ""}`,
+            190,
+          ),
           DocumentLines: [
             {
               ItemCode: finalItemCode,
@@ -936,7 +949,7 @@ Deno.serve(async (req) => {
           U_FGR_CONTRATO: "N",
           ...(String(integrationParams.default_currency || "").trim() ? { DocCurrency: String(integrationParams.default_currency).trim() } : {}),
           ...(Number(integrationParams.default_doc_rate) > 0 ? { DocRate: Number(integrationParams.default_doc_rate) } : {}),
-          Comments: `${failedEmployeeName} - ${description} - Integração PagCorp`,
+          Comments: formatPagCorpComments(`${failedEmployeeName} - ${description} - Integração`, 190),
           DocumentLines: [
             {
               ItemCode: itemMapping?.item_code || String(integrationParams.default_item_code || ""),
