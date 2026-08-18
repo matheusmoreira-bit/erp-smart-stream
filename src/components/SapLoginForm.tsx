@@ -17,6 +17,7 @@ import { lovable } from "@/integrations/lovable/index";
 import { toast } from "sonner";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
+import { useAuth } from "@/hooks/useAuth";
 import { assertIdpBinding, assertSapLoginIdpBinding, upsertGoogleIdpMapping, upsertLocalAdminMapping } from "@/lib/idp-binding";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 
@@ -44,6 +45,12 @@ interface CompanyOption {
   erp_type: string;
 }
 
+interface CompanyRow {
+  company_db: string;
+  display_name: string;
+  erp_type: string | null;
+}
+
 const ERP_LABELS: Record<string, { label: string; icon: typeof Server; method: string }> = {
   sap: { label: "SAP Business One", icon: Server, method: "Service Layer" },
   s4hana_cloud: { label: "SAP S/4HANA Cloud", icon: Cloud, method: "credenciais armazenadas" },
@@ -67,6 +74,7 @@ function getErpBadge(erpType: string): string {
 export function SapLoginForm() {
   const { login, loginManaged, loginIdentity, isLoading } = useSap();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const { enabledNames, isLoading: erpLoading } = useEnabledErpTypes();
   const [userName, setUserName] = useState("");
   const [password, setPassword] = useState("");
@@ -124,9 +132,9 @@ export function SapLoginForm() {
         identifier: authSession?.user?.email || null,
       });
       setAllCompanies(
-        (data || [])
-          .filter((c: any) => canSeeTest || !isTestCompanyDb(c.company_db))
-          .map((c: any) => ({
+        ((data || []) as CompanyRow[])
+          .filter((c) => canSeeTest || !isTestCompanyDb(c.company_db))
+          .map((c) => ({
             label: c.display_name,
             value: c.company_db,
             erp_type: c.erp_type || "sap",
@@ -625,10 +633,12 @@ export function SapLoginForm() {
           <p className="text-xs text-muted-foreground">
             Conexão segura via {erpInfo.method}
           </p>
-          <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => navigate("/backoffice/login")}>
-            <Settings className="w-3 h-3 mr-1" />
-            Backoffice
-          </Button>
+          {isAdmin && (
+            <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => navigate("/backoffice")}>
+              <Settings className="w-3 h-3 mr-1" />
+              Backoffice
+            </Button>
+          )}
         </div>
       </motion.div>
     </div>

@@ -9,10 +9,10 @@ export function AdminRoute({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
 
   // Reage à perda de sessão enquanto a rota já está montada (expiração/logout
-  // em outra aba): redireciona imediatamente para o login do backoffice.
+  // em outra aba): redireciona para o login Google principal.
   useEffect(() => {
     if (!loading && !user) {
-      navigate("/backoffice/login", {
+      navigate("/login", {
         replace: true,
         state: { from: location.pathname + location.search },
       });
@@ -30,7 +30,7 @@ export function AdminRoute({ children }: { children: React.ReactNode }) {
   if (!user) {
     return (
       <Navigate
-        to="/backoffice/login"
+        to="/login"
         replace
         state={{ from: location.pathname + location.search }}
       />

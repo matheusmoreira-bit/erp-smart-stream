@@ -71,7 +71,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { SYSTEMS, type SystemConfig } from "@/lib/system-definitions";
 import { CustomFieldsEditor } from "@/components/CustomFieldsEditor";
-import { useAuth } from "@/hooks/useAuth";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
 import AuditLogTable from "@/components/AuditLogTable";
@@ -624,16 +623,14 @@ export default function Admin() {
     if (!error) fetchCompanies();
   };
 
-  const { signOut } = useAuth();
-
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
 
   const handleLogout = () => setConfirmLogoutOpen(true);
 
   const confirmLogout = async () => {
-    await signOut();
-    toast.success("Sessão encerrada", { description: "Você saiu do Backoffice." });
-    navigate("/backoffice/login", { replace: true });
+    setConfirmLogoutOpen(false);
+    toast.success("Você saiu do Backoffice", { description: "Sua sessão Google continua conectada." });
+    navigate("/", { replace: true });
   };
 
   return (
@@ -641,9 +638,9 @@ export default function Admin() {
       <AlertDialog open={confirmLogoutOpen} onOpenChange={setConfirmLogoutOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Encerrar sessão do Backoffice?</AlertDialogTitle>
+            <AlertDialogTitle>Sair do Backoffice?</AlertDialogTitle>
             <AlertDialogDescription>
-              Você será desconectado e voltará para a tela de login do Backoffice.
+              Você voltará para o sistema principal. Sua sessão Google continuará ativa.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

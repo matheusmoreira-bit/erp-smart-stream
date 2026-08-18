@@ -41,7 +41,6 @@ import Notifications from "./pages/Notifications.tsx";
 import NotificationGovernance from "./pages/NotificationGovernance.tsx";
 import Profile from "./pages/Profile.tsx";
 import NotFound from "./pages/NotFound.tsx";
-import BackofficeLogin from "./pages/AdminLogin.tsx";
 import Backoffice from "./pages/Admin.tsx";
 import SapUsersReplicate from "./pages/SapUsersReplicate.tsx";
 import AuditTrail from "./pages/AuditTrail.tsx";
@@ -105,7 +104,7 @@ const App = () => (
 
 
               {/* Backoffice */}
-              <Route path="/backoffice/login" element={<BackofficeLogin />} />
+              <Route path="/backoffice/login" element={<Navigate to="/backoffice" replace />} />
               <Route path="/backoffice" element={<AdminRoute><Backoffice /></AdminRoute>} />
               <Route path="/backoffice/sap-users" element={<Navigate to="/usuarios/sap" replace />} />
               <Route path="/backoffice/sap-users/replicate" element={<AdminRoute><SapUsersReplicate /></AdminRoute>} />
