@@ -1,6 +1,6 @@
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import { internalDocCode, normalizeDocQuery, exportDocLabel } from "@/lib/doc-number";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 import { Helmet } from "react-helmet-async";
 import { useAuth } from "@/hooks/useAuth";
@@ -58,8 +58,18 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VirtualExpensesTable } from "@/components/VirtualExpensesTable";
 import { ShieldAlert } from "lucide-react";
@@ -131,6 +141,122 @@ function formatDate(dateStr: string) {
   } catch {
     return dateStr;
   }
+}
+
+type MultiFilterValue = string[] | string;
+
+interface FilterOption {
+  value: string;
+  label: string;
+  meta?: string;
+}
+
+function normalizeMultiValue(value: MultiFilterValue | null | undefined): string[] {
+  if (Array.isArray(value)) return value.map((v) => v.trim()).filter(Boolean);
+  const legacy = (value || "").trim();
+  return legacy ? [legacy] : [];
+}
+
+function hasMultiValue(value: MultiFilterValue | null | undefined) {
+  return normalizeMultiValue(value).length > 0;
+}
+
+function MultiFilterSelect({
+  label,
+  values,
+  options,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  values: MultiFilterValue;
+  options: FilterOption[];
+  placeholder: string;
+  onChange: (values: string[]) => void;
+}) {
+  const selected = normalizeMultiValue(values);
+  const selectedSet = new Set(selected.map((v) => v.toLowerCase()));
+  const mergedOptions = useMemo(() => {
+    const map = new Map<string, FilterOption>();
+    for (const opt of options) {
+      if (!opt.value.trim()) continue;
+      map.set(opt.value.toLowerCase(), opt);
+    }
+    for (const value of selected) {
+      const key = value.toLowerCase();
+      if (!map.has(key)) map.set(key, { value, label: value });
+    }
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+  }, [options, selected]);
+
+  const summary =
+    selected.length === 0
+      ? placeholder
+      : selected.length === 1
+        ? mergedOptions.find((o) => o.value.toLowerCase() === selected[0].toLowerCase())?.label || selected[0]
+        : `${selected.length} selecionados`;
+
+  const toggle = (value: string) => {
+    const key = value.toLowerCase();
+    const next = selectedSet.has(key)
+      ? selected.filter((v) => v.toLowerCase() !== key)
+      : [...selected, value];
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">{label}</Label>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            className={`h-9 w-full justify-between px-3 text-left text-sm font-normal ${
+              selected.length ? "text-foreground" : "text-muted-foreground"
+            }`}
+          >
+            <span className="min-w-0 truncate">{summary}</span>
+            <ChevronDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-60" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-[min(28rem,calc(100vw-2rem))] p-0">
+          <Command>
+            <CommandInput placeholder="Buscar..." />
+            <CommandList>
+              <CommandEmpty>Nenhuma opção encontrada.</CommandEmpty>
+              <CommandGroup>
+                {mergedOptions.map((opt) => {
+                  const checked = selectedSet.has(opt.value.toLowerCase());
+                  return (
+                    <CommandItem
+                      key={opt.value}
+                      value={`${opt.label} ${opt.meta || ""} ${opt.value}`}
+                      onSelect={() => toggle(opt.value)}
+                      className="gap-2"
+                    >
+                      <Checkbox checked={checked} className="pointer-events-none" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate">{opt.label}</p>
+                        {opt.meta && <p className="truncate text-xs text-muted-foreground">{opt.meta}</p>}
+                      </div>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </CommandList>
+            {selected.length > 0 && (
+              <div className="border-t p-2">
+                <Button type="button" variant="ghost" size="sm" className="h-8 w-full" onClick={() => onChange([])}>
+                  <XIcon className="mr-1.5 h-3.5 w-3.5" /> Limpar seleção
+                </Button>
+              </div>
+            )}
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
 }
 
 /* ─── Backfill button (reprocessa anexo com IA para extrair data de vencimento) ─── */
@@ -1407,9 +1533,80 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       })
     : [];
 
+  const [advancedOptionRows, setAdvancedOptionRows] = useState<Partial<Expense>[]>([]);
+  useEffect(() => {
+    if (!session?.companyDB) {
+      setAdvancedOptionRows([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const res = await expenseRead<Partial<Expense>>("expenses")
+        .select("supplier_name,supplier_code,requester_name,requester_email,current_approver,cost_center,project,currency,branch_id")
+        .eq("company_db", session.companyDB)
+        .eq("doc_type", mode)
+        .viewAll(effectiveShowAll)
+        .order("created_at", { ascending: false })
+        .limit(2000);
+      if (cancelled) return;
+      if (res.error) {
+        console.warn("[Expenses] falha ao carregar opções de filtros avançados", res.error);
+        setAdvancedOptionRows([]);
+        return;
+      }
+      setAdvancedOptionRows(res.data || []);
+    })();
+    return () => { cancelled = true; };
+  }, [session?.companyDB, mode, effectiveShowAll]);
+
+  const advancedOptions = useMemo(() => {
+    const rows = [...advancedOptionRows, ...expenses, ...sapOrders];
+    const clean = (value: unknown) => (value ?? "").toString().trim();
+    const build = (
+      getValue: (row: Partial<Expense>) => unknown,
+      getLabel?: (row: Partial<Expense>, value: string) => string,
+      getMeta?: (row: Partial<Expense>, value: string) => string | undefined,
+    ) => {
+      const map = new Map<string, FilterOption>();
+      for (const row of rows) {
+        const value = clean(getValue(row));
+        if (!value) continue;
+        const key = value.toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, {
+            value,
+            label: getLabel?.(row, value) || value,
+            meta: getMeta?.(row, value),
+          });
+        }
+      }
+      return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+    };
+
+    return {
+      supplier: build(
+        (row) => row.supplier_name,
+        (_row, value) => value,
+        (row) => clean(row.supplier_code) || undefined,
+      ),
+      supplier_code: build(
+        (row) => row.supplier_code,
+        (_row, value) => value,
+        (row) => clean(row.supplier_name) || undefined,
+      ),
+      requester: build((row) => row.requester_name, undefined, (row) => clean(row.requester_email) || undefined),
+      requester_email: build((row) => row.requester_email, undefined, (row) => clean(row.requester_name) || undefined),
+      approver: build((row) => row.current_approver),
+      cost_center: build((row) => row.cost_center),
+      project: build((row) => row.project),
+      currency: build((row) => row.currency),
+      branch_id: build((row) => row.branch_id),
+    };
+  }, [advancedOptionRows, expenses, sapOrders]);
+
   const emptyAdvanced: AdvancedFilters = {
-    supplier: "", supplier_code: "", requester: "", requester_email: "", approver: "",
-    cost_center: "", project: "", currency: "", remarks: "", sap_doc_num: "", branch_id: "",
+    supplier: [], supplier_code: [], requester: [], requester_email: [], approver: [],
+    cost_center: [], project: [], currency: [], remarks: "", sap_doc_num: "", branch_id: [],
     origin: "all", min_amount: "", max_amount: "",
     doc_date_from: "", doc_date_to: "", due_date_from: "", due_date_to: "",
     created_from: "", created_to: "",
@@ -1430,15 +1627,26 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     const f = advFilters;
     const includes = (val: string | number | null | undefined, needle: string) =>
       (val ?? "").toString().toLowerCase().includes(needle.toLowerCase());
+    const matchesMulti = (val: string | number | null | undefined, filter: MultiFilterValue, exact = true) => {
+      if (typeof filter === "string") return !filter.trim() || includes(val, filter);
+      const selected = normalizeMultiValue(filter);
+      if (selected.length === 0) return true;
+      const text = (val ?? "").toString().trim().toLowerCase();
+      if (!text) return false;
+      return selected.some((item) => {
+        const needle = item.toLowerCase();
+        return exact ? text === needle : text.includes(needle);
+      });
+    };
     if (f.origin !== "all" && f.origin !== origin) return false;
-    if (f.supplier && !includes(e.supplier_name, f.supplier)) return false;
-    if (f.supplier_code && !includes(e.supplier_code, f.supplier_code)) return false;
-    if (f.requester && !includes(e.requester_name, f.requester)) return false;
-    if (f.requester_email && !includes(e.requester_email, f.requester_email)) return false;
-    if (f.approver && !includes(e.current_approver, f.approver)) return false;
-    if (f.cost_center && !includes(e.cost_center, f.cost_center)) return false;
-    if (f.project && !includes(e.project, f.project)) return false;
-    if (f.currency && (e.currency || "").toLowerCase() !== f.currency.toLowerCase()) return false;
+    if (!matchesMulti(e.supplier_name, f.supplier)) return false;
+    if (!matchesMulti(e.supplier_code, f.supplier_code)) return false;
+    if (!matchesMulti(e.requester_name, f.requester)) return false;
+    if (!matchesMulti(e.requester_email, f.requester_email)) return false;
+    if (!matchesMulti(e.current_approver, f.approver)) return false;
+    if (!matchesMulti(e.cost_center, f.cost_center)) return false;
+    if (!matchesMulti(e.project, f.project)) return false;
+    if (!matchesMulti(e.currency, f.currency)) return false;
     if (f.remarks && !includes(e.remarks, f.remarks)) return false;
     if (f.sap_doc_num) {
       const q = f.sap_doc_num.trim();
@@ -1449,7 +1657,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       const matchesInternal = !!dq && !!iid && (iid.startsWith(dq) || internalDocCode(iid).toLowerCase().includes(dq));
       if (!num.includes(q) && !entry.includes(q) && !matchesInternal) return false;
     }
-    if (f.branch_id && String(e.branch_id ?? "") !== f.branch_id.trim()) return false;
+    if (!matchesMulti(e.branch_id, f.branch_id)) return false;
     const minV = f.min_amount ? Number(f.min_amount.replace(",", ".")) : null;
     const maxV = f.max_amount ? Number(f.max_amount.replace(",", ".")) : null;
     if (minV != null && Number.isFinite(minV) && e.total_amount < minV) return false;
@@ -1553,17 +1761,17 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
   // ─── Filtros avançados (modal) ────────────────────────────────
   interface AdvancedFilters {
-    supplier: string;
-    supplier_code: string;
-    requester: string;
-    requester_email: string;
-    approver: string;
-    cost_center: string;
-    project: string;
-    currency: string;
+    supplier: MultiFilterValue;
+    supplier_code: MultiFilterValue;
+    requester: MultiFilterValue;
+    requester_email: MultiFilterValue;
+    approver: MultiFilterValue;
+    cost_center: MultiFilterValue;
+    project: MultiFilterValue;
+    currency: MultiFilterValue;
     remarks: string;
     sap_doc_num: string;
-    branch_id: string;
+    branch_id: MultiFilterValue;
     origin: "all" | "erp_flow" | "erp";
     min_amount: string;
     max_amount: string;
@@ -1584,7 +1792,12 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     (
       [
         "supplier","supplier_code","requester","requester_email","approver","cost_center","project",
-        "currency","remarks","sap_doc_num","branch_id","min_amount","max_amount",
+        "currency","branch_id",
+      ] as const
+    ).forEach((k) => { if (hasMultiValue(f[k])) n++; });
+    (
+      [
+        "remarks","sap_doc_num","min_amount","max_amount",
         "doc_date_from","doc_date_to","due_date_from","due_date_to","created_from","created_to",
       ] as const
     ).forEach((k) => { if ((f[k] || "").toString().trim()) n++; });
@@ -1607,17 +1820,36 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       const t = v.trim();
       if (t) filters.push({ op: "ilike", column, value: `%${t}%` });
     };
+    const textMulti = (column: string, v: MultiFilterValue) => {
+      if (Array.isArray(v)) {
+        const values = normalizeMultiValue(v);
+        if (values.length) filters.push({ op: "in", column, value: values });
+        return;
+      }
+      like(column, v);
+    };
+    const numberMulti = (column: string, v: MultiFilterValue) => {
+      if (Array.isArray(v)) {
+        const values = normalizeMultiValue(v)
+          .map((item) => Number(item))
+          .filter((item) => Number.isFinite(item));
+        if (values.length) filters.push({ op: "in", column, value: values });
+        return;
+      }
+      const t = v.trim();
+      if (t) filters.push({ op: "eq", column, value: Number(t) });
+    };
     if (statusFilter !== "all") filters.push({ op: "eq", column: "status", value: statusFilter });
-    like("supplier_name", f.supplier);
-    like("supplier_code", f.supplier_code);
-    like("requester_name", f.requester);
-    like("requester_email", f.requester_email);
-    like("current_approver", f.approver);
-    like("cost_center", f.cost_center);
-    like("project", f.project);
+    textMulti("supplier_name", f.supplier);
+    textMulti("supplier_code", f.supplier_code);
+    textMulti("requester_name", f.requester);
+    textMulti("requester_email", f.requester_email);
+    textMulti("current_approver", f.approver);
+    textMulti("cost_center", f.cost_center);
+    textMulti("project", f.project);
     like("remarks", f.remarks);
-    if (f.currency.trim()) filters.push({ op: "ilike", column: "currency", value: f.currency.trim() });
-    if (f.branch_id.trim()) filters.push({ op: "eq", column: "branch_id", value: Number(f.branch_id.trim()) });
+    textMulti("currency", f.currency);
+    numberMulti("branch_id", f.branch_id);
     const minV = f.min_amount ? Number(f.min_amount.replace(",", ".")) : null;
     const maxV = f.max_amount ? Number(f.max_amount.replace(",", ".")) : null;
     if (minV != null && Number.isFinite(minV)) filters.push({ op: "gte", column: "total_amount", value: minV });
@@ -2590,38 +2822,62 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Fornecedor</Label>
-                <Input value={advDraft.supplier} onChange={(e) => setAdvDraft({ ...advDraft, supplier: e.target.value })} placeholder="Nome do fornecedor" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Código do fornecedor</Label>
-                <Input value={advDraft.supplier_code} onChange={(e) => setAdvDraft({ ...advDraft, supplier_code: e.target.value })} placeholder="Ex.: F0000123" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Solicitante</Label>
-                <Input value={advDraft.requester} onChange={(e) => setAdvDraft({ ...advDraft, requester: e.target.value })} placeholder="Nome do solicitante" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">E-mail do solicitante</Label>
-                <Input value={advDraft.requester_email} onChange={(e) => setAdvDraft({ ...advDraft, requester_email: e.target.value })} placeholder="exemplo@empresa.com" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Aprovador</Label>
-                <Input value={advDraft.approver} onChange={(e) => setAdvDraft({ ...advDraft, approver: e.target.value })} placeholder="Nome ou usuário" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Centro de custo</Label>
-                <Input value={advDraft.cost_center} onChange={(e) => setAdvDraft({ ...advDraft, cost_center: e.target.value })} placeholder="Código do CC" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Projeto</Label>
-                <Input value={advDraft.project} onChange={(e) => setAdvDraft({ ...advDraft, project: e.target.value })} placeholder="Código do projeto" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Moeda</Label>
-                <Input value={advDraft.currency} onChange={(e) => setAdvDraft({ ...advDraft, currency: e.target.value })} placeholder="BRL, USD…" />
-              </div>
+              <MultiFilterSelect
+                label={isSales ? "Cliente" : "Fornecedor"}
+                values={advDraft.supplier}
+                options={advancedOptions.supplier}
+                placeholder={isSales ? "Selecionar clientes" : "Selecionar fornecedores"}
+                onChange={(supplier) => setAdvDraft({ ...advDraft, supplier })}
+              />
+              <MultiFilterSelect
+                label={isSales ? "Código do cliente" : "Código do fornecedor"}
+                values={advDraft.supplier_code}
+                options={advancedOptions.supplier_code}
+                placeholder="Selecionar códigos"
+                onChange={(supplier_code) => setAdvDraft({ ...advDraft, supplier_code })}
+              />
+              <MultiFilterSelect
+                label="Solicitante"
+                values={advDraft.requester}
+                options={advancedOptions.requester}
+                placeholder="Selecionar solicitantes"
+                onChange={(requester) => setAdvDraft({ ...advDraft, requester })}
+              />
+              <MultiFilterSelect
+                label="E-mail do solicitante"
+                values={advDraft.requester_email}
+                options={advancedOptions.requester_email}
+                placeholder="Selecionar e-mails"
+                onChange={(requester_email) => setAdvDraft({ ...advDraft, requester_email })}
+              />
+              <MultiFilterSelect
+                label="Aprovador"
+                values={advDraft.approver}
+                options={advancedOptions.approver}
+                placeholder="Selecionar aprovadores"
+                onChange={(approver) => setAdvDraft({ ...advDraft, approver })}
+              />
+              <MultiFilterSelect
+                label="Centro de custo"
+                values={advDraft.cost_center}
+                options={advancedOptions.cost_center}
+                placeholder="Selecionar centros de custo"
+                onChange={(cost_center) => setAdvDraft({ ...advDraft, cost_center })}
+              />
+              <MultiFilterSelect
+                label="Projeto"
+                values={advDraft.project}
+                options={advancedOptions.project}
+                placeholder="Selecionar projetos"
+                onChange={(project) => setAdvDraft({ ...advDraft, project })}
+              />
+              <MultiFilterSelect
+                label="Moeda"
+                values={advDraft.currency}
+                options={advancedOptions.currency}
+                placeholder="Selecionar moedas"
+                onChange={(currency) => setAdvDraft({ ...advDraft, currency })}
+              />
               <div className="space-y-1.5 sm:col-span-2">
                 <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Observação (remarks)</Label>
                 <Input value={advDraft.remarks} onChange={(e) => setAdvDraft({ ...advDraft, remarks: e.target.value })} placeholder="Contém…" />
@@ -2630,10 +2886,13 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Nº do documento (SAP)</Label>
                 <Input value={advDraft.sap_doc_num} onChange={(e) => setAdvDraft({ ...advDraft, sap_doc_num: e.target.value })} placeholder="DocNum, DocEntry ou código interno" />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Filial (branch)</Label>
-                <Input value={advDraft.branch_id} onChange={(e) => setAdvDraft({ ...advDraft, branch_id: e.target.value })} placeholder="ID da filial" />
-              </div>
+              <MultiFilterSelect
+                label="Filial (branch)"
+                values={advDraft.branch_id}
+                options={advancedOptions.branch_id}
+                placeholder="Selecionar filiais"
+                onChange={(branch_id) => setAdvDraft({ ...advDraft, branch_id })}
+              />
             </div>
 
             <div>
