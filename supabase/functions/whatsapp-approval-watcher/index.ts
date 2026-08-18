@@ -6,14 +6,15 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
 import { listSapUsersHybrid } from "../_shared/sap-users-hybrid.ts";
 import { tryWatcherLock, releaseWatcherLock } from "../_shared/watcher-lock.ts";
+import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const WHATSAPP_URL = "http://63.177.171.140/sender_wpp";
-const WHATSAPP_TOKEN = "777a5756-d6b3-4295-a031-e5c210998766";
+const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "http://63.177.171.140/sender_wpp";
+const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || Deno.env.get("WHATSAPP_API_TOKEN") || "";
 const FALLBACK_WHATSAPP_TO = "5531972665309";
 const APPROVAL_APP_URL = "https://sap-b1-approval-hub-761741690592.us-west1.run.app/";
 // HanaAPI V1 (middleware n8n) foi descontinuada — usamos V2 via fetchHanaView.
@@ -98,6 +99,10 @@ async function fetchApprovals(
 }
 
 async function sendWhatsApp(to: string, message: string) {
+  if (!WHATSAPP_TOKEN) {
+    console.warn("[whatsapp-approval-watcher] WHATSAPP_TOKEN não configurado; notificação ignorada.");
+    return { ok: false, status: 0, body: "WHATSAPP_TOKEN ausente" };
+  }
   const body = new URLSearchParams({ to, message });
   const resp = await fetch(WHATSAPP_URL, {
     method: "POST",
@@ -311,6 +316,8 @@ async function processCompany(
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const auth = await requireSchedulerOrAdmin(req, corsHeaders);
+  if (!auth.ok) return auth.response;
 
   const sb = createClient(
     Deno.env.get("SUPABASE_URL")!,

@@ -7,6 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { logNotificationAudit } from "../_shared/approval-notify.ts";
 import { getChannelSettings } from "../_shared/notification-channels.ts";
 import { normalizeText } from "../_shared/text-normalize.ts";
+import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 
 
 const corsHeaders = {
@@ -14,8 +15,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const WHATSAPP_URL = "http://63.177.171.140/sender_wpp";
-const WHATSAPP_TOKEN = "777a5756-d6b3-4295-a031-e5c210998766";
+const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "http://63.177.171.140/sender_wpp";
+const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || Deno.env.get("WHATSAPP_API_TOKEN") || "";
 const PUBLIC_APP_URL = Deno.env.get("PUBLIC_APP_URL") || "https://erp-flow.cactuscorporation.com";
 
 interface Settings {
@@ -59,6 +60,10 @@ function normalizePhone(p?: string | null): string {
 }
 
 async function sendWhatsApp(to: string, message: string) {
+  if (!WHATSAPP_TOKEN) {
+    console.warn("[overdue-reminders-dispatch] WHATSAPP_TOKEN não configurado; notificação ignorada.");
+    return { ok: false, status: 0, body: "WHATSAPP_TOKEN ausente" };
+  }
   const body = new URLSearchParams({ to, message });
   const resp = await fetch(WHATSAPP_URL, {
     method: "POST",
@@ -213,6 +218,8 @@ async function findPhone(
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const auth = await requireSchedulerOrAdmin(req, corsHeaders);
+  if (!auth.ok) return auth.response;
 
   const t0 = Date.now();
   const sb = createClient(

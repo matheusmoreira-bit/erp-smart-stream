@@ -1,7 +1,9 @@
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { SubmenuBar } from "@/components/SubmenuBar";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 import { useModuleAccess } from "@/hooks/usePermissions";
+import { Loader2 } from "lucide-react";
 
 export interface HubTabDef<K extends string> {
   key: K;
@@ -26,13 +28,42 @@ interface TabsHubProps<K extends string> {
  */
 export function TabsHub<K extends string>({ tabs, active, moduleLabel, backTo = "/" }: TabsHubProps<K>) {
   const navigate = useNavigate();
-  const { userModules } = useModuleAccess();
+  const { userModules, loading } = useModuleAccess();
 
   const visible = tabs.filter(
     (t) => !t.module || userModules.length === 0 || userModules.includes(t.module),
   );
-  const list = visible.length > 0 ? visible : tabs;
-  const activeTab = list.find((t) => t.key === active) ?? tabs.find((t) => t.key === active) ?? list[0];
+  const activeTab = visible.find((t) => t.key === active) ?? null;
+
+  useEffect(() => {
+    if (loading || activeTab || visible.length === 0) return;
+    navigate(visible[0].path, { replace: true });
+  }, [activeTab, loading, navigate, visible]);
+
+  if (loading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (visible.length === 0) {
+    return (
+      <div>
+        <BackofficePageHeader
+          title="Acesso negado"
+          description={moduleLabel}
+          backTo={backTo}
+        />
+        <div className="px-6 py-10 text-sm text-muted-foreground">
+          Você não possui permissão para acessar este módulo.
+        </div>
+      </div>
+    );
+  }
+
+  if (!activeTab) return null;
 
   return (
     <div>
@@ -43,11 +74,11 @@ export function TabsHub<K extends string>({ tabs, active, moduleLabel, backTo = 
       />
       <SubmenuBar
         moduleLabel={moduleLabel}
-        items={list.map((t) => ({ key: t.path, label: t.label }))}
-        active={activeTab?.path ?? list[0]?.path}
+        items={visible.map((t) => ({ key: t.path, label: t.label }))}
+        active={activeTab.path}
         onSelect={(key) => navigate(key)}
       />
-      {activeTab?.render() ?? null}
+      {activeTab.render()}
     </div>
   );
 }

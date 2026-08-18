@@ -74,10 +74,14 @@ import { TestCompanyVisibilityGate } from "./components/TestCompanyVisibilityGat
 import { DefaultPasswordWarning } from "./components/DefaultPasswordWarning.tsx";
 import { MobileBottomNav } from "./components/MobileBottomNav.tsx";
 import { RequireAuth } from "./components/RequireAuth.tsx";
+import { ModuleRoute } from "./components/ModuleRoute.tsx";
 import Login from "./pages/Login.tsx";
 
 
 const queryClient = new QueryClient();
+const protect = (moduleKey: string, element: JSX.Element) => (
+  <ModuleRoute moduleKey={moduleKey}>{element}</ModuleRoute>
+);
 
 const App = () => (
   <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="erp-theme">
@@ -131,87 +135,87 @@ const App = () => (
 
 
               {/* Analytics */}
-              <Route path="/analytics" element={<AnalyticsPage />} />
+              <Route path="/analytics" element={protect("analytics", <AnalyticsPage />)} />
 
               {/* Operação */}
-              <Route path="/compras" element={<Expenses />} />
+              <Route path="/compras" element={protect("expenses", <Expenses />)} />
               <Route path="/vendas" element={<Navigate to="/vendas/pedidos" replace />} />
-              <Route path="/vendas/pedidos" element={<SalesHub tab="orders" />} />
-              <Route path="/vendas/nfse" element={<SalesHub tab="nfse" />} />
-              <Route path="/vendas/recebimentos" element={<SalesHub tab="receivables" />} />
-              <Route path="/vendas/destinatarios" element={<SalesHub tab="recipients" />} />
-              <Route path="/vendas/historico" element={<BaixasHistory />} />
+              <Route path="/vendas/pedidos" element={protect("sales", <SalesHub tab="orders" />)} />
+              <Route path="/vendas/nfse" element={protect("sales", <SalesHub tab="nfse" />)} />
+              <Route path="/vendas/recebimentos" element={protect("sales", <SalesHub tab="receivables" />)} />
+              <Route path="/vendas/destinatarios" element={protect("sales", <SalesHub tab="recipients" />)} />
+              <Route path="/vendas/historico" element={protect("sales", <BaixasHistory />)} />
 
               {/* Aprovações */}
-              <Route path="/aprovacoes" element={<ApprovalsHub />} />
-              <Route path="/aprovacoes/mobile" element={<MobileApprovals />} />
-              <Route path="/captura/nota" element={<MobileInvoiceCapture />} />
-              <Route path="/aprovacoes/regras" element={<ApprovalRules />} />
-              <Route path="/aprovacoes/matriz" element={<ApprovalMatrix />} />
+              <Route path="/aprovacoes" element={protect("approvals", <ApprovalsHub />)} />
+              <Route path="/aprovacoes/mobile" element={protect("approvals", <MobileApprovals />)} />
+              <Route path="/captura/nota" element={protect("expenses", <MobileInvoiceCapture />)} />
+              <Route path="/aprovacoes/regras" element={protect("approval_rules", <ApprovalRules />)} />
+              <Route path="/aprovacoes/matriz" element={protect("approval_rules", <ApprovalMatrix />)} />
 
 
               {/* Cartões Corporativos */}
               <Route path="/cartoes" element={<Navigate to="/cartoes/transacoes" replace />} />
-              <Route path="/cartoes/transacoes" element={<PagCorp />} />
-              <Route path="/cartoes/mapeamento" element={<PagCorpMapping />} />
-              <Route path="/cartoes/indedutiveis" element={<PagCorpNondeductible />} />
-              <Route path="/cartoes/baixas" element={<PagCorpSettlements />} />
-              <Route path="/cartoes/historico" element={<IntegrationHistory />} />
+              <Route path="/cartoes/transacoes" element={protect("pagcorp", <PagCorp />)} />
+              <Route path="/cartoes/mapeamento" element={protect("pagcorp", <PagCorpMapping />)} />
+              <Route path="/cartoes/indedutiveis" element={protect("pagcorp", <PagCorpNondeductible />)} />
+              <Route path="/cartoes/baixas" element={protect("pagcorp", <PagCorpSettlements />)} />
+              <Route path="/cartoes/historico" element={protect("pagcorp", <IntegrationHistory />)} />
 
               {/* Auditoria */}
               <Route path="/auditoria" element={<Navigate to="/auditoria/geral" replace />} />
-              <Route path="/auditoria/geral" element={<AuditHub tab="geral" />} />
-              <Route path="/auditoria/geral/:section" element={<AuditHub tab="geral" />} />
-              <Route path="/auditoria/geral/:section/:id" element={<AuditHub tab="geral" />} />
+              <Route path="/auditoria/geral" element={protect("audit_console", <AuditHub tab="geral" />)} />
+              <Route path="/auditoria/geral/:section" element={protect("audit_console", <AuditHub tab="geral" />)} />
+              <Route path="/auditoria/geral/:section/:id" element={protect("audit_console", <AuditHub tab="geral" />)} />
               {/* Rotas legadas → módulo unificado */}
               <Route path="/auditoria/sap/*" element={<Navigate to="/auditoria/geral/sap-dashboard" replace />} />
               <Route path="/auditoria/pagamentos/*" element={<Navigate to="/auditoria/geral/pay-dashboard" replace />} />
               <Route path="/auditoria/fiscal" element={<Navigate to="/auditoria/geral/fiscal" replace />} />
-              <Route path="/auditoria/cruzamento" element={<AuditHub tab="cruzamento" />} />
-              <Route path="/auditoria/totais" element={<AuditHub tab="totais" />} />
-              <Route path="/auditoria/kyp" element={<AuditHub tab="kyp" />} />
+              <Route path="/auditoria/cruzamento" element={protect("audit_console", <AuditHub tab="cruzamento" />)} />
+              <Route path="/auditoria/totais" element={protect("audit_console", <AuditHub tab="totais" />)} />
+              <Route path="/auditoria/kyp" element={protect("audit_console", <AuditHub tab="kyp" />)} />
 
-              <Route path="/auditoria/logs" element={<AuditHub tab="logs" />} />
+              <Route path="/auditoria/logs" element={protect("audit_console", <AuditHub tab="logs" />)} />
 
               {/* Integrações */}
               <Route path="/integracoes" element={<Navigate to="/integracoes/automacoes" replace />} />
-              <Route path="/integracoes/automacoes" element={<IntegrationsHub tab="automations" />} />
-              <Route path="/integracoes/monitor" element={<IntegrationsHub tab="monitor" />} />
-              <Route path="/integracoes/credenciais" element={<IntegrationsHub tab="credentials" />} />
-              <Route path="/integracoes/colaboradores" element={<IntegrationsHub tab="employees" />} />
+              <Route path="/integracoes/automacoes" element={protect("synapse", <IntegrationsHub tab="automations" />)} />
+              <Route path="/integracoes/monitor" element={protect("integration_history", <IntegrationsHub tab="monitor" />)} />
+              <Route path="/integracoes/credenciais" element={protect("credentials", <IntegrationsHub tab="credentials" />)} />
+              <Route path="/integracoes/colaboradores" element={protect("employee_integration", <IntegrationsHub tab="employees" />)} />
 
               {/* Usuários */}
               <Route path="/usuarios" element={<Navigate to="/usuarios/lista" replace />} />
-              <Route path="/usuarios/lista" element={<UsersHub tab="list" />} />
-              <Route path="/usuarios/permissoes" element={<UsersHub tab="permissions" />} />
+              <Route path="/usuarios/lista" element={protect("users", <UsersHub tab="list" />)} />
+              <Route path="/usuarios/permissoes" element={protect("users", <UsersHub tab="permissions" />)} />
               <Route path="/usuarios/administradores" element={<Navigate to="/usuarios/lista?seg=admins" replace />} />
               <Route path="/usuarios/sap" element={<Navigate to="/usuarios/lista?seg=sap" replace />} />
-              <Route path="/usuarios/atividade" element={<UsersHub tab="activity" />} />
+              <Route path="/usuarios/atividade" element={protect("users", <UsersHub tab="activity" />)} />
               <Route path="/usuarios/produtividade" element={<Navigate to="/analytics/produtividade" replace />} />
-              <Route path="/analytics/produtividade" element={<UserProductivity />} />
-              <Route path="/usuarios/sincronizacao-idp" element={<UsersHub tab="idp" />} />
-              <Route path="/usuarios/licencas" element={<UsersHub tab="licenses" />} />
-              <Route path="/usuarios/importar-licencas" element={<UsersHub tab="licenses-import" />} />
+              <Route path="/analytics/produtividade" element={protect("users_productivity", <UserProductivity />)} />
+              <Route path="/usuarios/sincronizacao-idp" element={protect("users", <UsersHub tab="idp" />)} />
+              <Route path="/usuarios/licencas" element={protect("users", <UsersHub tab="licenses" />)} />
+              <Route path="/usuarios/importar-licencas" element={protect("users", <UsersHub tab="licenses-import" />)} />
 
               {/* Cadastros */}
-              <Route path="/cadastros/fornecedores" element={<Suppliers />} />
+              <Route path="/cadastros/fornecedores" element={protect("suppliers", <Suppliers />)} />
               
-              <Route path="/cadastros/itens" element={<Items />} />
+              <Route path="/cadastros/itens" element={protect("items", <Items />)} />
               <Route path="/cadastros/solicitacoes" element={<Navigate to="/solicitacoes" replace />} />
-              <Route path="/cadastros/intercompany" element={<Intercompany />} />
+              <Route path="/cadastros/intercompany" element={protect("intercompany", <Intercompany />)} />
 
               {/* Solicitações de cadastro (módulo próprio) */}
-              <Route path="/solicitacoes" element={<RegistrationRequests />} />
+              <Route path="/solicitacoes" element={protect("suppliers", <RegistrationRequests />)} />
 
               {/* Financeiro */}
-              <Route path="/financeiro/adiantamentos" element={<AdvancePayments />} />
-              <Route path="/financeiro/reconciliacao" element={<FinancialReview />} />
-              <Route path="/financeiro/previsao-caixa" element={<CashflowForecast />} />
-              <Route path="/financeiro/nf-entrada" element={<NfEntrada />} />
+              <Route path="/financeiro/adiantamentos" element={protect("financial_review", <AdvancePayments />)} />
+              <Route path="/financeiro/reconciliacao" element={protect("financial_review", <FinancialReview />)} />
+              <Route path="/financeiro/previsao-caixa" element={protect("financial_review", <CashflowForecast />)} />
+              <Route path="/financeiro/nf-entrada" element={protect("nf_entrada", <NfEntrada />)} />
 
               {/* Notificações */}
-              <Route path="/notificacoes" element={<Notifications />} />
-              <Route path="/notificacoes/regras" element={<NotificationGovernance />} />
+              <Route path="/notificacoes" element={protect("notifications", <Notifications />)} />
+              <Route path="/notificacoes/regras" element={protect("notifications", <NotificationGovernance />)} />
 
               {/* Perfil intercompany */}
               <Route path="/perfil" element={<Profile />} />

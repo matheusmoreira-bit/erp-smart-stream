@@ -17,6 +17,7 @@ import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/
 import { logIntegrationCall } from "../_shared/integration-log.ts";
 import { linkNfToAp } from "../_shared/link-nf-ap.ts";
 import { notifyPagcorpSettlementPending } from "../_shared/pagcorp-settlement-notify.ts";
+import { requireSchedulerAdminOrUserSession, requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 
 const sapCorsHeaders = {
   ...baseCorsHeaders,
@@ -155,7 +156,7 @@ function parseIsoDate(raw: unknown): string | null {
   }
 
   // DD/MM/YYYY ou DD-MM-YYYY
-  const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  const dmy = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
   if (dmy) {
     let y = parseInt(dmy[3], 10);
     if (y < 100) y += 2000;
@@ -531,6 +532,13 @@ Deno.serve(async (req) => {
     } catch { /* ignore */ }
   }
 
+  const auth = manualLogId
+    ? await requireSchedulerAdminOrUserSession(req, sapCorsHeaders)
+    : await requireSchedulerOrAdmin(req, sapCorsHeaders);
+  if (!auth.ok) {
+    safeWarn(requestId, "unauthorized", { manualLogId, hasAuthorization: Boolean(req.headers.get("authorization")) });
+    return auth.response;
+  }
 
   safeLog(requestId, "request_received", {
     method: req.method,

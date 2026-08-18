@@ -5,14 +5,15 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
 import { listSapUsersHybrid } from "../_shared/sap-users-hybrid.ts";
+import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const WHATSAPP_URL = "http://63.177.171.140/sender_wpp";
-const WHATSAPP_TOKEN = "777a5756-d6b3-4295-a031-e5c210998766";
+const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "http://63.177.171.140/sender_wpp";
+const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || Deno.env.get("WHATSAPP_API_TOKEN") || "";
 const WHATSAPP_TO = "5531972665309";
 const EMAIL_TO = "matheus.moreira@anagaming.com.br";
 const IDLE_DAYS = 15;
@@ -168,6 +169,10 @@ function parseOusrLastLogin(r: OusrRow): { code: string; date: Date | null } {
 }
 
 async function sendWhatsApp(message: string) {
+  if (!WHATSAPP_TOKEN) {
+    console.warn("[license-idle-watcher] WHATSAPP_TOKEN não configurado; notificação ignorada.");
+    return false;
+  }
   try {
     const body = new URLSearchParams({ to: WHATSAPP_TO, message });
     const resp = await fetch(WHATSAPP_URL, {
@@ -204,6 +209,8 @@ async function sendEmail(subject: string, html: string) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const auth = await requireSchedulerOrAdmin(req, corsHeaders);
+  if (!auth.ok) return auth.response;
 
   const sb = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -422,7 +429,7 @@ Deno.serve(async (req) => {
   };
 
   if (isAsync) {
-    // @ts-ignore EdgeRuntime is available in Supabase Edge Functions
+    // @ts-expect-error EdgeRuntime is available in Supabase Edge Functions
     if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(work());
     else work();
     return new Response(JSON.stringify({ ok: true, queued: true }), {

@@ -3,6 +3,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { listSapUsersHybrid } from "../_shared/sap-users-hybrid.ts";
+import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -372,6 +373,9 @@ import { weekendBlockResponse } from "../_shared/weekend-guard.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const auth = await requireSchedulerOrAdmin(req, corsHeaders);
+  if (!auth.ok) return auth.response;
 
   const supabase = svc();
   let body: any = {};

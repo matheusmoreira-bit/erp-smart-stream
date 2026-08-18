@@ -1,2 +1,5 @@
-UPDATE public.system_credentials SET credential_value='690b77c428700a761988a2c6', updated_at=now() WHERE system_name='jumpcloud' AND credential_key='org_id';
-UPDATE public.system_credentials SET credential_value='jca_MKGNNohBN2fQGcb4ypzFfnUvndJ6djyexjDI', updated_at=now() WHERE system_name='jumpcloud' AND credential_key='api_key';
+-- Deprecated migration.
+-- Do not version JumpCloud credentials in SQL migrations.
+-- Configure jumpcloud.org_id and jumpcloud.api_key via the credentials UI
+-- or Supabase secrets/Vault after rotating the exposed values.
+SELECT 1;
