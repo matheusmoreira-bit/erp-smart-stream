@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ import {
 import { Loader2 } from "lucide-react";
 import { RelationsMapFlow } from "./RelationsMapFlow";
 import { isPendingApproval } from "@/lib/approval-authz";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
 
 type LogDecision =
   | "created"
@@ -66,6 +67,10 @@ interface SapHistoryRow {
   step: number | null;
   stage_name: string | null;
   remarks: string | null;
+}
+
+interface SupabaseListResult<T> {
+  data?: T[] | null;
 }
 
 export interface SapFluxoEnrichment {
@@ -165,6 +170,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
   const [detailStage, setDetailStage] = useState<StageKey | null>(null);
   const [enriched, setEnriched] = useState(false);
   const [fluxoRow, setFluxoRow] = useState<SapFluxoEnrichment | null>(null);
+  const reconciledKeyRef = useRef<string | null>(null);
 
 
   const derivedInput = {
@@ -177,6 +183,43 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
   };
   const nfLinks = useNfEntradaLinks(derivedInput);
   const apLinks = useContasPagarLinks(derivedInput);
+  const refreshNfLinks = nfLinks.refresh;
+  const refreshApLinks = apLinks.refresh;
+
+  useEffect(() => {
+    if (!open || !expense?.company_db || !expense?.sap_doc_entry) return;
+    const key = `${expense.company_db}:${expense.sap_doc_entry}`;
+    if (reconciledKeyRef.current === key) return;
+    reconciledKeyRef.current = key;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await sapFunctionFetch("sap-document-link-watcher", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            company_db: expense.company_db,
+            days_back: 60,
+            limit: 350,
+          }),
+        });
+        if (!res.ok) {
+          console.warn("[relations-map] reconciliação SAP não executada:", await res.text().catch(() => res.statusText));
+          return;
+        }
+        if (!cancelled) {
+          await Promise.allSettled([refreshNfLinks(), refreshApLinks()]);
+        }
+      } catch (e) {
+        console.warn("[relations-map] falha na reconciliação SAP:", e);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, expense?.company_db, expense?.sap_doc_entry, refreshNfLinks, refreshApLinks]);
 
   // Une pagamentos SAP (VendorPayments) às NFs pelo DocEntry da fatura.
   const nfLinksWithPayments = useMemo(() => {
@@ -233,9 +276,9 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
           : Promise.resolve({ data: [] as SapHistoryRow[] }),
       ]);
       if (cancelled) return;
-      setLog(((logRes as any).data || []) as ApprovalLogRow[]);
-      setLevels(((levelsRes as any).data || []) as RuleLevelRow[]);
-      setSapHistory(((sapRes as any).data || []) as SapHistoryRow[]);
+      setLog((logRes as SupabaseListResult<ApprovalLogRow>).data || []);
+      setLevels((levelsRes as SupabaseListResult<RuleLevelRow>).data || []);
+      setSapHistory((sapRes as SupabaseListResult<SapHistoryRow>).data || []);
       setIsLoading(false);
     })();
     return () => {
@@ -273,38 +316,6 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
       cancelled = true;
     };
   }, [enriched, open, expense?.company_db, expense?.sap_doc_num, expense?.sap_doc_entry]);
-
-
-
-  const stages = useMemo(() => {
-    if (!expense) return [] as { key: StageKey; label: string; icon: any; state: "done" | "current" | "pending" | "skipped"; hasDoc: boolean }[];
-    const currentIdx = ORDER.indexOf(expense.status as StageKey);
-    const isBad = expense.status === "rejeitado" || expense.status === "cancelado";
-    return STAGE_DEFS.map((s, i) => {
-      const state: "done" | "current" | "pending" | "skipped" = isBad
-        ? s.key === "rascunho"
-          ? "done"
-          : "skipped"
-        : i < currentIdx
-          ? "done"
-          : i === currentIdx
-            ? "current"
-            : "pending";
-      const reached = state === "done" || state === "current";
-      const nfCount = nfLinks.data?.length || 0;
-      const apCount = apLinks.data?.payables.length || 0;
-      // hasDoc: there's something concrete to inspect at this stage
-      const hasDoc =
-        s.key === "rascunho" ||
-        (s.key === "pendente_aprovacao" && (levels.length > 0 || log.length > 0 || sapHistory.length > 0)) ||
-        (s.key === "aprovado" && reached) ||
-        (s.key === "pc_lancado" && (!!expense.sap_doc_num || reached)) ||
-        (s.key === "nf_entrada" && (nfCount > 0 || reached)) ||
-        (s.key === "pagamento" && (apCount > 0 || reached)) ||
-        (s.key === "finalizado" && reached);
-      return { key: s.key, label: s.label, icon: s.icon, state, hasDoc };
-    });
-  }, [expense, levels.length, log.length, sapHistory.length, nfLinks.data, apLinks.data]);
 
   // Aprovadores: feitos, atual, próximos
   const approvedNames = useMemo(
@@ -409,6 +420,26 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
   const currentApproverRow = approverRows.find((r) => r.isCurrent);
   const nextApproverRows = approverRows.filter((r) => !r.done && !r.rejected && !r.isCurrent);
 
+  const mapStatusLabel = useMemo(() => {
+    if (!expense) return null;
+    const payables = apLinks.data?.payables || [];
+    const hasPayment =
+      (apLinks.data?.payments.length || 0) > 0 ||
+      payables.some((ap) => {
+        const paidByStatus = ap.status?.toLowerCase() === "pago";
+        const paidByAmount =
+          ap.valor_documento != null &&
+          ap.valor_pago != null &&
+          ap.valor_documento > 0 &&
+          Math.abs(ap.valor_documento - ap.valor_pago) < 0.01;
+        return paidByStatus || paidByAmount || !!ap.data_pagamento;
+      });
+    if (hasPayment) return "Pago no ERP";
+    if (nfLinksWithPayments.length > 0) return "NF vinculada";
+    if (expense.sap_doc_entry || expense.sap_doc_num) return "PC no SAP";
+    return STATUS_LABELS[expense.status as keyof typeof STATUS_LABELS] || expense.status;
+  }, [expense, apLinks.data, nfLinksWithPayments]);
+
 
 
   if (!expense) return null;
@@ -423,6 +454,11 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
               {expense.sap_doc_num && (
                 <Badge variant="outline" className="font-mono text-xs">
                   SAP #{expense.sap_doc_num}
+                </Badge>
+              )}
+              {mapStatusLabel && (
+                <Badge variant="secondary" className="text-xs">
+                  {mapStatusLabel}
                 </Badge>
               )}
             </DialogTitle>

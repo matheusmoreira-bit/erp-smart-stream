@@ -328,6 +328,7 @@ async function runCompany(sb: Sb, companyDb: string, daysBack: number, limit: nu
   const counts = {
     purchase_invoice_po: 0,
     downpayment_invoice: 0,
+    vendor_payment_invoice: 0,
     sales_invoice_order: 0,
     payment_invoice: 0,
     nfse_invoice: 0,
@@ -341,9 +342,13 @@ async function runCompany(sb: Sb, companyDb: string, daysBack: number, limit: nu
   try {
     const piQuery = `?$filter=${encodeURIComponent(`DocDate ge '${since}' and Cancelled eq 'tNO'`)}&$orderby=DocEntry desc`;
     const purchaseInvoices = await sapList<SapDoc>(conn, "PurchaseInvoices", piQuery, limit);
+    const purchaseInvoiceEntries = new Set<number>();
+    const purchaseCardCodes = new Set<string>();
     for (const inv of purchaseInvoices) {
       const invEntry = num(inv.DocEntry);
       if (invEntry == null) continue;
+      purchaseInvoiceEntries.add(invEntry);
+      if (inv.CardCode) purchaseCardCodes.add(String(inv.CardCode));
       for (const poEntry of baseEntries(inv, 22)) {
         await upsertRelation(sb, {
           company_db: companyDb,
@@ -386,6 +391,38 @@ async function runCompany(sb: Sb, companyDb: string, daysBack: number, limit: nu
           applied_at: new Date().toISOString(),
         }).eq("company_db", companyDb).eq("sap_doc_entry", dpEntry);
         counts.downpayment_invoice++;
+      }
+    }
+
+    if (purchaseInvoiceEntries.size > 0 && purchaseCardCodes.size > 0) {
+      const vendorCardFilter = Array.from(purchaseCardCodes)
+        .map((c) => `CardCode eq '${escapeOData(c)}'`)
+        .join(" or ");
+      const vpQuery = `?$filter=${encodeURIComponent(`DocDate ge '${since}' and Cancelled eq 'tNO' and (${vendorCardFilter})`)}&$orderby=DocEntry desc`;
+      const vendorPayments = await sapList<SapDoc>(conn, "VendorPayments", vpQuery, limit);
+      for (const pay of vendorPayments) {
+        const payEntry = num(pay.DocEntry);
+        if (payEntry == null) continue;
+        for (const line of pay.PaymentInvoices || []) {
+          if (String(line.InvoiceType || "") !== "it_PurchaseInvoice") continue;
+          const invoiceEntry = num(line.DocEntry);
+          if (invoiceEntry == null || !purchaseInvoiceEntries.has(invoiceEntry)) continue;
+          const amount = num(line.SumApplied ?? line.AppliedFC ?? line.AppliedSys);
+          await upsertRelation(sb, {
+            company_db: companyDb,
+            source_type: "ap_invoice",
+            source_doc_entry: invoiceEntry,
+            target_type: "vendor_payment",
+            target_doc_entry: payEntry,
+            target_doc_num: pay.DocNum ?? null,
+            relation_type: "ap_invoice_to_vendor_payment",
+            amount,
+            currency: pay.DocCurrency || null,
+            relation_date: pay.DocDate || null,
+            metadata: { card_code: pay.CardCode, card_name: pay.CardName, raw: line },
+          });
+          counts.vendor_payment_invoice++;
+        }
       }
     }
 
