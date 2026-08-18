@@ -11,8 +11,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const WHATSAPP_URL = "http://63.177.171.140/sender_wpp";
-const WHATSAPP_TOKEN = "777a5756-d6b3-4295-a031-e5c210998766";
+const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "";
+const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || "";
 const WHATSAPP_TO = "5531972665309";
 const EMAIL_TO = "matheus.moreira@anagaming.com.br";
 const IDLE_DAYS = 15;

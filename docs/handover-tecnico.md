@@ -845,7 +845,7 @@ Policies detalhadas de `storage.objects` para esses buckets não estão inteiram
 | **PagCorp** | `pagcorp-proxy` (HMAC+AES) | `PAGCORP_*` | Assinatura HMAC, campos cifrados |
 | **Google Drive** | connector Lovable + `backup-to-gdrive` | `GOOGLE_DRIVE_API_KEY` | Backup periódico 6h |
 | **SMTP (Gmail)** | `send-smtp-email`, filas `q_*_emails` | `SMTP_PASSWORD` | Templates auth + transacional; supressão e unsubscribe |
-| **WhatsApp gateway** | `whatsapp-*`, `overdue-reminders-dispatch`, `expense-integration-retry`, `expense-to-sap` | URL/token **hardcoded** (`http://63.177.171.140/sender_wpp`) | Risco documentado; migrar para segredo |
+| **WhatsApp gateway** | `whatsapp-*`, `overdue-reminders-dispatch`, `expense-integration-retry`, `expense-to-sap` | `WHATSAPP_URL` e `WHATSAPP_TOKEN` nos secrets do ambiente | Nunca versionar URL privada ou token |
 | **Lovable AI Gateway** | `ai-assistant`, `report-ai-chat`, `supplier-ai-extract`, `audit-console-analyze-doc`, `license-analysis`, `expense-backfill-due-date`, `process-expense-doc`, `synapse-pagcorp-sync`, `backup-to-gdrive`, `auth-email-hook` | `LOVABLE_API_KEY` (managed) | Chat, análise de docs, extração |
 | **IDP corporativo (JumpCloud)** | `jumpcloud-proxy`, `idp-mapping`, `synapse-jc-sync` | connector | Provisiona `idp_user_mapping` |
 | **CNPJ lookup** | `cnpj-lookup` (`publica.cnpj.ws/cnpj/`) | — | Enriquecimento de fornecedor |

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -122,7 +122,7 @@ export default function PagCorpMapping() {
       today.toISOString().slice(0, 10),
       companyDB || undefined,
     );
-  }, [companyDB]);
+  }, [companyDB, fetchTransactions]);
 
   const accountCodeOptions: SapSearchOption[] = useMemo(() => {
     const map = new Map<string, string>();
@@ -274,16 +274,7 @@ export default function PagCorpMapping() {
     setEditingCardIds((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
 
-  useEffect(() => {
-    if (!companyDB) {
-      setCardMappings([]);
-      setIsLoadingCards(false);
-      return;
-    }
-    loadCardMappings();
-  }, [companyDB]);
-
-  async function loadCardMappings() {
+  const loadCardMappings = useCallback(async () => {
     setIsLoadingCards(true);
     try {
       const { sapFunctionFetch } = await import("@/lib/auth-fetch");
@@ -311,7 +302,16 @@ export default function PagCorpMapping() {
     } finally {
       setIsLoadingCards(false);
     }
-  }
+  }, [companyDB]);
+
+  useEffect(() => {
+    if (!companyDB) {
+      setCardMappings([]);
+      setIsLoadingCards(false);
+      return;
+    }
+    loadCardMappings();
+  }, [companyDB, loadCardMappings]);
 
   // Pré-cria uma linha nova quando vindo de "Abrir mapeamento" (?card=)
   // — só dispara após o load terminar e se ainda não existir mapeamento.

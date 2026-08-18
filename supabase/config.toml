@@ -12,6 +12,18 @@ verify_jwt = true
 [functions.synapse-po-notify]
 verify_jwt = false
 
+[functions.synapse-dispatcher]
+verify_jwt = false
+
+[functions.synapse-jc-sync]
+verify_jwt = false
+
+[functions.synapse-pagcorp-sync]
+verify_jwt = false
+
+[functions.jumpcloud-attributes-sync]
+verify_jwt = false
+
 [functions.external-approvals-api]
 verify_jwt = false
 
@@ -69,6 +81,9 @@ verify_jwt = false
 
 
 [functions.sap-suppliers-hana]
+verify_jwt = false
+
+[functions.sap-credentials-test]
 verify_jwt = false
 
 [functions.sap-approvals-hana]

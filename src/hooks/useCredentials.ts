@@ -1,12 +1,14 @@
 import { useState, useCallback } from "react";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 
-interface CredentialMeta {
+export interface CredentialMeta {
   id: string;
   system_name: string;
   credential_key: string;
   updated_at: string;
   company_db: string | null;
+  is_configured: boolean;
+  enabled_value?: boolean;
 }
 
 export function useCredentials() {
@@ -125,5 +127,16 @@ export function useCredentials() {
     [credentialsFetch]
   );
 
-  return { credentials, isLoading, error, lastFetchOk, fetchCredentials, saveCredentials, deleteCredentials, hasCredentials, fetchCredentialValues };
+  const fetchCredentialCoverage = useCallback(async (systemName: string) => {
+    const params = new URLSearchParams({ system: systemName });
+    const res = await credentialsFetch(`credentials?${params.toString()}`);
+    if (!res.ok) throw new Error(`Erro ${res.status}`);
+    const data = await res.json();
+    return {
+      credentials: (data.credentials || []) as CredentialMeta[],
+      scope: data.scope === "all" ? "all" as const : "company" as const,
+    };
+  }, [credentialsFetch]);
+
+  return { credentials, isLoading, error, lastFetchOk, fetchCredentials, saveCredentials, deleteCredentials, hasCredentials, fetchCredentialValues, fetchCredentialCoverage };
 }

@@ -583,6 +583,30 @@ export async function requireServiceRoleOrUserOrSapSession(req: Request) {
   return await requireUserOrSapSession(req);
 }
 
+/**
+ * Autoriza um job externo somente por um segredo dedicado. A service role nao
+ * e aceita aqui: ela concede acesso ao banco inteiro e nao deve circular em
+ * schedulers, webhooks ou logs de infraestrutura.
+ */
+export function requireScheduler(req: Request) {
+  const configured = Deno.env.get("CRON_SECRET") || "";
+  const supplied = req.headers.get("x-cron-secret") || "";
+  if (configured.length < 32 || !supplied) {
+    throw new AuthError("Scheduler não autenticado", 401);
+  }
+
+  if (!timingSafeEqual(encoder.encode(supplied), encoder.encode(configured))) {
+    throw new AuthError("Scheduler não autenticado", 401);
+  }
+
+  return { id: "scheduler", email: null, source: "scheduler" as const };
+}
+
+export async function requireSchedulerOrAdminOrSapModule(req: Request, moduleKey: string) {
+  if (req.headers.has("x-cron-secret")) return requireScheduler(req);
+  return await requireAdminOrSapModule(req, moduleKey);
+}
+
 
 export function authErrorResponse(err: unknown, corsHeaders: Record<string, string>) {
   if (err instanceof AuthError) {

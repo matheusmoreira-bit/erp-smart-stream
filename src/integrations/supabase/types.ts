@@ -7624,6 +7624,7 @@ export type Database = {
       synapse_execution_log: {
         Row: {
           affected_count: number | null
+          company_db: string | null
           created_at: string
           details: Json | null
           id: string
@@ -7632,6 +7633,7 @@ export type Database = {
         }
         Insert: {
           affected_count?: number | null
+          company_db?: string | null
           created_at?: string
           details?: Json | null
           id?: string
@@ -7640,6 +7642,7 @@ export type Database = {
         }
         Update: {
           affected_count?: number | null
+          company_db?: string | null
           created_at?: string
           details?: Json | null
           id?: string

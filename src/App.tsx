@@ -20,6 +20,7 @@ import { TestCompanyVisibilityGate } from "./components/TestCompanyVisibilityGat
 import { DefaultPasswordWarning } from "./components/DefaultPasswordWarning.tsx";
 import { MobileBottomNav } from "./components/MobileBottomNav.tsx";
 import { RequireAuth } from "./components/RequireAuth.tsx";
+import { ModuleRoute } from "./components/ModuleRoute.tsx";
 import { Loader2 } from "lucide-react";
 
 const Index = lazy(() => import("./pages/Index.tsx"));
@@ -138,32 +139,32 @@ const App = () => (
 
 
               {/* Analytics */}
-              <Route path="/analytics" element={<AnalyticsPage />} />
+              <Route path="/analytics" element={<ModuleRoute module="analytics"><AnalyticsPage /></ModuleRoute>} />
 
               {/* Operação */}
-              <Route path="/compras" element={<Expenses />} />
+              <Route path="/compras" element={<ModuleRoute module="expenses"><Expenses /></ModuleRoute>} />
               <Route path="/vendas" element={<Navigate to="/vendas/pedidos" replace />} />
-              <Route path="/vendas/pedidos" element={<SalesHub tab="orders" />} />
-              <Route path="/vendas/nfse" element={<SalesHub tab="nfse" />} />
-              <Route path="/vendas/recebimentos" element={<SalesHub tab="receivables" />} />
-              <Route path="/vendas/destinatarios" element={<SalesHub tab="recipients" />} />
-              <Route path="/vendas/historico" element={<BaixasHistory />} />
+              <Route path="/vendas/pedidos" element={<ModuleRoute module="sales"><SalesHub tab="orders" /></ModuleRoute>} />
+              <Route path="/vendas/nfse" element={<ModuleRoute module="sales"><SalesHub tab="nfse" /></ModuleRoute>} />
+              <Route path="/vendas/recebimentos" element={<ModuleRoute module="sales"><SalesHub tab="receivables" /></ModuleRoute>} />
+              <Route path="/vendas/destinatarios" element={<ModuleRoute module="sales"><SalesHub tab="recipients" /></ModuleRoute>} />
+              <Route path="/vendas/historico" element={<ModuleRoute module="sales"><BaixasHistory /></ModuleRoute>} />
 
               {/* Aprovações */}
-              <Route path="/aprovacoes" element={<ApprovalsHub />} />
-              <Route path="/aprovacoes/mobile" element={<MobileApprovals />} />
-              <Route path="/captura/nota" element={<MobileInvoiceCapture />} />
-              <Route path="/aprovacoes/regras" element={<ApprovalRules />} />
-              <Route path="/aprovacoes/matriz" element={<ApprovalMatrix />} />
+              <Route path="/aprovacoes" element={<ModuleRoute module="approvals"><ApprovalsHub /></ModuleRoute>} />
+              <Route path="/aprovacoes/mobile" element={<ModuleRoute module="approvals"><MobileApprovals /></ModuleRoute>} />
+              <Route path="/captura/nota" element={<ModuleRoute module="expenses"><MobileInvoiceCapture /></ModuleRoute>} />
+              <Route path="/aprovacoes/regras" element={<ModuleRoute module="approval_rules"><ApprovalRules /></ModuleRoute>} />
+              <Route path="/aprovacoes/matriz" element={<ModuleRoute module="approval_rules"><ApprovalMatrix /></ModuleRoute>} />
 
 
               {/* Cartões Corporativos */}
               <Route path="/cartoes" element={<Navigate to="/cartoes/transacoes" replace />} />
-              <Route path="/cartoes/transacoes" element={<PagCorp />} />
-              <Route path="/cartoes/mapeamento" element={<PagCorpMapping />} />
-              <Route path="/cartoes/indedutiveis" element={<PagCorpNondeductible />} />
-              <Route path="/cartoes/baixas" element={<PagCorpSettlements />} />
-              <Route path="/cartoes/historico" element={<IntegrationHistory />} />
+              <Route path="/cartoes/transacoes" element={<ModuleRoute module="pagcorp"><PagCorp /></ModuleRoute>} />
+              <Route path="/cartoes/mapeamento" element={<ModuleRoute module="pagcorp"><PagCorpMapping /></ModuleRoute>} />
+              <Route path="/cartoes/indedutiveis" element={<ModuleRoute module="pagcorp"><PagCorpNondeductible /></ModuleRoute>} />
+              <Route path="/cartoes/baixas" element={<ModuleRoute module="pagcorp"><PagCorpSettlements /></ModuleRoute>} />
+              <Route path="/cartoes/historico" element={<ModuleRoute module="pagcorp"><IntegrationHistory /></ModuleRoute>} />
 
               {/* Auditoria */}
               <Route path="/auditoria" element={<Navigate to="/auditoria/geral" replace />} />
@@ -195,30 +196,30 @@ const App = () => (
               <Route path="/usuarios/sap" element={<Navigate to="/usuarios/lista?seg=sap" replace />} />
               <Route path="/usuarios/atividade" element={<UsersHub tab="activity" />} />
               <Route path="/usuarios/produtividade" element={<Navigate to="/analytics/produtividade" replace />} />
-              <Route path="/analytics/produtividade" element={<UserProductivity />} />
+              <Route path="/analytics/produtividade" element={<ModuleRoute module="users_productivity"><UserProductivity /></ModuleRoute>} />
               <Route path="/usuarios/sincronizacao-idp" element={<UsersHub tab="idp" />} />
               <Route path="/usuarios/licencas" element={<UsersHub tab="licenses" />} />
               <Route path="/usuarios/importar-licencas" element={<UsersHub tab="licenses-import" />} />
 
               {/* Cadastros */}
-              <Route path="/cadastros/fornecedores" element={<Suppliers />} />
+              <Route path="/cadastros/fornecedores" element={<ModuleRoute module="suppliers"><Suppliers /></ModuleRoute>} />
               
-              <Route path="/cadastros/itens" element={<Items />} />
+              <Route path="/cadastros/itens" element={<ModuleRoute module="items"><Items /></ModuleRoute>} />
               <Route path="/cadastros/solicitacoes" element={<Navigate to="/solicitacoes" replace />} />
-              <Route path="/cadastros/intercompany" element={<Intercompany />} />
+              <Route path="/cadastros/intercompany" element={<ModuleRoute module="intercompany"><Intercompany /></ModuleRoute>} />
 
               {/* Solicitações de cadastro (módulo próprio) */}
               <Route path="/solicitacoes" element={<RegistrationRequests />} />
 
               {/* Financeiro */}
-              <Route path="/financeiro/adiantamentos" element={<AdvancePayments />} />
-              <Route path="/financeiro/reconciliacao" element={<FinancialReview />} />
-              <Route path="/financeiro/previsao-caixa" element={<CashflowForecast />} />
-              <Route path="/financeiro/nf-entrada" element={<NfEntrada />} />
+              <Route path="/financeiro/adiantamentos" element={<ModuleRoute module="financial_review"><AdvancePayments /></ModuleRoute>} />
+              <Route path="/financeiro/reconciliacao" element={<ModuleRoute module="financial_review"><FinancialReview /></ModuleRoute>} />
+              <Route path="/financeiro/previsao-caixa" element={<ModuleRoute module="financial_review"><CashflowForecast /></ModuleRoute>} />
+              <Route path="/financeiro/nf-entrada" element={<ModuleRoute module="nf_entrada"><NfEntrada /></ModuleRoute>} />
 
               {/* Notificações */}
-              <Route path="/notificacoes" element={<Notifications />} />
-              <Route path="/notificacoes/regras" element={<NotificationGovernance />} />
+              <Route path="/notificacoes" element={<ModuleRoute module="notifications"><Notifications /></ModuleRoute>} />
+              <Route path="/notificacoes/regras" element={<ModuleRoute module="notifications"><NotificationGovernance /></ModuleRoute>} />
 
               {/* Perfil intercompany */}
               <Route path="/perfil" element={<Profile />} />

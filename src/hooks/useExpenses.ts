@@ -1565,7 +1565,7 @@ export function useExpenses(
       if (!opts?.skipRefresh) await fetchExpenses();
       return { replayed: !!payload.replayed };
     },
-    [fetchExpenses, session]
+    [fetchExpenses]
   );
 
 

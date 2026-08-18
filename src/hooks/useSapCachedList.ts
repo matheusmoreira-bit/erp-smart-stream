@@ -393,7 +393,7 @@ export function useSapCachedList({
     } finally {
       setIsLoading(false);
     }
-  }, [session?.sessionId, session?.companyDB, enabled, cacheKey, endpoint]);
+  }, [session, enabled, cacheKey, endpoint]);
 
   // Reset loaded flag when session changes
   useEffect(() => {

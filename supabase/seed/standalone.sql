@@ -16,7 +16,7 @@ SET display_name = EXCLUDED.display_name,
     is_active = EXCLUDED.is_active,
     updated_at = now();
 
-INSERT INTO public.system_credentials (system_name, company_db, credential_key, credential_value)
+WITH credentials(system_name, company_db, credential_key, credential_value) AS (
 VALUES
   ('sap', 'SBO_ANAGAMING', 'service_layer_url', 'http://sap-disabled.local/b1s/v2'),
   ('sap', 'SBO_ANAGAMING', 'company_db', 'SBO_ANAGAMING'),
@@ -33,8 +33,14 @@ VALUES
   ('sap', 'open_gaming_sa', 'username', 'Apiuser'),
   ('sap', 'open_gaming_sa', 'password', 'standalone-disabled'),
   ('sap', 'open_gaming_sa', 'use_hana_db', 'false')
-ON CONFLICT (system_name, company_db, credential_key)
-DO UPDATE SET credential_value = EXCLUDED.credential_value, updated_at = now();
+)
+SELECT public.upsert_system_credential(
+  system_name,
+  credential_key,
+  credential_value,
+  company_db
+)
+FROM credentials;
 
 WITH local_user AS (
   SELECT id, email

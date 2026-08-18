@@ -190,6 +190,11 @@
       padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
     }
 
+    button,
+    [role="button"] {
+      min-height: 44px;
+    }
+
     /* Hide horizontal scrollbars on tab strips */
     .scrollbar-none::-webkit-scrollbar { display: none; }
     .scrollbar-none { scrollbar-width: none; }

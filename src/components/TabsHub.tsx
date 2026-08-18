@@ -1,4 +1,5 @@
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
+import { Loader2, ShieldX } from "lucide-react";
 import { SubmenuBar } from "@/components/SubmenuBar";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 import { useModuleAccess } from "@/hooks/usePermissions";
@@ -26,13 +27,25 @@ interface TabsHubProps<K extends string> {
  */
 export function TabsHub<K extends string>({ tabs, active, moduleLabel, backTo = "/" }: TabsHubProps<K>) {
   const navigate = useNavigate();
-  const { userModules } = useModuleAccess();
+  const { userModules, loading } = useModuleAccess();
 
-  const visible = tabs.filter(
-    (t) => !t.module || userModules.length === 0 || userModules.includes(t.module),
-  );
-  const list = visible.length > 0 ? visible : tabs;
-  const activeTab = list.find((t) => t.key === active) ?? tabs.find((t) => t.key === active) ?? list[0];
+  if (loading) {
+    return <div className="min-h-[50vh] flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+  }
+
+  const list = tabs.filter((t) => !t.module || userModules.includes(t.module));
+  if (list.length === 0) {
+    return (
+      <div className="min-h-[50vh] flex flex-col items-center justify-center gap-2 p-6 text-center">
+        <ShieldX className="h-8 w-8 text-destructive" />
+        <p className="font-semibold">Acesso negado</p>
+        <p className="text-sm text-muted-foreground">Nenhuma área deste módulo está liberada para seu perfil.</p>
+      </div>
+    );
+  }
+
+  const activeTab = list.find((t) => t.key === active);
+  if (!activeTab) return <Navigate to={list[0].path} replace />;
 
   return (
     <div>

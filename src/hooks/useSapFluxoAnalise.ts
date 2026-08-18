@@ -46,14 +46,16 @@ export function useSapFluxoAnalise(opts: Options) {
   const [rows, setRows] = useState<SapFluxoRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fromTime = from?.getTime();
+  const toTime = to?.getTime();
 
   const load = useCallback(async () => {
     if (!enabled) { setRows([]); return; }
     setLoading(true);
     setError(null);
     try {
-      const fromIso = from?.toISOString();
-      const toIso = to?.toISOString();
+      const fromIso = fromTime === undefined ? undefined : new Date(fromTime).toISOString();
+      const toIso = toTime === undefined ? undefined : new Date(toTime).toISOString();
 
       const out: SapFluxoRow[] = [];
       for (let offset = 0; ; offset += PAGE) {
@@ -82,7 +84,7 @@ export function useSapFluxoAnalise(opts: Options) {
     } finally {
       setLoading(false);
     }
-  }, [companyDb, from?.getTime(), to?.getTime(), consolidated, enabled]);
+  }, [companyDb, fromTime, toTime, consolidated, enabled]);
 
   useEffect(() => { load(); }, [load]);
 

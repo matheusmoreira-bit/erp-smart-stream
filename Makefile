@@ -1,7 +1,10 @@
 # ============================================================================
 # Makefile — atalhos para o stack QA local (Fase 3).
 # ============================================================================
-.PHONY: qa-up qa-down qa-nuke qa-logs qa-seed qa-jwt qa-migrate qa-shell qa-status standalone-up standalone-down standalone-nuke standalone-seed standalone-logs standalone-status
+.PHONY: qa-up qa-down qa-nuke qa-logs qa-seed qa-jwt qa-migrate qa-shell qa-status standalone-up standalone-down standalone-nuke standalone-seed standalone-logs standalone-status cloud-preflight cloud-up cloud-down cloud-logs cloud-status cloud-migrate cloud-backup cloud-restore cloud-smoke cloud-jwt
+
+CLOUD_ENV ?= docker/.env.cloud
+CLOUD_COMPOSE = docker compose -f docker/docker-compose.yml -f docker/docker-compose.cloud.yml --env-file $(CLOUD_ENV)
 
 qa-up: ## Sobe o stack QA local (Supabase self-hosted)
 	@test -f docker/.env || (echo "ERRO: copie docker/.env.example para docker/.env"; exit 1)
@@ -58,6 +61,36 @@ standalone-logs: ## Tail dos logs standalone
 
 standalone-status: ## Status dos containers standalone
 	docker compose -f docker/docker-compose.standalone.yml --env-file docker/.env.standalone ps
+
+cloud-preflight: ## Valida configuração antes de publicar em GCP/AWS
+	CLOUD_ENV_FILE=$(CLOUD_ENV) bash scripts/cloud-preflight.sh
+
+cloud-up: cloud-preflight ## Sobe o stack cloud completo com HTTPS
+	$(CLOUD_COMPOSE) up -d --build --remove-orphans
+
+cloud-down: ## Para o stack cloud mantendo os volumes
+	$(CLOUD_COMPOSE) down
+
+cloud-logs: ## Tail dos logs do stack cloud
+	$(CLOUD_COMPOSE) logs -f --tail=100
+
+cloud-status: ## Status e health checks dos containers cloud
+	$(CLOUD_COMPOSE) ps
+
+cloud-migrate: ## Aplica migrations de schema sem reconciliacoes de producao
+	CLOUD_ENV_FILE=$(CLOUD_ENV) bash scripts/cloud-migrate.sh
+
+cloud-backup: ## Gera backup local e envia opcionalmente para S3/GCS
+	CLOUD_ENV_FILE=$(CLOUD_ENV) bash scripts/cloud-backup.sh
+
+cloud-restore: ## Restaura CLOUD_RESTORE_FROM apos confirmacao explicita
+	CLOUD_ENV_FILE=$(CLOUD_ENV) bash scripts/cloud-restore.sh
+
+cloud-smoke: ## Testa gateway, frontend e Auth pelo dominio publico
+	CLOUD_ENV_FILE=$(CLOUD_ENV) bash scripts/cloud-smoke.sh
+
+cloud-jwt: ## Gera ANON_KEY e SERVICE_ROLE_KEY para o ambiente cloud
+	JWT_ENV_FILE=$(CLOUD_ENV) bash scripts/qa-mint-jwt.sh
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \

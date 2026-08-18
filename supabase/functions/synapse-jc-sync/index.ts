@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { authErrorResponse, requireSchedulerOrAdminOrSapModule } from "../_shared/auth.ts";
 import { deprovisionUser, logDeprovision } from "../_shared/idp-deprovision.ts";
 
 
@@ -105,10 +106,17 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  try {
+    await requireSchedulerOrAdminOrSapModule(req, "synapse");
+  } catch (error) {
+    return authErrorResponse(error, corsHeaders) ?? new Response("Unauthorized", { status: 401, headers: corsHeaders });
+  }
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
+  let bodyCompanyDB = "";
 
   // KILL SWITCH: fluxo de offboarding (desligar usuário no SAP quando desligado no IdP)
   // está desativado por decisão de negócio. Para reativar, defina o secret
@@ -122,7 +130,6 @@ Deno.serve(async (req) => {
 
   try {
     // Get company_db from request body
-    let bodyCompanyDB = "";
     try {
       const body = await req.json();
       bodyCompanyDB = body.company_db || "";
@@ -154,7 +161,7 @@ Deno.serve(async (req) => {
       .eq("status", "linked");
 
     if (!mappings || mappings.length === 0) {
-      await logExecution(supabase, "success", { message: "No linked users to check" }, 0);
+      await logExecution(supabase, bodyCompanyDB || null, "success", { message: "No linked users to check" }, 0);
       return new Response(JSON.stringify({ message: "No linked users" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -172,11 +179,11 @@ Deno.serve(async (req) => {
       .filter((x): x is { mapping: (typeof mappings)[number]; reason: string } => x !== null);
 
     if (toDisable.length === 0) {
-      await logExecution(supabase, "success", { message: "No users to disable" }, 0);
+      await logExecution(supabase, bodyCompanyDB || null, "success", { message: "No users to disable" }, 0);
       await supabase
         .from("synapse_integrations")
         .update({ last_run_at: new Date().toISOString(), last_run_status: "success", last_run_message: "Nenhum usuário para desabilitar" })
-        .eq("integration_key", "jumpcloud_sap_sync");
+        .eq("id", config.id);
 
       return new Response(JSON.stringify({ message: "No users to disable", checked: mappings.length }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -247,23 +254,24 @@ Deno.serve(async (req) => {
     const msg = `${successCount}/${toDisable.length} usuários desprovisionados`;
 
 
-    await logExecution(supabase, successCount === toDisable.length ? "success" : "partial", { results }, successCount);
+    await logExecution(supabase, bodyCompanyDB || null, successCount === toDisable.length ? "success" : "partial", { results }, successCount);
     await supabase
       .from("synapse_integrations")
       .update({ last_run_at: new Date().toISOString(), last_run_status: "success", last_run_message: msg })
-      .eq("integration_key", "jumpcloud_sap_sync");
+      .eq("id", config.id);
 
     return new Response(JSON.stringify({ message: msg, results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro desconhecido";
-    await logExecution(supabase, "error", { error: message }, 0).catch(() => {});
-    await supabase
+    await logExecution(supabase, bodyCompanyDB || null, "error", { error: message }, 0).catch(() => {});
+    let statusQuery = supabase
       .from("synapse_integrations")
       .update({ last_run_at: new Date().toISOString(), last_run_status: "error", last_run_message: message })
-      .eq("integration_key", "jumpcloud_sap_sync")
-      .catch(() => {});
+      .eq("integration_key", "jumpcloud_sap_sync");
+    if (bodyCompanyDB) statusQuery = statusQuery.eq("company_db", bodyCompanyDB);
+    await statusQuery.catch(() => {});
 
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
@@ -274,12 +282,14 @@ Deno.serve(async (req) => {
 
 async function logExecution(
   supabase: ReturnType<typeof createClient>,
+  companyDb: string | null,
   status: string,
   details: Record<string, unknown>,
   affectedCount: number
 ) {
   await supabase.from("synapse_execution_log").insert({
     integration_key: "jumpcloud_sap_sync",
+    company_db: companyDb,
     status,
     details,
     affected_count: affectedCount,

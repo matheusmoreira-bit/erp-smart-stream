@@ -27,6 +27,24 @@ export interface PagCorpCardMappingDescribed {
   cardKey: string | null;
 }
 
+interface PagCorpCardReference {
+  cardLastDigits?: unknown;
+  cardId?: unknown;
+  cardName?: unknown;
+  accountAlias?: unknown;
+  accountName?: unknown;
+}
+
+const normalizeKey = (value: unknown): string => String(value ?? "").trim().toLowerCase();
+const digitKey = (value: unknown): string => String(value ?? "").replace(/\D/g, "");
+const resolveKeys = (tx: PagCorpCardReference): string[] => {
+  const candidates = [tx.cardLastDigits, tx.cardId, tx.cardName, tx.accountAlias, tx.accountName]
+    .map((value) => value == null ? "" : String(value).trim())
+    .filter(Boolean);
+  return Array.from(new Set(candidates));
+};
+const resolveKey = (tx: PagCorpCardReference): string | null => resolveKeys(tx)[0] || null;
+
 /**
  * Carrega TODAS as linhas de pagcorp_card_mapping da empresa atual e expõe
  * uma função que resolve o mapeamento aplicável a uma transação (por
@@ -84,34 +102,8 @@ export function usePagCorpCardMapping(companyDb: string | undefined) {
     };
   }, [companyDb]);
 
-  const normalizeKey = (value: unknown): string => String(value ?? "").trim().toLowerCase();
-  const digitKey = (value: unknown): string => String(value ?? "").replace(/\D/g, "");
-
-  const resolveKeys = (tx: {
-    cardLastDigits?: unknown;
-    cardId?: unknown;
-    cardName?: unknown;
-    accountAlias?: unknown;
-    accountName?: unknown;
-  }): string[] => {
-    const candidates = [tx.cardLastDigits, tx.cardId, tx.cardName, tx.accountAlias, tx.accountName]
-      .map((v) => (v == null ? "" : String(v).trim()))
-      .filter(Boolean);
-    return Array.from(new Set(candidates));
-  };
-
-  const resolveKey = (tx: {
-    cardLastDigits?: unknown;
-    cardId?: unknown;
-    cardName?: unknown;
-    accountAlias?: unknown;
-    accountName?: unknown;
-  }): string | null => {
-    return resolveKeys(tx)[0] || null;
-  };
-
   const resolve = useCallback(
-    (tx: { cardLastDigits?: unknown; cardId?: unknown; cardName?: unknown; accountAlias?: unknown; accountName?: unknown }): PagCorpCardMappingResolved => {
+    (tx: PagCorpCardReference): PagCorpCardMappingResolved => {
       const keys = resolveKeys(tx);
       const normalizedKeys = keys.map(normalizeKey);
       const digitKeys = keys.map(digitKey).filter((v) => v.length >= 4);
@@ -146,7 +138,7 @@ export function usePagCorpCardMapping(companyDb: string | undefined) {
   );
 
   const describe = useCallback(
-    (tx: { cardLastDigits?: unknown; cardId?: unknown; cardName?: unknown; accountAlias?: unknown; accountName?: unknown }): PagCorpCardMappingDescribed => {
+    (tx: PagCorpCardReference): PagCorpCardMappingDescribed => {
       const resolved = resolve(tx);
       const missing: string[] = [];
       if (!resolved.costCenter) missing.push("Centro de Custo");

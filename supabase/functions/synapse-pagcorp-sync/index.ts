@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { authErrorResponse, requireSchedulerOrAdminOrSapModule } from "../_shared/auth.ts";
 import { ensureCopyToTargetDocument } from "../_shared/sap-attach-copy.ts";
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 
@@ -610,12 +611,14 @@ async function sendValidationNotificationEmail(
 
 async function logExecution(
   supabase: ReturnType<typeof createClient>,
+  companyDb: string | null,
   status: string,
   details: Record<string, unknown>,
   affectedCount: number,
 ) {
   await supabase.from("synapse_execution_log").insert({
     integration_key: "pagcorp_erp_sync",
+    company_db: companyDb,
     status,
     details,
     affected_count: affectedCount,
@@ -629,10 +632,16 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  try {
+    await requireSchedulerOrAdminOrSapModule(req, "synapse");
+  } catch (error) {
+    return authErrorResponse(error, corsHeaders) ?? new Response("Unauthorized", { status: 401, headers: corsHeaders });
+  }
+
   const supabase = getServiceClient();
+  let bodyCompanyDB = "";
 
   try {
-    let bodyCompanyDB = "";
     let bodyParams: Record<string, unknown> = {};
     try {
       const body = await req.json();
@@ -671,7 +680,7 @@ Deno.serve(async (req) => {
     const approvedExpenses = await fetchApprovedExpenses(pagToken, pagCreds.api_base_url, pagCreds.account_id, startDate, endDate);
 
     if (approvedExpenses.length === 0) {
-      await logExecution(supabase, "success", { message: "Nenhuma despesa aprovada encontrada", startDate, endDate }, 0);
+      await logExecution(supabase, bodyCompanyDB || null, "success", { message: "Nenhuma despesa aprovada encontrada", startDate, endDate }, 0);
       await supabase.from("synapse_integrations")
         .update({ last_run_at: now.toISOString(), last_run_status: "success", last_run_message: "Nenhuma despesa aprovada" })
         .eq("id", config.id);
@@ -692,7 +701,7 @@ Deno.serve(async (req) => {
     const pending = approvedExpenses.filter((e: any) => !alreadyIntegrated.has(Number(e.id || e.expenseId)));
 
     if (pending.length === 0) {
-      await logExecution(supabase, "success", { message: "Todas despesas já integradas", total: approvedExpenses.length }, 0);
+      await logExecution(supabase, bodyCompanyDB || null, "success", { message: "Todas despesas já integradas", total: approvedExpenses.length }, 0);
       await supabase.from("synapse_integrations")
         .update({ last_run_at: now.toISOString(), last_run_status: "success", last_run_message: `${approvedExpenses.length} despesas, todas já integradas` })
         .eq("id", config.id);
@@ -983,7 +992,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    await logExecution(supabase, finalStatus, { results, startDate, endDate, validationIssues: validationIssues.length > 0 ? validationIssues : undefined }, successCount);
+    await logExecution(supabase, bodyCompanyDB || null, finalStatus, { results, startDate, endDate, validationIssues: validationIssues.length > 0 ? validationIssues : undefined }, successCount);
     await supabase.from("synapse_integrations")
       .update({ last_run_at: now.toISOString(), last_run_status: finalStatus, last_run_message: msg })
       .eq("id", config.id);
@@ -993,13 +1002,15 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro desconhecido";
-    try { await logExecution(supabase, "error", { error: message }, 0); } catch {
+    try { await logExecution(supabase, bodyCompanyDB || null, "error", { error: message }, 0); } catch {
       // Preserve the original integration error when telemetry also fails.
     }
     try {
-      await supabase.from("synapse_integrations")
+      let statusQuery = supabase.from("synapse_integrations")
         .update({ last_run_at: new Date().toISOString(), last_run_status: "error", last_run_message: message })
         .eq("integration_key", "pagcorp_erp_sync");
+      if (bodyCompanyDB) statusQuery = statusQuery.eq("company_db", bodyCompanyDB);
+      await statusQuery;
     } catch {
       // Preserve the original integration error when status persistence fails.
     }

@@ -74,6 +74,7 @@ import { CustomFieldsEditor } from "@/components/CustomFieldsEditor";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
+import { authFetch } from "@/lib/auth-fetch";
 import AuditLogTable from "@/components/AuditLogTable";
 import IntegrationsTab from "@/components/IntegrationsTab";
 import NfseEmailSettingsTab from "@/components/NfseEmailSettingsTab";
@@ -169,12 +170,13 @@ function SystemCredentialModal({
       .map((f) => f.key);
     if (loadableKeys.length === 0) return;
     (async () => {
-      const { data } = await supabase
-        .from("system_credentials")
-        .select("credential_key, credential_value")
-        .eq("company_db", companyDb)
-        .eq("system_name", system.name)
-        .in("credential_key", loadableKeys);
+      const params = new URLSearchParams({
+        company_db: companyDb,
+        system: system.name,
+        keys: loadableKeys.join(","),
+      });
+      const response = await authFetch(`credentials?${params.toString()}`);
+      const { credentials: data = [] } = response.ok ? await response.json() : {};
       if (data) {
         const map: Record<string, string> = {};
         for (const row of data) map[row.credential_key] = row.credential_value;
@@ -208,15 +210,19 @@ function SystemCredentialModal({
     }
 
     setSaving(true);
-    for (const cred of creds) {
-      const { error } = await supabase.from("system_credentials").upsert(cred, {
-        onConflict: "company_db,system_name,credential_key",
-      });
-      if (error) {
-        toast.error(`Erro ao salvar ${cred.credential_key}`);
-        setSaving(false);
-        return;
-      }
+    const saveResponse = await authFetch("credentials", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        company_db: companyDb,
+        system_name: system.name,
+        credentials: creds.map((credential) => ({ key: credential.credential_key, value: credential.credential_value })),
+      }),
+    });
+    if (!saveResponse.ok) {
+      toast.error(`Erro ao salvar credenciais do ${system.label}`);
+      setSaving(false);
+      return;
     }
     toast.success(`Credenciais do ${system.label} salvas`);
     setSaving(false);
@@ -228,11 +234,11 @@ function SystemCredentialModal({
   const handleDeleteAll = async () => {
     setConfirmDeleteAllOpen(false);
     setSaving(true);
-    await supabase
-      .from("system_credentials")
-      .delete()
-      .eq("company_db", companyDb)
-      .eq("system_name", system.name);
+    await authFetch("credentials", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ company_db: companyDb, system_name: system.name }),
+    });
     toast.success(`Credenciais do ${system.label} removidas`);
     setSaving(false);
     onSaved();
@@ -450,13 +456,10 @@ export default function Admin() {
 
   const fetchCredentials = async (companyDb: string) => {
     setCredLoading(companyDb);
-    const { data, error } = await supabase
-      .from("system_credentials")
-      .select("*")
-      .eq("company_db", companyDb)
-      .order("system_name");
-    if (!error) {
-      setCredentials((prev) => ({ ...prev, [companyDb]: data || [] }));
+    const response = await authFetch(`credentials?company_db=${encodeURIComponent(companyDb)}`);
+    if (response.ok) {
+      const data = await response.json();
+      setCredentials((prev) => ({ ...prev, [companyDb]: data.credentials || [] }));
     }
     setCredLoading(null);
   };
@@ -502,12 +505,13 @@ export default function Admin() {
       .filter((f) => f.type !== "password")
       .map((f) => f.key);
     if (loadableKeys.length === 0) return;
-    const { data } = await supabase
-      .from("system_credentials")
-      .select("credential_key, credential_value")
-      .eq("company_db", c.company_db)
-      .eq("system_name", erpType)
-      .in("credential_key", loadableKeys);
+    const params = new URLSearchParams({
+      company_db: c.company_db,
+      system: erpType,
+      keys: loadableKeys.join(","),
+    });
+    const response = await authFetch(`credentials?${params.toString()}`);
+    const { credentials: data = [] } = response.ok ? await response.json() : {};
     const map: Record<string, string> = {};
     for (const row of data || []) map[row.credential_key] = row.credential_value;
     setWizardCreds(map);
@@ -581,12 +585,15 @@ export default function Admin() {
             : wizardCreds[field.key].trim(),
         ] as const);
       if (credEntries.length > 0) {
-        for (const [key, value] of credEntries) {
-          await supabase.from("system_credentials").upsert(
-            { company_db: companyForm.company_db, system_name: companyForm.erp_type, credential_key: key, credential_value: value },
-            { onConflict: "company_db,system_name,credential_key" }
-          );
-        }
+        await authFetch("credentials", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            company_db: companyForm.company_db,
+            system_name: companyForm.erp_type,
+            credentials: credEntries.map(([key, value]) => ({ key, value })),
+          }),
+        });
       }
       toast.success(isNew ? "Empresa criada com sucesso" : "Empresa atualizada");
     }

@@ -1,0 +1,37 @@
+{
+  email {$TLS_EMAIL}
+}
+
+{$APP_DOMAIN} {
+  encode zstd gzip
+
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    Permissions-Policy "camera=(self), microphone=(), geolocation=(), payment=()"
+    -Server
+  }
+
+  handle /healthz {
+    respond "ok" 200
+  }
+
+  @backend path /auth/v1/* /rest/v1/* /storage/v1/* /realtime/v1/* /functions/v1/*
+  handle @backend {
+    reverse_proxy kong:8000 {
+      header_down -Access-Control-Allow-Origin
+      header_down -Access-Control-Allow-Credentials
+    }
+  }
+
+  handle {
+    reverse_proxy web:80
+  }
+
+  log {
+    output stdout
+    format json
+  }
+}

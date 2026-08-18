@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("stand-alone carrega empresas e entra no painel", async ({ page }) => {
+test("stand-alone carrega empresas e entra no painel", async ({ page }, testInfo) => {
   const errors: string[] = [];
   const failedRequests: string[] = [];
   page.on("console", (message) => {
@@ -18,11 +18,26 @@ test("stand-alone carrega empresas e entra no painel", async ({ page }) => {
   await page.getByRole("combobox").click();
   await page.getByRole("option", { name: "ANA Gaming" }).click();
   await page.getByRole("button", { name: /Entrar/i }).click();
-  await expect(page.getByText("Painel de gestão")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Módulos" })).toBeVisible();
+  await page.waitForLoadState("networkidle");
 
   await page.goto("/compras");
   await expect(page.getByText("Gestão de Compras")).toBeVisible();
   await expect(page.getByText(/Sessão SAP não encontrada/i)).toHaveCount(0);
+
+  if (testInfo.project.name === "mobile-chromium") {
+    await page.goto("/cadastros/fornecedores");
+    await expect(page.getByRole("heading", { name: "Fornecedores" })).toBeVisible();
+    const hasViewportOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth,
+    );
+    expect(hasViewportOverflow).toBe(false);
+
+    const controls = await page.locator("main button:visible, main [role=button]:visible").evaluateAll(
+      (elements) => elements.map((element) => element.getBoundingClientRect().height),
+    );
+    expect(controls.every((height) => height >= 44)).toBe(true);
+  }
   expect(failedRequests).toEqual([]);
   expect(errors).toEqual([]);
 });

@@ -26,6 +26,26 @@ psql_file() {
   psql_local -q < "$1"
 }
 
+migration_checksum() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+record_migration() {
+  psql_local -q -v migration_name="$1" -v migration_checksum="$2" -v migration_status="$3" <<'SQL'
+INSERT INTO erp_deploy.standalone_migrations (name, checksum, status)
+VALUES (:'migration_name', :'migration_checksum', :'migration_status')
+ON CONFLICT (name) DO UPDATE
+SET checksum = EXCLUDED.checksum,
+    status = EXCLUDED.status,
+    applied_at = now();
+SQL
+  MIGRATION_STATE="${MIGRATION_STATE:-}"$'\n'"$1|$2"
+}
+
 clear_local_cron_jobs() {
   psql_local -q >/dev/null <<'SQL'
 DO $$
@@ -41,8 +61,23 @@ SQL
 
 apply_standalone_migration() {
   local file="$1"
-  local name
+  local name checksum existing
   name="$(basename "$file")"
+  checksum="$(migration_checksum "$file")"
+  existing="$(printf '%s\n' "$MIGRATION_STATE" | awk -F'|' -v target="$name" '$1 == target { value = $2 } END { print value }')"
+
+  if [[ -n "$existing" ]]; then
+    if [[ "$existing" != "$checksum" ]]; then
+      if [[ "$name" == "20260511202322_cd70f45c-dbb2-4116-9e68-ca3cc4a1a489.sql" ]]; then
+        echo "   - $name (aceita sanitizacao de segredo)"
+        record_migration "$name" "$checksum" applied
+        return 0
+      fi
+      echo "ERRO: migration local aplicada foi alterada: $name" >&2
+      return 1
+    fi
+    return 0
+  fi
 
   case "$name" in
     # Migrations de reconciliacao manual de despesas reais. Em standalone,
@@ -65,12 +100,14 @@ apply_standalone_migration() {
     20260806135638_cc2f3edc-ffa6-4d24-9e95-9fb1f438225f.sql|\
     20260806190403_f264b6d5-a7c3-4a08-b2fe-baa26d51b470.sql)
       echo "   - $name (skip standalone: reconciliacao de dado produtivo)"
+      record_migration "$name" "$checksum" skipped_data
       return 0
       ;;
     20260708142407_23ede603-e116-4bdd-8357-828cfe4118a6.sql)
       echo "   - $name (partial standalone: funcao sem reconciliacao produtiva)"
       sed -n '/CREATE OR REPLACE FUNCTION public.reassign_approval_rule_safe/,$p' "$file" | psql_local -q >/dev/null
       clear_local_cron_jobs
+      record_migration "$name" "$checksum" applied
       return 0
       ;;
   esac
@@ -78,6 +115,7 @@ apply_standalone_migration() {
   echo "   - $name"
   psql_file "$file" >/dev/null
   clear_local_cron_jobs
+  record_migration "$name" "$checksum" applied
 }
 
 echo ">> Aguardando Postgres local"
@@ -98,6 +136,30 @@ done
 if [[ "$(psql_local -tAc "select to_regclass('auth.users') is not null")" != "t" ]]; then
   echo "ERRO: Auth local nao criou auth.users a tempo" >&2
   exit 1
+fi
+
+psql_local -q <<'SQL'
+CREATE SCHEMA IF NOT EXISTS erp_deploy;
+CREATE TABLE IF NOT EXISTS erp_deploy.standalone_migrations (
+  name text PRIMARY KEY,
+  checksum text NOT NULL,
+  status text NOT NULL CHECK (status IN ('applied', 'skipped_data')),
+  applied_at timestamptz NOT NULL DEFAULT now()
+);
+REVOKE ALL ON SCHEMA erp_deploy FROM PUBLIC, anon, authenticated;
+SQL
+MIGRATION_STATE="$(psql_local -qAt -F '|' -c 'SELECT name, checksum FROM erp_deploy.standalone_migrations')"
+
+# Volumes criados antes do ledger já possuem todo o schema até 2026-08-14.
+# A coluna abaixo é o marcador da última migration desse baseline.
+if [[ "$(psql_local -tAc "select count(*) from erp_deploy.standalone_migrations")" == "0" ]] &&
+   [[ "$(psql_local -tAc "select exists(select 1 from information_schema.columns where table_schema='public' and table_name='nf_entrada_imports' and column_name='sap_matched_po_doc_num')")" == "t" ]]; then
+  echo ">> Registrando baseline do volume standalone existente"
+  for f in "$ROOT_DIR"/supabase/migrations/*.sql; do
+    name="$(basename "$f")"
+    [[ "$name" < "20260818173000" ]] || continue
+    record_migration "$name" "$(migration_checksum "$f")" applied
+  done
 fi
 
 echo ">> Aplicando migrations locais"

@@ -20,6 +20,7 @@ export interface SynapseIntegration {
 export interface SynapseLog {
   id: string;
   integration_key: string;
+  company_db: string | null;
   status: string;
   details: Record<string, unknown>;
   affected_count: number;
@@ -52,15 +53,17 @@ export function useSynapseIntegrations(companyDB?: string) {
   }, [companyDB]);
 
   const fetchLogs = useCallback(async (integrationKey: string, limit = 20) => {
-    const { data, error } = await supabase
+    let query = supabase
       .from("synapse_execution_log")
       .select("*")
       .eq("integration_key", integrationKey)
       .order("created_at", { ascending: false })
       .limit(limit);
+    if (companyDB) query = query.eq("company_db", companyDB);
+    const { data, error } = await query;
     if (error) throw error;
     setLogs((data as unknown as SynapseLog[]) || []);
-  }, []);
+  }, [companyDB]);
 
   const updateIntegration = useCallback(async (id: string, updates: Partial<SynapseIntegration>) => {
     const { error } = await supabase

@@ -144,7 +144,7 @@ export default function SynapsePage() {
   return (
     <div className="min-h-screen bg-background">
       <PageTitle title="Automações" />
-      <header className="border-b border-border px-6 py-6">
+      <header className="border-b border-border px-4 md:px-6 py-4 md:py-6">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" aria-label="Voltar" onClick={() => navigate("/")}>
@@ -155,7 +155,7 @@ export default function SynapsePage() {
                 <Zap className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-foreground">Automações</h1>
+                <h1 className="text-xl md:text-2xl font-bold text-foreground">Automações</h1>
                 <p className="text-sm text-muted-foreground">
                   Central de automações e integrações
                   {companyLabel && <span className="ml-1">— {companyLabel}</span>}
@@ -167,7 +167,7 @@ export default function SynapsePage() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+      <main className="max-w-5xl mx-auto px-4 md:px-6 py-6 md:py-8 space-y-6">
         {!session && (
           <div className="p-6 rounded-xl border border-border bg-card text-center space-y-2">
             <AlertCircle className="w-8 h-8 text-yellow-500 mx-auto" />
@@ -190,9 +190,9 @@ export default function SynapsePage() {
             {integrations.map((integration) => (
               <div
                 key={integration.id}
-                className="rounded-xl border border-border bg-card p-6 space-y-4"
+                className="rounded-lg border border-border bg-card p-4 md:p-6 space-y-4"
               >
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                   <div className="flex items-center gap-3 min-w-0">
                     <div
                       className={`p-2 rounded-lg ${
@@ -217,7 +217,7 @@ export default function SynapsePage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 flex-wrap md:flex-nowrap md:flex-shrink-0">
                     {integration.integration_key === "pagcorp_erp_sync" && (
                       <Button
                         variant="outline"
@@ -255,7 +255,7 @@ export default function SynapsePage() {
                 </div>
 
                 {/* Status row */}
-                <div className="flex items-center gap-6 text-sm">
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Status:</span>
                     <span

@@ -41,6 +41,7 @@ GRANT anon, authenticated, service_role TO postgres;
 CREATE SCHEMA IF NOT EXISTS auth        AUTHORIZATION supabase_auth_admin;
 CREATE SCHEMA IF NOT EXISTS storage     AUTHORIZATION supabase_storage_admin;
 CREATE SCHEMA IF NOT EXISTS realtime    AUTHORIZATION supabase_admin;
+CREATE SCHEMA IF NOT EXISTS _realtime   AUTHORIZATION supabase_admin;
 CREATE SCHEMA IF NOT EXISTS extensions  AUTHORIZATION supabase_admin;
 CREATE SCHEMA IF NOT EXISTS graphql_public;
 CREATE SCHEMA IF NOT EXISTS pgmq        AUTHORIZATION supabase_admin;
@@ -88,6 +89,8 @@ CREATE TABLE IF NOT EXISTS storage.objects (
 
 ALTER TABLE storage.buckets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE storage.buckets OWNER TO supabase_storage_admin;
+ALTER TABLE storage.objects OWNER TO supabase_storage_admin;
 GRANT ALL ON storage.buckets, storage.objects TO supabase_storage_admin, service_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON storage.buckets, storage.objects TO authenticated, anon;
 

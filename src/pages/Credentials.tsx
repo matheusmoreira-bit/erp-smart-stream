@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft, Key, Save, Trash2, Loader2,
-  CheckCircle2, XCircle, Eye, EyeOff, Shield, Settings2, Zap,
+  CheckCircle2, XCircle, Eye, EyeOff, Shield, Settings2, Zap, Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -24,10 +24,23 @@ import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
 import { CustomFieldsEditor } from "@/components/CustomFieldsEditor";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { PageTitle } from "@/components/PageTitle";
+import { useCompanies } from "@/hooks/useCompanies";
+import type { CredentialMeta } from "@/hooks/useCredentials";
 
 const TEST_ENDPOINTS: Record<string, string> = {
+  sap: "sap-credentials-test",
   mastertax: "mastertax-test",
   becompliance: "becompliance-test",
+};
+
+const INTEGRATION_ENABLED_KEY = "_integration_enabled";
+const REQUIRED_KEYS: Record<string, string[]> = {
+  sap: ["service_layer_url", "company_db", "username", "password"],
+  omie: ["app_key", "app_secret"],
+  jumpcloud: ["api_key"],
+  pagcorp: ["api_base_url", "client_key", "client_secret", "login_email", "login_password"],
+  mastertax: ["base_url", "empresa_id", "token"],
+  becompliance: ["base_url", "client_id", "email", "password"],
 };
 
 function CredentialModal({
@@ -325,9 +338,14 @@ export default function Credentials() {
   const navigate = useNavigate();
   const { session } = useSap();
   const companyDb = session?.companyDB;
-  const { credentials, fetchCredentials, isLoading } = useCredentials();
+  const { credentials, fetchCredentials, saveCredentials, fetchCredentialCoverage, isLoading } = useCredentials();
+  const { companies } = useCompanies(true);
   const [selectedSystem, setSelectedSystem] = useState<SystemConfig | null>(null);
   const [enabledSystems, setEnabledSystems] = useState<Record<string, boolean>>({});
+  const [sapCoverage, setSapCoverage] = useState<{
+    credentials: CredentialMeta[];
+    scope: "all" | "company";
+  } | null>(null);
   const { enabledNames: enabledErpNames, isLoading: erpTypesLoading } = useEnabledErpTypes();
 
   useEffect(() => {
@@ -335,43 +353,53 @@ export default function Credentials() {
   }, [fetchCredentials, companyDb]);
 
   useEffect(() => {
-    const enabled: Record<string, boolean> = { ...enabledSystems };
-    SYSTEMS.forEach((s) => {
-      const hasKeys = credentials.some((c) => c.system_name === s.name);
-      if (hasKeys && enabled[s.name] === undefined) {
-        enabled[s.name] = true;
-      }
+    fetchCredentialCoverage("sap")
+      .then(setSapCoverage)
+      .catch(() => setSapCoverage(null));
+  }, [fetchCredentialCoverage, companyDb]);
+
+  useEffect(() => {
+    if (isLoading) return;
+    const entries = SYSTEMS.map((system) => {
+      const setting = credentials.find(
+        (credential) => credential.system_name === system.name && credential.credential_key === INTEGRATION_ENABLED_KEY,
+      );
+      const hasConfiguredKey = credentials.some(
+        (credential) => credential.system_name === system.name &&
+          credential.credential_key !== INTEGRATION_ENABLED_KEY && credential.is_configured,
+      );
+      return [system.name, setting ? setting.enabled_value === true : hasConfiguredKey] as const;
     });
-    setEnabledSystems(enabled);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [credentials]);
+    setEnabledSystems(Object.fromEntries(entries));
+  }, [credentials, isLoading]);
 
   const getKeysForSystem = (system: string) =>
-    credentials.filter((c) => c.system_name === system).map((c) => c.credential_key);
+    credentials
+      .filter((c) => c.system_name === system && c.is_configured && c.credential_key !== INTEGRATION_ENABLED_KEY)
+      .map((c) => c.credential_key);
 
-  const toggleSystem = (name: string, checked: boolean) => {
-    setEnabledSystems((prev) => {
-      const next = { ...prev, [name]: checked };
-      // ERP exclusivity: deactivate other ERPs when activating one
-      if (checked) {
-        const activatedSystem = SYSTEMS.find((s) => s.name === name);
-        if (activatedSystem?.category === "erp") {
-          SYSTEMS.forEach((s) => {
-            if (s.category === "erp" && s.name !== name) {
-              next[s.name] = false;
-            }
-          });
-          const others = SYSTEMS.filter((s) => s.category === "erp" && s.name !== name).map((s) => s.label);
-          if (others.length > 0) {
-            toast.info(`${others.join(", ")} desativado(s) — apenas um ERP pode estar ativo`);
-          }
-        }
-      }
-      return next;
-    });
-    if (!checked) {
-      toast.info("Integração desativada. As credenciais foram mantidas.");
+  const toggleSystem = async (name: string, checked: boolean) => {
+    const previous = { ...enabledSystems };
+    const changes: Record<string, boolean> = { [name]: checked };
+    const activatedSystem = SYSTEMS.find((s) => s.name === name);
+    if (checked && activatedSystem?.category === "erp") {
+      SYSTEMS.forEach((system) => {
+        if (system.category === "erp" && system.name !== name) changes[system.name] = false;
+      });
     }
+    setEnabledSystems((prev) => {
+      return { ...prev, ...changes };
+    });
+
+    const results = await Promise.all(Object.entries(changes).map(([system, enabled]) =>
+      saveCredentials(system, [{ key: INTEGRATION_ENABLED_KEY, value: String(enabled) }], companyDb)
+    ));
+    if (results.some((ok) => !ok)) {
+      setEnabledSystems(previous);
+      toast.error("Não foi possível salvar o estado da integração");
+      return;
+    }
+    toast.success(checked ? "Integração ativada" : "Integração desativada; credenciais mantidas");
   };
 
   // Group systems by category, filtering ERPs by admin-enabled list
@@ -384,6 +412,17 @@ export default function Credentials() {
     const hasToggle = enabledErpNames !== undefined; // erpTypes is loaded; check by presence in raw list
     return hasToggle ? enabledErpNames.includes(s.name) || !["mastertax"].includes(s.name) : true;
   });
+  const sapRequiredKeys = REQUIRED_KEYS.sap;
+  const sapCoverageRows = companies.map((company) => {
+    const keys = sapCoverage?.credentials
+      .filter((credential) => credential.company_db === company.company_db && credential.is_configured)
+      .map((credential) => credential.credential_key) || [];
+    return {
+      company,
+      configured: sapRequiredKeys.every((key) => keys.includes(key)),
+    };
+  });
+  const configuredSapCompanies = sapCoverageRows.filter((row) => row.configured).length;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -427,6 +466,37 @@ export default function Credentials() {
             </div>
           </div>
 
+          {sapCoverage && companies.length > 0 && (
+            <section className="border-y border-border py-4" aria-label="Cobertura das credenciais SAP">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <Building2 className="mt-0.5 h-5 w-5 text-primary" />
+                  <div>
+                    <h2 className="text-sm font-semibold text-foreground">Cobertura SAP por empresa</h2>
+                    <p className="text-xs text-muted-foreground">
+                      {sapCoverage.scope === "all"
+                        ? `${configuredSapCompanies} de ${sapCoverageRows.length} empresas com todas as credenciais obrigatórias.`
+                        : "A cobertura completa está disponível para administradores do Cloud; exibindo a empresa atual."}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 sm:justify-end">
+                  {sapCoverageRows
+                    .filter((row) => sapCoverage.scope === "all" || row.company.company_db === companyDb)
+                    .map((row) => (
+                      <Badge
+                        key={row.company.company_db}
+                        variant="outline"
+                        className={row.configured ? "border-emerald-500/30 text-emerald-600" : "border-amber-500/30 text-amber-600"}
+                      >
+                        {row.company.display_name}: {row.configured ? "completo" : "pendente"}
+                      </Badge>
+                    ))}
+                </div>
+              </div>
+            </section>
+          )}
+
           {isLoading && credentials.length === 0 ? (
             <div className="flex justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -449,7 +519,12 @@ export default function Credentials() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {group.systems.map((system) => {
                       const existingKeys = getKeysForSystem(system.name);
-                      const isConfigured = existingKeys.length > 0;
+                      const requiredKeys = REQUIRED_KEYS[system.name] || system.fields
+                        .filter((field) => field.type !== "toggle" && field.type !== "custom_fields")
+                        .map((field) => field.key);
+                      const configuredCount = requiredKeys.filter((key) => existingKeys.includes(key)).length;
+                      const isConfigured = requiredKeys.length > 0 && configuredCount === requiredKeys.length;
+                      const isPartial = configuredCount > 0 && !isConfigured;
                       const isEnabled = enabledSystems[system.name] ?? false;
                       const Icon = system.icon;
 
@@ -493,6 +568,11 @@ export default function Credentials() {
                                     >
                                       <CheckCircle2 className="w-3 h-3" />
                                       Configurado
+                                    </Badge>
+                                  ) : isPartial ? (
+                                    <Badge variant="secondary" className="gap-1 bg-amber-500/10 text-amber-600 border-amber-500/20">
+                                      <XCircle className="w-3 h-3" />
+                                      Incompleto ({configuredCount}/{requiredKeys.length})
                                     </Badge>
                                   ) : (
                                     <Badge

@@ -12,8 +12,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const WHATSAPP_URL = "http://63.177.171.140/sender_wpp";
-const WHATSAPP_TOKEN = "777a5756-d6b3-4295-a031-e5c210998766";
+const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "";
+const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || "";
 const ERP_FLOW_URL = "https://erp-flow.cactuscorporation.com";
 // HanaAPI V1 (middleware n8n) foi descontinuada — usamos V2 via fetchHanaView.
 

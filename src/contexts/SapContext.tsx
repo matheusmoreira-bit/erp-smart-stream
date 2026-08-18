@@ -233,7 +233,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [setSession]);
 
   const loginManaged = useCallback(async (companyDB: string) => {
     setIsLoading(true);

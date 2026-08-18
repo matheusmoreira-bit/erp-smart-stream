@@ -4,8 +4,8 @@
 // que a NF de entrada de um pedido de compra do cartão foi lançada no ERP,
 // avisamos a responsável pela baixa em vez de emitir o pagamento.
 
-const WHATSAPP_URL = "http://63.177.171.140/sender_wpp";
-const WHATSAPP_TOKEN = "777a5756-d6b3-4295-a031-e5c210998766";
+const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "";
+const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || "";
 
 /** Responsável pela baixa manual dos cartões corporativos. */
 export const PAGCORP_SETTLEMENT_OWNER = {

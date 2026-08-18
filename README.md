@@ -52,6 +52,21 @@ O stack de QA está em `docker/docker-compose.yml`. Ele pode carregar dados
 sensíveis e, por isso, usa uma rede Docker interna sem saída para a internet.
 Nunca remova esse isolamento para testar com dump produtivo.
 
+## GCP e AWS
+
+O perfil `cloud` sobe a stack completa em uma VM do Compute Engine ou EC2 com
+o mesmo Compose, HTTPS automatico e login fake bloqueado:
+
+```bash
+cp docker/.env.cloud.example docker/.env.cloud
+chmod 600 docker/.env.cloud
+make cloud-preflight
+make cloud-up
+```
+
+O procedimento de provisionamento, backup e integracao SAP sem VPN esta em
+[`docs/cloud-deployment.md`](docs/cloud-deployment.md).
+
 ## Arquitetura
 
 - `src/pages`: rotas e fluxos de tela.
@@ -59,7 +74,7 @@ Nunca remova esse isolamento para testar com dump produtivo.
 - `src/lib`: clientes compartilhados, autenticação e regras de domínio.
 - `supabase/functions`: integrações e operações privilegiadas.
 - `supabase/migrations`: schema, RLS e funções PostgreSQL.
-- `docker`: stacks stand-alone e QA.
+- `docker`: stacks stand-alone, QA e cloud.
 - `docs`: contratos de API, operação e decisões técnicas.
 
 Novas chamadas de Edge Functions devem usar `authFetch`, `sapFunctionFetch` ou

@@ -2,6 +2,7 @@
 // dos usuários vinculados em public.idp_user_mapping a partir do JumpCloud.
 // Invocado por pg_cron (a cada 30 minutos) e também disponível on-demand.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { authErrorResponse, requireSchedulerOrAdminOrSapModule } from "../_shared/auth.ts";
 import { tryWatcherLock, releaseWatcherLock } from "../_shared/watcher-lock.ts";
 
 const corsHeaders = {
@@ -70,11 +71,13 @@ async function fetchAllJumpCloudUsers(apiKey: string, orgId?: string): Promise<J
   return all;
 }
 
-async function getJumpCloudCredentials(supabase: ReturnType<typeof createClient>) {
-  const { data, error } = await supabase
+async function getJumpCloudCredentials(supabase: ReturnType<typeof createClient>, companyDb?: string) {
+  let query = supabase
     .from("system_credentials")
     .select("credential_key, credential_value")
     .eq("system_name", "jumpcloud");
+  if (companyDb) query = query.eq("company_db", companyDb);
+  const { data, error } = await query;
   if (error) throw new Error(`Erro ao buscar credenciais JumpCloud: ${error.message}`);
   if (!data || data.length === 0) throw new Error("Credenciais JumpCloud não configuradas");
   const creds: Record<string, string> = {};
@@ -86,10 +89,18 @@ async function getJumpCloudCredentials(supabase: ReturnType<typeof createClient>
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  try {
+    await requireSchedulerOrAdminOrSapModule(req, "synapse");
+  } catch (error) {
+    return authErrorResponse(error, corsHeaders) ?? new Response("Unauthorized", { status: 401, headers: corsHeaders });
+  }
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
+  const body = await req.json().catch(() => ({}));
+  const companyDb = typeof body.company_db === "string" ? body.company_db.trim() : "";
 
   const gotLock = await tryWatcherLock(supabase, WATCHER_NAME, 10);
   if (!gotLock) {
@@ -104,18 +115,20 @@ Deno.serve(async (req) => {
   let missingCount = 0;
 
   try {
-    const creds = await getJumpCloudCredentials(supabase);
+    const creds = await getJumpCloudCredentials(supabase, companyDb || undefined);
     const jcUsers = await fetchAllJumpCloudUsers(creds.api_key, creds.org_id);
     const jcById = new Map<string, JcUser>();
     for (const jc of jcUsers) jcById.set(jc._id, jc);
 
     // Todos os mapeamentos linkados (independente de empresa)
-    const { data: mappings, error: mErr } = await supabase
+    let mappingsQuery = supabase
       .from("idp_user_mapping")
       .select("id, idp_user_id, department, cost_center_code, cost_center_label, job_title, company_name, employee_id, employee_type, manager_idp_id")
       .eq("idp_provider", "jumpcloud")
       .eq("status", "linked")
       .not("idp_user_id", "is", null);
+    if (companyDb) mappingsQuery = mappingsQuery.eq("company_db", companyDb);
+    const { data: mappings, error: mErr } = await mappingsQuery;
 
     if (mErr) throw new Error(`Erro lendo idp_user_mapping: ${mErr.message}`);
 
@@ -166,12 +179,13 @@ Deno.serve(async (req) => {
 
     await supabase.from("synapse_execution_log").insert({
       integration_key: "jumpcloud_attributes_sync",
+      company_db: companyDb || null,
       status: "success",
       details: { checkedCount, updatedCount, missingCount, jcUserCount: jcUsers.length, startedAt },
       affected_count: updatedCount,
     });
 
-    await supabase
+    let successStatusQuery = supabase
       .from("synapse_integrations")
       .update({
         last_run_at: now,
@@ -179,6 +193,8 @@ Deno.serve(async (req) => {
         last_run_message: message,
       })
       .eq("integration_key", "jumpcloud_attributes_sync");
+    if (companyDb) successStatusQuery = successStatusQuery.eq("company_db", companyDb);
+    await successStatusQuery;
 
     await releaseWatcherLock(supabase, WATCHER_NAME, "ok", message);
     return new Response(
@@ -190,15 +206,17 @@ Deno.serve(async (req) => {
     console.error("[jumpcloud-attributes-sync]", message);
     await supabase.from("synapse_execution_log").insert({
       integration_key: "jumpcloud_attributes_sync",
+      company_db: companyDb || null,
       status: "error",
       details: { error: message, checkedCount, updatedCount },
       affected_count: updatedCount,
     }).then(() => {}, () => {});
-    await supabase
+    let errorStatusQuery = supabase
       .from("synapse_integrations")
       .update({ last_run_at: new Date().toISOString(), last_run_status: "error", last_run_message: message })
-      .eq("integration_key", "jumpcloud_attributes_sync")
-      .then(() => {}, () => {});
+      .eq("integration_key", "jumpcloud_attributes_sync");
+    if (companyDb) errorStatusQuery = errorStatusQuery.eq("company_db", companyDb);
+    await errorStatusQuery.then(() => {}, () => {});
     await releaseWatcherLock(supabase, WATCHER_NAME, "error", message);
     return new Response(JSON.stringify({ error: message }), {
       status: 500,

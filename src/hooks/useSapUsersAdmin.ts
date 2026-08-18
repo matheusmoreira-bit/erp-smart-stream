@@ -74,7 +74,7 @@ export function useSapUsersAdmin() {
   }, [companyDb, loadUsers]);
 
   useEffect(() => { loadCompanies(); }, [loadCompanies]);
-  useEffect(() => { if (companyDb) loadUsers(companyDb);   }, [companyDb]);
+  useEffect(() => { if (companyDb) loadUsers(companyDb); }, [companyDb, loadUsers]);
 
   return {
     companies, companyDb, setCompanyDb,

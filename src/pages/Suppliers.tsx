@@ -303,8 +303,8 @@ export default function Suppliers() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <PageTitle title="Fornecedores" />
-      <header className="border-b border-border px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+      <header className="border-b border-border px-4 md:px-6 py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -319,13 +319,13 @@ export default function Suppliers() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-foreground">Fornecedores</h1>
-              <p className="text-xs text-muted-foreground">
+              <p className="hidden sm:block text-xs text-muted-foreground">
                 Cadastro PJ via CNPJ (Receita) / PF, listagem SAP + locais e reenvio ao SAP.
               </p>
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <div className="text-right">
+            <div className="hidden sm:block text-right">
               <p className="text-sm font-medium text-foreground">{companyLabel}</p>
               <p className="text-xs text-muted-foreground">{session?.userName}</p>
             </div>
@@ -337,9 +337,9 @@ export default function Suppliers() {
         </div>
       </header>
 
-      <div className="border-b border-border px-6 py-4">
+      <div className="border-b border-border px-4 md:px-6 py-4">
         <div className="max-w-7xl mx-auto flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[260px]">
+          <div className="flex-1 min-w-0 basis-full sm:basis-64">
             <label className="text-xs text-muted-foreground mb-1 block">Buscar</label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -393,9 +393,9 @@ export default function Suppliers() {
         </p>
       </div>
 
-      <main className="flex-1 px-6 py-6">
-        <div className="max-w-7xl mx-auto glass-card overflow-hidden">
-          <Table>
+      <main className="flex-1 min-w-0 px-4 md:px-6 py-6">
+        <div className="max-w-7xl min-w-0 mx-auto glass-card overflow-x-auto">
+          <Table className="min-w-[980px]">
             <TableHeader>
               <TableRow>
                 <TableHead>CardCode</TableHead>

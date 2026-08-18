@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
     const callerCompanyDb = typeof (caller as { companyDB?: unknown }).companyDB === "string"
       ? (caller as { companyDB: string }).companyDB
       : null;
-    if (metadataOnlyGet && callerCompanyDb) {
+    if (callerCompanyDb) {
       if (companyDb && companyDb !== callerCompanyDb) {
         throw new AuthError("Acesso negado para esta empresa", 403);
       }
@@ -40,9 +40,7 @@ Deno.serve(async (req) => {
     const adminClient = getServiceClient();
 
     if (req.method === "GET") {
-      const selectCols = includeKeys
-        ? "id, system_name, credential_key, credential_value, updated_at, company_db"
-        : "id, system_name, credential_key, updated_at, company_db";
+      const selectCols = "id, system_name, credential_key, credential_value, updated_at, company_db";
       let query = adminClient.from("system_credentials").select(selectCols);
       if (systemName) query = query.eq("system_name", systemName);
       if (companyDb) query = query.eq("company_db", companyDb);
@@ -52,18 +50,29 @@ Deno.serve(async (req) => {
       }
       const { data, error } = await query.order("system_name").order("credential_key");
       if (error) throw error;
-      return new Response(JSON.stringify({ credentials: data }), {
+      const credentials = includeKeys
+        ? data
+        : (data || []).map(({ credential_value, ...row }) => ({
+          ...row,
+          is_configured: typeof credential_value === "string" && credential_value.trim().length > 0,
+          enabled_value: row.credential_key === "_integration_enabled" ? credential_value === "true" : undefined,
+          }));
+      return new Response(JSON.stringify({ credentials, scope: callerCompanyDb ? "company" : "all" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (req.method === "POST") {
       const body = await req.json();
-      const { system_name, credentials, company_db } = body as {
+      const { system_name, credentials, company_db: requestedCompanyDb } = body as {
         system_name: string;
         credentials: { key: string; value: string }[];
         company_db?: string;
       };
+      if (callerCompanyDb && requestedCompanyDb && requestedCompanyDb !== callerCompanyDb) {
+        throw new AuthError("Acesso negado para esta empresa", 403);
+      }
+      const targetCompanyDb = callerCompanyDb || requestedCompanyDb || null;
 
       if (!system_name || typeof system_name !== "string" || system_name.length > 100) {
         return new Response(JSON.stringify({ error: "system_name inválido" }), {
@@ -89,12 +98,12 @@ Deno.serve(async (req) => {
       }
 
       for (const cred of credentials) {
-        const { error } = await adminClient
-          .from("system_credentials")
-          .upsert(
-            { system_name, credential_key: cred.key, credential_value: cred.value, company_db: company_db || null },
-            { onConflict: "system_name,credential_key,company_db" },
-          );
+        const { error } = await adminClient.rpc("upsert_system_credential", {
+          _system_name: system_name,
+          _credential_key: cred.key,
+          _credential_value: cred.value,
+          _company_db: targetCompanyDb,
+        });
         if (error) throw error;
       }
 
@@ -105,15 +114,19 @@ Deno.serve(async (req) => {
 
     if (req.method === "DELETE") {
       const body = await req.json();
-      const { system_name, company_db } = body as { system_name: string; company_db?: string };
+      const { system_name, company_db: requestedCompanyDb } = body as { system_name: string; company_db?: string };
       if (!system_name) {
         return new Response(JSON.stringify({ error: "system_name é obrigatório" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      let q = adminClient.from("system_credentials").delete().eq("system_name", system_name);
-      q = company_db ? q.eq("company_db", company_db) : q.is("company_db", null);
-      const { error } = await q;
+      if (callerCompanyDb && requestedCompanyDb && requestedCompanyDb !== callerCompanyDb) {
+        throw new AuthError("Acesso negado para esta empresa", 403);
+      }
+      const { error } = await adminClient.rpc("delete_system_credentials", {
+        _system_name: system_name,
+        _company_db: callerCompanyDb || requestedCompanyDb || null,
+      });
       if (error) throw error;
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

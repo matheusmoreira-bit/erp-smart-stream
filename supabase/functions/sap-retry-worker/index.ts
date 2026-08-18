@@ -14,8 +14,8 @@ const corsHeaders = {
 
 const MAX_ROWS_PER_RUN = 20;
 const STALE_IN_FLIGHT_MINUTES = 10;
-const WHATSAPP_URL = "http://63.177.171.140/sender_wpp";
-const WHATSAPP_TOKEN = "777a5756-d6b3-4295-a031-e5c210998766";
+const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "";
+const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || "";
 const ADMIN_USER_CODES = ["matheus.moreira"];
 const ADMIN_EMAILS = ["matheus.moreira@anagaming.com.br"];
 

@@ -92,8 +92,8 @@ ${rows.map(([k, v]) => `<tr><td style="padding:4px 8px;border:1px solid #ddd;bac
 
 // Fire-and-forget contingência: avisa via WhatsApp quando um pedido é
 // integrado no SAP sem nenhum anexo, para lançamento manual do arquivo.
-const CONTINGENCY_WHATSAPP_URL = "http://63.177.171.140/sender_wpp";
-const CONTINGENCY_WHATSAPP_TOKEN = "777a5756-d6b3-4295-a031-e5c210998766";
+const CONTINGENCY_WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "";
+const CONTINGENCY_WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || "";
 const CONTINGENCY_WHATSAPP_TO = "5531972665309";
 
 async function notifyMissingAttachmentWhatsApp(params: {

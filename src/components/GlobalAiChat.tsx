@@ -7,11 +7,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
+import { authFetch } from "@/lib/auth-fetch";
+import { runtime } from "@/config/runtime";
 
 type Msg = { id?: string; role: "user" | "assistant"; content: string };
 type Thread = { id: string; title: string; updated_at: string };
-
-const FN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-assistant`;
 
 export function GlobalAiChat() {
   const [open, setOpen] = useState(false);
@@ -91,13 +91,10 @@ export function GlobalAiChat() {
     setLoading(true);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const resp = await fetch(FN_URL, {
+      const resp = await authFetch("ai-assistant", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({ messages: newMsgs.map(({ role, content }) => ({ role, content })), threadId: tid }),
       });
@@ -112,7 +109,7 @@ export function GlobalAiChat() {
     }
   };
 
-  if (!userId) return null;
+  if (!userId || runtime.isStandaloneLocal) return null;
 
   return (
     <>
@@ -120,7 +117,7 @@ export function GlobalAiChat() {
         onClick={() => setOpen(true)}
         size="lg"
         aria-label="Assistente IA"
-        className="fixed bottom-20 md:bottom-6 right-6 z-40 rounded-full h-14 w-14 p-0 shadow-lg bg-gradient-to-br from-primary to-primary/70 hover:from-primary/90 hover:to-primary/60 glow-primary"
+        className="fixed bottom-24 md:bottom-6 right-4 md:right-6 z-40 rounded-full h-12 w-12 md:h-14 md:w-14 p-0 shadow-lg bg-primary hover:bg-primary/90 glow-primary"
       >
         <Sparkles className="w-6 h-6" />
       </Button>
