@@ -127,7 +127,7 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
         setItems([]);
         return;
       }
-      const { data, error: err } = await supabase
+      const { data, error: err } = await (supabase as any)
         .from("advance_payments")
         .select("*")
         .eq("company_db", company)
@@ -193,7 +193,7 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
       const headerCc = items.find((i) => i.cost_center)?.cost_center || null;
       const headerCcName = items.find((i) => i.cost_center)?.cost_center_name || null;
 
-      const { data: row, error: err } = await supabase
+      const { data: row, error: err } = await (supabase as any)
         .from("advance_payments")
         .insert({
           company_db: input.company_db,
@@ -260,7 +260,7 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
 
   const approve = useCallback(
     async (id: string) => {
-      const { error: err } = await supabase
+      const { error: err } = await (supabase as any)
         .from("advance_payments")
         .update({ status: "approved" })
         .eq("id", id);
@@ -287,7 +287,7 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
 
   const reject = useCallback(
     async (id: string, reason: string) => {
-      const { error: err } = await supabase
+      const { error: err } = await (supabase as any)
         .from("advance_payments")
         .update({ status: "rejected", rejection_reason: reason })
         .eq("id", id);
@@ -299,7 +299,7 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
 
   const retry = useCallback(
     async (id: string) => {
-      await supabase
+      await (supabase as any)
         .from("advance_payments")
         .update({ status: "integrating", sap_integration_error: null })
         .eq("id", id);

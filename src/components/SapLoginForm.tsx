@@ -40,7 +40,7 @@ async function isEmailAllowedForOmieCompany(email: string, companyDb: string): P
 }
 
 async function isEmailAllowedForCompany(email: string, companyDb: string): Promise<boolean> {
-  const { data, error } = await supabase.rpc("is_email_allowed_for_company", {
+  const { data, error } = await (supabase as any).rpc("is_email_allowed_for_company", {
     _email: email,
     _company_db: companyDb,
   });
