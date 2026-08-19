@@ -220,12 +220,7 @@ export type Database = {
       }
       advance_payments: {
         Row: {
-          applied_amount: number | null
-          applied_at: string | null
-          applied_invoice_doc_entry: number | null
-          applied_invoice_doc_num: number | null
           amount: number
-          advance_type: string
           company_db: string
           cost_center: string | null
           cost_center_name: string | null
@@ -253,12 +248,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          applied_amount?: number | null
-          applied_at?: string | null
-          applied_invoice_doc_entry?: number | null
-          applied_invoice_doc_num?: number | null
           amount: number
-          advance_type?: string
           company_db: string
           cost_center?: string | null
           cost_center_name?: string | null
@@ -286,12 +276,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          applied_amount?: number | null
-          applied_at?: string | null
-          applied_invoice_doc_entry?: number | null
-          applied_invoice_doc_num?: number | null
           amount?: number
-          advance_type?: string
           company_db?: string
           cost_center?: string | null
           cost_center_name?: string | null
@@ -2022,7 +2007,6 @@ export type Database = {
           id: string
           sap_error_message: string | null
           sap_incoming_payment_doc_entry: number | null
-          sap_incoming_payment_doc_num: number | null
           status: string
           updated_at: string
           valor_juros_multa: number
@@ -2044,7 +2028,6 @@ export type Database = {
           id?: string
           sap_error_message?: string | null
           sap_incoming_payment_doc_entry?: number | null
-          sap_incoming_payment_doc_num?: number | null
           status?: string
           updated_at?: string
           valor_juros_multa?: number
@@ -2066,7 +2049,6 @@ export type Database = {
           id?: string
           sap_error_message?: string | null
           sap_incoming_payment_doc_entry?: number | null
-          sap_incoming_payment_doc_num?: number | null
           status?: string
           updated_at?: string
           valor_juros_multa?: number
@@ -6495,16 +6477,10 @@ export type Database = {
           created_by_email: string | null
           currency: string
           expense_id: string | null
-          fiscal_authorized_at: string | null
-          fiscal_doc_key: string | null
           id: string
           last_error: string | null
           nfse_number: string | null
-          paid_amount: number | null
-          paid_at: string | null
           rps_number: string | null
-          sap_incoming_payment_doc_entry: number | null
-          sap_incoming_payment_doc_num: number | null
           sap_invoice_doc_entry: number | null
           sap_invoice_doc_num: number | null
           sap_order_doc_entry: number | null
@@ -6521,16 +6497,10 @@ export type Database = {
           created_by_email?: string | null
           currency?: string
           expense_id?: string | null
-          fiscal_authorized_at?: string | null
-          fiscal_doc_key?: string | null
           id?: string
           last_error?: string | null
           nfse_number?: string | null
-          paid_amount?: number | null
-          paid_at?: string | null
           rps_number?: string | null
-          sap_incoming_payment_doc_entry?: number | null
-          sap_incoming_payment_doc_num?: number | null
           sap_invoice_doc_entry?: number | null
           sap_invoice_doc_num?: number | null
           sap_order_doc_entry?: number | null
@@ -6547,16 +6517,10 @@ export type Database = {
           created_by_email?: string | null
           currency?: string
           expense_id?: string | null
-          fiscal_authorized_at?: string | null
-          fiscal_doc_key?: string | null
           id?: string
           last_error?: string | null
           nfse_number?: string | null
-          paid_amount?: number | null
-          paid_at?: string | null
           rps_number?: string | null
-          sap_incoming_payment_doc_entry?: number | null
-          sap_incoming_payment_doc_num?: number | null
           sap_invoice_doc_entry?: number | null
           sap_invoice_doc_num?: number | null
           sap_order_doc_entry?: number | null
@@ -6575,69 +6539,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      sap_document_relations: {
-        Row: {
-          amount: number | null
-          company_db: string
-          confidence: string
-          created_at: string
-          currency: string | null
-          detected_by: string
-          id: string
-          last_seen_at: string
-          metadata: Json
-          relation_date: string | null
-          relation_type: string
-          source_doc_entry: number
-          source_doc_num: string | null
-          source_type: string
-          target_doc_entry: number
-          target_doc_num: string | null
-          target_type: string
-          updated_at: string
-        }
-        Insert: {
-          amount?: number | null
-          company_db: string
-          confidence?: string
-          created_at?: string
-          currency?: string | null
-          detected_by?: string
-          id?: string
-          last_seen_at?: string
-          metadata?: Json
-          relation_date?: string | null
-          relation_type: string
-          source_doc_entry: number
-          source_doc_num?: string | null
-          source_type: string
-          target_doc_entry: number
-          target_doc_num?: string | null
-          target_type: string
-          updated_at?: string
-        }
-        Update: {
-          amount?: number | null
-          company_db?: string
-          confidence?: string
-          created_at?: string
-          currency?: string | null
-          detected_by?: string
-          id?: string
-          last_seen_at?: string
-          metadata?: Json
-          relation_date?: string | null
-          relation_type?: string
-          source_doc_entry?: number
-          source_doc_num?: string | null
-          source_type?: string
-          target_doc_entry?: number
-          target_doc_num?: string | null
-          target_type?: string
-          updated_at?: string
-        }
-        Relationships: []
       }
       sap_cache: {
         Row: {
@@ -8688,10 +8589,6 @@ export type Database = {
         Returns: undefined
       }
       is_email_allowed_for_omie_company: {
-        Args: { _company_db: string; _email: string }
-        Returns: boolean
-      }
-      is_email_allowed_for_company: {
         Args: { _company_db: string; _email: string }
         Returns: boolean
       }

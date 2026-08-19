@@ -109,7 +109,7 @@ async function downloadReceipts(receipts: any[]): Promise<{ name: string; blob: 
 async function uploadAttachments(sap: SapSession, files: { name: string; blob: Blob }[]): Promise<number | null> {
   if (!files.length) return null;
   const form = new FormData();
-  for (const f of files) form.append("files", f.blob, sanitizeSapFileName(f.name));
+  for (const f of files) form.append("files", f.blob, sanitizeSapFileName(f.name, f.blob?.type));
   const res = await fetch(`${sap.baseUrl}/Attachments2`, { method: "POST", headers: { Cookie: sap.cookies }, body: form });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`Attachments2 HTTP ${res.status}: ${body?.error?.message?.value || JSON.stringify(body)}`);

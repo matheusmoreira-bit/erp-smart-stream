@@ -205,7 +205,7 @@ Deno.serve(async (req) => {
     const existingEntry = Number(getBody?.AttachmentEntry) > 0 ? Number(getBody.AttachmentEntry) : null;
 
     const form = new FormData();
-    for (const f of files) form.append("files", f.blob, sanitizeSapFileName(f.name));
+    for (const f of files) form.append("files", f.blob, sanitizeSapFileName(f.name, f.blob?.type));
 
     let absoluteEntry: number;
     if (existingEntry) {
