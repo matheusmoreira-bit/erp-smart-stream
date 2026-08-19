@@ -27,6 +27,8 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const companyDb = String(body.company_db || "").trim();
     const fromUser = String(body.from_user_code || "").trim();
+    const fromUserName = String(body.from_user_name || "").trim();
+    const fromUserEmail = String(body.from_user_email || "").trim();
     const toUser = String(body.to_user_code || "").trim();
     const toUserName = String(body.to_user_name || "").trim();
     const toUserEmail = String(body.to_user_email || "").trim();
@@ -37,16 +39,19 @@ Deno.serve(async (req) => {
     const dryRun = body.dry_run !== false;
     const reason = String(body.reason || "Transferência administrativa de aprovações pendentes").slice(0, 500);
     const targetApprover = toUserName || toUserEmail || toUser;
+    const fromCandidates = Array.from(new Set([fromUserName, fromUserEmail, fromUser, fromUserEmail.split("@")[0]]
+      .map(norm)
+      .filter(Boolean)));
 
     if (!companyDb || !targetApprover) {
       return new Response(JSON.stringify({ error: "company_db e to_user_code são obrigatórios" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    if (expenseIds.length === 0 && !fromUser && !costCenter) {
+    if (expenseIds.length === 0 && fromCandidates.length === 0 && !costCenter) {
       return new Response(JSON.stringify({ error: "informe expense_ids, from_user_code e/ou cost_center como filtro" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    if (fromUser && norm(fromUser) === norm(targetApprover)) {
+    if (fromCandidates.length > 0 && fromCandidates.includes(norm(targetApprover))) {
       return new Response(JSON.stringify({ error: "from_user_code e to_user_code devem ser diferentes" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -65,13 +70,13 @@ Deno.serve(async (req) => {
     if (rowsErr) throw new Error(rowsErr.message);
 
     const matches = (rows || []).filter((r) => {
-      if (!fromUser) return true;
-      return norm(r.current_approver) === norm(fromUser);
+      if (fromCandidates.length === 0) return true;
+      return fromCandidates.includes(norm(r.current_approver));
     });
 
     const results: any = {
       dryRun,
-      filter: { expenseIds, fromUser: fromUser || null, costCenter: costCenter || null },
+      filter: { expenseIds, fromUser: fromUser || null, fromUserName: fromUserName || null, fromUserEmail: fromUserEmail || null, costCenter: costCenter || null },
       toUser: targetApprover,
       totalCandidates: rows?.length ?? 0,
       transferred: [] as any[],
@@ -83,7 +88,7 @@ Deno.serve(async (req) => {
     if (matches.length === 0) {
       results.skipped = (rows || []).map((r) => ({
         id: r.id, current_approver: r.current_approver,
-        reason: fromUser ? "não pertence ao aprovador de origem" : "sem filtro correspondente",
+        reason: fromCandidates.length > 0 ? "não pertence ao aprovador de origem" : "sem filtro correspondente",
       }));
       return new Response(JSON.stringify(results), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
