@@ -33,6 +33,7 @@ import {
   AlertTriangle,
   Network,
   Eye,
+  FileText,
   Paperclip,
   FileDown,
   SlidersHorizontal,
@@ -53,6 +54,7 @@ import { isPendingApproval } from "@/lib/approval-authz";
 import { buildDuplicateDraftPayload } from "@/lib/expense-duplicate";
 import { expenseRead } from "@/lib/expense-read";
 import { supabase } from "@/integrations/supabase/client";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
@@ -159,6 +161,18 @@ function normalizeMultiValue(value: MultiFilterValue | null | undefined): string
 
 function hasMultiValue(value: MultiFilterValue | null | undefined) {
   return normalizeMultiValue(value).length > 0;
+}
+
+interface SalesNfseEmissionInfo {
+  sapInvoiceDocEntry: number | null;
+  sapInvoiceDocNum: number | null;
+  nfseNumber: string | null;
+  status: string | null;
+}
+
+function salesNfseOrderKey(exp: Pick<Expense, "id" | "sap_doc_entry">): string | null {
+  if (exp.id && !exp.id.startsWith("sap-order-")) return exp.id;
+  return exp.sap_doc_entry ? `sap:${Number(exp.sap_doc_entry)}` : null;
 }
 
 function MultiFilterSelect({
@@ -303,12 +317,16 @@ function ExpenseDetailModal({
   onReject,
   onViewIntegration,
   onAddAttachments,
+  onEmitNfse,
+  onOpenNfse,
   canCancel,
   canReactivate,
   canEdit,
   canRetrySap,
   canApprove,
   canAddAttachments,
+  nfseEmission,
+  isNfseEmitting,
   isSubmitting,
   isCancelling,
   isReactivating,
@@ -333,12 +351,16 @@ function ExpenseDetailModal({
   onReject: (expense: Expense) => void;
   onViewIntegration: () => void;
   onAddAttachments: (id: string, files: File[]) => Promise<void>;
+  onEmitNfse?: (expense: Expense) => void;
+  onOpenNfse?: () => void;
   canCancel: boolean;
   canReactivate: boolean;
   canEdit: boolean;
   canRetrySap: boolean;
   canApprove: boolean;
   canAddAttachments: boolean;
+  nfseEmission?: SalesNfseEmissionInfo | null;
+  isNfseEmitting?: boolean;
   isSubmitting: boolean;
   isCancelling: boolean;
   isReactivating: boolean;
@@ -381,6 +403,8 @@ function ExpenseDetailModal({
     (expense.status === "aprovado" && (hasSapError || alreadyInSap))
   );
   const showRetrySap = canRetrySap && expense.status === "aprovado" && !expense.sap_doc_entry;
+  const showEmitNfse = isSalesDoc && alreadyInSap && !nfseEmission;
+  const showOpenNfse = isSalesDoc && alreadyInSap && !!nfseEmission;
   const showApproval = canApprove && expense.status === "pendente_aprovacao";
   // Reativação: apenas o autor (ou admin) e somente se nunca foi ao ERP.
   const showReactivate =
@@ -400,7 +424,7 @@ function ExpenseDetailModal({
         <DialogContent className="w-screen h-[100dvh] max-w-none rounded-none border-0 overflow-y-auto p-4 sm:w-auto sm:h-auto sm:max-w-2xl sm:max-h-[85vh] sm:rounded-lg sm:border sm:p-6">
           <DialogHeader className="space-y-2">
             <DialogTitle className="flex flex-wrap items-center gap-x-3 gap-y-2 pr-6">
-              <span className="text-foreground font-semibold">Despesa</span>
+              <span className="text-foreground font-semibold">{isSalesDoc ? "Pedido de venda" : "Despesa"}</span>
               <Badge className={STATUS_COLORS[expense.status]}>{statusLabel(expense.status)}</Badge>
               {originBadge === "erp_flow" && (
                 <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">ERP Flow</Badge>
@@ -767,9 +791,37 @@ function ExpenseDetailModal({
 
 
 
-            {(showSubmit || showCancel || showRetrySap || showEdit || showApproval || showReactivate) && (
+            {(showSubmit || showCancel || showRetrySap || showEdit || showApproval || showReactivate || showEmitNfse || showOpenNfse) && (
               <div className="border-t border-border pt-4 flex flex-col-reverse sm:flex-row sm:justify-end sm:flex-wrap gap-2 sm:gap-3">
                 <Button variant="outline" onClick={onClose} className="w-full sm:w-auto justify-center">Fechar</Button>
+                {showOpenNfse && (
+                  <Button
+                    variant="outline"
+                    onClick={onOpenNfse}
+                    className="w-full sm:w-auto justify-center gap-1.5"
+                    title={
+                      nfseEmission?.nfseNumber
+                        ? `NFS-e ${nfseEmission.nfseNumber}`
+                        : nfseEmission?.sapInvoiceDocNum
+                          ? `NF de saída SAP #${nfseEmission.sapInvoiceDocNum}`
+                          : "Abrir a aba NFS-e"
+                    }
+                  >
+                    <FileText className="w-4 h-4" aria-hidden="true" />
+                    Ver NFS-e
+                  </Button>
+                )}
+                {showEmitNfse && (
+                  <Button
+                    onClick={() => onEmitNfse?.(expense)}
+                    disabled={isNfseEmitting}
+                    className="w-full sm:w-auto justify-center gap-1.5"
+                    title="Criar NF de saída no SAP a partir deste pedido de venda"
+                  >
+                    {isNfseEmitting ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <FileText className="w-4 h-4" aria-hidden="true" />}
+                    Emitir NFS-e
+                  </Button>
+                )}
                 {showApproval && (
                   <>
                     <Button
@@ -970,6 +1022,10 @@ function ExpenseCard({
   erpLabel,
   onRelationsMap,
   onDuplicate,
+  nfseEmission,
+  isNfseEmitting,
+  onEmitNfse,
+  onOpenNfse,
 }: {
   expense: Expense;
   onOpen: () => void;
@@ -977,6 +1033,10 @@ function ExpenseCard({
   erpLabel?: string;
   onRelationsMap?: () => void;
   onDuplicate?: () => void;
+  nfseEmission?: SalesNfseEmissionInfo | null;
+  isNfseEmitting?: boolean;
+  onEmitNfse?: () => void;
+  onOpenNfse?: () => void;
 }) {
   const statusLabel = useStatusLabel();
   const erpLbl = erpLabel || "ERP";
@@ -1040,6 +1100,35 @@ function ExpenseCard({
               onClick={(ev) => { ev.stopPropagation(); onDuplicate(); }}
             >
               <Copy className="w-4 h-4" />
+            </Button>
+          )}
+          {onEmitNfse && !nfseEmission && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-primary"
+              title="Emitir NFS-e"
+              aria-label={`Emitir NFS-e para ${expense.supplier_name}`}
+              disabled={isNfseEmitting}
+              onClick={(ev) => { ev.stopPropagation(); onEmitNfse(); }}
+            >
+              {isNfseEmitting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FileText className="w-4 h-4" />
+              )}
+            </Button>
+          )}
+          {onOpenNfse && nfseEmission && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-emerald-600 dark:text-emerald-400 hover:text-emerald-500"
+              title={nfseEmission.nfseNumber ? `NFS-e ${nfseEmission.nfseNumber}` : "Ver NFS-e"}
+              aria-label={`Ver NFS-e de ${expense.supplier_name}`}
+              onClick={(ev) => { ev.stopPropagation(); onOpenNfse(); }}
+            >
+              <FileText className="w-4 h-4" />
             </Button>
           )}
           <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(expense.total_amount, expense.currency)}</p>
@@ -1156,6 +1245,9 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [showCreate, setShowCreate] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<ExpenseDraftHydration | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
+  const [nfseByOrder, setNfseByOrder] = useState<Map<string, SalesNfseEmissionInfo>>(new Map());
+  const [nfseConfirm, setNfseConfirm] = useState<{ expense: Expense; origin?: "erp_flow" | "erp" } | null>(null);
+  const [emittingNfseFor, setEmittingNfseFor] = useState<string | null>(null);
   const { refresh: refreshDrafts } = useDocumentDrafts(mode, session?.companyDB);
 
   // Se navegamos para cá com arquivos pré-anexados (ex.: PDF da NF de entrada),
@@ -1219,6 +1311,112 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [isLoadingMoreSap, setIsLoadingMoreSap] = useState(false);
   const [sapHasMore, setSapHasMore] = useState(false);
   const [relationsMapExpense, setRelationsMapExpense] = useState<Expense | null>(null);
+
+  const loadSalesNfseIndex = useCallback(async () => {
+    if (!isSales || !session?.companyDB) {
+      setNfseByOrder(new Map());
+      return;
+    }
+    const { data, error } = await supabase
+      .from("sales_order_invoices")
+      .select("expense_id,sap_order_doc_entry,sap_invoice_doc_entry,sap_invoice_doc_num,nfse_number,status")
+      .eq("company_db", session.companyDB)
+      .not("status", "in", "(failed,cancelled)")
+      .limit(1000);
+    if (error) {
+      console.warn("[Sales] falha ao carregar índice de NFS-e:", error.message);
+      return;
+    }
+    const next = new Map<string, SalesNfseEmissionInfo>();
+    for (const row of (data || []) as Array<{
+      expense_id: string | null;
+      sap_order_doc_entry: number | null;
+      sap_invoice_doc_entry: number | null;
+      sap_invoice_doc_num: number | null;
+      nfse_number: string | null;
+      status: string | null;
+    }>) {
+      const info: SalesNfseEmissionInfo = {
+        sapInvoiceDocEntry: row.sap_invoice_doc_entry,
+        sapInvoiceDocNum: row.sap_invoice_doc_num,
+        nfseNumber: row.nfse_number,
+        status: row.status,
+      };
+      if (row.expense_id) next.set(row.expense_id, info);
+      if (row.sap_order_doc_entry) next.set(`sap:${Number(row.sap_order_doc_entry)}`, info);
+    }
+    setNfseByOrder(next);
+  }, [isSales, session?.companyDB]);
+
+  useEffect(() => {
+    void loadSalesNfseIndex();
+  }, [loadSalesNfseIndex]);
+
+  const nfseEmissionFor = useCallback(
+    (exp: Expense) => {
+      const byId = exp.id ? nfseByOrder.get(exp.id) : undefined;
+      const bySap = exp.sap_doc_entry ? nfseByOrder.get(`sap:${Number(exp.sap_doc_entry)}`) : undefined;
+      return byId || bySap || null;
+    },
+    [nfseByOrder],
+  );
+
+  const openNfseTab = useCallback(() => {
+    setSelectedExpense(null);
+    navigate("/vendas/nfse");
+  }, [navigate]);
+
+  const requestEmitNfse = useCallback((expense: Expense, origin?: "erp_flow" | "erp") => {
+    if (!isSales) return;
+    if (!expense.sap_doc_entry) {
+      toast.error("Pedido ainda não integrado ao SAP. A NFS-e só pode ser emitida após o PV existir no SAP.");
+      return;
+    }
+    if (nfseEmissionFor(expense)) {
+      openNfseTab();
+      return;
+    }
+    setNfseConfirm({ expense, origin });
+  }, [isSales, nfseEmissionFor, openNfseTab]);
+
+  const emitConfirmedNfse = useCallback(async () => {
+    if (!nfseConfirm || !session?.companyDB) return;
+    const { expense, origin } = nfseConfirm;
+    const key = salesNfseOrderKey(expense) || expense.id;
+    setEmittingNfseFor(key);
+    try {
+      const isNative = origin === "erp" || expense.id.startsWith("sap-order-");
+      const payload = isNative
+        ? {
+            action: "emit",
+            company_db: session.companyDB,
+            sap_order_doc_entry: expense.sap_doc_entry,
+            customer_name: expense.supplier_name,
+            total_amount: expense.total_amount,
+            currency: expense.currency,
+          }
+        : { action: "emit", expense_id: expense.id };
+      const res = await sapFunctionFetch("sales-nfse-emit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body?.error) throw new Error(body?.error || `Falha ao emitir NFS-e (${res.status})`);
+      toast.success(
+        body?.auto_send
+          ? `NFS-e criada e enviada à prefeitura — documento ${body.doc_num}`
+          : `NF de saída criada no SAP — documento ${body.doc_num}. A automação fiscal seguirá a emissão da NFS-e.`,
+      );
+      setNfseConfirm(null);
+      await Promise.all([loadSalesNfseIndex(), refresh()]);
+      openNfseTab();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao emitir NFS-e");
+    } finally {
+      setEmittingNfseFor(null);
+    }
+  }, [nfseConfirm, session?.companyDB, loadSalesNfseIndex, refresh, openNfseTab]);
 
   /** Cria um novo pedido a partir de um lançamento existente (sem anexos/ERP). */
   const duplicateExpense = useCallback((exp: Expense) => {
@@ -2496,17 +2694,26 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           <>
             {/* Card grid (mobile / tablet / laptop) */}
             <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 ${viewMode === "cards" ? "" : "hidden"}`}>
-              {visibleItems.map(({ exp, origin }) => (
-                <ExpenseCard
-                  key={exp.id}
-                  expense={exp}
-                  originBadge={origin}
-                  erpLabel={erpLabel}
-                  onOpen={() => openExpense(exp, origin)}
-                  onRelationsMap={origin === "erp_flow" ? () => setRelationsMapExpense(exp) : undefined}
-                  onDuplicate={() => duplicateExpense(exp)}
-                />
-              ))}
+              {visibleItems.map(({ exp, origin }) => {
+                const nfseEmission = isSales && exp.sap_doc_entry ? nfseEmissionFor(exp) : null;
+                const nfseKey = salesNfseOrderKey(exp) || exp.id;
+                const canEmitNfse = isSales && !!exp.sap_doc_entry;
+                return (
+                  <ExpenseCard
+                    key={exp.id}
+                    expense={exp}
+                    originBadge={origin}
+                    erpLabel={erpLabel}
+                    onOpen={() => openExpense(exp, origin)}
+                    onRelationsMap={origin === "erp_flow" ? () => setRelationsMapExpense(exp) : undefined}
+                    onDuplicate={() => duplicateExpense(exp)}
+                    nfseEmission={nfseEmission}
+                    isNfseEmitting={emittingNfseFor === nfseKey}
+                    onEmitNfse={canEmitNfse ? () => requestEmitNfse(exp, origin) : undefined}
+                    onOpenNfse={canEmitNfse ? openNfseTab : undefined}
+                  />
+                );
+              })}
             </div>
 
             {/* Table view (widescreen) */}
@@ -2547,7 +2754,11 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleItems.map(({ exp, origin }) => (
+                    {visibleItems.map(({ exp, origin }) => {
+                      const nfseEmission = isSales && exp.sap_doc_entry ? nfseEmissionFor(exp) : null;
+                      const nfseKey = salesNfseOrderKey(exp) || exp.id;
+                      const canEmitNfse = isSales && !!exp.sap_doc_entry;
+                      return (
                       <tr
                         key={exp.id}
                         className="border-t border-border/60 hover:bg-muted/30 cursor-pointer transition-colors"
@@ -2616,10 +2827,40 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                             >
                               <Copy className="w-4 h-4" aria-hidden="true" />
                             </Button>
+                            {canEmitNfse && !nfseEmission && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                aria-label={`Emitir NFS-e para ${exp.supplier_name}`}
+                                title="Emitir NFS-e"
+                                disabled={emittingNfseFor === nfseKey}
+                                onClick={(ev) => { ev.stopPropagation(); requestEmitNfse(exp, origin); }}
+                              >
+                                {emittingNfseFor === nfseKey ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                                ) : (
+                                  <FileText className="w-4 h-4" aria-hidden="true" />
+                                )}
+                              </Button>
+                            )}
+                            {canEmitNfse && nfseEmission && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-emerald-600 dark:text-emerald-400 hover:text-emerald-500"
+                                aria-label={`Ver NFS-e de ${exp.supplier_name}`}
+                                title={nfseEmission.nfseNumber ? `NFS-e ${nfseEmission.nfseNumber}` : "Ver NFS-e"}
+                                onClick={(ev) => { ev.stopPropagation(); openNfseTab(); }}
+                              >
+                                <FileText className="w-4 h-4" aria-hidden="true" />
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -2731,6 +2972,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         onReject={handleReject}
         onViewIntegration={handleViewIntegration}
         onAddAttachments={async (id, files) => { await addAttachments(id, files); }}
+        onEmitNfse={(exp) => requestEmitNfse(exp, selectedOrigin)}
+        onOpenNfse={openNfseTab}
         canCancel={selectedExpense ? canCancel(selectedExpense) : false}
         canReactivate={selectedExpense ? canCancel(selectedExpense) : false}
         canEdit={selectedExpense ? canCancel(selectedExpense) : false}
@@ -2740,6 +2983,11 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           !!selectedExpense &&
           !["nf_entrada", "pagamento", "finalizado", "cancelado", "rejeitado"].includes(selectedExpense.status) &&
           (isAdmin || canCancel(selectedExpense))
+        }
+        nfseEmission={selectedExpense ? nfseEmissionFor(selectedExpense) : null}
+        isNfseEmitting={
+          !!selectedExpense &&
+          emittingNfseFor === (salesNfseOrderKey(selectedExpense) || selectedExpense.id)
         }
         isSubmitting={isSubmitting}
         isCancelling={isCancelling}
@@ -2783,6 +3031,47 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         expense={relationsMapExpense as any}
         title={isSales ? "Mapa de Relações — Pedido de Venda" : "Mapa de Relações — Pedido de Compra"}
       />
+
+      <AlertDialog open={!!nfseConfirm} onOpenChange={(open) => { if (!open && !emittingNfseFor) setNfseConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Emitir NFS-e deste pedido?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação cria uma NF de saída no SAP a partir do PV integrado. Depois disso, a automação fiscal do SAP gera a NFS-e no portal da prefeitura e a nota aparece na aba NFS-e para envio ao cliente e baixa.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {nfseConfirm && (
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">PV SAP</span>
+                <span className="font-mono">#{nfseConfirm.expense.sap_doc_num || nfseConfirm.expense.sap_doc_entry}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">Cliente</span>
+                <span className="text-right">{nfseConfirm.expense.supplier_name}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">Valor</span>
+                <span className="font-mono">
+                  {formatCurrency(nfseConfirm.expense.total_amount, nfseConfirm.expense.currency)}
+                </span>
+              </div>
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!emittingNfseFor}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!!emittingNfseFor}
+              onClick={(ev) => {
+                ev.preventDefault();
+                void emitConfirmedNfse();
+              }}
+            >
+              {emittingNfseFor ? "Emitindo..." : "Emitir NFS-e"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Modal de filtros avançados */}
       <Dialog open={advancedOpen} onOpenChange={setAdvancedOpen}>

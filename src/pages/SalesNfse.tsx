@@ -12,6 +12,7 @@ import {
   Eye,
   FileCode,
   Mail,
+  DollarSign,
 
 } from "lucide-react";
 import { toast } from "sonner";
@@ -22,6 +23,7 @@ import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
 import { PageHeader } from "@/components/PageHeader";
 import { NfseReconcilePanel } from "@/components/NfseReconcilePanel";
+import { BaixaRecebimentoDialog, type BaixaInvoiceRow } from "@/components/BaixaRecebimentoDialog";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -459,6 +461,16 @@ interface NfseRow {
   created_at: string;
 }
 
+interface SapInvoiceRef {
+  docEntry: number;
+  docNum: number | null;
+  cardCode?: string | null;
+  docTotal?: number | null;
+  paidToDate?: number | null;
+  currency?: string | null;
+  status?: string | null;
+}
+
 /* ── página ──────────────────────────────────────────────── */
 
 export default function SalesNfse() {
@@ -472,10 +484,11 @@ export default function SalesNfse() {
   // tiveram NF emitida (o registro local pode apontar para uma nota cancelada).
   const [sapInvoices, setSapInvoices] = useState<{
     available: boolean;
-    byOrder: Map<number, { docEntry: number; docNum: number | null }>;
-    byMatch: Map<string, { docEntry: number; docNum: number | null }>;
+    byOrder: Map<number, SapInvoiceRef>;
+    byMatch: Map<string, SapInvoiceRef>;
+    byEntry: Map<number, SapInvoiceRef>;
     entries: Set<number>;
-  }>({ available: false, byOrder: new Map(), byMatch: new Map(), entries: new Set() });
+  }>({ available: false, byOrder: new Map(), byMatch: new Map(), byEntry: new Map(), entries: new Set() });
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -492,6 +505,7 @@ export default function SalesNfse() {
   const [retryingFor, setRetryingFor] = useState<string | null>(null);
   const [detailOrder, setDetailOrder] = useState<SalesOrderRow | null>(null);
   const [retryTarget, setRetryTarget] = useState<SalesOrderRow | null>(null);
+  const [baixaTarget, setBaixaTarget] = useState<{ order: SalesOrderRow; inv: NfseRow; saldoResidual: number } | null>(null);
   const uploadTargetRef = useRef<{ order: SalesOrderRow; inv: NfseRow | null } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -567,7 +581,7 @@ export default function SalesNfse() {
               session,
               "Invoices",
               {
-                $select: "DocEntry,DocNum,DocDate,CardCode,DocTotal,Cancelled,DocumentStatus,DocumentLines",
+                $select: "DocEntry,DocNum,DocDate,CardCode,DocTotal,PaidToDate,DocCurrency,Cancelled,DocumentStatus,DocumentLines",
                 $filter: `DocDate ge '${cutoffIso}' and Cancelled ne 'tYES'`,
                 $orderby: "DocDate desc",
               },
@@ -619,18 +633,31 @@ export default function SalesNfse() {
             DocNum: number | null;
             CardCode?: string | null;
             DocTotal?: number | null;
+            PaidToDate?: number | null;
+            DocCurrency?: string | null;
             Cancelled?: string;
+            DocumentStatus?: string | null;
             DocumentLines?: Array<{ BaseEntry?: number | null; BaseType?: number | null }>;
           }>
         | null;
       if (erpInvoiceRows) {
-        const byOrder = new Map<number, { docEntry: number; docNum: number | null }>();
-        const byMatch = new Map<string, { docEntry: number; docNum: number | null }>();
+        const byOrder = new Map<number, SapInvoiceRef>();
+        const byMatch = new Map<string, SapInvoiceRef>();
+        const byEntry = new Map<number, SapInvoiceRef>();
         const entries = new Set<number>();
         for (const nf of erpInvoiceRows) {
           if (!nf || nf.Cancelled === "tYES") continue;
           entries.add(Number(nf.DocEntry));
-          const ref = { docEntry: Number(nf.DocEntry), docNum: nf.DocNum ?? null };
+          const ref: SapInvoiceRef = {
+            docEntry: Number(nf.DocEntry),
+            docNum: nf.DocNum ?? null,
+            cardCode: nf.CardCode ?? null,
+            docTotal: Number(nf.DocTotal || 0),
+            paidToDate: Number(nf.PaidToDate || 0),
+            currency: nf.DocCurrency || "BRL",
+            status: nf.DocumentStatus || null,
+          };
+          byEntry.set(ref.docEntry, ref);
           const card = (nf.CardCode || "").trim().toUpperCase();
           const total = Number(nf.DocTotal || 0);
           if (card && total > 0) {
@@ -644,9 +671,9 @@ export default function SalesNfse() {
             if (!byOrder.has(base)) byOrder.set(base, ref);
           }
         }
-        setSapInvoices({ available: true, byOrder, byMatch, entries });
+        setSapInvoices({ available: true, byOrder, byMatch, byEntry, entries });
       } else {
-        setSapInvoices({ available: false, byOrder: new Map(), byMatch: new Map(), entries: new Set() });
+        setSapInvoices({ available: false, byOrder: new Map(), byMatch: new Map(), byEntry: new Map(), entries: new Set() });
       }
 
 
@@ -936,6 +963,17 @@ export default function SalesNfse() {
     [sapInvoices],
   );
 
+  const saldoResidualFor = useCallback(
+    (inv: NfseRow | null | undefined) => {
+      if (!inv?.sap_invoice_doc_entry) return 0;
+      const sapInv = sapInvoices.byEntry.get(Number(inv.sap_invoice_doc_entry));
+      const total = Number(sapInv?.docTotal ?? inv.total_amount ?? 0);
+      const paid = Number(sapInv?.paidToDate ?? 0);
+      return Math.max(0, +(total - paid).toFixed(2));
+    },
+    [sapInvoices],
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let base = orders;
@@ -1125,6 +1163,7 @@ export default function SalesNfse() {
                   const inv = invoiceByExpense.get(o.id);
                   const emission = emissionFor(o, inv);
                   const emitted = emission.emitted;
+                  const saldoResidual = saldoResidualFor(inv);
                   return (
                     <tr key={o.id} className="border-t border-border/60">
                       <td className="px-3 py-2 font-mono text-xs">
@@ -1282,6 +1321,26 @@ export default function SalesNfse() {
                           </Button>
                           <Button
                             size="sm"
+                            variant="outline"
+                            className="h-8 gap-1"
+                            disabled={!emitted || !inv?.sap_invoice_doc_entry || saldoResidual <= 0}
+                            title={
+                              !emitted
+                                ? "Baixa disponível após a emissão da NFS-e"
+                                : saldoResidual <= 0
+                                  ? "NF sem saldo em aberto"
+                                  : "Registrar recebimento de pagamento"
+                            }
+                            onClick={() => {
+                              if (!inv?.sap_invoice_doc_entry) return;
+                              setBaixaTarget({ order: o, inv, saldoResidual });
+                            }}
+                          >
+                            <DollarSign className="w-3.5 h-3.5" />
+                            Baixar
+                          </Button>
+                          <Button
+                            size="sm"
                             variant={emitted ? "ghost" : "default"}
                             disabled={emitted || !o.sap_doc_entry}
                             title={
@@ -1349,6 +1408,30 @@ export default function SalesNfse() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <BaixaRecebimentoDialog
+        open={!!baixaTarget}
+        onClose={() => setBaixaTarget(null)}
+        invoices={baixaTarget ? [((): BaixaInvoiceRow => {
+          const sapInv = baixaTarget.inv.sap_invoice_doc_entry
+            ? sapInvoices.byEntry.get(Number(baixaTarget.inv.sap_invoice_doc_entry))
+            : undefined;
+          return {
+            docEntry: Number(baixaTarget.inv.sap_invoice_doc_entry),
+            docNum: Number(sapInv?.docNum ?? baixaTarget.inv.sap_invoice_doc_num ?? baixaTarget.inv.sap_invoice_doc_entry),
+            cardCode: baixaTarget.order.supplier_code || sapInv?.cardCode || "",
+            cardName: baixaTarget.order.supplier_name,
+            currency: sapInv?.currency || baixaTarget.inv.currency || baixaTarget.order.currency || "BRL",
+            saldoResidual: baixaTarget.saldoResidual,
+            docType: "invoice",
+            docLine: null,
+          };
+        })()] : []}
+        onSuccess={() => {
+          setBaixaTarget(null);
+          void load();
+        }}
+      />
 
       <input
         ref={fileInputRef}
