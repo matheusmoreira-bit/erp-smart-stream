@@ -11,6 +11,7 @@ import {
   canonicalIdentity,
   identityMatches,
   normalizeText,
+  personTokensSubset,
   tokenizePerson,
 } from "./text-normalize.ts";
 

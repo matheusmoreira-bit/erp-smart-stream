@@ -21,6 +21,7 @@ import {
   emailLocalPart,
   identityMatches,
   normalizeText,
+  personTokensSubset,
   tokenizePerson,
 } from "@/lib/text-normalize";
 import { isSameAsRequester } from "@/lib/self-approval";
@@ -65,7 +66,9 @@ export function isDesignatedApprover(
   const nameTokens = tokenize(approverName || "");
   const callerTokens = tokenize(caller);
   if (nameTokens.length === 0 || callerTokens.length === 0) return false;
-  const allIn = callerTokens.every((t) => nameTokens.includes(t));
+  // Tolerante a erro de grafia por truncamento ("Antonio Guerard" x
+  // "antonio.guerardi@..."), que já deixou documentos sem aprovador válido.
+  const allIn = personTokensSubset(callerTokens, nameTokens);
   if (!allIn) return false;
   if (callerTokens.length >= 2) return true;
   return nameTokens.length === 1;
