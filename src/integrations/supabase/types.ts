@@ -8588,6 +8588,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      is_email_allowed_for_company: {
+        Args: { _company_db: string; _email: string }
+        Returns: boolean
+      }
       is_email_allowed_for_omie_company: {
         Args: { _company_db: string; _email: string }
         Returns: boolean
