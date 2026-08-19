@@ -8,7 +8,8 @@ import { DecimalInput } from "@/components/DecimalInput";
 import { SapSearchCombobox, type SapSearchOption } from "@/components/SapSearchCombobox";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useSap } from "@/contexts/SapContext";
-import { useAdvancePayments, type CreateAdvanceInput, type AdvanceItem } from "@/hooks/useAdvancePayments";
+import { useAdvancePayments, type CreateAdvanceInput, type AdvanceItem, type AdvanceType } from "@/hooks/useAdvancePayments";
+import { CurrencyField, normalizeCurrencyCode } from "@/components/CurrencyField";
 import { Loader2, Paperclip, X, Building2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -20,12 +21,13 @@ import {
 interface Props {
   open: boolean;
   onClose: () => void;
+  advanceType?: AdvanceType;
 }
 
-import { CurrencyField, normalizeCurrencyCode } from "@/components/CurrencyField";
 const CURRENCIES = ["BRL", "USD", "EUR", "ARS", "GBP"];
 
-interface SupplierOpt extends SapSearchOption {
+interface PartnerOpt extends SapSearchOption {
+  currency?: string;
   details?: { fantasyName?: string; taxId?: string; currency?: string };
 }
 
@@ -44,10 +46,14 @@ function newLine(): LineRow {
   return { description: "", quantity: 1, unit_price: 0, line_total: 0 };
 }
 
-export function CreateAdvanceModal({ open, onClose }: Props) {
+export function CreateAdvanceModal({ open, onClose, advanceType = "supplier" }: Props) {
   const { session } = useSap();
   const { companies } = useCompanies(true);
-  const { create } = useAdvancePayments();
+  const { create } = useAdvancePayments(advanceType);
+  const isCustomerAdvance = advanceType === "customer";
+  const partnerLabel = isCustomerAdvance ? "Cliente" : "Fornecedor";
+  const partnerLabelLower = partnerLabel.toLowerCase();
+  const sapPartnerType = isCustomerAdvance ? "cCustomer" : "cSupplier";
 
   const companyDb = session?.companyDB || "";
   const company = useMemo(
@@ -56,7 +62,7 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
   );
   const defaultCurrency = company?.default_currency || "BRL";
 
-  const [supplier, setSupplier] = useState<SupplierOpt | null>(null);
+  const [partner, setPartner] = useState<PartnerOpt | null>(null);
   const [currency, setCurrency] = useState<string>(defaultCurrency);
   const [dueDate, setDueDate] = useState<string>("");
   const [remarks, setRemarks] = useState<string>("");
@@ -65,13 +71,13 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
   const [saving, setSaving] = useState(false);
 
   // Normaliza "Todas as Moedas" (view HANA) para "##" — senão o campo trava.
-  const supplierCurrency = normalizeCurrencyCode((supplier as any)?.details?.currency || (supplier as any)?.currency || "");
-  const currencyLocked = !!supplierCurrency && supplierCurrency !== "##";
+  const partnerCurrency = normalizeCurrencyCode(partner?.details?.currency || partner?.currency || "");
+  const currencyLocked = !!partnerCurrency && partnerCurrency !== "##";
 
   useEffect(() => {
-    if (currencyLocked) setCurrency(supplierCurrency);
-    else if (!supplier) setCurrency(defaultCurrency);
-  }, [supplier, supplierCurrency, currencyLocked, defaultCurrency]);
+    if (currencyLocked) setCurrency(partnerCurrency);
+    else if (!partner) setCurrency(defaultCurrency);
+  }, [partner, partnerCurrency, currencyLocked, defaultCurrency]);
 
   const total = useMemo(
     () => lines.reduce((s, l) => s + (Number(l.line_total) || 0), 0),
@@ -79,7 +85,7 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
   );
 
   const reset = () => {
-    setSupplier(null);
+    setPartner(null);
     setCurrency(defaultCurrency);
     setDueDate("");
     setRemarks("");
@@ -101,9 +107,10 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
   };
 
   const handleSubmit = async (submit: boolean) => {
-    if (!supplier) return toast.error("Selecione um fornecedor");
+    if (!partner) return toast.error(`Selecione um ${partnerLabelLower}`);
     if (!companyDb) return toast.error("Sessão sem empresa selecionada");
     if (!lines.length) return toast.error("Adicione ao menos um item");
+    if (!files.length) return toast.error("Anexe o comprovante do adiantamento");
 
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i];
@@ -133,9 +140,10 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
 
       const input: CreateAdvanceInput = {
         company_db: companyDb,
-        supplier_card_code: supplier.code,
-        supplier_name: supplier.name,
-        supplier_cnpj: supplier.details?.taxId || supplier.extra,
+        advance_type: advanceType,
+        supplier_card_code: partner.code,
+        supplier_name: partner.name,
+        supplier_cnpj: partner.details?.taxId || partner.extra,
         currency,
         due_date: dueDate || undefined,
         remarks: remarks || undefined,
@@ -158,7 +166,7 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="w-screen h-[100dvh] max-w-none rounded-none border-0 overflow-y-auto sm:w-auto sm:h-auto sm:max-w-4xl sm:max-h-[90vh] sm:rounded-lg sm:border">
         <DialogHeader>
-          <DialogTitle>Novo Adiantamento a Fornecedor</DialogTitle>
+          <DialogTitle>Novo Adiantamento a {partnerLabel}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 mt-2">
@@ -171,10 +179,10 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
           </div>
 
           <div className="space-y-2">
-            <Label>Fornecedor</Label>
+            <Label>{partnerLabel}</Label>
             <SapSearchCombobox
               endpoint="BusinessPartners"
-              filterTemplate="CardType eq 'cSupplier' and Frozen ne 'tYES' and (contains(CardName,'{q}') or contains(CardCode,'{q}') or contains(FederalTaxID,'{q}'))"
+              filterTemplate={`CardType eq '${sapPartnerType}' and Frozen ne 'tYES' and (contains(CardName,'{q}') or contains(CardCode,'{q}') or contains(FederalTaxID,'{q}'))`}
               selectFields="CardCode,CardName,FederalTaxID,Currency"
               topResults={50}
               mapRow={(r) => ({
@@ -186,15 +194,15 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
                   currency: r.Currency || "",
                 },
               })}
-              value={supplier}
-              onChange={(v) => setSupplier(v as SupplierOpt | null)}
-              placeholder="Buscar fornecedor por nome, código ou CNPJ"
+              value={partner}
+              onChange={(v) => setPartner(v as PartnerOpt | null)}
+              placeholder={`Buscar ${partnerLabelLower} por nome, código ou CNPJ`}
             />
-            {supplier && (
+            {partner && (
               <p className="text-xs text-muted-foreground">
-                {supplier.code} · {supplier.name}
-                {supplier.details?.taxId && ` · CNPJ ${supplier.details.taxId}`}
-                {supplierCurrency && ` · Moeda ${supplierCurrency === "##" ? "Todas" : supplierCurrency}`}
+                {partner.code} · {partner.name}
+                {partner.details?.taxId && ` · CNPJ ${partner.details.taxId}`}
+                {partnerCurrency && ` · Moeda ${partnerCurrency === "##" ? "Todas" : partnerCurrency}`}
               </p>
             )}
           </div>
@@ -205,7 +213,7 @@ export function CreateAdvanceModal({ open, onClose }: Props) {
                 id="advance-currency"
                 value={currency}
                 onChange={currencyLocked ? undefined : setCurrency}
-                options={currencyLocked ? [supplierCurrency] : CURRENCIES}
+                options={currencyLocked ? [partnerCurrency] : CURRENCIES}
                 locked={currencyLocked}
                 required={false}
               />

@@ -225,6 +225,7 @@ export type Database = {
           applied_invoice_doc_entry: number | null
           applied_invoice_doc_num: number | null
           amount: number
+          advance_type: string
           company_db: string
           cost_center: string | null
           cost_center_name: string | null
@@ -257,6 +258,7 @@ export type Database = {
           applied_invoice_doc_entry?: number | null
           applied_invoice_doc_num?: number | null
           amount: number
+          advance_type?: string
           company_db: string
           cost_center?: string | null
           cost_center_name?: string | null
@@ -289,6 +291,7 @@ export type Database = {
           applied_invoice_doc_entry?: number | null
           applied_invoice_doc_num?: number | null
           amount?: number
+          advance_type?: string
           company_db?: string
           cost_center?: string | null
           cost_center_name?: string | null

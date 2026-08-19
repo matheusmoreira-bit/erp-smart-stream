@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
-import { useAdvancePayments, ADVANCE_STATUS_LABELS, ADVANCE_STATUS_COLORS, type AdvancePayment } from "@/hooks/useAdvancePayments";
+import { useAdvancePayments, ADVANCE_STATUS_LABELS, ADVANCE_STATUS_COLORS, type AdvancePayment, type AdvanceType } from "@/hooks/useAdvancePayments";
 import { CreateAdvanceModal } from "@/components/CreateAdvanceModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,16 +25,19 @@ function fmtDate(s?: string | null) {
   }
 }
 
-export default function AdvancePayments() {
+export default function AdvancePayments({ advanceType = "supplier" }: { advanceType?: AdvanceType } = {}) {
   const navigate = useNavigate();
   const { session } = useSap();
-  const { items, loading, error, refresh, approve, reject, retry, remove } = useAdvancePayments();
+  const { items, loading, error, refresh, approve, reject, retry, remove } = useAdvancePayments(advanceType);
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const deepLinkHandledRef = useRef(false);
+  const isCustomerAdvance = advanceType === "customer";
+  const partnerLabel = isCustomerAdvance ? "cliente" : "fornecedor";
+  const pageTitle = isCustomerAdvance ? "Adiantamentos a Cliente" : "Adiantamentos a Fornecedor";
 
   useEffect(() => {
     if (deepLinkHandledRef.current) return;
@@ -115,7 +118,7 @@ export default function AdvancePayments() {
 
   return (
     <div className="min-h-screen bg-background">
-      <PageTitle title="Adiantamentos a Fornecedor" />
+      <PageTitle title={pageTitle} />
       <header className="border-b border-border px-4 sm:px-6 py-3 sm:py-4 sticky top-0 z-20 bg-background/95 backdrop-blur">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -147,7 +150,7 @@ export default function AdvancePayments() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por fornecedor, CNPJ, solicitante…"
+              placeholder={`Buscar por ${partnerLabel}, CNPJ, solicitante...`}
               className="pl-9"
             />
           </div>
@@ -242,7 +245,7 @@ export default function AdvancePayments() {
         </div>
       </main>
 
-      <CreateAdvanceModal open={createOpen} onClose={() => setCreateOpen(false)} />
+      <CreateAdvanceModal open={createOpen} onClose={() => setCreateOpen(false)} advanceType={advanceType} />
     </div>
   );
 }

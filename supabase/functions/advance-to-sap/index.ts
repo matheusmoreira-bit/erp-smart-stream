@@ -1,4 +1,4 @@
-// Edge function: integra um adiantamento aprovado como Down Payment Invoice (PurchaseDownPaymentInvoices) no SAP B1.
+// Edge function: integra um adiantamento aprovado como Down Payment Invoice no SAP B1.
 // POST /functions/v1/advance-to-sap  body: { advance_id: string }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { ensureCopyToTargetDocument } from "../_shared/sap-attach-copy.ts";
@@ -121,12 +121,20 @@ Deno.serve(async (req) => {
     const creds = await getSapCreds(supabase, companyDb);
     const baseUrl = getSapBaseUrl(creds);
 
+    const advanceType = adv.advance_type === "customer" ? "customer" : "supplier";
+    const isCustomerAdvance = advanceType === "customer";
+    const sapEndpoint = isCustomerAdvance ? "DownPayments" : "PurchaseDownPaymentInvoices";
+
     // Conta contábil padrão de adiantamento por empresa.
-    // Configurada em system_credentials com credential_key='dpm_account_code'.
-    const dpmAccount = creds.dpm_account_code;
+    // Para cliente, permite chave específica e mantém fallback para a chave legado.
+    const dpmAccount = isCustomerAdvance
+      ? creds.customer_dpm_account_code || creds.sales_dpm_account_code || creds.ar_dpm_account_code || creds.dpm_account_code
+      : creds.dpm_account_code;
     if (!dpmAccount) {
       throw new Error(
-        "Conta contábil de adiantamento (dpm_account_code) não configurada para esta empresa. Cadastre em Integrações → Credenciais SAP.",
+        isCustomerAdvance
+          ? "Conta contábil de adiantamento de cliente (customer_dpm_account_code ou sales_dpm_account_code) não configurada para esta empresa. Cadastre em Integrações → Credenciais SAP."
+          : "Conta contábil de adiantamento (dpm_account_code) não configurada para esta empresa. Cadastre em Integrações → Credenciais SAP.",
       );
     }
 
@@ -204,12 +212,12 @@ Deno.serve(async (req) => {
       DocCurrency: adv.currency,
       DownPaymentType: "dptInvoice",
       DownPaymentPercentage: 100,
-      Comments: adv.remarks || `Adiantamento a fornecedor — solicitante: ${adv.requester_email || ""}`,
+      Comments: adv.remarks || `${isCustomerAdvance ? "Adiantamento de cliente" : "Adiantamento a fornecedor"} — solicitante: ${adv.requester_email || ""}`,
       DocumentLines: documentLines,
     };
     if (attachmentEntry) payload.AttachmentEntry = attachmentEntry;
 
-    const res = await fetch(`${baseUrl}/PurchaseDownPaymentInvoices`, {
+    const res = await fetch(`${baseUrl}/${sapEndpoint}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Cookie: cookies },
       body: JSON.stringify(payload),
@@ -217,7 +225,7 @@ Deno.serve(async (req) => {
     const respBody = await res.json().catch(() => ({}));
     if (!res.ok) {
       const msg = respBody?.error?.message?.value || JSON.stringify(respBody);
-      throw new Error(`SAP PurchaseDownPaymentInvoices failed [${res.status}]: ${msg}`);
+      throw new Error(`SAP ${sapEndpoint} failed [${res.status}]: ${msg}`);
     }
 
     await supabase

@@ -142,6 +142,7 @@ const App = () => (
               <Route path="/vendas" element={<Navigate to="/vendas/pedidos" replace />} />
               <Route path="/vendas/pedidos" element={protect("sales", <SalesHub tab="orders" />)} />
               <Route path="/vendas/nfse" element={protect("sales", <SalesHub tab="nfse" />)} />
+              <Route path="/vendas/adiantamentos" element={protect("sales", <SalesHub tab="advances" />)} />
               <Route path="/vendas/recebimentos" element={protect("sales", <SalesHub tab="receivables" />)} />
               <Route path="/vendas/destinatarios" element={protect("sales", <SalesHub tab="recipients" />)} />
               <Route path="/vendas/historico" element={protect("sales", <BaixasHistory />)} />
