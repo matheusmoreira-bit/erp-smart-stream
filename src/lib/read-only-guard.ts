@@ -114,6 +114,7 @@ const READ_ONLY_FUNCTIONS = new Set<string>([
   "sap-list-service",
   "sap-nfse-lookup",
   "sap-user-credentials",
+  "sap-auto-login",
   "sap-user-profile-sync",
   "nfse-xml-fetch",
   "nf-entrada-fetch-file",

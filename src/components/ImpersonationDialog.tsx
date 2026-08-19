@@ -30,12 +30,12 @@ interface Props {
 }
 
 /**
- * Inicia uma sessão de impersonação: o admin faz login real no ERP com o
- * usuário alvo (validando a senha provisionada) e o app passa a resolver
- * permissões e visibilidade como esse usuário.
+ * Inicia uma sessão de impersonação somente por identidade: o admin preserva
+ * sua sessão Google e sua sessão técnica do ERP, enquanto o app resolve
+ * permissões e visibilidade como o usuário alvo em modo somente leitura.
  */
 export function ImpersonationDialog({ open, onOpenChange }: Props) {
-  const { session, login, impersonateAs } = useSap();
+  const { session, impersonateAs } = useSap();
   const { isAdmin } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -43,14 +43,12 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
   const { users, isLoading } = useSapUsers();
   const [search, setSearch] = useState("");
   const [target, setTarget] = useState<string>("");
-  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!open) {
       setSearch("");
       setTarget("");
-      setPassword("");
     }
   }, [open]);
 
@@ -98,7 +96,7 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
         target_name: selected?.UserName || null,
         target_email: selected?.eMail || null,
         company_db: session.companyDB,
-        with_password: !!password,
+        with_password: false,
       });
       if (!authz.ok) {
         toast.error(authz.error || "Apenas administradores podem atuar como outro usuário.");
@@ -113,21 +111,14 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
         targetEmail: selected?.eMail || undefined,
         adminEmail,
         adminUser: session.userName,
-        withPassword: !!password,
+        withPassword: false,
         companyDB: session.companyDB,
         startedAt: Date.now(),
       });
       clearAuthCache();
-
-      if (password) {
-        // Com senha: valida a credencial provisionada abrindo sessão real no ERP.
-        await login(target, password, session.companyDB, "sap");
-      } else {
-        // Sem senha: entra por identidade, mas PRESERVA a sessão do Service
-        // Layer do usuário original (o admin). Assim leituras e ações no ERP
-        // continuam funcionando durante a impersonação.
-        impersonateAs(target);
-      }
+      // Preserva a autenticação Google e a sessão técnica do admin. A
+      // impersonação altera apenas a identidade exibida/filtrada.
+      impersonateAs(target);
 
       await logAuditAction({
         action: "impersonation_start",
@@ -138,7 +129,7 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
           target_user: target,
           target_email: selected?.eMail || null,
           company: getLabel(session.companyDB),
-          with_password: !!password,
+          with_password: false,
         },
       });
 
@@ -150,7 +141,7 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
       toast.success(`Atuando como ${displayUserName(selected?.UserName || target)}`);
       navigate("/", { replace: true });
     } catch (e) {
-      // Falhou o login: desfaz a impersonação para não deixar o admin sem poderes.
+      // Falhou a troca de identidade: desfaz a impersonação para não deixar o admin sem poderes.
       const { clearImpersonation } = await import("@/lib/impersonation");
       clearImpersonation();
       clearAuthCache();
@@ -173,9 +164,8 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
             Atuar como outro usuário
           </DialogTitle>
           <DialogDescription>
-            Você entrará em {getLabel(session?.companyDB || "")} com a identidade do usuário
-            escolhido, incluindo a sessão do ERP. Todas as ações ficam registradas em auditoria
-            com o seu e-mail.
+            Você verá {getLabel(session?.companyDB || "")} com a identidade do usuário
+            escolhido, em modo somente leitura. Sua sessão Google permanece conectada.
           </DialogDescription>
         </DialogHeader>
 
@@ -220,21 +210,10 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="imp-pass">Senha do usuário (opcional)</Label>
-            <Input
-              id="imp-pass"
-              type="password"
-              autoComplete="off"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Deixe em branco para entrar sem senha"
-            />
-            <p className="text-xs text-muted-foreground">
-              Sem senha você entra pela identidade do usuário; informe a senha apenas se quiser
-              validar a credencial provisionada no ERP.
-            </p>
-          </div>
+          <p className="text-xs text-muted-foreground">
+            A sessão técnica do ERP continua sendo a sua. O usuário selecionado define apenas
+            visibilidade, permissões e filtros durante a impersonação.
+          </p>
         </div>
 
         <DialogFooter>
