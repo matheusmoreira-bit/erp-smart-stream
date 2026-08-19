@@ -57,7 +57,9 @@ export function personMatches(a: unknown, b: unknown): boolean {
   if (ta.length === 1 && tb.length >= 2 && ja.includes(jb)) return true;
   if (tb.length === 1 && ta.length >= 2 && jb.includes(ja)) return true;
 
-  const subset = (x: string[], y: string[]) => x.every((t) => y.includes(t));
+  // Subconjunto tolerante a erro de grafia por truncamento
+  // ("Antonio Guerard" x "antonio.guerardi").
+  const subset = personTokensSubset;
   if (ta.length >= 2 && subset(ta, tb)) return true;
   if (tb.length >= 2 && subset(tb, ta)) return true;
   if (ta.length === 1 && tb.length === 1) return ta[0] === tb[0];
