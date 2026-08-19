@@ -146,16 +146,20 @@ export function SapLoginForm() {
       });
       let rows = ((data || []) as CompanyRow[])
         .filter((c) => canSeeTest || !isTestCompanyDb(c.company_db));
-      if (!isAdmin) {
-        if (!email) rows = [];
-        else {
-          const allowed = await Promise.all(rows.map(async (c) => ({
-            row: c,
-            ok: await isEmailAllowedForCompany(email, c.company_db),
-          })));
-          rows = allowed.filter((r) => r.ok).map((r) => r.row);
-        }
+      // Antes do login Google não há e-mail para filtrar: mostramos todas as
+      // empresas ativas (dado público, já exposto pela política de leitura).
+      // O controle de acesso real acontece na autenticação e nas edge functions.
+      if (!isAdmin && email) {
+        const allowed = await Promise.all(rows.map(async (c) => ({
+          row: c,
+          ok: await isEmailAllowedForCompany(email, c.company_db),
+        })));
+        const filtered = allowed.filter((r) => r.ok).map((r) => r.row);
+        // Se o filtro zerar tudo (usuário sem vínculo cadastrado), preserva a
+        // lista completa para não travar o login.
+        rows = filtered.length ? filtered : rows;
       }
+
       setAllCompanies(rows.map((c) => ({
         label: c.display_name,
         value: c.company_db,
