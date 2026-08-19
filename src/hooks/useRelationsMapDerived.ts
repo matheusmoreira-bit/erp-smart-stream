@@ -168,7 +168,7 @@ function asString(value: unknown): string | null {
 }
 
 async function readRelations(companyDb: string, sapDocEntry: number): Promise<SapDocumentRelation[]> {
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from("sap_document_relations")
     .select("source_type,source_doc_entry,source_doc_num,target_type,target_doc_entry,target_doc_num,relation_type,amount,currency,relation_date,last_seen_at,metadata")
     .eq("company_db", companyDb)
@@ -190,7 +190,7 @@ async function readRelations(companyDb: string, sapDocEntry: number): Promise<Sa
   );
   if (apInvoiceEntries.length === 0) return direct;
 
-  const { data: downstream, error: downstreamError } = await supabase
+  const { data: downstream, error: downstreamError } = await (supabase as any)
     .from("sap_document_relations")
     .select("source_type,source_doc_entry,source_doc_num,target_type,target_doc_entry,target_doc_num,relation_type,amount,currency,relation_date,last_seen_at,metadata")
     .eq("company_db", companyDb)

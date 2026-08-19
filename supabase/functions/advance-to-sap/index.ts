@@ -56,7 +56,7 @@ async function sapLogin(baseUrl: string, creds: Record<string, string>, companyD
 async function uploadAttachmentsToSap(baseUrl: string, cookies: string, files: { name: string; blob: Blob }[]) {
   if (files.length === 0) return null;
   const form = new FormData();
-  for (const f of files) form.append("files", f.blob, sanitizeSapFileName(f.name));
+  for (const f of files) form.append("files", f.blob, sanitizeSapFileName(f.name, f.blob?.type));
   const res = await fetch(`${baseUrl}/Attachments2`, { method: "POST", headers: { Cookie: cookies }, body: form });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`SAP Attachments2 failed [${res.status}]: ${body?.error?.message?.value || JSON.stringify(body)}`);

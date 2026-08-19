@@ -486,7 +486,7 @@ async function uploadAttachmentsToSap(
 ): Promise<number | null> {
   if (files.length === 0) return null;
   const form = new FormData();
-  for (const f of files) form.append("files", f.blob, sanitizeSapFileName(f.name));
+  for (const f of files) form.append("files", f.blob, sanitizeSapFileName(f.name, f.blob?.type));
   const res = await fetch(`${sapBaseUrl}/Attachments2`, {
     method: "POST",
     headers: { Cookie: cookies },

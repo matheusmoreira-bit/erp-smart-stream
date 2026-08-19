@@ -322,7 +322,7 @@ Deno.serve(async (req) => {
             if (!files.length) { entry.errors.push(`${exp.id}: arquivos faltantes não encontrados no storage`); return; }
 
             const addForm = new FormData();
-            for (const f of files) addForm.append("files", f.blob, sanitizeSapFileName(f.name));
+            for (const f of files) addForm.append("files", f.blob, sanitizeSapFileName(f.name, f.blob?.type));
             const addRes = await fetch(`${sapConn.baseUrl}/Attachments2(${existingEntry})`, {
               method: "PATCH",
               headers: { Cookie: sapConn.cookies },
@@ -367,7 +367,7 @@ Deno.serve(async (req) => {
           if (!files.length) { entry.errors.push(`${exp.id}: arquivos não encontrados no storage`); return; }
 
           const form = new FormData();
-          for (const f of files) form.append("files", f.blob, sanitizeSapFileName(f.name));
+          for (const f of files) form.append("files", f.blob, sanitizeSapFileName(f.name, f.blob?.type));
           const res = await fetch(`${sapConn.baseUrl}/Attachments2`, { method: "POST", headers: { Cookie: sapConn.cookies }, body: form });
           const resBody = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(`Attachments2 [${res.status}]: ${resBody?.error?.message?.value || ""}`);
