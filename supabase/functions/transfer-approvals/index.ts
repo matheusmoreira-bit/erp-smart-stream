@@ -3,12 +3,12 @@
 // filtrando por centro de custo. Cria notificação in-app para o novo
 // aprovador e registra audit_log. Apenas admins podem invocar.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
-import { requireAdmin, authErrorResponse } from "../_shared/auth.ts";
+import { requireAdminOrSapAdmin, authErrorResponse } from "../_shared/auth.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db, x-sap-auth-token",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   let caller;
-  try { caller = await requireAdmin(req); }
+  try { caller = await requireAdminOrSapAdmin(req); }
   catch (e) { return authErrorResponse(e, corsHeaders); }
 
   try {
@@ -28,19 +28,25 @@ Deno.serve(async (req) => {
     const companyDb = String(body.company_db || "").trim();
     const fromUser = String(body.from_user_code || "").trim();
     const toUser = String(body.to_user_code || "").trim();
+    const toUserName = String(body.to_user_name || "").trim();
+    const toUserEmail = String(body.to_user_email || "").trim();
     const costCenter = String(body.cost_center || "").trim();
+    const expenseIds = Array.isArray(body.expense_ids)
+      ? body.expense_ids.map((v: unknown) => String(v || "").trim()).filter(Boolean).slice(0, 200)
+      : [];
     const dryRun = body.dry_run !== false;
     const reason = String(body.reason || "Transferência administrativa de aprovações pendentes").slice(0, 500);
+    const targetApprover = toUserName || toUserEmail || toUser;
 
-    if (!companyDb || !toUser) {
+    if (!companyDb || !targetApprover) {
       return new Response(JSON.stringify({ error: "company_db e to_user_code são obrigatórios" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    if (!fromUser && !costCenter) {
-      return new Response(JSON.stringify({ error: "informe from_user_code e/ou cost_center como filtro" }),
+    if (expenseIds.length === 0 && !fromUser && !costCenter) {
+      return new Response(JSON.stringify({ error: "informe expense_ids, from_user_code e/ou cost_center como filtro" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    if (fromUser && norm(fromUser) === norm(toUser)) {
+    if (fromUser && norm(fromUser) === norm(targetApprover)) {
       return new Response(JSON.stringify({ error: "from_user_code e to_user_code devem ser diferentes" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -53,6 +59,7 @@ Deno.serve(async (req) => {
       .eq("company_db", companyDb)
       .eq("status", "pendente_aprovacao");
     if (costCenter) q = q.eq("cost_center", costCenter);
+    if (expenseIds.length > 0) q = q.in("id", expenseIds);
 
     const { data: rows, error: rowsErr } = await q;
     if (rowsErr) throw new Error(rowsErr.message);
@@ -64,8 +71,8 @@ Deno.serve(async (req) => {
 
     const results: any = {
       dryRun,
-      filter: { fromUser: fromUser || null, costCenter: costCenter || null },
-      toUser,
+      filter: { expenseIds, fromUser: fromUser || null, costCenter: costCenter || null },
+      toUser: targetApprover,
       totalCandidates: rows?.length ?? 0,
       transferred: [] as any[],
       skipped: [] as any[],
@@ -85,26 +92,26 @@ Deno.serve(async (req) => {
 
     for (const r of matches) {
       try {
-        if (norm(r.current_approver) === norm(toUser)) {
+        if (norm(r.current_approver) === norm(targetApprover)) {
           results.skipped.push({ id: r.id, reason: "já pertence ao destino" });
           continue;
         }
         if (dryRun) {
           results.transferred.push({
-            id: r.id, previousApprover: r.current_approver, wouldSetApprover: toUser,
+            id: r.id, previousApprover: r.current_approver, wouldSetApprover: targetApprover,
             costCenter: r.cost_center, totalAmount: r.total_amount, requester: r.requester_name,
           });
           continue;
         }
 
         const { error: updErr } = await sb.from("expenses")
-          .update({ current_approver: toUser, updated_at: new Date().toISOString() })
+          .update({ current_approver: targetApprover, updated_at: new Date().toISOString() })
           .eq("id", r.id)
           .eq("status", "pendente_aprovacao"); // guard against concurrent state change
         if (updErr) throw new Error(updErr.message);
 
         // In-app notification for the new approver
-        const toIdentifier = norm(toUser).replace(/\s+/g, ".");
+        const toIdentifier = norm(toUserEmail || toUser || targetApprover).replace(/\s+/g, ".");
         await sb.from("notifications").insert({
           user_identifier: toIdentifier,
           title: "Aprovação transferida para você",
@@ -117,6 +124,9 @@ Deno.serve(async (req) => {
             costCenter: r.cost_center,
             totalAmount: r.total_amount,
             transferredFrom: r.current_approver,
+            transferredTo: targetApprover,
+            transferredToCode: toUser || null,
+            transferredToEmail: toUserEmail || null,
             transferredBy: caller.email || caller.id,
             reason,
           },
@@ -131,7 +141,7 @@ Deno.serve(async (req) => {
           entity_id: String(r.id),
           company_db: companyDb,
           details: {
-            from: r.current_approver, to: toUser,
+            from: r.current_approver, to: targetApprover, toCode: toUser || null, toEmail: toUserEmail || null,
             costCenter: r.cost_center, totalAmount: r.total_amount,
             requester: r.requester_name, reason,
           },
@@ -144,14 +154,14 @@ Deno.serve(async (req) => {
             company_db: companyDb,
             action: "reassigned",
             actor_email: caller.email,
-            approver_name: toUser,
+            approver_name: targetApprover,
             previous_approver: r.current_approver,
             note: reason,
           } as any);
         } catch { /* table shape may differ — ignore */ }
 
         results.transferred.push({
-          id: r.id, previousApprover: r.current_approver, newApprover: toUser,
+          id: r.id, previousApprover: r.current_approver, newApprover: targetApprover,
           costCenter: r.cost_center, totalAmount: r.total_amount, requester: r.requester_name,
         });
       } catch (e) {

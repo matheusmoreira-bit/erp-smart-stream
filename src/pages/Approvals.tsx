@@ -24,6 +24,7 @@ import {
   Search,
   ShieldAlert,
   SlidersHorizontal,
+  ArrowRightLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -55,6 +56,8 @@ import { toast } from "sonner";
 import { useSapUsers } from "@/hooks/useSapUsers";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
+import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { cn } from "@/lib/utils";
 import { Split, ScanSearch } from "lucide-react";
 import { ApprovalRuleExplainDialog } from "@/components/ApprovalRuleExplainDialog";
@@ -184,6 +187,27 @@ function docProjects(doc: ApprovalDoc): string[] {
   return Array.from(set);
 }
 
+type ApprovalTransferUserOption = SapSearchOption & { email?: string };
+
+function sortUserOptions(options: ApprovalTransferUserOption[]): ApprovalTransferUserOption[] {
+  return [...options].sort((a, b) =>
+    (a.name || a.code).localeCompare(b.name || b.code, "pt-BR", { sensitivity: "base" }),
+  );
+}
+
+function pendingCountsByApprover(docs: ApprovalDoc[]): Array<{ approver: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const doc of docs) {
+    const internalId = (doc as unknown as { __internalId?: string }).__internalId;
+    if (!internalId) continue;
+    const key = (doc.currentApprover || "Sem aprovador").trim() || "Sem aprovador";
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([approver, count]) => ({ approver, count }))
+    .sort((a, b) => b.count - a.count || a.approver.localeCompare(b.approver, "pt-BR"));
+}
+
 function ApprovalCard({
   doc,
   onOpen,
@@ -192,6 +216,8 @@ function ApprovalCard({
   onRelationsMap,
   onBehalfOf,
   substituteName,
+  selectedForTransfer,
+  onToggleTransfer,
 }: {
   doc: ApprovalDoc;
   onOpen: () => void;
@@ -200,6 +226,8 @@ function ApprovalCard({
   onRelationsMap?: () => void;
   onBehalfOf?: { name: string; email: string } | null;
   substituteName?: string | null;
+  selectedForTransfer?: boolean;
+  onToggleTransfer?: (checked: boolean) => void;
 }) {
   const overdue = isOverdue(doc.dueDate);
   const { show: showRateio, info } = shouldShowRateio(doc);
@@ -251,11 +279,22 @@ function ApprovalCard({
       }}
     >
       <div className="flex items-start justify-between">
-        <div>
-          <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-            {doc.docTypeName}
-          </span>
-          <h3 className="text-foreground font-semibold mt-2 font-mono">{docNumberLabel(doc)}</h3>
+        <div className="flex items-start gap-2 min-w-0">
+          {onToggleTransfer && (
+            <Checkbox
+              checked={!!selectedForTransfer}
+              onCheckedChange={(v) => onToggleTransfer(v === true)}
+              onClick={(ev) => ev.stopPropagation()}
+              aria-label={`Selecionar ${docNumberLabel(doc)} para transferência`}
+              className="mt-1"
+            />
+          )}
+          <div className="min-w-0">
+            <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+              {doc.docTypeName}
+            </span>
+            <h3 className="text-foreground font-semibold mt-2 font-mono">{docNumberLabel(doc)}</h3>
+          </div>
         </div>
         <div className="text-right flex items-start gap-1">
           {onRelationsMap && (
@@ -397,11 +436,15 @@ function DelegationDialog({
   };
 
   const selectedUser = users.find((u) => u.InternalKey === selectedKey);
-  const eligibleUsers = users.filter((u) => u.Locked !== "tYES" && (u.UserName || u.UserCode));
+  const eligibleUsers = [...users]
+    .filter((u) => u.Locked !== "tYES" && (u.UserName || u.UserCode))
+    .sort((a, b) =>
+      (a.UserName || a.UserCode || "").localeCompare(b.UserName || b.UserCode || "", "pt-BR", { sensitivity: "base" }),
+    );
 
   const handleConfirm = async () => {
     if (!selectedUser || !selectedKey) {
-      toast.error("Selecione um usuário para delegar.");
+      toast.error("Selecione um usuário para transferir.");
       return;
     }
     await onConfirm({
@@ -419,7 +462,7 @@ function DelegationDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserCog className="w-5 h-5 text-primary" />
-            Delegar aprovação
+            Transferir aprovação
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 mt-2">
@@ -479,11 +522,11 @@ function DelegationDialog({
           </div>
 
           <div>
-            <Label className="text-xs text-muted-foreground mb-1.5 block">Motivo da delegação</Label>
+            <Label className="text-xs text-muted-foreground mb-1.5 block">Motivo da transferência</Label>
             <Textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Ex.: Aprovador em férias, transferência de responsabilidade..."
+              placeholder="Ex.: redistribuição de fila, aprovador em férias..."
               className="bg-muted/30 border-border text-sm"
               rows={3}
               disabled={isSubmitting}
@@ -499,7 +542,132 @@ function DelegationDialog({
             <Button variant="outline" onClick={resetAndClose} disabled={isSubmitting}>Cancelar</Button>
             <Button onClick={handleConfirm} disabled={isSubmitting || !selectedKey} className="gap-1.5">
               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCog className="w-4 h-4" />}
-              Delegar
+              Transferir
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TransferApprovalsDialog({
+  open,
+  onClose,
+  docs,
+  userOptions,
+  usersLoading,
+  pendingCounts,
+  onConfirm,
+  isSubmitting,
+}: {
+  open: boolean;
+  onClose: () => void;
+  docs: ApprovalDoc[];
+  userOptions: ApprovalTransferUserOption[];
+  usersLoading: boolean;
+  pendingCounts: Array<{ approver: string; count: number }>;
+  onConfirm: (params: { user: ApprovalTransferUserOption; reason: string }) => Promise<void>;
+  isSubmitting: boolean;
+}) {
+  const [selectedUser, setSelectedUser] = useState<ApprovalTransferUserOption | null>(null);
+  const [reason, setReason] = useState("Transferência administrativa de aprovações pendentes");
+
+  useEffect(() => {
+    if (!open) {
+      setSelectedUser(null);
+      setReason("Transferência administrativa de aprovações pendentes");
+    }
+  }, [open]);
+
+  const totalAmount = docs.reduce((sum, doc) => sum + Number(doc.docTotal || 0), 0);
+  const distinctCurrentApprovers = pendingCounts.filter((row) =>
+    docs.some((doc) => (doc.currentApprover || "Sem aprovador").trim() === row.approver),
+  );
+
+  const handleConfirm = async () => {
+    if (!selectedUser) {
+      toast.error("Selecione o novo aprovador.");
+      return;
+    }
+    if (docs.length === 0) {
+      toast.error("Selecione pelo menos uma aprovação interna.");
+      return;
+    }
+    await onConfirm({ user: selectedUser, reason: reason.trim() });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ArrowRightLeft className="w-5 h-5 text-primary" />
+            Transferir aprovações
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-md border border-border bg-muted/30 p-3">
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Selecionadas</p>
+              <p className="text-lg font-semibold text-foreground">{docs.length}</p>
+            </div>
+            <div className="rounded-md border border-border bg-muted/30 p-3">
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Aprovadores atuais</p>
+              <p className="text-lg font-semibold text-foreground">{distinctCurrentApprovers.length || 0}</p>
+            </div>
+            <div className="rounded-md border border-border bg-muted/30 p-3">
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Valor total</p>
+              <p className="text-lg font-semibold text-foreground">{formatCurrency(totalAmount)}</p>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">Novo aprovador</Label>
+            <CachedSearchCombobox
+              options={userOptions}
+              isLoading={usersLoading}
+              value={selectedUser}
+              onChange={(opt) => setSelectedUser(opt as ApprovalTransferUserOption | null)}
+              placeholder="Buscar usuário por nome, código ou e-mail..."
+              required
+              footerHint={`${userOptions.length} usuário(s) disponíveis em ordem alfabética`}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">Motivo</Label>
+            <Textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+              maxLength={500}
+              disabled={isSubmitting}
+            />
+          </div>
+
+          <div className="rounded-md border border-border bg-muted/20 p-3">
+            <p className="text-xs font-medium text-foreground mb-2">Pendências por aprovador</p>
+            {pendingCounts.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Nenhuma aprovação interna pendente nos filtros atuais.</p>
+            ) : (
+              <div className="max-h-40 overflow-y-auto space-y-1">
+                {pendingCounts.map((row) => (
+                  <div key={row.approver} className="flex items-center justify-between gap-3 text-xs">
+                    <span className="truncate text-muted-foreground">{row.approver}</span>
+                    <Badge variant="outline" className="font-mono">{row.count}</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <Button variant="outline" onClick={onClose} disabled={isSubmitting}>Cancelar</Button>
+            <Button onClick={handleConfirm} disabled={isSubmitting || !selectedUser || docs.length === 0} className="gap-1.5">
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRightLeft className="w-4 h-4" />}
+              Transferir
             </Button>
           </div>
         </div>
@@ -1319,8 +1487,8 @@ function ApprovalDetailModal({
                 >
                   Cancelar
                 </Button>
-                {/* Delegação disponível apenas para aprovações internas (Regra Interna).
-                    Aprovações nativas do SAP não podem ser delegadas daqui porque a
+                {/* Transferência disponível apenas para aprovações internas (Regra Interna).
+                    Aprovações nativas do SAP não podem ser transferidas daqui porque a
                     decisão precisa ser enviada pelo próprio usuário SAP. */}
                 {canApprove && doc.approvalRequestId <= 0 && (
                   <Button
@@ -1329,8 +1497,8 @@ function ApprovalDetailModal({
                     disabled={isActioning}
                     className="gap-1.5 border-primary/40 text-primary hover:bg-primary/10 w-full sm:w-auto"
                   >
-                    <UserCog className="w-4 h-4" />
-                    Delegar
+                    <ArrowRightLeft className="w-4 h-4" />
+                    Transferir
                   </Button>
                 )}
                 {canApprove && doc.approvalRequestId <= 0 && doc.delegatedFrom && (
@@ -2076,6 +2244,9 @@ export default function ApprovalsPage() {
   const [ccFilter, setCcFilter] = useState<string[]>([]);
   const [projectFilter, setProjectFilter] = useState<string[]>([]);
   const [onlyOverdue, setOnlyOverdue] = useState(false);
+  const [selectedTransferIds, setSelectedTransferIds] = useState<Set<string>>(new Set());
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [isTransferringApprovals, setIsTransferringApprovals] = useState(false);
   // Ordenação da tabela — por padrão, vencimento mais antigo primeiro.
   const [sortKey, setSortKey] = useState<SortKey>("dueDate");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -2091,6 +2262,21 @@ export default function ApprovalsPage() {
   const companyLabel = getLabel(session?.companyDB || "");
   const { getCostCentersForEmail } = useApproverCostCenters(session?.companyDB);
   const { officials: activeOfficials, refresh: refreshActiveOfficials } = useActiveOfficialsForMe();
+  const { users: transferUsers, isLoading: transferUsersLoading } = useSapUsers();
+  const transferUserOptions = useMemo<ApprovalTransferUserOption[]>(
+    () => sortUserOptions(
+      transferUsers
+        .filter((u) => u.Locked !== "tYES" && (u.UserName || u.UserCode || u.eMail))
+        .map((u) => ({
+          code: (u.UserCode || u.eMail || u.UserName || "").trim(),
+          name: (u.UserName || u.UserCode || u.eMail || "").trim(),
+          extra: (u.eMail || "").trim() || undefined,
+          email: (u.eMail || "").trim() || undefined,
+        }))
+        .filter((u) => u.code && u.name),
+    ),
+    [transferUsers],
+  );
   const { grants: substituteGrants, refresh: refreshSubstituteGrants } = useSubstituteGrantsForMe();
 
   // ── Recarregamento automático quando as permissões de substituto mudam ──
@@ -2699,6 +2885,29 @@ export default function ApprovalsPage() {
   }, [preFiltered, onlyOverdue, sortKey, sortDir]);
 
   const totalValue = filtered.reduce((sum, a) => sum + a.docTotal, 0);
+  const transferEligibleDocs = useMemo(
+    () => filtered.filter((doc) => Boolean((doc as unknown as { __internalId?: string }).__internalId)),
+    [filtered],
+  );
+  const selectedTransferDocs = useMemo(
+    () => transferEligibleDocs.filter((doc) => selectedTransferIds.has((doc as unknown as { __internalId: string }).__internalId)),
+    [transferEligibleDocs, selectedTransferIds],
+  );
+  const transferPendingCounts = useMemo(
+    () => pendingCountsByApprover(transferEligibleDocs),
+    [transferEligibleDocs],
+  );
+  const allTransferEligibleSelected = transferEligibleDocs.length > 0 && selectedTransferDocs.length === transferEligibleDocs.length;
+  useEffect(() => {
+    if (selectedTransferIds.size === 0) return;
+    const eligibleIds = new Set(
+      transferEligibleDocs.map((doc) => (doc as unknown as { __internalId: string }).__internalId),
+    );
+    setSelectedTransferIds((prev) => {
+      const next = new Set(Array.from(prev).filter((id) => eligibleIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [selectedTransferIds.size, transferEligibleDocs]);
 
   const { visibleItems: visibleApprovals, hasMore: apprHasMore, loadMore: apprLoadMore, sentinelRef: apprSentinelRef, total: apprTotal, initial: apprInitial } =
     useLazyList(filtered, {
@@ -2753,6 +2962,8 @@ export default function ApprovalsPage() {
     }
 
     const doc = selectedDoc;
+    const internalDoc = (selectedDoc as any)?.__internalId;
+    const adminInternalOverride = Boolean(internalDoc && isAdmin);
 
     // Papel do usuário na ação — usado para registrar no histórico:
     //   - substitute → grant vigente cobrindo a docDate
@@ -2810,7 +3021,7 @@ export default function ApprovalsPage() {
       return "approver";
     };
 
-    if (!canApproveDocWith(doc, liveGrants)) {
+    if (!canApproveDocWith(doc, liveGrants) && !adminInternalOverride) {
       // Registra a tentativa negada no histórico (auditoria).
       try {
         const attemptedRole = await resolveActingRole(doc, liveGrants);
@@ -2847,7 +3058,6 @@ export default function ApprovalsPage() {
     const actingRole = await resolveActingRole(doc, liveGrants);
 
     setActionPhase("sending");
-    const internalDoc = (selectedDoc as any)?.__internalId;
     try {
       // ===== Fase 1: mutação (aprovar/rejeitar) =====
       try {
@@ -3054,15 +3264,65 @@ export default function ApprovalsPage() {
         throw new Error(payload?.error || `Falha ao delegar (HTTP ${resp.status})`);
       }
 
-      toast.success(`Aprovação delegada para ${params.userName}.`);
+      toast.success(`Aprovação transferida para ${params.userName}.`);
       setDelegationDoc(null);
       setSelectedDoc(null);
-      refresh();
+      await refreshFeed();
     } catch (e) {
       console.error("Delegation error:", e);
       toast.error(e instanceof Error ? e.message : "Erro ao delegar aprovação");
     } finally {
       setIsDelegating(false);
+    }
+  };
+
+  const handleBulkTransferApprovals = async (params: { user: ApprovalTransferUserOption; reason: string }) => {
+    if (!session) return;
+    const expenseIds = selectedTransferDocs
+      .map((doc) => (doc as unknown as { __internalId?: string }).__internalId)
+      .filter(Boolean) as string[];
+    if (expenseIds.length === 0) {
+      toast.error("Selecione pelo menos uma aprovação interna.");
+      return;
+    }
+    setIsTransferringApprovals(true);
+    try {
+      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+      const resp = await sapFunctionFetch("transfer-approvals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company_db: session.companyDB,
+          expense_ids: expenseIds,
+          to_user_code: params.user.code,
+          to_user_name: params.user.name,
+          to_user_email: params.user.email || params.user.extra || null,
+          reason: params.reason || "Transferência administrativa de aprovações pendentes",
+          dry_run: false,
+        }),
+      });
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        throw new Error(payload?.error || `Falha ao transferir aprovações (HTTP ${resp.status})`);
+      }
+      const transferred = Array.isArray(payload?.transferred) ? payload.transferred.length : 0;
+      const errors = Array.isArray(payload?.errors) ? payload.errors.length : 0;
+      if (transferred > 0) {
+        toast.success(`${transferred} aprovação(ões) transferida(s) para ${params.user.name}.`);
+      } else {
+        toast.info("Nenhuma aprovação foi transferida.");
+      }
+      if (errors > 0) {
+        toast.warning(`${errors} aprovação(ões) tiveram erro na transferência.`);
+      }
+      setSelectedTransferIds(new Set());
+      setShowTransferDialog(false);
+      await refreshFeed();
+    } catch (e) {
+      console.error("Bulk transfer error:", e);
+      toast.error(e instanceof Error ? e.message : "Erro ao transferir aprovações");
+    } finally {
+      setIsTransferringApprovals(false);
     }
   };
 
@@ -3110,7 +3370,7 @@ export default function ApprovalsPage() {
       const restored = payload.current_approver || doc.delegatedFrom || "aprovador original";
       toast.success(`Delegação revogada. Aprovação devolvida para ${restored}.`);
       setSelectedDoc(null);
-      refresh();
+      await refreshFeed();
     } catch (e) {
       console.error("Revoke delegation error:", e);
       toast.error(e instanceof Error ? e.message : "Erro ao revogar delegação");
@@ -3120,6 +3380,9 @@ export default function ApprovalsPage() {
   };
 
 
+
+  const selectedInternalId = (selectedDoc as unknown as { __internalId?: string } | null)?.__internalId;
+  const canActOnSelectedDoc = canApproveDocWith(selectedDoc, substituteGrants) || Boolean(isAdmin && selectedInternalId);
 
   if (!session) return null;
 
@@ -3325,6 +3588,38 @@ export default function ApprovalsPage() {
                 Ver todas as aprovações
               </Label>
               <Switch id="show-all" checked={showAll} onCheckedChange={setShowAll} />
+            </div>
+          )}
+          {isAdmin && transferEligibleDocs.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => {
+                  if (allTransferEligibleSelected) {
+                    setSelectedTransferIds(new Set());
+                  } else {
+                    setSelectedTransferIds(new Set(
+                      transferEligibleDocs.map((doc) => (doc as unknown as { __internalId: string }).__internalId),
+                    ));
+                  }
+                }}
+              >
+                <CheckCircle2 className={`w-4 h-4 ${allTransferEligibleSelected ? "text-primary" : "text-muted-foreground"}`} />
+                {allTransferEligibleSelected ? "Limpar seleção" : "Selecionar internas"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 border-primary/40 text-primary hover:bg-primary/10"
+                disabled={selectedTransferDocs.length === 0}
+                onClick={() => setShowTransferDialog(true)}
+                title="Transferir aprovações internas selecionadas para outro aprovador"
+              >
+                <ArrowRightLeft className="w-4 h-4" />
+                Transferir ({selectedTransferDocs.length})
+              </Button>
             </div>
           )}
 
@@ -3585,8 +3880,10 @@ export default function ApprovalsPage() {
           </div>
         ) : viewMode === "cards" ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {visibleApprovals.map((doc, i) => (
-              <motion.div key={doc.approvalRequestId} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
+            {visibleApprovals.map((doc, i) => {
+              const internalId = (doc as any).__internalId as string | undefined;
+              return (
+                <motion.div key={doc.approvalRequestId} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
                 <ApprovalCard
                   doc={doc}
                   onOpen={() => setSelectedDoc(doc)}
@@ -3600,16 +3897,31 @@ export default function ApprovalsPage() {
                     const exp = expenses.find((e) => e.id === internalId);
                     return exp ? () => setRelationsMapExpense(exp) : undefined;
                   })()}
+                  selectedForTransfer={internalId ? selectedTransferIds.has(internalId) : false}
+                  onToggleTransfer={isAdmin && internalId ? (checked) => {
+                    setSelectedTransferIds((prev) => {
+                      const next = new Set(prev);
+                      if (checked) next.add(internalId);
+                      else next.delete(internalId);
+                      return next;
+                    });
+                  } : undefined}
                 />
 
-              </motion.div>
-            ))}
+                </motion.div>
+              );
+            })}
           </div>
         ) : (
           <div className="glass-card p-4 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
+                  {isAdmin && (
+                    <th className="py-3 px-3 text-left">
+                      <span className="sr-only">Selecionar</span>
+                    </th>
+                  )}
                   {([
                     ["docTypeName", "Tipo", "left"],
                     ["docNum", "Nº Doc", "left"],
@@ -3665,6 +3977,26 @@ export default function ApprovalsPage() {
                       className={`border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer ${overdue ? "bg-destructive/5" : ""}`}
                       onClick={() => setSelectedDoc(doc)}
                     >
+                      {isAdmin && (
+                        <td className="py-3 px-3" onClick={(ev) => ev.stopPropagation()}>
+                          {internalId ? (
+                            <Checkbox
+                              checked={selectedTransferIds.has(internalId)}
+                              onCheckedChange={(v) => {
+                                setSelectedTransferIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (v === true) next.add(internalId);
+                                  else next.delete(internalId);
+                                  return next;
+                                });
+                              }}
+                              aria-label={`Selecionar ${docNumberLabel(doc)} para transferência`}
+                            />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
+                      )}
                       <td className="py-3 px-3">
                         <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span>
                       </td>
@@ -3759,7 +4091,7 @@ export default function ApprovalsPage() {
         rules={rules}
         isAdmin={isAdmin}
         onBehalfOf={selectedDoc ? getSubstitutedOfficial(selectedDoc) : null}
-        canApprove={canApproveDocWith(selectedDoc, substituteGrants)}
+        canApprove={canActOnSelectedDoc}
       />
 
 
@@ -3779,6 +4111,17 @@ export default function ApprovalsPage() {
           isSubmitting={isDelegating}
         />
       ) : null}
+
+      <TransferApprovalsDialog
+        open={showTransferDialog}
+        onClose={() => setShowTransferDialog(false)}
+        docs={selectedTransferDocs}
+        userOptions={transferUserOptions}
+        usersLoading={transferUsersLoading}
+        pendingCounts={transferPendingCounts}
+        onConfirm={handleBulkTransferApprovals}
+        isSubmitting={isTransferringApprovals}
+      />
 
       <Dialog open={showSubstitutes} onOpenChange={(o) => {
         setShowSubstitutes(o);
