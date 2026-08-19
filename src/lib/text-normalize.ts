@@ -101,3 +101,29 @@ export function tokenizePerson(value: unknown): string[] {
     .map((t) => stripDiacritics(t))
     .filter((t) => t && !NAME_CONNECTORS.has(t));
 }
+
+/**
+ * Dois tokens de nome representam a mesma palavra?
+ *
+ * Além da igualdade exata, tolera ERROS DE GRAFIA por truncamento/letra a mais
+ * ("guerard" x "guerardi", "goncalve" x "goncalves"): um token precisa ser
+ * prefixo do outro, com no mínimo 4 caracteres e diferença de até 2 letras.
+ * Não faz correspondência difusa genérica — só prefixo — para evitar casar
+ * pessoas diferentes.
+ */
+export function tokenEquivalent(a: string, b: string): boolean {
+  const x = stripDiacritics(String(a ?? "")).toLowerCase();
+  const y = stripDiacritics(String(b ?? "")).toLowerCase();
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+  if (short.length < 4) return false;
+  if (long.length - short.length > 2) return false;
+  return long.startsWith(short);
+}
+
+/** Todos os tokens de `a` têm equivalente em `b` (tolerante a grafia)? */
+export function personTokensSubset(a: string[], b: string[]): boolean {
+  if (!a.length || !b.length) return false;
+  return a.every((t) => b.some((o) => tokenEquivalent(t, o)));
+}
