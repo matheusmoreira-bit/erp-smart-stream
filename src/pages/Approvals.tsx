@@ -147,13 +147,25 @@ function formatDate(dateStr: string) {
   return new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(dt);
 }
 
-function isOverdue(dueDate: string): boolean {
-  if (!dueDate) return false;
+type DueStatus = "missing" | "overdue" | "warning" | "normal";
+
+function daysUntilDue(dueDate: string): number | null {
+  if (!dueDate) return null;
   const dt = parseDateFlexible(dueDate);
-  if (!dt) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return dt < today;
+  if (!dt) return null;
+  const now = new Date();
+  const todayUtc = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const dueUtc = Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate());
+  return Math.floor((dueUtc - todayUtc) / 86_400_000);
+}
+
+function getDueStatus(dueDate: string): DueStatus {
+  if (!dueDate) return "missing";
+  const days = daysUntilDue(dueDate);
+  if (days === null) return "missing";
+  if (days <= 2) return "overdue";
+  if (days <= 5) return "warning";
+  return "normal";
 }
 
 /** Colunas ordenáveis da tabela de aprovações pendentes. */
@@ -229,7 +241,9 @@ function ApprovalCard({
   selectedForTransfer?: boolean;
   onToggleTransfer?: (checked: boolean) => void;
 }) {
-  const overdue = isOverdue(doc.dueDate);
+  const dueStatus = getDueStatus(doc.dueDate);
+  const overdue = dueStatus === "overdue";
+  const dueWarning = dueStatus === "warning";
   const { show: showRateio, info } = shouldShowRateio(doc);
 
   // Centros de custo mapeados que aparecem neste documento
@@ -268,8 +282,8 @@ function ApprovalCard({
       animate={{ opacity: 1, y: 0 }}
       role="button"
       tabIndex={0}
-      aria-label={`Abrir aprovação ${doc.docTypeName} nº ${docNumberLabel(doc)}, ${doc.cardName}, valor ${formatCurrency(doc.docTotal, doc.currency)}${overdue ? ", vencida" : ""}`}
-      className={`glass-card p-5 flex flex-col gap-3 cursor-pointer hover:ring-1 hover:ring-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background transition-all ${overdue ? "border-destructive/40" : ""}`}
+      aria-label={`Abrir aprovação ${doc.docTypeName} nº ${docNumberLabel(doc)}, ${doc.cardName}, valor ${formatCurrency(doc.docTotal, doc.currency)}${overdue ? ", vencida" : dueWarning ? ", com alerta de vencimento" : ""}`}
+      className={`glass-card p-5 flex flex-col gap-3 cursor-pointer hover:ring-1 hover:ring-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background transition-all ${overdue ? "border-destructive/40" : dueWarning ? "border-amber-500/40 bg-amber-500/5" : ""}`}
       onClick={onOpen}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -313,6 +327,11 @@ function ApprovalCard({
             {overdue && (
               <span className="text-[10px] font-medium text-destructive bg-destructive/10 px-2 py-0.5 rounded-full uppercase">
                 Vencido
+              </span>
+            )}
+            {dueWarning && (
+              <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full uppercase">
+                Alerta
               </span>
             )}
           </div>
@@ -391,9 +410,10 @@ function ApprovalCard({
             <Calendar className="w-3.5 h-3.5 text-primary/70" />
             <span>Criado: {formatDate(doc.docDate)}</span>
           </div>
-          <div className={`flex items-center gap-1 text-xs font-medium ${overdue ? "text-destructive" : "text-muted-foreground"}`}>
+          <div className={`flex items-center gap-1 text-xs font-medium ${overdue ? "text-destructive" : dueWarning ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>
             <Clock className="w-3 h-3" />
             {formatDate(doc.dueDate)}
+            {dueWarning && <span className="text-[10px]">⚠</span>}
           </div>
         </div>
         {hasAutoShare && approverShare > 0 && approverShare < info.total && (
@@ -872,7 +892,9 @@ function ApprovalDetailModal({
 
   if (!doc) return null;
 
-  const overdue = isOverdue(doc.dueDate);
+  const dueStatus = getDueStatus(doc.dueDate);
+  const overdue = dueStatus === "overdue";
+  const dueWarning = dueStatus === "warning";
   const isOtherApprover = isSuperUser &&
     !approverMatches(doc.currentApprover, currentUserName) &&
     !approverMatches(doc.currentApprover, currentUserEmail || "");
@@ -1081,9 +1103,10 @@ function ApprovalDetailModal({
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Data de Vencimento</p>
-                <p className={!doc.dueDate ? "text-destructive font-semibold" : overdue ? "text-destructive font-semibold" : "text-foreground"}>
+                <p className={!doc.dueDate ? "text-destructive font-semibold" : overdue ? "text-destructive font-semibold" : dueWarning ? "text-amber-600 dark:text-amber-400 font-semibold" : "text-foreground"}>
                   {doc.dueDate ? formatDate(doc.dueDate) : "sem data"}
                   {overdue && doc.dueDate && " ⚠ Vencido"}
+                  {dueWarning && doc.dueDate && " ⚠ Alerta de vencimento"}
                 </p>
               </div>
               {doc.daysOpen > 0 && (
@@ -2839,10 +2862,11 @@ export default function ApprovalsPage() {
       .map((v) => ({ value: v, label: v }));
   }, [userApprovals]);
 
-  const overdueCount = preFiltered.filter((a) => isOverdue(a.dueDate)).length;
+  const overdueCount = preFiltered.filter((a) => getDueStatus(a.dueDate) === "overdue").length;
+  const dueWarningCount = preFiltered.filter((a) => getDueStatus(a.dueDate) === "warning").length;
 
   const filtered = useMemo(() => {
-    const base = onlyOverdue ? preFiltered.filter((a) => isOverdue(a.dueDate)) : preFiltered;
+    const base = onlyOverdue ? preFiltered.filter((a) => getDueStatus(a.dueDate) === "overdue") : preFiltered;
     const dir = sortDir === "asc" ? 1 : -1;
     const ts = (d?: string | null) => {
       const t = d ? new Date(d).getTime() : NaN;
@@ -3568,6 +3592,15 @@ export default function ApprovalsPage() {
               </div>
             </button>
           )}
+          {dueWarningCount > 0 && (
+            <div className="glass-card px-4 py-3 flex items-center gap-3 border-amber-500/30 bg-amber-500/5">
+              <Calendar className="w-4 h-4 text-amber-500" aria-hidden="true" />
+              <div>
+                <p className="text-xs text-muted-foreground">Alerta de vencimento</p>
+                <p className="text-lg font-bold font-mono text-amber-600 dark:text-amber-400">{dueWarningCount}</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Toolbar */}
@@ -3964,7 +3997,9 @@ export default function ApprovalsPage() {
               </thead>
               <tbody>
                 {visibleApprovals.map((doc, i) => {
-                  const overdue = isOverdue(doc.dueDate);
+                  const dueStatus = getDueStatus(doc.dueDate);
+                  const overdue = dueStatus === "overdue";
+                  const dueWarning = dueStatus === "warning";
                   const internalId = (doc as any).__internalId as string | undefined;
                   const linkedExpense = internalId ? expenses.find((e) => e.id === internalId) : undefined;
                   const onBehalfOf = getSubstitutedOfficial(doc);
@@ -3974,7 +4009,9 @@ export default function ApprovalsPage() {
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       transition={{ delay: i * 0.02 }}
-                      className={`border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer ${overdue ? "bg-destructive/5" : ""}`}
+                      className={`border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer ${
+                        overdue ? "bg-destructive/5" : dueWarning ? "bg-amber-500/5" : ""
+                      }`}
                       onClick={() => setSelectedDoc(doc)}
                     >
                       {isAdmin && (
@@ -4018,9 +4055,15 @@ export default function ApprovalsPage() {
                         </div>
                       </td>
                       <td className="py-3 px-3 text-muted-foreground">{doc.requester}</td>
-                      <td className={`py-3 px-3 font-mono text-xs ${overdue ? "text-destructive font-semibold" : "text-muted-foreground"}`}>
+                      <td className={`py-3 px-3 font-mono text-xs ${
+                        overdue
+                          ? "text-destructive font-semibold"
+                          : dueWarning
+                            ? "text-amber-600 dark:text-amber-400 font-semibold"
+                            : "text-muted-foreground"
+                      }`}>
                         {formatDate(doc.dueDate)}
-                        {overdue && <span className="ml-1 text-[10px]">⚠</span>}
+                        {(overdue || dueWarning) && <span className="ml-1 text-[10px]">⚠</span>}
                       </td>
                       <td className="py-3 px-3 text-center">
                         <div className="flex items-center justify-center gap-1">
