@@ -135,10 +135,9 @@ export default function TransferApprovalsTool() {
           return;
         }
         setPendingRows((data || []) as PendingApprovalRow[]);
-      })
-      .finally(() => {
         if (!cancelled) setPendingLoading(false);
       });
+
 
     return () => { cancelled = true; };
   }, [companyDb]);
