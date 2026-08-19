@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { DEFAULT_TARGETS, type CompanyTargets } from "@/hooks/useCompanies";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Target, Server, Box, Cloud, Layers, Globe, DollarSign, ImageIcon, Menu, Wrench, FileCheck2, MoreHorizontal, TrendingUp, Sparkles, Mail, Rocket, Activity, AlarmClock, History as HistoryIcon } from "lucide-react";
+import { Target, Server, Box, Cloud, Layers, Globe, DollarSign, ImageIcon, Menu, Wrench, FileCheck2, MoreHorizontal, TrendingUp, Sparkles, Mail, Rocket, Activity, AlarmClock, History as HistoryIcon, type LucideIcon } from "lucide-react";
 import { RoiAnalysis } from "@/components/RoiAnalysis";
 import {
   Building2,
@@ -109,6 +109,59 @@ interface Company {
   is_foreign: boolean;
   is_test?: boolean;
 }
+
+type AdminTab = "companies" | "integrations" | "nfse_email" | "audit" | "permissions" | "admin_users" | "tools" | "roi";
+
+interface BackofficeNavItem {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  tab?: AdminTab;
+  to?: string;
+}
+
+const BACKOFFICE_PRIMARY_NAV: BackofficeNavItem[] = [
+  { key: "companies", label: "Empresas", icon: Building2, tab: "companies" },
+  { key: "users", label: "Usuários e acessos", icon: Users, to: "/usuarios/lista" },
+  { key: "integrations", label: "Integrações", icon: Key, tab: "integrations" },
+  { key: "nfse_email", label: "E-mail NFS-e", icon: Mail, tab: "nfse_email" },
+  { key: "audit", label: "Auditoria", icon: ScrollText, tab: "audit" },
+  { key: "tools", label: "Ferramentas", icon: Wrench, tab: "tools" },
+  { key: "roi", label: "ROI", icon: TrendingUp, tab: "roi" },
+];
+
+const BACKOFFICE_MORE_GROUPS: { label: string; items: BackofficeNavItem[] }[] = [
+  {
+    label: "Identidade e Segurança",
+    items: [
+      { key: "admin_users", label: "Administradores", icon: ShieldCheck, to: "/usuarios/administradores" },
+      { key: "access_review", label: "Revisão de acessos", icon: ShieldCheck, to: "/backoffice/revisao-acessos" },
+      { key: "api_keys", label: "Chaves de API", icon: KeyRound, to: "/backoffice/chaves-api" },
+      { key: "sap_users", label: "Usuários SAP", icon: Users, to: "/backoffice/sap-users/replicate" },
+    ],
+  },
+  {
+    label: "Observabilidade",
+    items: [
+      { key: "audit_trail", label: "Trilha de auditoria", icon: FileCheck2, to: "/backoffice/audit-trail" },
+      { key: "document_timeline", label: "Trilha por documento", icon: HistoryIcon, to: "/backoffice/trilha-documento" },
+      { key: "integration_health", label: "Saúde das integrações", icon: Activity, to: "/backoffice/saude-integracoes" },
+      { key: "infra_health", label: "Infraestrutura e backups", icon: Server, to: "/backoffice/infra-health" },
+      { key: "db_performance", label: "Desempenho do banco", icon: Database, to: "/backoffice/desempenho-banco" },
+      { key: "flow_performance", label: "Performance dos fluxos", icon: Gauge, to: "/backoffice/performance" },
+    ],
+  },
+  {
+    label: "Operação Assistida",
+    items: [
+      { key: "retry_queue", label: "Fila de retentativas", icon: RefreshCw, to: "/backoffice/retry-queue" },
+      { key: "pagcorp_audit", label: "Auditoria de baixas PagCorp", icon: FileCheck2, to: "/backoffice/baixas-pagcorp" },
+      { key: "sla_escalation", label: "Escalonamento por SLA", icon: AlarmClock, to: "/backoffice/sla-escalonamento" },
+      { key: "sla_dashboard", label: "Dashboard de SLA", icon: TrendingUp, to: "/backoffice/sla-dashboard" },
+      { key: "roadmap", label: "Roadmap", icon: Rocket, to: "/backoffice/roadmap" },
+    ],
+  },
+];
 
 const ERP_TYPE_LABELS: Record<string, { label: string; icon: typeof Server }> = {
   sap: { label: "SAP Business One", icon: Server },
@@ -392,7 +445,7 @@ export default function Admin() {
   const [selectedCompanyDb, setSelectedCompanyDb] = useState("");
 
   // Audit log
-  const [activeTab, setActiveTab] = useState<"companies" | "integrations" | "nfse_email" | "audit" | "permissions" | "admin_users" | "tools" | "roi">("companies");
+  const [activeTab, setActiveTab] = useState<AdminTab>("companies");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { theme, setTheme } = useTheme();
   const [auditCompanyFilter, setAuditCompanyFilter] = useState("all");
@@ -651,7 +704,7 @@ export default function Admin() {
       </AlertDialog>
       {/* Header — mobile first */}
       <header className="border-b border-border sticky top-0 z-40 bg-background/95 backdrop-blur">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 px-3 sm:px-6 py-3">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-2 px-3 sm:px-6 py-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="p-1 rounded-lg bg-[hsl(var(--cactus-amber))]/10 border border-[hsl(var(--cactus-amber))]/20 shrink-0">
               <img src={cactusLogo.url} alt="Cactus" className="w-7 h-7 object-contain" />
@@ -688,25 +741,16 @@ export default function Admin() {
         </div>
 
         {/* Desktop nav */}
-        <div className="hidden md:block max-w-7xl mx-auto px-6 pb-3">
+        <div className="hidden md:block max-w-6xl mx-auto px-6 pb-3">
           <div className="flex items-center gap-3">
             <nav className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border/60">
-              {([
-                { key: "companies", label: "Empresas", icon: Building2 },
-                { key: "users_hub", label: "Usuários", icon: Users, to: "/usuarios/lista" },
-                { key: "integrations", label: "Integrações", icon: Key },
-                { key: "nfse_email", label: "E-mail NFS-e", icon: Mail },
-                { key: "audit", label: "Logs", icon: ScrollText },
-                { key: "admin_users", label: "Admins", icon: ShieldCheck, to: "/usuarios/administradores" },
-                { key: "tools", label: "Ferramentas", icon: Wrench },
-                { key: "roi", label: "ROI", icon: TrendingUp },
-              ] as { key: string; label: string; icon: typeof Building2; to?: string }[]).map((t) => {
+              {BACKOFFICE_PRIMARY_NAV.map((t) => {
                 const Icon = t.icon;
-                const isActive = activeTab === t.key;
+                const isActive = !!t.tab && activeTab === t.tab;
                 return (
                   <button
                     key={t.key}
-                    onClick={() => (t.to ? navigate(t.to) : setActiveTab(t.key as typeof activeTab))}
+                    onClick={() => (t.to ? navigate(t.to) : t.tab ? setActiveTab(t.tab) : undefined)}
                     className={cn(
                       "px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1.5",
                       isActive
@@ -735,36 +779,25 @@ export default function Admin() {
                 <DropdownMenuTrigger asChild>
                   <Button size="sm" variant="ghost" className="text-muted-foreground">
                     <MoreHorizontal className="w-4 h-4 mr-1.5" />
-                    Mais
+                    Mais opções
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52">
-                  <DropdownMenuLabel>Ferramentas avançadas</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {[
-                    { label: "Audit Trail", icon: FileCheck2, to: "/backoffice/audit-trail" },
-                    { label: "Trilha por documento", icon: HistoryIcon, to: "/backoffice/trilha-documento" },
-                    { label: "Saúde das Integrações", icon: Activity, to: "/backoffice/saude-integracoes" },
-                    { label: "Infra & Backups", icon: Server, to: "/backoffice/infra-health" },
-                    { label: "Desempenho do banco", icon: Database, to: "/backoffice/desempenho-banco" },
-                    { label: "Painel de performance", icon: Gauge, to: "/backoffice/performance" },
-                    { label: "Retries SAP", icon: RefreshCw, to: "/backoffice/retry-queue" },
-                    { label: "Auditoria de baixas PagCorp", icon: FileCheck2, to: "/backoffice/baixas-pagcorp" },
-                    { label: "Revisão de acessos", icon: ShieldCheck, to: "/backoffice/revisao-acessos" },
-                    { label: "Chaves de API", icon: KeyRound, to: "/backoffice/chaves-api" },
-
-                    { label: "Escalonamento por SLA", icon: AlarmClock, to: "/backoffice/sla-escalonamento" },
-                    { label: "Dashboard de SLA", icon: TrendingUp, to: "/backoffice/sla-dashboard" },
-                    { label: "Roadmap", icon: Rocket, to: "/backoffice/roadmap" },
-                  ].map((it) => {
-                    const Icon = it.icon;
-                    return (
-                      <DropdownMenuItem key={it.to} onSelect={() => navigate(it.to)}>
-                        <Icon className="w-4 h-4 mr-2 text-muted-foreground" />
-                        {it.label}
-                      </DropdownMenuItem>
-                    );
-                  })}
+                <DropdownMenuContent align="end" className="w-72">
+                  {BACKOFFICE_MORE_GROUPS.map((group, index) => (
+                    <div key={group.label}>
+                      {index > 0 && <DropdownMenuSeparator />}
+                      <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
+                      {group.items.map((it) => {
+                        const Icon = it.icon;
+                        return (
+                          <DropdownMenuItem key={it.key} onSelect={() => it.to && navigate(it.to)}>
+                            <Icon className="w-4 h-4 mr-2 text-muted-foreground" />
+                            {it.label}
+                          </DropdownMenuItem>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -773,7 +806,7 @@ export default function Admin() {
 
       </header>
 
-      <main className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-24 md:pb-8">
+      <main className="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-24 md:pb-8">
 
 
         {activeTab === "companies" && (
@@ -982,11 +1015,11 @@ export default function Admin() {
         className="md:hidden fixed inset-x-0 bottom-0 z-40 bg-background/95 backdrop-blur-lg border-t border-border pb-[max(env(safe-area-inset-bottom),0.25rem)]"
         aria-label="Navegação backoffice"
       >
-        <ul className="grid grid-cols-3">
+        <ul className="grid grid-cols-4">
           {[
             { key: "companies", label: "Empresas", icon: Building2, action: () => setActiveTab("companies") },
-            { key: "users_hub", label: "Usuários", icon: Users, action: () => navigate("/usuarios/lista") },
-            { key: "audit", label: "Logs", icon: ScrollText, action: () => setActiveTab("audit") },
+            { key: "users_hub", label: "Acessos", icon: Users, action: () => navigate("/usuarios/lista") },
+            { key: "audit", label: "Auditoria", icon: ScrollText, action: () => setActiveTab("audit") },
           ].map((t) => {
             const Icon = t.icon;
             const isActive = activeTab === t.key;
@@ -1039,21 +1072,19 @@ export default function Admin() {
             <div>
               <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-3 mb-2">Seções</h4>
               <ul className="space-y-0.5">
-                {[
-                  { key: "integrations", label: "Integrações", icon: Key },
-                  { key: "admin_users", label: "Admins", icon: ShieldCheck },
-                  { key: "audit", label: "Logs de Auditoria", icon: ScrollText },
-                  { key: "tools", label: "Ferramentas", icon: Wrench },
-                  { key: "roi", label: "ROI Consolidado", icon: TrendingUp },
-                ].map((t) => {
+                {BACKOFFICE_PRIMARY_NAV.filter((item) => item.tab || item.to).map((t) => {
                   const Icon = t.icon;
                   return (
                     <li key={t.key}>
                       <button
-                        onClick={() => { setActiveTab(t.key as typeof activeTab); setMobileMenuOpen(false); }}
+                        onClick={() => {
+                          if (t.to) navigate(t.to);
+                          else if (t.tab) setActiveTab(t.tab);
+                          setMobileMenuOpen(false);
+                        }}
                         className={cn(
                           "w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left hover:bg-muted min-h-11",
-                          activeTab === t.key && "bg-muted",
+                          t.tab && activeTab === t.tab && "bg-muted",
                         )}
                       >
                         <span className="p-2 rounded-md bg-card border border-border text-[hsl(var(--cactus-amber))]">
@@ -1068,27 +1099,29 @@ export default function Admin() {
             </div>
 
             <div>
-              <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-3 mb-2">Navegação</h4>
-              <ul className="space-y-0.5">
-                {[
-                  { path: "/backoffice/audit-trail", label: "Audit Trail", icon: FileCheck2 },
-                ].map((it) => {
-                  const Icon = it.icon;
-                  return (
-                    <li key={it.path}>
-                      <button
-                        onClick={() => { setMobileMenuOpen(false); navigate(it.path); }}
-                        className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left hover:bg-muted min-h-11"
-                      >
-                        <span className="p-2 rounded-md bg-card border border-border text-[hsl(var(--cactus-green))]">
-                          <Icon className="w-4 h-4" />
-                        </span>
-                        <span className="text-sm font-medium">{it.label}</span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+              {BACKOFFICE_MORE_GROUPS.map((group) => (
+                <div key={group.label} className="mb-4">
+                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-3 mb-2">{group.label}</h4>
+                  <ul className="space-y-0.5">
+                    {group.items.map((it) => {
+                      const Icon = it.icon;
+                      return (
+                        <li key={it.key}>
+                          <button
+                            onClick={() => { setMobileMenuOpen(false); if (it.to) navigate(it.to); }}
+                            className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left hover:bg-muted min-h-11"
+                          >
+                            <span className="p-2 rounded-md bg-card border border-border text-[hsl(var(--cactus-green))]">
+                              <Icon className="w-4 h-4" />
+                            </span>
+                            <span className="text-sm font-medium">{it.label}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
             </div>
           </div>
 
