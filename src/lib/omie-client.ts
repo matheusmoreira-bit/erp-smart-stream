@@ -151,12 +151,64 @@ export interface OmieClienteFornecedor {
   [key: string]: unknown;
 }
 
+export interface OmieProduto {
+  codigo_produto: number;
+  codigo_produto_integracao?: string;
+  codigo?: string;
+  descricao?: string;
+  unidade?: string;
+  valor_unitario?: number;
+  tipoItem?: string;
+  inativo?: "S" | "N" | string;
+  [key: string]: unknown;
+}
+
+export interface OmieServico {
+  intListar?: {
+    nCodServ?: number;
+    cCodIntServ?: string;
+  };
+  cabecalho?: {
+    cCodigo?: string;
+    cDescricao?: string;
+    nPrecoUnit?: number;
+  };
+  descricao?: {
+    cDescrCompleta?: string;
+  };
+  info?: {
+    inativo?: "S" | "N" | string;
+  };
+  [key: string]: unknown;
+}
+
+export interface OmieCatalogItem {
+  code: string;
+  name: string;
+  kind: "product" | "service";
+  externalCode?: string;
+  unitPrice?: number;
+  inactive: boolean;
+}
+
 interface OmieClientesResponse {
   clientes_cadastro?: OmieClienteFornecedor[];
   pagina: number;
   total_de_paginas: number;
   registros: number;
   total_de_registros: number;
+}
+
+interface OmieProdutosResponse {
+  produto_servico_cadastro?: OmieProduto[];
+  pagina: number;
+  total_de_paginas: number;
+}
+
+interface OmieServicosResponse {
+  cadastros?: OmieServico[];
+  nPagina: number;
+  nTotPaginas: number;
 }
 
 /**
@@ -191,6 +243,97 @@ export async function omieListarClientesFornecedores(
   }
 
   return all;
+}
+
+async function omieListarProdutos(
+  companyDB: string,
+  maxPages: number,
+  forceRefresh: boolean,
+): Promise<OmieCatalogItem[]> {
+  const all: OmieCatalogItem[] = [];
+  let page = 1;
+  while (page <= maxPages) {
+    const response = await omieCall<OmieProdutosResponse>(
+      companyDB,
+      "geral/produtos/",
+      {
+        call: "ListarProdutos",
+        param: [{
+          pagina: page,
+          registros_por_pagina: 500,
+          apenas_importado_api: "N",
+          filtrar_apenas_omiepdv: "N",
+        }],
+      },
+      { cacheTtlMs: 5 * 60_000, forceRefresh },
+    );
+    for (const product of response.produto_servico_cadastro || []) {
+      const id = Number(product.codigo_produto);
+      const name = String(product.descricao || product.codigo || "").trim();
+      if (!Number.isFinite(id) || !name) continue;
+      all.push({
+        code: `P:${id}`,
+        name,
+        kind: "product",
+        externalCode: product.codigo || product.codigo_produto_integracao,
+        unitPrice: Number(product.valor_unitario) || undefined,
+        inactive: String(product.inativo || "N").toUpperCase() === "S",
+      });
+    }
+    if (page >= (response.total_de_paginas || 1)) break;
+    page++;
+  }
+  return all;
+}
+
+async function omieListarServicos(
+  companyDB: string,
+  maxPages: number,
+  forceRefresh: boolean,
+): Promise<OmieCatalogItem[]> {
+  const all: OmieCatalogItem[] = [];
+  let page = 1;
+  while (page <= maxPages) {
+    const response = await omieCall<OmieServicosResponse>(
+      companyDB,
+      "servicos/servico/",
+      {
+        call: "ListarCadastroServico",
+        param: [{ nPagina: page, nRegPorPagina: 500 }],
+      },
+      { cacheTtlMs: 5 * 60_000, forceRefresh },
+    );
+    for (const service of response.cadastros || []) {
+      const id = Number(service.intListar?.nCodServ);
+      const name = String(service.cabecalho?.cDescricao || service.descricao?.cDescrCompleta || "").trim();
+      if (!Number.isFinite(id) || !name) continue;
+      all.push({
+        code: `S:${id}`,
+        name,
+        kind: "service",
+        externalCode: service.cabecalho?.cCodigo || service.intListar?.cCodIntServ,
+        unitPrice: Number(service.cabecalho?.nPrecoUnit) || undefined,
+        inactive: String(service.info?.inativo || "N").toUpperCase() === "S",
+      });
+    }
+    if (page >= (response.nTotPaginas || 1)) break;
+    page++;
+  }
+  return all;
+}
+
+/** Lista unificada usada nos seletores de produtos e serviços do ERP Flow. */
+export async function omieListarProdutosServicos(
+  companyDB: string,
+  options: { maxPages?: number; forceRefresh?: boolean } = {},
+): Promise<OmieCatalogItem[]> {
+  const maxPages = options.maxPages ?? 20;
+  const forceRefresh = options.forceRefresh ?? false;
+  const [products, services] = await Promise.all([
+    omieListarProdutos(companyDB, maxPages, forceRefresh),
+    omieListarServicos(companyDB, maxPages, forceRefresh),
+  ]);
+  return [...products, ...services].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 }
 
 /**

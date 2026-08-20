@@ -5,6 +5,7 @@ import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { assertCircuitClosed, recordCircuitFailure, recordCircuitSuccess } from "@/lib/sap-circuit-breaker";
 import { useSap } from "@/contexts/SapContext";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
+import { omieListarProdutosServicos } from "@/lib/omie-client";
 
 const DEFAULT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
 // Chaves com atualização mais frequente (dados que mudam com frequência no ERP)
@@ -319,7 +320,40 @@ export function useSapCachedList({
       }
 
 
-      // 2. If no cache hit (or expired/forced) and we have a SAP session, fetch from SAP.
+      // 2. Em empresas Omie, `Items` representa o catálogo combinado de
+      // produtos e serviços. Normalizamos a resposta para o formato SAP-like
+      // consumido pelos comboboxes existentes.
+      if (session?.erpType?.toLowerCase() === "omie" && endpoint === "Items" && companyDB) {
+        const catalog = await omieListarProdutosServicos(companyDB, { forceRefresh });
+        const rows = catalog.map((item) => ({
+          ItemCode: item.code,
+          ItemName: `${item.kind === "product" ? "[Produto]" : "[Serviço]"} ${item.name}`,
+          ExternalCode: item.externalCode || null,
+          UnitPrice: item.unitPrice ?? null,
+          Valid: item.inactive ? "tNO" : "tYES",
+          Frozen: item.inactive ? "tYES" : "tNO",
+          SalesItem: "tYES",
+          PurchaseItem: "tYES",
+          ItemType: item.kind === "service" ? "itService" : "itItems",
+        }));
+        const activeRows = filterActiveRows(endpoint, rows, cacheKey);
+        if (activeRows.length > 0) {
+          const expiresAt = new Date(Date.now() + getCacheTtlMs(cacheKey)).toISOString();
+          markSelfCacheWrite(cacheKey, companyDB);
+          await supabase.from("sap_cache").upsert({
+            cache_key: cacheKey,
+            company_db: companyDB,
+            data: activeRows as any,
+            expires_at: expiresAt,
+          }, { onConflict: "cache_key,company_db" });
+        }
+        setOptions(activeRows.map(mapRowRef.current));
+        setIsStale(false);
+        lastLoadedAtRef.current = Date.now();
+        return;
+      }
+
+      // 3. If no cache hit (or expired/forced) and we have a SAP session, fetch from SAP.
       //    Prefer the server-side Apiuser route (edge function sap-list-service)
       //    so that results are consistent regardless of the currently signed-in
       //    SAP user's authorizations. Fall back to the direct Service Layer call
@@ -397,7 +431,7 @@ export function useSapCachedList({
       rows = filterActiveRows(endpoint, rows, cacheKey);
 
 
-      // 3. Only cache non-empty results
+      // 4. Only cache non-empty results
       if (rows.length > 0) {
         const expiresAt = new Date(Date.now() + getCacheTtlMs(cacheKey)).toISOString();
         markSelfCacheWrite(cacheKey, companyDB);
@@ -430,12 +464,12 @@ export function useSapCachedList({
     } finally {
       setIsLoading(false);
     }
-  }, [session?.sessionId, session?.companyDB, enabled, cacheKey, endpoint]);
+  }, [session?.sessionId, session?.companyDB, session?.erpType, enabled, cacheKey, endpoint]);
 
   // Reset loaded flag when session changes
   useEffect(() => {
     loadedRef.current = false;
-  }, [session?.sessionId, session?.companyDB, cacheKey]);
+  }, [session?.sessionId, session?.companyDB, session?.erpType, cacheKey]);
 
   useEffect(() => {
     load();

@@ -6,7 +6,7 @@ const { publicFunctionFetch } = vi.hoisted(() => ({
 
 vi.mock("@/lib/auth-fetch", () => ({ publicFunctionFetch }));
 
-import { omieListarClientesFornecedores } from "./omie-client";
+import { omieListarClientesFornecedores, omieListarProdutosServicos } from "./omie-client";
 
 describe("omieListarClientesFornecedores", () => {
   beforeEach(() => {
@@ -44,5 +44,64 @@ describe("omieListarClientesFornecedores", () => {
         param: [{ pagina: 1, registros_por_pagina: 500, apenas_importado_api: "N" }],
       },
     });
+  });
+});
+
+describe("omieListarProdutosServicos", () => {
+  beforeEach(() => {
+    publicFunctionFetch.mockReset();
+  });
+
+  it("combines active products and services in a searchable catalog", async () => {
+    publicFunctionFetch.mockImplementation(async (_name: string, init: RequestInit) => {
+      const request = JSON.parse(String(init.body));
+      const isProductRequest = request.endpoint === "geral/produtos/";
+      return new Response(JSON.stringify({
+        data: isProductRequest
+          ? {
+              pagina: 1,
+              total_de_paginas: 1,
+              produto_servico_cadastro: [{
+                codigo_produto: 10,
+                codigo: "SKU-10",
+                descricao: "Produto A",
+                valor_unitario: 25.5,
+                inativo: "N",
+              }],
+            }
+          : {
+              nPagina: 1,
+              nTotPaginas: 1,
+              cadastros: [{
+                intListar: { nCodServ: 20, cCodIntServ: "SERV-20" },
+                cabecalho: { cCodigo: "S20", cDescricao: "Servico B", nPrecoUnit: 80 },
+                info: { inativo: "N" },
+              }],
+            },
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+
+    const result = await omieListarProdutosServicos("OMIE_CATALOG_TEST", { forceRefresh: true });
+
+    expect(result).toEqual([
+      expect.objectContaining({ code: "P:10", name: "Produto A", kind: "product", externalCode: "SKU-10" }),
+      expect.objectContaining({ code: "S:20", name: "Servico B", kind: "service", externalCode: "S20" }),
+    ]);
+    expect(publicFunctionFetch).toHaveBeenCalledTimes(2);
+    const requests = publicFunctionFetch.mock.calls.map((call) => JSON.parse(String(call[1].body)));
+    expect(requests).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        action: "call",
+        company_db: "OMIE_CATALOG_TEST",
+        endpoint: "geral/produtos/",
+        params: expect.objectContaining({ call: "ListarProdutos" }),
+      }),
+      expect.objectContaining({
+        action: "call",
+        company_db: "OMIE_CATALOG_TEST",
+        endpoint: "servicos/servico/",
+        params: expect.objectContaining({ call: "ListarCadastroServico" }),
+      }),
+    ]));
   });
 });

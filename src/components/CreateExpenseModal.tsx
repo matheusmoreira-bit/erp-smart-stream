@@ -203,6 +203,7 @@ export function CreateExpenseModal({
     "03-Rec Cactus Distr",
   ];
   const isSales = mode === "sales";
+  const isOmie = sapSession?.erpType?.toLowerCase() === "omie";
   const isProjectRequired = sapSession?.companyDB !== "SBO_CACTUS";
 
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
@@ -491,13 +492,16 @@ export function CreateExpenseModal({
     hasCapability("items_restricted_all") ||
     canSeeAllCostCenters;
   const filteredItemOptions = useMemo(() => {
+    // Na Omie, produtos e serviços compartilham o catálogo do formulário e
+    // não usam os prefixos/restrições de códigos definidos para o SAP.
+    if (isOmie) return itemOptions;
     // Vendas: apenas os itens de receita liberados (SV0003 e SV0006).
     if (isSales) return itemOptions.filter((o) => SALES_ALLOWED_ITEMS.includes(o.code));
     // Compras: itens SV% são exclusivos de venda e nunca aparecem aqui.
     return itemOptions.filter(
       (o) => !isSalesOnlyItemCode(o.code) && isItemAllowedForCostCenter(o.code, userCostCenter, bypassCcItemRules),
     );
-  }, [itemOptions, userCostCenter, isSales, bypassCcItemRules]);
+  }, [itemOptions, userCostCenter, isSales, isOmie, bypassCcItemRules]);
 
   // Alçada de CC: quem é do 1.6.1.2 pode lançar em qualquer 1.6.%.
   // Grupos com visão total (Facilities, Contábil, Fiscal, Financeiro, CFO,
@@ -2200,7 +2204,7 @@ export function CreateExpenseModal({
       }
 
       // Itens SV% são exclusivos de venda — nunca em pedido de compra.
-      if (!isSales && isSalesOnlyItemCode(it.item_code)) {
+      if (!isOmie && !isSales && isSalesOnlyItemCode(it.item_code)) {
         toast.error(`Item ${n}: itens SV% são exclusivos de pedidos de venda`);
         return;
       }
@@ -2208,7 +2212,7 @@ export function CreateExpenseModal({
 
       // Alçada por CC do usuário logado: IMP% só para 1.2.2.%; FOL% só para 1.5.1.3 (Pessoas e Cultura).
       // CC vazio (sem vínculo no IdP) não bloqueia — evita falso negativo.
-      if (!isSales && !isItemAllowedForCostCenter(it.item_code, userCostCenter, bypassCcItemRules)) {
+      if (!isOmie && !isSales && !isItemAllowedForCostCenter(it.item_code, userCostCenter, bypassCcItemRules)) {
         const codeUp = String(it.item_code).toUpperCase();
         if (codeUp.startsWith("IMP")) {
           toast.error(`Item ${n}: itens IMP% são restritos a usuários do CC 1.2.2.%`);
@@ -3419,7 +3423,7 @@ export function CreateExpenseModal({
                     placeholder={
                       origin === "pagcorp" && mappingInfo?.missingFields.includes("Item")
                         ? "Sem mapeamento — selecione manualmente"
-                        : "Buscar item SAP por nome ou código..."
+                        : `Buscar produto ou serviço ${isOmie ? "Omie" : "SAP"} por nome ou código...`
                     }
                     suggestedQuery={!item.sapItem ? (item.searchHint || item.description || undefined) : undefined}
                     portalContainer={dialogContainer}

@@ -113,6 +113,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
   const isSales = mode === "sales";
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
   const { session: sapSession } = useSap();
+  const isOmie = sapSession?.erpType?.toLowerCase() === "omie";
   const isOpenGaming = sapSession?.companyDB === "open_gaming_sa";
 
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
@@ -168,8 +169,8 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
   });
   // Itens SV% são exclusivos de venda — bloqueados em pedidos de compra.
   const itemOptions = useMemo(
-    () => (isSales ? rawItemOptions : rawItemOptions.filter((o) => !isSalesOnlyItemCode(o.code))),
-    [rawItemOptions, isSales],
+    () => (isOmie || isSales ? rawItemOptions : rawItemOptions.filter((o) => !isSalesOnlyItemCode(o.code))),
+    [rawItemOptions, isSales, isOmie],
   );
 
   const costCenterMapRow = useCallback(
@@ -690,7 +691,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
                           return updated;
                         });
                       }}
-                      placeholder="Buscar item SAP por nome ou código..."
+                      placeholder={`Buscar produto ou serviço ${isOmie ? "Omie" : "SAP"} por nome ou código...`}
                       suggestedQuery={!item.sapItem && item.item_code ? item.item_code : undefined}
                       portalContainer={dialogContainer}
                     />
