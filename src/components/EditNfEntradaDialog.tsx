@@ -16,6 +16,7 @@ import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { supabase } from "@/integrations/supabase/client";
 import type { NfEntradaImport } from "@/hooks/useNfEntrada";
+import { isSalesOnlyItemCode } from "@/hooks/useCurrentUserCostCenter";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
