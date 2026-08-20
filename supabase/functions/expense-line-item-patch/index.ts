@@ -32,19 +32,25 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization") || "";
     const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-    if (!token) return json({ error: "UNAUTHORIZED" }, 401);
+    const internalSecret = Deno.env.get("INTERNAL_FUNCTION_SECRET") || "";
+    const providedInternal = req.headers.get("x-internal-key") || "";
+    const isInternal = Boolean(internalSecret) && providedInternal === internalSecret;
 
-    if (token !== serviceKey) {
-      // Autorização real: só service role ou admin consegue ler system_credentials (RLS).
-      const asCaller = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
-        global: { headers: { Authorization: `Bearer ${token}` } },
-      });
-      const { error: authzErr } = await asCaller
-        .from("system_credentials")
-        .select("id")
-        .limit(1);
-      if (authzErr) return json({ error: "Apenas administradores podem alterar linhas já integradas." }, 403);
+    if (!isInternal) {
+      if (!token) return json({ error: "UNAUTHORIZED" }, 401);
+      if (token !== serviceKey) {
+        // Autorização real: só service role ou admin consegue ler system_credentials (RLS).
+        const asCaller = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+          global: { headers: { Authorization: `Bearer ${token}` } },
+        });
+        const { error: authzErr } = await asCaller
+          .from("system_credentials")
+          .select("id")
+          .limit(1);
+        if (authzErr) return json({ error: "Apenas administradores podem alterar linhas já integradas." }, 403);
+      }
     }
+
 
 
     const body = await req.json().catch(() => ({}));
