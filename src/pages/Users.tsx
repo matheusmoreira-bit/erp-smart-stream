@@ -334,13 +334,17 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
     else if (alertFilter === "ok") list = list.filter((r) => r.alerts.length === 0);
 
     if (q) {
+      const norm = (v?: string | null) =>
+        (v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      const nq = norm(q);
       list = list.filter(
         (r) =>
-          r.user.UserName?.toLowerCase().includes(q) ||
-          r.user.UserCode?.toLowerCase().includes(q) ||
-          (r.user.eMail?.toLowerCase().includes(q) ?? false),
+          norm(r.user.UserName).includes(nq) ||
+          norm(r.user.UserCode).includes(nq) ||
+          norm(r.user.eMail).includes(nq),
       );
     }
+
 
     const sorted = [...list];
     if (segment === "divergences") {
