@@ -34,6 +34,7 @@ export const NAV_MODULES: NavModule[] = [
     items: [
       { label: "Pedidos de Venda", path: "/vendas/pedidos", moduleKey: "sales" },
       { label: "NFS-e", path: "/vendas/nfse", moduleKey: "sales" },
+      { label: "Adiantamentos", path: "/vendas/adiantamentos", moduleKey: "sales" },
       { label: "Contas a Receber", path: "/vendas/recebimentos", moduleKey: "sales" },
       { label: "Destinatários", path: "/vendas/destinatarios", moduleKey: "sales" },
       { label: "Histórico de Baixas", path: "/vendas/historico", moduleKey: "sales" },

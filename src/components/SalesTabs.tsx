@@ -5,6 +5,7 @@ import { useLocation } from "react-router-dom";
 const TABS = [
   { to: "/vendas/pedidos", label: "Pedidos de Venda" },
   { to: "/vendas/nfse", label: "NFS-e" },
+  { to: "/vendas/adiantamentos", label: "Adiantamentos" },
   { to: "/vendas/recebimentos", label: "Contas a Receber" },
   { to: "/vendas/destinatarios", label: "Destinatários" },
 ];

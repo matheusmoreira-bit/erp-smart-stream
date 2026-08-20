@@ -3,11 +3,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { listSapUsersHybrid } from "../_shared/sap-users-hybrid.ts";
-import { authErrorResponse, requireSchedulerOrAdminOrSapModule } from "../_shared/auth.ts";
+import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
+import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 const INTEGRATION_KEY = "purchase_order_notifications";
@@ -374,27 +375,25 @@ import { weekendBlockResponse } from "../_shared/weekend-guard.ts";
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  try {
-    await requireSchedulerOrAdminOrSapModule(req, "synapse");
-  } catch (error) {
-    return authErrorResponse(error, corsHeaders) ?? new Response("Unauthorized", { status: 401, headers: corsHeaders });
-  }
+  const auth = await requireSchedulerOrAdmin(req, corsHeaders);
+  if (!auth.ok) return auth.response;
+  const disabled = blockIfIntegrationsDisabled(corsHeaders);
+  if (disabled) return disabled;
 
   const supabase = svc();
   let body: any = {};
   try { body = await req.json(); } catch { /* empty */ }
-  const requestedCompany: string | undefined = body?.company_db;
   const weekendBlock = await weekendBlockResponse(req, corsHeaders, body);
   if (weekendBlock) {
     await supabase.from("synapse_execution_log").insert({
       integration_key: INTEGRATION_KEY,
-      company_db: requestedCompany || null,
       status: "skipped",
       affected_count: 0,
       details: { reason: "weekend_pause" },
     } as any).then(() => {}, () => {});
     return weekendBlock;
   }
+  const requestedCompany: string | undefined = body?.company_db;
 
   // Global config check
   const { data: gs } = await supabase
@@ -409,7 +408,6 @@ Deno.serve(async (req) => {
   if (!globalActive && !body?.force) {
     await supabase.from("synapse_execution_log").insert({
       integration_key: INTEGRATION_KEY,
-      company_db: requestedCompany || null,
       status: "skipped",
       affected_count: 0,
       details: { reason: "global_disabled" },
@@ -469,7 +467,6 @@ Deno.serve(async (req) => {
 
       await supabase.from("synapse_execution_log").insert({
         integration_key: INTEGRATION_KEY,
-        company_db: companyDb,
         status: (summary.errors as number) > 0 ? "partial" : "success",
         affected_count: sent,
         details: { company_db: companyDb, started_at: startedAt, ...summary },
@@ -488,7 +485,6 @@ Deno.serve(async (req) => {
       overall.push({ company_db: companyDb, error: msg });
       await supabase.from("synapse_execution_log").insert({
         integration_key: INTEGRATION_KEY,
-        company_db: companyDb,
         status: "error",
         affected_count: 0,
         details: { company_db: companyDb, error: msg },

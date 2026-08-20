@@ -12,6 +12,11 @@ export interface MultiCompanyPasswordResult {
   managedSaved?: boolean;
 }
 
+interface ManagedPasswordTarget {
+  targetUserId?: string;
+  targetEmail?: string;
+}
+
 /**
  * Detecta erros do SAP B1 quando a nova senha é igual à anterior.
  * Em lote, tratamos esse caso como "skipped" e seguimos com as demais empresas.
@@ -63,6 +68,7 @@ export async function changePasswordInCompanies(
   companyDbs: string[],
   currentPassword?: string,
   saveManaged = false,
+  managedTarget?: ManagedPasswordTarget,
 ): Promise<MultiCompanyPasswordResult[]> {
   if (companyDbs.length === 0) return [];
 
@@ -96,6 +102,8 @@ export async function changePasswordInCompanies(
         ...(currentPassword ? { current_password: currentPassword } : {}),
         company_dbs: companyDbs,
         save_managed: saveManaged,
+        ...(managedTarget?.targetUserId ? { target_user_id: managedTarget.targetUserId } : {}),
+        ...(managedTarget?.targetEmail ? { target_email: managedTarget.targetEmail } : {}),
       }),
     });
 

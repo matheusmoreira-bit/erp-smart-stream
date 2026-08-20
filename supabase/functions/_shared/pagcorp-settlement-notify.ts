@@ -4,8 +4,8 @@
 // que a NF de entrada de um pedido de compra do cartão foi lançada no ERP,
 // avisamos a responsável pela baixa em vez de emitir o pagamento.
 
-const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "";
-const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || "";
+const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "http://63.177.171.140/sender_wpp";
+const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || Deno.env.get("WHATSAPP_API_TOKEN") || "";
 
 /** Responsável pela baixa manual dos cartões corporativos. */
 export const PAGCORP_SETTLEMENT_OWNER = {
@@ -14,6 +14,10 @@ export const PAGCORP_SETTLEMENT_OWNER = {
 };
 
 export async function sendWhatsApp(to: string, message: string) {
+  if (!WHATSAPP_TOKEN) {
+    console.warn("[pagcorp-settlement-notify] WHATSAPP_TOKEN não configurado; notificação ignorada.");
+    return { ok: false, status: 0, error: "WHATSAPP_TOKEN ausente" };
+  }
   try {
     const body = new URLSearchParams({ to, message });
     const resp = await fetch(WHATSAPP_URL, {

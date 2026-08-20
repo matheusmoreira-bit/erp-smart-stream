@@ -36,6 +36,8 @@ import {
   type ManagementSegment,
 } from "@/hooks/useManagementSegments";
 import { IDP_STATE_LABEL, type IdpLinkState, type UserAlert } from "@/lib/user-state";
+import UserCompaniesTab from "@/components/users/UserCompaniesTab";
+
 
 export interface UserDrawerData {
   user: SapUser;
@@ -57,7 +59,7 @@ interface Props {
   groups: PermissionGroupOption[];
   onClose: () => void;
   onSetSegment: (identity: string, segment: ManagementSegment) => Promise<void>;
-  onSetGroup: (opts: { userCode: string; email?: string | null; groupId: string | null }) => Promise<void>;
+  onSetGroup: (opts: { userCode: string; email?: string | null; groupId: string | null; companyDb?: string | null }) => Promise<void>;
   onToggleLock: (user: SapUser) => Promise<void>;
   onResetPassword: (user: SapUser) => void;
   onEditPhone: (user: SapUser) => void;
@@ -142,14 +144,14 @@ export default function UserDetailDrawer({
         });
         toast.success(`Gestão alterada para ${MANAGEMENT_SEGMENT_LABEL[pending.value]}`);
       } else if (pending.kind === "group") {
-        await onSetGroup({ userCode: data.user.UserCode, email: data.user.eMail, groupId: pending.value });
+        await onSetGroup({ userCode: data.user.UserCode, email: data.user.eMail, groupId: pending.value, companyDb: companyDb || null });
         await logAuditAction({
           action: "user_permission_group_changed",
           entity_type: "user",
           entity_id: identity,
           details: { from: data.groupName, to: groups.find((g) => g.id === pending.value)?.name ?? null },
         });
-        toast.success("Grupo de permissão atualizado em todas as empresas");
+        toast.success(companyDb ? "Grupo de permissão atualizado nesta empresa" : "Grupo de permissão atualizado");
       } else {
         await onToggleLock(data.user);
         await logAuditAction({
@@ -238,13 +240,15 @@ export default function UserDetailDrawer({
           )}
 
           <Tabs defaultValue="acesso" className="mt-4">
-            <TabsList className="w-full grid grid-cols-5">
+            <TabsList className="w-full grid grid-cols-6">
               <TabsTrigger value="identidade">Identidade</TabsTrigger>
               <TabsTrigger value="acesso">Acesso</TabsTrigger>
+              <TabsTrigger value="empresas">Empresas</TabsTrigger>
               <TabsTrigger value="vinculos">Vínculos</TabsTrigger>
               <TabsTrigger value="licenca">Licença</TabsTrigger>
               <TabsTrigger value="atividade">Atividade</TabsTrigger>
             </TabsList>
+
 
             <TabsContent value="identidade" className="space-y-3 pt-4 text-sm">
               <Field label="Nome" value={data.user.UserName || "—"} />
@@ -293,7 +297,7 @@ export default function UserDetailDrawer({
                   </SelectContent>
                 </Select>
                 <p className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs text-warning">
-                  A permissão vale para todas as empresas, independente do ERP.
+                  A permissão define se o usuário pode entrar nesta empresa e quais módulos enxerga.
                 </p>
               </div>
 
@@ -322,7 +326,18 @@ export default function UserDetailDrawer({
               </Button>
             </TabsContent>
 
+            <TabsContent value="empresas" className="pt-4">
+              <UserCompaniesTab
+                userCode={data.user.UserCode}
+                userName={data.user.UserName || data.user.UserCode}
+                email={data.user.eMail}
+                sourceCompanyDb={companyDb}
+                onChanged={onChanged}
+              />
+            </TabsContent>
+
             <TabsContent value="vinculos" className="space-y-4 pt-4 text-sm">
+
               <div className="rounded-lg border border-border p-3 space-y-1">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">SAP</p>
                 <p className="text-foreground">
@@ -402,7 +417,7 @@ export default function UserDetailDrawer({
               {pending?.kind === "segment" &&
                 `A gestão de ${data.user.UserName || data.user.UserCode} passará para ${MANAGEMENT_SEGMENT_LABEL[pending.value]}, alterando o escopo de projetos visíveis.`}
               {pending?.kind === "group" &&
-                `O grupo de permissão passará para "${groups.find((g) => g.id === pending.value)?.name ?? "Sem grupo"}" em todas as empresas.`}
+                `O grupo de permissão passará para "${groups.find((g) => g.id === pending.value)?.name ?? "Sem grupo"}" nesta empresa.`}
               {pending?.kind === "lock" &&
                 (isLocked
                   ? "O acesso do usuário será desbloqueado no ERP."

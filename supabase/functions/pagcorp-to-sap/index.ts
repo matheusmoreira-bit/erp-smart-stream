@@ -172,7 +172,7 @@ async function uploadAttachmentsToSap(
 ): Promise<number | null> {
   if (files.length === 0) return null;
   const form = new FormData();
-  for (const f of files) form.append("files", f.blob, sanitizeSapFileName(f.name));
+  for (const f of files) form.append("files", f.blob, sanitizeSapFileName(f.name, f.blob?.type));
   const res = await fetch(`${sap.baseUrl}/Attachments2`, {
     method: "POST",
     headers: { Cookie: sap.cookies },
@@ -278,6 +278,11 @@ interface AccountMapping {
 function truncateSapText(value: unknown, maxLength: number): string {
   const text = String(value ?? "").replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
   return text.length > maxLength ? text.slice(0, maxLength) : text;
+}
+
+function formatPagCorpComments(details: string, maxLength: number): string {
+  const cleanDetails = truncateSapText(details, Math.max(0, maxLength - "PagCorp - ".length));
+  return truncateSapText(`PagCorp - ${cleanDetails}`, maxLength);
 }
 
 async function resolveAccountMapping(
@@ -664,13 +669,12 @@ Deno.serve(async (req) => {
       .filter((s) => !!s);
     const accountabilitySuffix = accountabilityTexts.length > 0 ? ` | PC: ${accountabilityTexts.join(" ; ")}` : "";
 
-    const description = truncateSapText(
-      (isConsolidated
-        ? `PagCorp${holderName ? ` ${holderName}` : ""} — consolidado ${transactions.length} transações`
-        : `PagCorp${holderName ? ` ${holderName}` : ""} — ${transaction.description || ""}`) +
-        accountabilitySuffix,
-      190,
-    );
+    const descriptionDetails = (
+      isConsolidated
+        ? `${holderName ? `${holderName} - ` : ""}consolidado ${transactions.length} transações`
+        : `${holderName ? `${holderName} - ` : ""}${transaction.description || ""}`
+    ) + accountabilitySuffix;
+    const description = formatPagCorpComments(descriptionDetails, 190);
 
 
     const toIsoDate = (v: unknown): string | null => {
@@ -788,33 +792,40 @@ Deno.serve(async (req) => {
       } as any)
       .in("id", consolidatedLogIds);
 
-    // Audit
-    await supabase.rpc("insert_audit_log", {
-      p_action: isConsolidated ? "pagcorp_integrated_consolidated" : "pagcorp_integrated",
-      p_entity_type: "pagcorp_transaction",
-      p_entity_id: transactions.map((t) => String(t.id)).join(","),
-      p_company_db: companyDb,
-      p_actor_email: integratedBy || undefined,
-      p_details: {
-        integration_type: integrationType,
-        purchase_order: poResult,
-        stages,
-        consolidated_ids: transactions.map((t) => t.id),
-      } as any,
-    });
+    try {
+      await supabase.rpc("insert_audit_log", {
+        p_action: isConsolidated ? "pagcorp_integrated_consolidated" : "pagcorp_integrated",
+        p_entity_type: "pagcorp_transaction",
+        p_entity_id: transactions.map((t) => String(t.id)).join(","),
+        p_company_db: companyDb,
+        p_actor_email: integratedBy || undefined,
+        p_details: {
+          integration_type: integrationType,
+          purchase_order: poResult,
+          stages,
+          consolidated_ids: transactions.map((t) => t.id),
+        } as any,
+      });
+    } catch (auditErr) {
+      console.warn("pagcorp-to-sap audit log failed after SAP success:", auditErr);
+    }
 
-    await notifyErpIntegration({
-      status: "success",
-      entityIds: snapshot.txIds,
-      companyDb: snapshot.companyDb,
-      docEntry: poResult.docEntry,
-      docNum: poResult.docNum,
-      supplierCode: snapshot.supplierCode,
-      supplierName: snapshot.supplierName,
-      totalAmount: snapshot.totalAmount,
-      currency: snapshot.currency,
-      integratedBy: snapshot.integratedBy,
-    });
+    try {
+      await notifyErpIntegration({
+        status: "success",
+        entityIds: snapshot.txIds,
+        companyDb: snapshot.companyDb,
+        docEntry: poResult.docEntry,
+        docNum: poResult.docNum,
+        supplierCode: snapshot.supplierCode,
+        supplierName: snapshot.supplierName,
+        totalAmount: snapshot.totalAmount,
+        currency: snapshot.currency,
+        integratedBy: snapshot.integratedBy,
+      });
+    } catch (notifyErr) {
+      console.warn("pagcorp-to-sap notification failed after SAP success:", notifyErr);
+    }
 
     return new Response(
       JSON.stringify({
@@ -828,13 +839,25 @@ Deno.serve(async (req) => {
     const msg = e instanceof Error ? e.message : "Erro desconhecido";
     console.error("pagcorp-to-sap error:", msg);
     if (supabase && consolidatedLogIds.length > 0) {
+      const po = sapResponses.purchase_order as { DocEntry?: number | null; DocNum?: number | null } | undefined;
+      const materialSuccess = stages.purchase_order === "success" && Number(po?.DocEntry || 0) > 0;
       await supabase
         .from("pagcorp_integration_log")
         .update({
-          status: "error",
-          error_message: msg,
+          status: materialSuccess ? "success" : "error",
+          error_message: materialSuccess ? null : msg,
+          ...(materialSuccess
+            ? {
+                sap_doc_entry: po?.DocEntry ?? null,
+                sap_doc_num: po?.DocNum ?? null,
+              }
+            : {}),
           sap_payload: sapPayloads as any,
-          sap_response: { stages, ...sapResponses } as any,
+          sap_response: {
+            stages,
+            ...sapResponses,
+            ...(materialSuccess ? { recovered_after_non_sap_error: msg } : {}),
+          } as any,
         } as any)
         .in("id", consolidatedLogIds);
     }

@@ -10,10 +10,10 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { useCompanies } from "@/hooks/useCompanies";
 import { checkPasswordPolicy, generateStrongPassword } from "@/lib/password-policy";
 import { PasswordPolicyChecklist } from "@/components/PasswordPolicyChecklist";
+import { changePasswordInCompanies } from "@/lib/sap-multi-password";
 
 
 interface ProvisionResult {
@@ -82,26 +82,25 @@ export function ProvisionSapAccessDialog({ open, onOpenChange, targetUserId, tar
     }
     setBusy(true);
     setResults(null);
-    const { data, error } = await supabase.functions.invoke("sap-provision-user-access", {
-      body: {
-        target_user_id: targetUserId,
-        target_email: targetUserId ? undefined : targetEmail,
-        sap_user: sapUser.trim(),
-        company_dbs: Array.from(selected),
-        password: mode === "custom" ? password : undefined,
-      },
-    });
-
-    setBusy(false);
-    if (error || (data as { error?: string })?.error) {
-      toast.error((data as { error?: string })?.error || error?.message || "Falha ao provisionar acesso");
-      return;
+    try {
+      const provisionedPassword = mode === "custom" ? password : generateStrongPassword(24, sapUser.trim());
+      const rows = await changePasswordInCompanies(
+        sapUser.trim(),
+        provisionedPassword,
+        Array.from(selected),
+        undefined,
+        true,
+        { targetUserId, targetEmail: targetUserId ? undefined : targetEmail },
+      );
+      setResults(rows);
+      const ok = rows.filter((r) => r.status === "success").length;
+      if (ok > 0) toast.success(`Senha provisionada em ${ok} empresa(s)`);
+      else toast.warning("Nenhuma senha provisionada");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao provisionar senha");
+    } finally {
+      setBusy(false);
     }
-    const rows: ProvisionResult[] = (data as { results?: ProvisionResult[] })?.results || [];
-    setResults(rows);
-    const ok = rows.filter((r) => r.status === "success").length;
-    if (ok > 0) toast.success(`Acesso provisionado em ${ok} empresa(s)`);
-    else toast.warning("Nenhuma empresa provisionada");
   };
 
   const close = () => {
@@ -119,10 +118,10 @@ export function ProvisionSapAccessDialog({ open, onOpenChange, targetUserId, tar
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-primary" /> Provisionar acesso SAP
+            <ShieldCheck className="w-5 h-5 text-primary" /> Provisionar senha SAP
           </DialogTitle>
           <DialogDescription>
-            A senha será aplicada no SAP e armazenada criptografada para <strong>{targetEmail}</strong>,
+            A senha será redefinida no SAP e armazenada criptografada para <strong>{targetEmail}</strong>,
             deixando o login transparente (autenticação Cloud → seleciona empresa → entra).
             Escolha entre uma senha aleatória (que ninguém conhece) ou uma senha definida por você.
           </DialogDescription>
@@ -316,7 +315,7 @@ export function ProvisionSapAccessDialog({ open, onOpenChange, targetUserId, tar
           </Button>
           <Button onClick={submit} disabled={busy || selected.size === 0 || !passwordReady}>
             {busy ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <KeyRound className="w-4 h-4 mr-1" />}
-            Provisionar {selected.size > 0 ? `(${selected.size})` : ""}
+            Provisionar senha {selected.size > 0 ? `(${selected.size})` : ""}
           </Button>
         </DialogFooter>
       </DialogContent>

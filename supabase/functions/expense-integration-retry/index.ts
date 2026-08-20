@@ -3,23 +3,22 @@
 // a document fails again — so someone can act manually.
 //
 // Trigger: pg_cron (every 10 min) OR manual POST.
-// Auth: cron passes the anon apikey; we validate a shared internal secret
-//       (SUPABASE_SERVICE_ROLE_KEY) or accept unauthenticated calls only
-//       when hit from cron/net.http_post (best-effort — the function is
-//       idempotent and only performs safe retries).
+// Auth: scheduler/service-role or Cloud admin only.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
 import { isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
+import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "";
-const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || "";
+const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "http://63.177.171.140/sender_wpp";
+const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || Deno.env.get("WHATSAPP_API_TOKEN") || "";
 // Admin que recebe as notificações de falha de integração
 const ADMIN_WHATSAPP_USER_CODE = "matheus.moreira";
 
@@ -39,6 +38,10 @@ function normalizePhone(p?: string | null): string {
 }
 
 async function sendWhatsApp(to: string, message: string) {
+  if (!WHATSAPP_TOKEN) {
+    console.warn("[expense-integration-retry] WHATSAPP_TOKEN não configurado; notificação WhatsApp ignorada.");
+    return { ok: false, status: 0, error: "WHATSAPP_TOKEN ausente" };
+  }
   try {
     const body = new URLSearchParams({ to, message });
     const resp = await fetch(WHATSAPP_URL, {
@@ -67,6 +70,10 @@ Deno.serve(async (req) => {
   const foreignOrigin = rejectForeignOrigin(req);
   if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const auth = await requireSchedulerOrAdmin(req, corsHeaders);
+  if (!auth.ok) return auth.response;
+  const disabled = blockIfIntegrationsDisabled(corsHeaders);
+  if (disabled) return disabled;
   { const _pause = await getIntegrationPause("sap_b1"); if (_pause) return pauseResponse(_pause, corsHeaders); }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

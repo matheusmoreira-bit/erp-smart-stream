@@ -126,7 +126,12 @@ export default function CashflowForecast() {
       setArNote(json.ar_source === "sap" ? null : (json.ar_note || "Contas a receber indisponível."));
       setLoaded(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const message = e instanceof Error ? e.message : String(e);
+      setError(
+        /Failed to fetch|NetworkError|Failed to send a request|network/i.test(message)
+          ? "Não foi possível conectar ao serviço de previsão de caixa. Atualize a página e tente novamente; se persistir, verifique sua sessão ERP."
+          : message,
+      );
     } finally {
       setLoading(false);
     }

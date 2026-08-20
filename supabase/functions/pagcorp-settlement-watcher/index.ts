@@ -17,13 +17,14 @@ import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/
 import { logIntegrationCall } from "../_shared/integration-log.ts";
 import { linkNfToAp } from "../_shared/link-nf-ap.ts";
 import { notifyPagcorpSettlementPending } from "../_shared/pagcorp-settlement-notify.ts";
-import { authErrorResponse, requireSchedulerOrAdminOrSapModule } from "../_shared/auth.ts";
+import { requireSchedulerAdminOrUserSession, requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
+import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
 
 const sapCorsHeaders = {
   ...baseCorsHeaders,
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db, x-sap-auth-token, x-cron-secret",
+    "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db, x-sap-auth-token",
   "Access-Control-Expose-Headers": "x-request-id",
 };
 
@@ -489,13 +490,6 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: responseHeaders(requestId, "text/plain") });
   }
 
-  try {
-    await requireSchedulerOrAdminOrSapModule(req, "pagcorp");
-  } catch (error) {
-    return authErrorResponse(error, responseHeaders(requestId)) ??
-      new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: responseHeaders(requestId) });
-  }
-
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
   // Suporte a disparo manual de um único log (baixa automática pela UI):
@@ -509,7 +503,6 @@ Deno.serve(async (req) => {
   let manualAccountCode: string | null = null;
   let manualCostCenter: string | null = null;
   let manualProject: string | null = null;
-  let requestedCompanyDb: string | null = null;
 
   // Sessão SAP do usuário (quando a UI dispara "Reprocessar baixa"). Usada
   // como fallback caso as credenciais salvas em system_credentials estejam
@@ -524,9 +517,6 @@ Deno.serve(async (req) => {
   if (req.method === "POST") {
     try {
       const body = await req.json().catch(() => ({}));
-      if (typeof body.company_db === "string" && body.company_db.trim()) {
-        requestedCompanyDb = body.company_db.trim();
-      }
       if (body && typeof body.logId === "string" && body.logId.length > 0) {
         manualLogId = body.logId;
         manualForceRetry = body.forceRetry !== false;
@@ -543,6 +533,15 @@ Deno.serve(async (req) => {
     } catch { /* ignore */ }
   }
 
+  const auth = manualLogId
+    ? await requireSchedulerAdminOrUserSession(req, sapCorsHeaders)
+    : await requireSchedulerOrAdmin(req, sapCorsHeaders);
+  if (!auth.ok) {
+    safeWarn(requestId, "unauthorized", { manualLogId, hasAuthorization: Boolean(req.headers.get("authorization")) });
+    return auth.response;
+  }
+  const disabled = blockIfIntegrationsDisabled(sapCorsHeaders);
+  if (disabled) return disabled;
 
   safeLog(requestId, "request_received", {
     method: req.method,
@@ -562,7 +561,7 @@ Deno.serve(async (req) => {
 
   const lockName = manualLogId
     ? `pagcorp-settlement-watcher:${manualLogId}`
-    : `pagcorp-settlement-watcher:${requestedCompanyDb || "all"}`;
+    : "pagcorp-settlement-watcher";
   const gotLock = await tryWatcherLock(sb, lockName, 10);
   if (!gotLock) {
     safeWarn(requestId, "lock_skipped", { lockName, manualLogId });
@@ -607,8 +606,6 @@ Deno.serve(async (req) => {
         .not("company_db", "is", null);
       if (manualLogId) {
         q = q.eq("id", manualLogId);
-      } else if (requestedCompanyDb) {
-        q = q.eq("company_db", requestedCompanyDb);
       } else {
         q = q
           .in("settlement_status", ["pending", "awaiting_invoice", "awaiting_settlement", "awaiting_manual", "error"])

@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireUser, authErrorResponse } from "../_shared/auth.ts";
 import { decryptSecret } from "../_shared/sap-cred-crypto.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { sapFetch } from "../_shared/sap-fetch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -56,6 +57,27 @@ async function getEffectiveCompanyDb(admin: ReturnType<typeof createClient>, com
   return companyDB;
 }
 
+/** Credencial de serviço (ApiUser) da empresa — usada em fluxos de leitura. */
+async function getServiceCredentials(
+  admin: ReturnType<typeof createClient>,
+  companyDB: string,
+): Promise<{ username: string; password: string } | null> {
+  const { data } = await admin
+    .from("system_credentials")
+    .select("credential_key, credential_value")
+    .eq("company_db", companyDB)
+    .eq("system_name", "sap")
+    .in("credential_key", ["username", "password"]);
+  const map = new Map<string, string>();
+  (data || []).forEach((r: { credential_key: string; credential_value: string | null }) => {
+    if (r.credential_value) map.set(r.credential_key, r.credential_value);
+  });
+  const username = (map.get("username") || "").trim();
+  const rawPassword = map.get("password") || "";
+  if (!username || !rawPassword) return null;
+  return { username, password: rawPassword };
+}
+
 Deno.serve(async (req) => {
   const foreignOrigin = rejectForeignOrigin(req);
   if (foreignOrigin) return foreignOrigin;
@@ -69,6 +91,9 @@ Deno.serve(async (req) => {
     if (!companyDb) return json({ error: "company_db obrigatório" }, 400);
     // `force` descarta o cache (usado quando o SAP recusou a sessão anterior).
     const force = body.force === true;
+    // Fluxos de leitura podem usar a credencial de serviço (ApiUser) da empresa.
+    // Ações que exigem a identidade do usuário devem enviar allow_service=false.
+    const allowService = body.allow_service !== false;
 
     const admin = service();
 
@@ -87,11 +112,12 @@ Deno.serve(async (req) => {
         user_id: user.id,
         company_db: companyDb,
         sap_user: String(store.sap_user || user.email || "").slice(0, 200),
+        is_service: false,
         session_id: store.session_id.trim(),
         route_id: typeof store.route_id === "string" ? store.route_id : "",
         expires_at: new Date(Date.now() + timeout * 60 * 1000).toISOString(),
         updated_at: new Date().toISOString(),
-      }, { onConflict: "user_id,company_db" });
+      }, { onConflict: "user_id,company_db,is_service" });
       if (storeErr) return json({ error: storeErr.message }, 500);
       return json({ ok: true, stored: true });
     }
@@ -100,12 +126,18 @@ Deno.serve(async (req) => {
     // Evita um /Login novo a cada integração (ex.: PagCorp em lote).
     // Margem de segurança de 2 min antes do vencimento real.
     if (!force) {
-      const { data: cached } = await admin
+      const { data: cachedRows } = await admin
         .from("erp_session_cache")
-        .select("session_id, route_id, sap_user, expires_at")
+        .select("session_id, route_id, sap_user, expires_at, is_service")
         .eq("user_id", user.id)
-        .eq("company_db", companyDb)
-        .maybeSingle();
+        .eq("company_db", companyDb);
+      const rows = (cachedRows || []) as Array<{
+        session_id: string; route_id: string | null; sap_user: string | null;
+        expires_at: string | null; is_service: boolean | null;
+      }>;
+      // Preferimos sempre a sessão do próprio usuário; a de serviço só entra
+      // quando o fluxo permite (leituras).
+      const cached = rows.find((r) => !r.is_service) || (allowService ? rows.find((r) => r.is_service) : undefined);
       const cachedExp = cached?.expires_at ? Date.parse(cached.expires_at) : 0;
       if (cached?.session_id && cachedExp - SAFETY_MS > Date.now()) {
         return json({
@@ -115,6 +147,7 @@ Deno.serve(async (req) => {
           sapUser: cached.sap_user,
           sessionTimeout: Math.max(1, Math.floor((cachedExp - Date.now()) / 60000)),
           cached: true,
+          service: cached.is_service === true,
         });
       }
     } else {
@@ -128,17 +161,44 @@ Deno.serve(async (req) => {
       .eq("company_db", companyDb)
       .maybeSingle();
     if (credErr) throw credErr;
-    if (!cred) return json({ error: "no_credentials" }, 404);
 
-    const password = await decryptSecret(cred.sap_password_encrypted);
+    let sapUserName = cred?.sap_user || "";
+    let password = "";
+    let usingService = false;
+
+    if (cred) {
+      password = await decryptSecret(cred.sap_password_encrypted);
+    } else if (allowService) {
+      // Sem senha provisionada: usa a credencial de serviço (ApiUser) da empresa.
+      const svc = await getServiceCredentials(admin, companyDb);
+      if (!svc) return json({ error: "no_credentials" }, 404);
+      sapUserName = svc.username;
+      password = svc.password;
+      usingService = true;
+    } else {
+      return json({ error: "no_credentials" }, 404);
+    }
+
     const baseUrl = await getSapBaseUrl(admin, companyDb);
     const effectiveCompanyDb = await getEffectiveCompanyDb(admin, companyDb);
 
-    const loginResp = await fetch(`${baseUrl}/Login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ UserName: cred.sap_user, Password: password, CompanyDB: effectiveCompanyDb }),
-    });
+    // Timeout curto + 1 retry: nunca deixar a função pendurada até o
+    // idle timeout (150s) da plataforma quando o Service Layer não responde.
+    let loginResp: Response;
+    try {
+      loginResp = await sapFetch(`${baseUrl}/Login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ UserName: sapUserName, Password: password, CompanyDB: effectiveCompanyDb }),
+        timeoutMs: 15_000,
+        maxAttempts: 2,
+        baseDelayMs: 500,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[sap-auto-login] Service Layer indisponível:", msg);
+      return json({ error: "sap_unavailable", message: `SAP não respondeu ao login: ${msg}`, status: 504 }, 503);
+    }
 
     if (!loginResp.ok) {
       const errText = await loginResp.text().catch(() => "");
@@ -163,12 +223,13 @@ Deno.serve(async (req) => {
       await admin.from("erp_session_cache").upsert({
         user_id: user.id,
         company_db: companyDb,
-        sap_user: cred.sap_user,
+        sap_user: sapUserName,
         session_id: loginData.SessionId,
         route_id: routeId,
+        is_service: usingService,
         expires_at: new Date(Date.now() + sessionTimeout * 60 * 1000).toISOString(),
         updated_at: new Date().toISOString(),
-      }, { onConflict: "user_id,company_db" });
+      }, { onConflict: "user_id,company_db,is_service" });
     } catch (e) { console.error("[sap-auto-login] cache upsert", e); }
 
     try {
@@ -179,7 +240,7 @@ Deno.serve(async (req) => {
         entity_type: "erp_session",
         entity_id: companyDb,
         company_db: companyDb,
-        details: { sap_user: cred.sap_user },
+        details: { sap_user: sapUserName, service: usingService },
       });
     } catch { /* ignore audit failure */ }
 
@@ -187,8 +248,9 @@ Deno.serve(async (req) => {
       sessionId: loginData.SessionId,
       routeId,
       companyDB: companyDb,
-      sapUser: cred.sap_user,
+      sapUser: sapUserName,
       sessionTimeout,
+      service: usingService,
     });
   } catch (err) {
     const authResp = authErrorResponse(err, corsHeaders);

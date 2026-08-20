@@ -1,6 +1,6 @@
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import { internalDocCode, normalizeDocQuery, exportDocLabel } from "@/lib/doc-number";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 import { Helmet } from "react-helmet-async";
 import { useAuth } from "@/hooks/useAuth";
@@ -33,6 +33,7 @@ import {
   AlertTriangle,
   Network,
   Eye,
+  FileText,
   Paperclip,
   FileDown,
   SlidersHorizontal,
@@ -53,13 +54,24 @@ import { isPendingApproval } from "@/lib/approval-authz";
 import { buildDuplicateDraftPayload } from "@/lib/expense-duplicate";
 import { expenseRead } from "@/lib/expense-read";
 import { supabase } from "@/integrations/supabase/client";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VirtualExpensesTable } from "@/components/VirtualExpensesTable";
 import { ShieldAlert } from "lucide-react";
@@ -133,6 +145,134 @@ function formatDate(dateStr: string) {
   }
 }
 
+type MultiFilterValue = string[] | string;
+
+interface FilterOption {
+  value: string;
+  label: string;
+  meta?: string;
+}
+
+function normalizeMultiValue(value: MultiFilterValue | null | undefined): string[] {
+  if (Array.isArray(value)) return value.map((v) => v.trim()).filter(Boolean);
+  const legacy = (value || "").trim();
+  return legacy ? [legacy] : [];
+}
+
+function hasMultiValue(value: MultiFilterValue | null | undefined) {
+  return normalizeMultiValue(value).length > 0;
+}
+
+interface SalesNfseEmissionInfo {
+  sapInvoiceDocEntry: number | null;
+  sapInvoiceDocNum: number | null;
+  nfseNumber: string | null;
+  status: string | null;
+}
+
+function salesNfseOrderKey(exp: Pick<Expense, "id" | "sap_doc_entry">): string | null {
+  if (exp.id && !exp.id.startsWith("sap-order-")) return exp.id;
+  return exp.sap_doc_entry ? `sap:${Number(exp.sap_doc_entry)}` : null;
+}
+
+function MultiFilterSelect({
+  label,
+  values,
+  options,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  values: MultiFilterValue;
+  options: FilterOption[];
+  placeholder: string;
+  onChange: (values: string[]) => void;
+}) {
+  const selected = normalizeMultiValue(values);
+  const selectedSet = new Set(selected.map((v) => v.toLowerCase()));
+  const mergedOptions = useMemo(() => {
+    const map = new Map<string, FilterOption>();
+    for (const opt of options) {
+      if (!opt.value.trim()) continue;
+      map.set(opt.value.toLowerCase(), opt);
+    }
+    for (const value of selected) {
+      const key = value.toLowerCase();
+      if (!map.has(key)) map.set(key, { value, label: value });
+    }
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+  }, [options, selected]);
+
+  const summary =
+    selected.length === 0
+      ? placeholder
+      : selected.length === 1
+        ? mergedOptions.find((o) => o.value.toLowerCase() === selected[0].toLowerCase())?.label || selected[0]
+        : `${selected.length} selecionados`;
+
+  const toggle = (value: string) => {
+    const key = value.toLowerCase();
+    const next = selectedSet.has(key)
+      ? selected.filter((v) => v.toLowerCase() !== key)
+      : [...selected, value];
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">{label}</Label>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            className={`h-9 w-full justify-between px-3 text-left text-sm font-normal ${
+              selected.length ? "text-foreground" : "text-muted-foreground"
+            }`}
+          >
+            <span className="min-w-0 truncate">{summary}</span>
+            <ChevronDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-60" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-[min(28rem,calc(100vw-2rem))] p-0">
+          <Command>
+            <CommandInput placeholder="Buscar..." />
+            <CommandList>
+              <CommandEmpty>Nenhuma opção encontrada.</CommandEmpty>
+              <CommandGroup>
+                {mergedOptions.map((opt) => {
+                  const checked = selectedSet.has(opt.value.toLowerCase());
+                  return (
+                    <CommandItem
+                      key={opt.value}
+                      value={`${opt.label} ${opt.meta || ""} ${opt.value}`}
+                      onSelect={() => toggle(opt.value)}
+                      className="gap-2"
+                    >
+                      <Checkbox checked={checked} className="pointer-events-none" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate">{opt.label}</p>
+                        {opt.meta && <p className="truncate text-xs text-muted-foreground">{opt.meta}</p>}
+                      </div>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </CommandList>
+            {selected.length > 0 && (
+              <div className="border-t p-2">
+                <Button type="button" variant="ghost" size="sm" className="h-8 w-full" onClick={() => onChange([])}>
+                  <XIcon className="mr-1.5 h-3.5 w-3.5" /> Limpar seleção
+                </Button>
+              </div>
+            )}
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
 /* ─── Backfill button (reprocessa anexo com IA para extrair data de vencimento) ─── */
 function BackfillDueDateButton({ expenseId }: { expenseId: string }) {
   const [loading, setLoading] = useState(false);
@@ -177,12 +317,16 @@ function ExpenseDetailModal({
   onReject,
   onViewIntegration,
   onAddAttachments,
+  onEmitNfse,
+  onOpenNfse,
   canCancel,
   canReactivate,
   canEdit,
   canRetrySap,
   canApprove,
   canAddAttachments,
+  nfseEmission,
+  isNfseEmitting,
   isSubmitting,
   isCancelling,
   isReactivating,
@@ -207,12 +351,16 @@ function ExpenseDetailModal({
   onReject: (expense: Expense) => void;
   onViewIntegration: () => void;
   onAddAttachments: (id: string, files: File[]) => Promise<void>;
+  onEmitNfse?: (expense: Expense) => void;
+  onOpenNfse?: () => void;
   canCancel: boolean;
   canReactivate: boolean;
   canEdit: boolean;
   canRetrySap: boolean;
   canApprove: boolean;
   canAddAttachments: boolean;
+  nfseEmission?: SalesNfseEmissionInfo | null;
+  isNfseEmitting?: boolean;
   isSubmitting: boolean;
   isCancelling: boolean;
   isReactivating: boolean;
@@ -255,6 +403,8 @@ function ExpenseDetailModal({
     (expense.status === "aprovado" && (hasSapError || alreadyInSap))
   );
   const showRetrySap = canRetrySap && expense.status === "aprovado" && !expense.sap_doc_entry;
+  const showEmitNfse = isSalesDoc && alreadyInSap && !nfseEmission;
+  const showOpenNfse = isSalesDoc && alreadyInSap && !!nfseEmission;
   const showApproval = canApprove && expense.status === "pendente_aprovacao";
   // Reativação: apenas o autor (ou admin) e somente se nunca foi ao ERP.
   const showReactivate =
@@ -274,7 +424,7 @@ function ExpenseDetailModal({
         <DialogContent className="w-screen h-[100dvh] max-w-none rounded-none border-0 overflow-y-auto p-4 sm:w-auto sm:h-auto sm:max-w-2xl sm:max-h-[85vh] sm:rounded-lg sm:border sm:p-6">
           <DialogHeader className="space-y-2">
             <DialogTitle className="flex flex-wrap items-center gap-x-3 gap-y-2 pr-6">
-              <span className="text-foreground font-semibold">Despesa</span>
+              <span className="text-foreground font-semibold">{isSalesDoc ? "Pedido de venda" : "Despesa"}</span>
               <Badge className={STATUS_COLORS[expense.status]}>{statusLabel(expense.status)}</Badge>
               {originBadge === "erp_flow" && (
                 <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">ERP Flow</Badge>
@@ -641,9 +791,37 @@ function ExpenseDetailModal({
 
 
 
-            {(showSubmit || showCancel || showRetrySap || showEdit || showApproval || showReactivate) && (
+            {(showSubmit || showCancel || showRetrySap || showEdit || showApproval || showReactivate || showEmitNfse || showOpenNfse) && (
               <div className="border-t border-border pt-4 flex flex-col-reverse sm:flex-row sm:justify-end sm:flex-wrap gap-2 sm:gap-3">
                 <Button variant="outline" onClick={onClose} className="w-full sm:w-auto justify-center">Fechar</Button>
+                {showOpenNfse && (
+                  <Button
+                    variant="outline"
+                    onClick={onOpenNfse}
+                    className="w-full sm:w-auto justify-center gap-1.5"
+                    title={
+                      nfseEmission?.nfseNumber
+                        ? `NFS-e ${nfseEmission.nfseNumber}`
+                        : nfseEmission?.sapInvoiceDocNum
+                          ? `NF de saída SAP #${nfseEmission.sapInvoiceDocNum}`
+                          : "Abrir a aba NFS-e"
+                    }
+                  >
+                    <FileText className="w-4 h-4" aria-hidden="true" />
+                    Ver NFS-e
+                  </Button>
+                )}
+                {showEmitNfse && (
+                  <Button
+                    onClick={() => onEmitNfse?.(expense)}
+                    disabled={isNfseEmitting}
+                    className="w-full sm:w-auto justify-center gap-1.5"
+                    title="Criar NF de saída no SAP a partir deste pedido de venda"
+                  >
+                    {isNfseEmitting ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <FileText className="w-4 h-4" aria-hidden="true" />}
+                    Emitir NFS-e
+                  </Button>
+                )}
                 {showApproval && (
                   <>
                     <Button
@@ -844,6 +1022,10 @@ function ExpenseCard({
   erpLabel,
   onRelationsMap,
   onDuplicate,
+  nfseEmission,
+  isNfseEmitting,
+  onEmitNfse,
+  onOpenNfse,
 }: {
   expense: Expense;
   onOpen: () => void;
@@ -851,6 +1033,10 @@ function ExpenseCard({
   erpLabel?: string;
   onRelationsMap?: () => void;
   onDuplicate?: () => void;
+  nfseEmission?: SalesNfseEmissionInfo | null;
+  isNfseEmitting?: boolean;
+  onEmitNfse?: () => void;
+  onOpenNfse?: () => void;
 }) {
   const statusLabel = useStatusLabel();
   const erpLbl = erpLabel || "ERP";
@@ -914,6 +1100,35 @@ function ExpenseCard({
               onClick={(ev) => { ev.stopPropagation(); onDuplicate(); }}
             >
               <Copy className="w-4 h-4" />
+            </Button>
+          )}
+          {onEmitNfse && !nfseEmission && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-primary"
+              title="Emitir NFS-e"
+              aria-label={`Emitir NFS-e para ${expense.supplier_name}`}
+              disabled={isNfseEmitting}
+              onClick={(ev) => { ev.stopPropagation(); onEmitNfse(); }}
+            >
+              {isNfseEmitting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FileText className="w-4 h-4" />
+              )}
+            </Button>
+          )}
+          {onOpenNfse && nfseEmission && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-emerald-600 dark:text-emerald-400 hover:text-emerald-500"
+              title={nfseEmission.nfseNumber ? `NFS-e ${nfseEmission.nfseNumber}` : "Ver NFS-e"}
+              aria-label={`Ver NFS-e de ${expense.supplier_name}`}
+              onClick={(ev) => { ev.stopPropagation(); onOpenNfse(); }}
+            >
+              <FileText className="w-4 h-4" />
             </Button>
           )}
           <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(expense.total_amount, expense.currency)}</p>
@@ -1030,6 +1245,9 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [showCreate, setShowCreate] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<ExpenseDraftHydration | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
+  const [nfseByOrder, setNfseByOrder] = useState<Map<string, SalesNfseEmissionInfo>>(new Map());
+  const [nfseConfirm, setNfseConfirm] = useState<{ expense: Expense; origin?: "erp_flow" | "erp" } | null>(null);
+  const [emittingNfseFor, setEmittingNfseFor] = useState<string | null>(null);
   const { refresh: refreshDrafts } = useDocumentDrafts(mode, session?.companyDB);
 
   // Se navegamos para cá com arquivos pré-anexados (ex.: PDF da NF de entrada),
@@ -1093,6 +1311,112 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const [isLoadingMoreSap, setIsLoadingMoreSap] = useState(false);
   const [sapHasMore, setSapHasMore] = useState(false);
   const [relationsMapExpense, setRelationsMapExpense] = useState<Expense | null>(null);
+
+  const loadSalesNfseIndex = useCallback(async () => {
+    if (!isSales || !session?.companyDB) {
+      setNfseByOrder(new Map());
+      return;
+    }
+    const { data, error } = await supabase
+      .from("sales_order_invoices")
+      .select("expense_id,sap_order_doc_entry,sap_invoice_doc_entry,sap_invoice_doc_num,nfse_number,status")
+      .eq("company_db", session.companyDB)
+      .not("status", "in", "(failed,cancelled)")
+      .limit(1000);
+    if (error) {
+      console.warn("[Sales] falha ao carregar índice de NFS-e:", error.message);
+      return;
+    }
+    const next = new Map<string, SalesNfseEmissionInfo>();
+    for (const row of (data || []) as Array<{
+      expense_id: string | null;
+      sap_order_doc_entry: number | null;
+      sap_invoice_doc_entry: number | null;
+      sap_invoice_doc_num: number | null;
+      nfse_number: string | null;
+      status: string | null;
+    }>) {
+      const info: SalesNfseEmissionInfo = {
+        sapInvoiceDocEntry: row.sap_invoice_doc_entry,
+        sapInvoiceDocNum: row.sap_invoice_doc_num,
+        nfseNumber: row.nfse_number,
+        status: row.status,
+      };
+      if (row.expense_id) next.set(row.expense_id, info);
+      if (row.sap_order_doc_entry) next.set(`sap:${Number(row.sap_order_doc_entry)}`, info);
+    }
+    setNfseByOrder(next);
+  }, [isSales, session?.companyDB]);
+
+  useEffect(() => {
+    void loadSalesNfseIndex();
+  }, [loadSalesNfseIndex]);
+
+  const nfseEmissionFor = useCallback(
+    (exp: Expense) => {
+      const byId = exp.id ? nfseByOrder.get(exp.id) : undefined;
+      const bySap = exp.sap_doc_entry ? nfseByOrder.get(`sap:${Number(exp.sap_doc_entry)}`) : undefined;
+      return byId || bySap || null;
+    },
+    [nfseByOrder],
+  );
+
+  const openNfseTab = useCallback(() => {
+    setSelectedExpense(null);
+    navigate("/vendas/nfse");
+  }, [navigate]);
+
+  const requestEmitNfse = useCallback((expense: Expense, origin?: "erp_flow" | "erp") => {
+    if (!isSales) return;
+    if (!expense.sap_doc_entry) {
+      toast.error("Pedido ainda não integrado ao SAP. A NFS-e só pode ser emitida após o PV existir no SAP.");
+      return;
+    }
+    if (nfseEmissionFor(expense)) {
+      openNfseTab();
+      return;
+    }
+    setNfseConfirm({ expense, origin });
+  }, [isSales, nfseEmissionFor, openNfseTab]);
+
+  const emitConfirmedNfse = useCallback(async () => {
+    if (!nfseConfirm || !session?.companyDB) return;
+    const { expense, origin } = nfseConfirm;
+    const key = salesNfseOrderKey(expense) || expense.id;
+    setEmittingNfseFor(key);
+    try {
+      const isNative = origin === "erp" || expense.id.startsWith("sap-order-");
+      const payload = isNative
+        ? {
+            action: "emit",
+            company_db: session.companyDB,
+            sap_order_doc_entry: expense.sap_doc_entry,
+            customer_name: expense.supplier_name,
+            total_amount: expense.total_amount,
+            currency: expense.currency,
+          }
+        : { action: "emit", expense_id: expense.id };
+      const res = await sapFunctionFetch("sales-nfse-emit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body?.error) throw new Error(body?.error || `Falha ao emitir NFS-e (${res.status})`);
+      toast.success(
+        body?.auto_send
+          ? `NFS-e criada e enviada à prefeitura — documento ${body.doc_num}`
+          : `NF de saída criada no SAP — documento ${body.doc_num}. A automação fiscal seguirá a emissão da NFS-e.`,
+      );
+      setNfseConfirm(null);
+      await Promise.all([loadSalesNfseIndex(), refresh()]);
+      openNfseTab();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao emitir NFS-e");
+    } finally {
+      setEmittingNfseFor(null);
+    }
+  }, [nfseConfirm, session?.companyDB, loadSalesNfseIndex, refresh, openNfseTab]);
 
   /** Cria um novo pedido a partir de um lançamento existente (sem anexos/ERP). */
   const duplicateExpense = useCallback((exp: Expense) => {
@@ -1407,9 +1731,80 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       })
     : [];
 
+  const [advancedOptionRows, setAdvancedOptionRows] = useState<Partial<Expense>[]>([]);
+  useEffect(() => {
+    if (!session?.companyDB) {
+      setAdvancedOptionRows([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const res = await expenseRead<Partial<Expense>>("expenses")
+        .select("supplier_name,supplier_code,requester_name,requester_email,current_approver,cost_center,project,currency,branch_id")
+        .eq("company_db", session.companyDB)
+        .eq("doc_type", mode)
+        .viewAll(effectiveShowAll)
+        .order("created_at", { ascending: false })
+        .limit(2000);
+      if (cancelled) return;
+      if (res.error) {
+        console.warn("[Expenses] falha ao carregar opções de filtros avançados", res.error);
+        setAdvancedOptionRows([]);
+        return;
+      }
+      setAdvancedOptionRows(res.data || []);
+    })();
+    return () => { cancelled = true; };
+  }, [session?.companyDB, mode, effectiveShowAll]);
+
+  const advancedOptions = useMemo(() => {
+    const rows = [...advancedOptionRows, ...expenses, ...sapOrders];
+    const clean = (value: unknown) => (value ?? "").toString().trim();
+    const build = (
+      getValue: (row: Partial<Expense>) => unknown,
+      getLabel?: (row: Partial<Expense>, value: string) => string,
+      getMeta?: (row: Partial<Expense>, value: string) => string | undefined,
+    ) => {
+      const map = new Map<string, FilterOption>();
+      for (const row of rows) {
+        const value = clean(getValue(row));
+        if (!value) continue;
+        const key = value.toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, {
+            value,
+            label: getLabel?.(row, value) || value,
+            meta: getMeta?.(row, value),
+          });
+        }
+      }
+      return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+    };
+
+    return {
+      supplier: build(
+        (row) => row.supplier_name,
+        (_row, value) => value,
+        (row) => clean(row.supplier_code) || undefined,
+      ),
+      supplier_code: build(
+        (row) => row.supplier_code,
+        (_row, value) => value,
+        (row) => clean(row.supplier_name) || undefined,
+      ),
+      requester: build((row) => row.requester_name, undefined, (row) => clean(row.requester_email) || undefined),
+      requester_email: build((row) => row.requester_email, undefined, (row) => clean(row.requester_name) || undefined),
+      approver: build((row) => row.current_approver),
+      cost_center: build((row) => row.cost_center),
+      project: build((row) => row.project),
+      currency: build((row) => row.currency),
+      branch_id: build((row) => row.branch_id),
+    };
+  }, [advancedOptionRows, expenses, sapOrders]);
+
   const emptyAdvanced: AdvancedFilters = {
-    supplier: "", supplier_code: "", requester: "", requester_email: "", approver: "",
-    cost_center: "", project: "", currency: "", remarks: "", sap_doc_num: "", branch_id: "",
+    supplier: [], supplier_code: [], requester: [], requester_email: [], approver: [],
+    cost_center: [], project: [], currency: [], remarks: "", sap_doc_num: "", branch_id: [],
     origin: "all", min_amount: "", max_amount: "",
     doc_date_from: "", doc_date_to: "", due_date_from: "", due_date_to: "",
     created_from: "", created_to: "",
@@ -1430,15 +1825,26 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     const f = advFilters;
     const includes = (val: string | number | null | undefined, needle: string) =>
       (val ?? "").toString().toLowerCase().includes(needle.toLowerCase());
+    const matchesMulti = (val: string | number | null | undefined, filter: MultiFilterValue, exact = true) => {
+      if (typeof filter === "string") return !filter.trim() || includes(val, filter);
+      const selected = normalizeMultiValue(filter);
+      if (selected.length === 0) return true;
+      const text = (val ?? "").toString().trim().toLowerCase();
+      if (!text) return false;
+      return selected.some((item) => {
+        const needle = item.toLowerCase();
+        return exact ? text === needle : text.includes(needle);
+      });
+    };
     if (f.origin !== "all" && f.origin !== origin) return false;
-    if (f.supplier && !includes(e.supplier_name, f.supplier)) return false;
-    if (f.supplier_code && !includes(e.supplier_code, f.supplier_code)) return false;
-    if (f.requester && !includes(e.requester_name, f.requester)) return false;
-    if (f.requester_email && !includes(e.requester_email, f.requester_email)) return false;
-    if (f.approver && !includes(e.current_approver, f.approver)) return false;
-    if (f.cost_center && !includes(e.cost_center, f.cost_center)) return false;
-    if (f.project && !includes(e.project, f.project)) return false;
-    if (f.currency && (e.currency || "").toLowerCase() !== f.currency.toLowerCase()) return false;
+    if (!matchesMulti(e.supplier_name, f.supplier)) return false;
+    if (!matchesMulti(e.supplier_code, f.supplier_code)) return false;
+    if (!matchesMulti(e.requester_name, f.requester)) return false;
+    if (!matchesMulti(e.requester_email, f.requester_email)) return false;
+    if (!matchesMulti(e.current_approver, f.approver)) return false;
+    if (!matchesMulti(e.cost_center, f.cost_center)) return false;
+    if (!matchesMulti(e.project, f.project)) return false;
+    if (!matchesMulti(e.currency, f.currency)) return false;
     if (f.remarks && !includes(e.remarks, f.remarks)) return false;
     if (f.sap_doc_num) {
       const q = f.sap_doc_num.trim();
@@ -1449,7 +1855,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       const matchesInternal = !!dq && !!iid && (iid.startsWith(dq) || internalDocCode(iid).toLowerCase().includes(dq));
       if (!num.includes(q) && !entry.includes(q) && !matchesInternal) return false;
     }
-    if (f.branch_id && String(e.branch_id ?? "") !== f.branch_id.trim()) return false;
+    if (!matchesMulti(e.branch_id, f.branch_id)) return false;
     const minV = f.min_amount ? Number(f.min_amount.replace(",", ".")) : null;
     const maxV = f.max_amount ? Number(f.max_amount.replace(",", ".")) : null;
     if (minV != null && Number.isFinite(minV) && e.total_amount < minV) return false;
@@ -1553,17 +1959,17 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
 
   // ─── Filtros avançados (modal) ────────────────────────────────
   interface AdvancedFilters {
-    supplier: string;
-    supplier_code: string;
-    requester: string;
-    requester_email: string;
-    approver: string;
-    cost_center: string;
-    project: string;
-    currency: string;
+    supplier: MultiFilterValue;
+    supplier_code: MultiFilterValue;
+    requester: MultiFilterValue;
+    requester_email: MultiFilterValue;
+    approver: MultiFilterValue;
+    cost_center: MultiFilterValue;
+    project: MultiFilterValue;
+    currency: MultiFilterValue;
     remarks: string;
     sap_doc_num: string;
-    branch_id: string;
+    branch_id: MultiFilterValue;
     origin: "all" | "erp_flow" | "erp";
     min_amount: string;
     max_amount: string;
@@ -1584,7 +1990,12 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     (
       [
         "supplier","supplier_code","requester","requester_email","approver","cost_center","project",
-        "currency","remarks","sap_doc_num","branch_id","min_amount","max_amount",
+        "currency","branch_id",
+      ] as const
+    ).forEach((k) => { if (hasMultiValue(f[k])) n++; });
+    (
+      [
+        "remarks","sap_doc_num","min_amount","max_amount",
         "doc_date_from","doc_date_to","due_date_from","due_date_to","created_from","created_to",
       ] as const
     ).forEach((k) => { if ((f[k] || "").toString().trim()) n++; });
@@ -1607,17 +2018,36 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       const t = v.trim();
       if (t) filters.push({ op: "ilike", column, value: `%${t}%` });
     };
+    const textMulti = (column: string, v: MultiFilterValue) => {
+      if (Array.isArray(v)) {
+        const values = normalizeMultiValue(v);
+        if (values.length) filters.push({ op: "in", column, value: values });
+        return;
+      }
+      like(column, v);
+    };
+    const numberMulti = (column: string, v: MultiFilterValue) => {
+      if (Array.isArray(v)) {
+        const values = normalizeMultiValue(v)
+          .map((item) => Number(item))
+          .filter((item) => Number.isFinite(item));
+        if (values.length) filters.push({ op: "in", column, value: values });
+        return;
+      }
+      const t = v.trim();
+      if (t) filters.push({ op: "eq", column, value: Number(t) });
+    };
     if (statusFilter !== "all") filters.push({ op: "eq", column: "status", value: statusFilter });
-    like("supplier_name", f.supplier);
-    like("supplier_code", f.supplier_code);
-    like("requester_name", f.requester);
-    like("requester_email", f.requester_email);
-    like("current_approver", f.approver);
-    like("cost_center", f.cost_center);
-    like("project", f.project);
+    textMulti("supplier_name", f.supplier);
+    textMulti("supplier_code", f.supplier_code);
+    textMulti("requester_name", f.requester);
+    textMulti("requester_email", f.requester_email);
+    textMulti("current_approver", f.approver);
+    textMulti("cost_center", f.cost_center);
+    textMulti("project", f.project);
     like("remarks", f.remarks);
-    if (f.currency.trim()) filters.push({ op: "ilike", column: "currency", value: f.currency.trim() });
-    if (f.branch_id.trim()) filters.push({ op: "eq", column: "branch_id", value: Number(f.branch_id.trim()) });
+    textMulti("currency", f.currency);
+    numberMulti("branch_id", f.branch_id);
     const minV = f.min_amount ? Number(f.min_amount.replace(",", ".")) : null;
     const maxV = f.max_amount ? Number(f.max_amount.replace(",", ".")) : null;
     if (minV != null && Number.isFinite(minV)) filters.push({ op: "gte", column: "total_amount", value: minV });
@@ -2264,17 +2694,26 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           <>
             {/* Card grid (mobile / tablet / laptop) */}
             <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 ${viewMode === "cards" ? "" : "hidden"}`}>
-              {visibleItems.map(({ exp, origin }) => (
-                <ExpenseCard
-                  key={exp.id}
-                  expense={exp}
-                  originBadge={origin}
-                  erpLabel={erpLabel}
-                  onOpen={() => openExpense(exp, origin)}
-                  onRelationsMap={origin === "erp_flow" ? () => setRelationsMapExpense(exp) : undefined}
-                  onDuplicate={() => duplicateExpense(exp)}
-                />
-              ))}
+              {visibleItems.map(({ exp, origin }) => {
+                const nfseEmission = isSales && exp.sap_doc_entry ? nfseEmissionFor(exp) : null;
+                const nfseKey = salesNfseOrderKey(exp) || exp.id;
+                const canEmitNfse = isSales && !!exp.sap_doc_entry;
+                return (
+                  <ExpenseCard
+                    key={exp.id}
+                    expense={exp}
+                    originBadge={origin}
+                    erpLabel={erpLabel}
+                    onOpen={() => openExpense(exp, origin)}
+                    onRelationsMap={origin === "erp_flow" ? () => setRelationsMapExpense(exp) : undefined}
+                    onDuplicate={() => duplicateExpense(exp)}
+                    nfseEmission={nfseEmission}
+                    isNfseEmitting={emittingNfseFor === nfseKey}
+                    onEmitNfse={canEmitNfse ? () => requestEmitNfse(exp, origin) : undefined}
+                    onOpenNfse={canEmitNfse ? openNfseTab : undefined}
+                  />
+                );
+              })}
             </div>
 
             {/* Table view (widescreen) */}
@@ -2315,7 +2754,11 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleItems.map(({ exp, origin }) => (
+                    {visibleItems.map(({ exp, origin }) => {
+                      const nfseEmission = isSales && exp.sap_doc_entry ? nfseEmissionFor(exp) : null;
+                      const nfseKey = salesNfseOrderKey(exp) || exp.id;
+                      const canEmitNfse = isSales && !!exp.sap_doc_entry;
+                      return (
                       <tr
                         key={exp.id}
                         className="border-t border-border/60 hover:bg-muted/30 cursor-pointer transition-colors"
@@ -2384,10 +2827,40 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                             >
                               <Copy className="w-4 h-4" aria-hidden="true" />
                             </Button>
+                            {canEmitNfse && !nfseEmission && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                aria-label={`Emitir NFS-e para ${exp.supplier_name}`}
+                                title="Emitir NFS-e"
+                                disabled={emittingNfseFor === nfseKey}
+                                onClick={(ev) => { ev.stopPropagation(); requestEmitNfse(exp, origin); }}
+                              >
+                                {emittingNfseFor === nfseKey ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                                ) : (
+                                  <FileText className="w-4 h-4" aria-hidden="true" />
+                                )}
+                              </Button>
+                            )}
+                            {canEmitNfse && nfseEmission && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-emerald-600 dark:text-emerald-400 hover:text-emerald-500"
+                                aria-label={`Ver NFS-e de ${exp.supplier_name}`}
+                                title={nfseEmission.nfseNumber ? `NFS-e ${nfseEmission.nfseNumber}` : "Ver NFS-e"}
+                                onClick={(ev) => { ev.stopPropagation(); openNfseTab(); }}
+                              >
+                                <FileText className="w-4 h-4" aria-hidden="true" />
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -2499,6 +2972,8 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         onReject={handleReject}
         onViewIntegration={handleViewIntegration}
         onAddAttachments={async (id, files) => { await addAttachments(id, files); }}
+        onEmitNfse={(exp) => requestEmitNfse(exp, selectedOrigin)}
+        onOpenNfse={openNfseTab}
         canCancel={selectedExpense ? canCancel(selectedExpense) : false}
         canReactivate={selectedExpense ? canCancel(selectedExpense) : false}
         canEdit={selectedExpense ? canCancel(selectedExpense) : false}
@@ -2508,6 +2983,11 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
           !!selectedExpense &&
           !["nf_entrada", "pagamento", "finalizado", "cancelado", "rejeitado"].includes(selectedExpense.status) &&
           (isAdmin || canCancel(selectedExpense))
+        }
+        nfseEmission={selectedExpense ? nfseEmissionFor(selectedExpense) : null}
+        isNfseEmitting={
+          !!selectedExpense &&
+          emittingNfseFor === (salesNfseOrderKey(selectedExpense) || selectedExpense.id)
         }
         isSubmitting={isSubmitting}
         isCancelling={isCancelling}
@@ -2552,6 +3032,47 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         title={isSales ? "Mapa de Relações — Pedido de Venda" : "Mapa de Relações — Pedido de Compra"}
       />
 
+      <AlertDialog open={!!nfseConfirm} onOpenChange={(open) => { if (!open && !emittingNfseFor) setNfseConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Emitir NFS-e deste pedido?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação cria uma NF de saída no SAP a partir do PV integrado. Depois disso, a automação fiscal do SAP gera a NFS-e no portal da prefeitura e a nota aparece na aba NFS-e para envio ao cliente e baixa.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {nfseConfirm && (
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">PV SAP</span>
+                <span className="font-mono">#{nfseConfirm.expense.sap_doc_num || nfseConfirm.expense.sap_doc_entry}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">Cliente</span>
+                <span className="text-right">{nfseConfirm.expense.supplier_name}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">Valor</span>
+                <span className="font-mono">
+                  {formatCurrency(nfseConfirm.expense.total_amount, nfseConfirm.expense.currency)}
+                </span>
+              </div>
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!emittingNfseFor}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!!emittingNfseFor}
+              onClick={(ev) => {
+                ev.preventDefault();
+                void emitConfirmedNfse();
+              }}
+            >
+              {emittingNfseFor ? "Emitindo..." : "Emitir NFS-e"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Modal de filtros avançados */}
       <Dialog open={advancedOpen} onOpenChange={setAdvancedOpen}>
         <DialogContent className="w-screen h-[100dvh] max-w-none rounded-none border-0 overflow-y-auto sm:w-auto sm:h-auto sm:max-w-3xl sm:max-h-[90vh] sm:rounded-lg sm:border">
@@ -2590,38 +3111,62 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Fornecedor</Label>
-                <Input value={advDraft.supplier} onChange={(e) => setAdvDraft({ ...advDraft, supplier: e.target.value })} placeholder="Nome do fornecedor" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Código do fornecedor</Label>
-                <Input value={advDraft.supplier_code} onChange={(e) => setAdvDraft({ ...advDraft, supplier_code: e.target.value })} placeholder="Ex.: F0000123" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Solicitante</Label>
-                <Input value={advDraft.requester} onChange={(e) => setAdvDraft({ ...advDraft, requester: e.target.value })} placeholder="Nome do solicitante" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">E-mail do solicitante</Label>
-                <Input value={advDraft.requester_email} onChange={(e) => setAdvDraft({ ...advDraft, requester_email: e.target.value })} placeholder="exemplo@empresa.com" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Aprovador</Label>
-                <Input value={advDraft.approver} onChange={(e) => setAdvDraft({ ...advDraft, approver: e.target.value })} placeholder="Nome ou usuário" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Centro de custo</Label>
-                <Input value={advDraft.cost_center} onChange={(e) => setAdvDraft({ ...advDraft, cost_center: e.target.value })} placeholder="Código do CC" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Projeto</Label>
-                <Input value={advDraft.project} onChange={(e) => setAdvDraft({ ...advDraft, project: e.target.value })} placeholder="Código do projeto" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Moeda</Label>
-                <Input value={advDraft.currency} onChange={(e) => setAdvDraft({ ...advDraft, currency: e.target.value })} placeholder="BRL, USD…" />
-              </div>
+              <MultiFilterSelect
+                label={isSales ? "Cliente" : "Fornecedor"}
+                values={advDraft.supplier}
+                options={advancedOptions.supplier}
+                placeholder={isSales ? "Selecionar clientes" : "Selecionar fornecedores"}
+                onChange={(supplier) => setAdvDraft({ ...advDraft, supplier })}
+              />
+              <MultiFilterSelect
+                label={isSales ? "Código do cliente" : "Código do fornecedor"}
+                values={advDraft.supplier_code}
+                options={advancedOptions.supplier_code}
+                placeholder="Selecionar códigos"
+                onChange={(supplier_code) => setAdvDraft({ ...advDraft, supplier_code })}
+              />
+              <MultiFilterSelect
+                label="Solicitante"
+                values={advDraft.requester}
+                options={advancedOptions.requester}
+                placeholder="Selecionar solicitantes"
+                onChange={(requester) => setAdvDraft({ ...advDraft, requester })}
+              />
+              <MultiFilterSelect
+                label="E-mail do solicitante"
+                values={advDraft.requester_email}
+                options={advancedOptions.requester_email}
+                placeholder="Selecionar e-mails"
+                onChange={(requester_email) => setAdvDraft({ ...advDraft, requester_email })}
+              />
+              <MultiFilterSelect
+                label="Aprovador"
+                values={advDraft.approver}
+                options={advancedOptions.approver}
+                placeholder="Selecionar aprovadores"
+                onChange={(approver) => setAdvDraft({ ...advDraft, approver })}
+              />
+              <MultiFilterSelect
+                label="Centro de custo"
+                values={advDraft.cost_center}
+                options={advancedOptions.cost_center}
+                placeholder="Selecionar centros de custo"
+                onChange={(cost_center) => setAdvDraft({ ...advDraft, cost_center })}
+              />
+              <MultiFilterSelect
+                label="Projeto"
+                values={advDraft.project}
+                options={advancedOptions.project}
+                placeholder="Selecionar projetos"
+                onChange={(project) => setAdvDraft({ ...advDraft, project })}
+              />
+              <MultiFilterSelect
+                label="Moeda"
+                values={advDraft.currency}
+                options={advancedOptions.currency}
+                placeholder="Selecionar moedas"
+                onChange={(currency) => setAdvDraft({ ...advDraft, currency })}
+              />
               <div className="space-y-1.5 sm:col-span-2">
                 <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Observação (remarks)</Label>
                 <Input value={advDraft.remarks} onChange={(e) => setAdvDraft({ ...advDraft, remarks: e.target.value })} placeholder="Contém…" />
@@ -2630,10 +3175,13 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Nº do documento (SAP)</Label>
                 <Input value={advDraft.sap_doc_num} onChange={(e) => setAdvDraft({ ...advDraft, sap_doc_num: e.target.value })} placeholder="DocNum, DocEntry ou código interno" />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Filial (branch)</Label>
-                <Input value={advDraft.branch_id} onChange={(e) => setAdvDraft({ ...advDraft, branch_id: e.target.value })} placeholder="ID da filial" />
-              </div>
+              <MultiFilterSelect
+                label="Filial (branch)"
+                values={advDraft.branch_id}
+                options={advancedOptions.branch_id}
+                placeholder="Selecionar filiais"
+                onChange={(branch_id) => setAdvDraft({ ...advDraft, branch_id })}
+              />
             </div>
 
             <div>

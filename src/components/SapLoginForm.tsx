@@ -17,6 +17,7 @@ import { lovable } from "@/integrations/lovable/index";
 import { toast } from "sonner";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
+import { useAuth } from "@/hooks/useAuth";
 import { assertIdpBinding, assertSapLoginIdpBinding, upsertGoogleIdpMapping, upsertLocalAdminMapping } from "@/lib/idp-binding";
 import { getCurrentAuthSession } from "@/lib/fake-auth";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
@@ -41,10 +42,28 @@ async function isEmailAllowedForOmieCompany(email: string, companyDb: string): P
   return data === true;
 }
 
+async function isEmailAllowedForCompany(email: string, companyDb: string): Promise<boolean> {
+  const { data, error } = await (supabase as any).rpc("is_email_allowed_for_company", {
+    _email: email,
+    _company_db: companyDb,
+  });
+  if (error) {
+    console.error("[company-allowlist] rpc failed:", error);
+    return false;
+  }
+  return data === true;
+}
+
 interface CompanyOption {
   label: string;
   value: string;
   erp_type: string;
+}
+
+interface CompanyRow {
+  company_db: string;
+  display_name: string;
+  erp_type: string | null;
 }
 
 const ERP_LABELS: Record<string, { label: string; icon: typeof Server; method: string }> = {
@@ -70,6 +89,7 @@ function getErpBadge(erpType: string): string {
 export function SapLoginForm() {
   const { login, loginManaged, loginIdentity, isLoading } = useSap();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const { enabledNames, isLoading: erpLoading } = useEnabledErpTypes();
   const [userName, setUserName] = useState("");
   const [password, setPassword] = useState("");
@@ -123,24 +143,37 @@ export function SapLoginForm() {
         .order("display_name");
       if (error) throw error;
       const { data: { session: authSession } } = await readAuthSession();
+      const email = authSession?.user?.email || null;
       const canSeeTest = await resolveTestCompanyVisibility({
-        identifier: authSession?.user?.email || null,
+        identifier: email,
       });
-      setAllCompanies(
-        (data || [])
-          .filter((c: any) => canSeeTest || !isTestCompanyDb(c.company_db))
-          .map((c: any) => ({
-            label: c.display_name,
-            value: c.company_db,
-            erp_type: c.erp_type || "sap",
-          })),
-      );
+      let rows = ((data || []) as CompanyRow[])
+        .filter((c) => canSeeTest || !isTestCompanyDb(c.company_db));
+      // Antes do login Google não há e-mail para filtrar: mostramos todas as
+      // empresas ativas (dado público, já exposto pela política de leitura).
+      // O controle de acesso real acontece na autenticação e nas edge functions.
+      if (!isAdmin && email) {
+        const allowed = await Promise.all(rows.map(async (c) => ({
+          row: c,
+          ok: await isEmailAllowedForCompany(email, c.company_db),
+        })));
+        const filtered = allowed.filter((r) => r.ok).map((r) => r.row);
+        // Se o filtro zerar tudo (usuário sem vínculo cadastrado), preserva a
+        // lista completa para não travar o login.
+        rows = filtered.length ? filtered : rows;
+      }
+
+      setAllCompanies(rows.map((c) => ({
+        label: c.display_name,
+        value: c.company_db,
+        erp_type: c.erp_type || "sap",
+      })));
     } catch (e) {
       setCompaniesError(e instanceof Error ? e.message : "Falha ao carregar empresas");
     } finally {
       setCompaniesLoading(false);
     }
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
     loadCompanies();
@@ -312,6 +345,12 @@ export function SapLoginForm() {
     // provisionada; senão, o modal de credenciais aparece na hora da ação).
     if (erpType === "sap" && cloudEmail) {
       try {
+        if (!isAdmin && !(await isEmailAllowedForCompany(cloudEmail, companyDB))) {
+          toast.error("Acesso não liberado", {
+            description: "Seu usuário não está autorizado a entrar nesta empresa.",
+          });
+          return;
+        }
         await loginIdentity(companyDB, "sap");
 
         toast.success(`Conectado ao ${erpInfo.label}!`);
@@ -628,10 +667,12 @@ export function SapLoginForm() {
           <p className="text-xs text-muted-foreground">
             Conexão segura via {erpInfo.method}
           </p>
-          <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => navigate("/backoffice/login")}>
-            <Settings className="w-3 h-3 mr-1" />
-            Backoffice
-          </Button>
+          {isAdmin && (
+            <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => navigate("/backoffice")}>
+              <Settings className="w-3 h-3 mr-1" />
+              Backoffice
+            </Button>
+          )}
         </div>
       </motion.div>
     </div>

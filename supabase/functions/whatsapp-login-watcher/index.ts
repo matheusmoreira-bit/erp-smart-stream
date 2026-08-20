@@ -5,15 +5,16 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { tryWatcherLock, releaseWatcherLock } from "../_shared/watcher-lock.ts";
 import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
+import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
+import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Credenciais fixas (conforme solicitado)
-const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "";
-const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || "";
+const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "http://63.177.171.140/sender_wpp";
+const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || Deno.env.get("WHATSAPP_API_TOKEN") || "";
 const WHATSAPP_TO = "5531972665309";
 // HanaAPI V1 (middleware n8n) foi descontinuada — usamos V2 via fetchHanaView.
 
@@ -89,6 +90,10 @@ async function fetchUsr5(
 }
 
 async function sendWhatsApp(message: string) {
+  if (!WHATSAPP_TOKEN) {
+    console.warn("[whatsapp-login-watcher] WHATSAPP_TOKEN não configurado; notificação ignorada.");
+    return { ok: false, status: 0, body: "WHATSAPP_TOKEN ausente" };
+  }
   const body = new URLSearchParams({ to: WHATSAPP_TO, message });
   const resp = await fetch(WHATSAPP_URL, {
     method: "POST",
@@ -253,6 +258,10 @@ async function processCompany(
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const auth = await requireSchedulerOrAdmin(req, corsHeaders);
+  if (!auth.ok) return auth.response;
+  const disabled = blockIfIntegrationsDisabled(corsHeaders);
+  if (disabled) return disabled;
 
   const sb = createClient(
     Deno.env.get("SUPABASE_URL")!,

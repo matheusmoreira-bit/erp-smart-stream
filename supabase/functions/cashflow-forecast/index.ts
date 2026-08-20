@@ -14,7 +14,7 @@ import { buildSapBaseUrl, loadSapCreds, sapSessionLogin, sapLogoutSession } from
 const corsHeaders = {
   ...baseCorsHeaders,
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-company-db, x-sap-session, x-sap-username, x-sap-routeid, x-sap-baseurl, x-csrf-token",
+    "authorization, x-client-info, apikey, content-type, x-company-db, x-sap-session, x-sap-route, x-sap-user, x-sap-auth-token, x-sap-username, x-sap-routeid, x-sap-baseurl, x-csrf-token, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

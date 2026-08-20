@@ -2,8 +2,7 @@ import { useCompanies } from "@/hooks/useCompanies";
 import { motion } from "framer-motion";
 
 import { useNavigate } from "react-router-dom";
-import { PageTitle } from "@/components/PageTitle";
-import cactusLogo from "@/assets/cactus-logo.png.asset.json";
+import { PageHeader } from "@/components/PageHeader";
 import {
   BarChart3,
   ShoppingCart,
@@ -25,14 +24,13 @@ import {
   ClipboardList,
   type LucideIcon,
   TrendingUp,
+  LayoutGrid,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
 import { useModuleAccess } from "@/hooks/usePermissions";
-import { ThemeToggle } from "@/components/ThemeToggle";
 
 import { NotificationBell } from "@/components/NotificationBell";
 import { OfflineQueueIndicator } from "@/components/OfflineQueueIndicator";
-import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 
 
 interface ModuleCard {
@@ -85,6 +83,7 @@ const modules: Record<string, ModuleCard> = {
     subItems: [
       { label: "Pedidos de Venda", path: "/vendas/pedidos" },
       { label: "NFS-e", path: "/vendas/nfse" },
+      { label: "Adiantamentos", path: "/vendas/adiantamentos" },
       { label: "Contas a Receber", path: "/vendas/recebimentos" },
       { label: "Destinatários", path: "/vendas/destinatarios" },
       { label: "Histórico de Baixas", path: "/vendas/historico" },
@@ -368,7 +367,7 @@ function firstAccessiblePath(
 
 export function MainMenu() {
   const navigate = useNavigate();
-  const { session, logout } = useSap();
+  const { session } = useSap();
   const { userModules, loading: permLoading } = useModuleAccess();
 
 
@@ -377,55 +376,29 @@ export function MainMenu() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <PageTitle title="Painel" />
-      {/* Header */}
-      <header className="border-b border-border px-4 sm:px-6 py-3 sm:py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <div className="p-1.5 rounded-lg bg-primary/10 glow-primary flex-shrink-0">
-              <img src={cactusLogo.url} alt="Logo" className="w-6 h-6 object-contain" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-bold text-foreground truncate">
-                ERP <span className="text-gradient">Flow</span>
-              </h1>
-              <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
-                <span className="sm:hidden">{companyLabel}</span>
-                <span className="hidden sm:inline">Painel de gestão</span>
-              </p>
-            </div>
-          </div>
-
-          {/* Desktop actions */}
-          <div className="hidden md:flex items-center gap-2">
+      <PageHeader
+        icon={<LayoutGrid className="h-4 w-4 text-primary" />}
+        title="Painel"
+        subtitle={companyLabel || "Painel de gestão"}
+        showBack={false}
+        actions={
+          <>
             <OfflineQueueIndicator />
             <NotificationBell />
             <button
               onClick={() => navigate("/perfil")}
               title="Meu perfil e senha do ERP"
-              className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
             >
               <UserCog className="w-4 h-4" />
             </button>
-
-            <ThemeToggle />
-            <UserCompanyMenu />
-          </div>
-
-
-          {/* Mobile actions: notificações + conta/empresa (mesmo menu do desktop) */}
-          <div className="flex md:hidden items-center gap-1">
-            <OfflineQueueIndicator />
-            <NotificationBell />
-            <ThemeToggle />
-            <UserCompanyMenu />
-          </div>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       {/* Content */}
       <main className="flex-1 px-4 sm:px-6 py-6 sm:py-12 pb-24 md:pb-12">
-        <div className="max-w-5xl mx-auto w-full">
+        <div className="max-w-6xl mx-auto w-full">
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-6 sm:mb-10">
             <h2 className="text-2xl sm:text-3xl font-bold text-foreground">Módulos</h2>
             <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">Selecione um módulo para começar</p>

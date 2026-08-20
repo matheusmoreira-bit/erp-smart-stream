@@ -55,7 +55,6 @@ const Notifications = lazy(() => import("./pages/Notifications.tsx"));
 const NotificationGovernance = lazy(() => import("./pages/NotificationGovernance.tsx"));
 const Profile = lazy(() => import("./pages/Profile.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
-const BackofficeLogin = lazy(() => import("./pages/AdminLogin.tsx"));
 const Backoffice = lazy(() => import("./pages/Admin.tsx"));
 const SapUsersReplicate = lazy(() => import("./pages/SapUsersReplicate.tsx"));
 const AuditTrail = lazy(() => import("./pages/AuditTrail.tsx"));
@@ -112,7 +111,7 @@ const App = () => (
 
 
               {/* Backoffice */}
-              <Route path="/backoffice/login" element={<BackofficeLogin />} />
+              <Route path="/backoffice/login" element={<Navigate to="/backoffice" replace />} />
               <Route path="/backoffice" element={<AdminRoute><Backoffice /></AdminRoute>} />
               <Route path="/backoffice/sap-users" element={<Navigate to="/usuarios/sap" replace />} />
               <Route path="/backoffice/sap-users/replicate" element={<AdminRoute><SapUsersReplicate /></AdminRoute>} />
@@ -146,6 +145,7 @@ const App = () => (
               <Route path="/vendas" element={<Navigate to="/vendas/pedidos" replace />} />
               <Route path="/vendas/pedidos" element={<ModuleRoute module="sales"><SalesHub tab="orders" /></ModuleRoute>} />
               <Route path="/vendas/nfse" element={<ModuleRoute module="sales"><SalesHub tab="nfse" /></ModuleRoute>} />
+              <Route path="/vendas/adiantamentos" element={<ModuleRoute module="sales"><SalesHub tab="advances" /></ModuleRoute>} />
               <Route path="/vendas/recebimentos" element={<ModuleRoute module="sales"><SalesHub tab="receivables" /></ModuleRoute>} />
               <Route path="/vendas/destinatarios" element={<ModuleRoute module="sales"><SalesHub tab="recipients" /></ModuleRoute>} />
               <Route path="/vendas/historico" element={<ModuleRoute module="sales"><BaixasHistory /></ModuleRoute>} />

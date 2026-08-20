@@ -1543,7 +1543,7 @@ export default function ApprovalRulesPage() {
           body: JSON.stringify({
             company_db: session?.companyDB || null,
             dry_run: dryRun,
-            only_unmatched: true,
+            only_unmatched: false,
           }),
         });
         const data = await resp.json().catch(() => ({}));
@@ -1556,7 +1556,7 @@ export default function ApprovalRulesPage() {
         toast.info(
           preview.scanned
             ? `Nenhum dos ${preview.scanned} documentos pendentes precisa ser redirecionado.`
-            : "Nenhum documento pendente sem regra encontrado.",
+            : "Nenhum documento pendente encontrado.",
         );
         return;
       }

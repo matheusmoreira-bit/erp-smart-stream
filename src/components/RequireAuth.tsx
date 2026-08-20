@@ -5,7 +5,7 @@ import { savePostLoginPath } from "@/lib/post-login-redirect";
 import { Loader2 } from "lucide-react";
 
 /** Rotas que podem ser abertas sem sessão autenticada. */
-const PUBLIC_PATHS = ["/login", "/backoffice/login"];
+const PUBLIC_PATHS = ["/login"];
 const PUBLIC_PREFIXES = ["/aprovar/"];
 
 function isPublicPath(pathname: string): boolean {

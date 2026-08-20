@@ -6,6 +6,8 @@
 // admins via email + WhatsApp.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { backoffMinutes, classifySapError, nextAttemptAt, type SapRetryDocType } from "../_shared/sap-retry.ts";
+import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
+import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,8 +16,8 @@ const corsHeaders = {
 
 const MAX_ROWS_PER_RUN = 20;
 const STALE_IN_FLIGHT_MINUTES = 10;
-const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "";
-const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || "";
+const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "http://63.177.171.140/sender_wpp";
+const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || Deno.env.get("WHATSAPP_API_TOKEN") || "";
 const ADMIN_USER_CODES = ["matheus.moreira"];
 const ADMIN_EMAILS = ["matheus.moreira@anagaming.com.br"];
 
@@ -27,6 +29,10 @@ function normalizePhone(p?: string | null): string {
 }
 
 async function sendWhatsApp(to: string, message: string) {
+  if (!WHATSAPP_TOKEN) {
+    console.warn("[sap-retry-worker] WHATSAPP_TOKEN não configurado; notificação WhatsApp ignorada.");
+    return false;
+  }
   try {
     const body = new URLSearchParams({ to, message });
     const r = await fetch(WHATSAPP_URL, {
@@ -112,14 +118,19 @@ async function notifyExhausted(admin: any, row: any) {
         .order("updated_at", { ascending: false }).limit(1).maybeSingle();
       const to = normalizePhone(ph?.phone);
       if (to) await sendWhatsApp(to, message);
-    } catch {
-      // Notification delivery is best effort.
+    } catch (e) {
+      console.warn("[sap-retry-worker] Falha ao notificar admin sobre retry esgotado:", e);
     }
   }
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const auth = await requireSchedulerOrAdmin(req, corsHeaders);
+  if (!auth.ok) return auth.response;
+  const disabled = blockIfIntegrationsDisabled(corsHeaders);
+  if (disabled) return disabled;
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -225,9 +236,8 @@ Deno.serve(async (req) => {
     const cls = classifySapError(httpStatus, errText);
     const isLastAttempt = !cls.retryable || attempts >= (row.max_attempts || 5);
 
-    // NÃO integrar automaticamente sem anexo. Falha de anexo é encerrada como
-    // "exhausted" e fica aguardando a decisão manual ("Integrar sem anexo" na
-    // fila de retentativas), já que isso exige lançamento manual do anexo no ERP.
+    // NÃO integrar sem anexo. Falha de anexo é encerrada como "exhausted"
+    // para o documento ser corrigido com anexo e reenviado.
 
 
     // Not retryable or attempts exhausted → mark exhausted + notify.

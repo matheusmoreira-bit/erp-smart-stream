@@ -57,10 +57,10 @@ export function ImpersonationBanner() {
       /* auditoria nunca bloqueia a saída */
     }
 
-    // Caminho preferido: volta à identidade original em memória, sem recarregar
-    // a página — a tela atual (rota, filtros, formulários) é preservada.
+    // Volta à identidade original em memória, sem recarregar a página — a tela
+    // atual (rota, filtros, formulários) é preservada.
     const adminUser = state.adminUser;
-    if (!state.withPassword && adminUser) {
+    if (adminUser) {
       clearImpersonation();
       clearAuthCache();
       impersonateAs(adminUser);
@@ -124,4 +124,3 @@ export function ImpersonationBanner() {
     </>
   );
 }
-

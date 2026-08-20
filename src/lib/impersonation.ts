@@ -8,8 +8,9 @@
  * - Enquanto ativa, os privilégios de admin do Cloud são SUSPENSOS
  *   (`getIsCloudAdmin()` devolve false) — o app resolve permissões, grupos e
  *   visibilidade exatamente como o usuário alvo.
- * - A sessão do ERP passa a ser a do usuário alvo (login real no SAP com a
- *   senha dele), então todas as chamadas ao ERP usam a identidade do alvo.
+ * - A sessão técnica do ERP permanece a do admin; a identidade exibida,
+ *   filtros e permissões passam a ser os do usuário alvo em modo somente
+ *   leitura.
  * - Toda ação auditada carrega `impersonated_by` (ver `logAuditAction`).
  */
 
@@ -24,7 +25,7 @@ export interface ImpersonationState {
   adminEmail: string;
   /** Usuário do ERP do admin antes da impersonação (para voltar sem reload). */
   adminUser?: string;
-  /** true quando foi aberta uma sessão real no ERP com a senha do alvo. */
+  /** Legado: true indicava sessão real no ERP com senha do alvo. */
   withPassword?: boolean;
   companyDB: string;
   startedAt: number;

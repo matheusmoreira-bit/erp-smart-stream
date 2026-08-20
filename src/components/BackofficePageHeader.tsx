@@ -25,12 +25,12 @@ export function BackofficePageHeader({
   return (
     <PageHeader
       icon={icon ?? null}
-      title="Backoffice"
-      titleAccent={title}
+      title={title}
       subtitle={description}
       documentTitle={title}
       backTo={backTo}
       actions={actions}
+      system="backoffice"
     />
   );
 }

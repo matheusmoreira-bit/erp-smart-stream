@@ -97,13 +97,12 @@ import {
   saveAiResponseCacheEntries,
   clearAiResponseCache,
 } from "@/lib/ai-response-cache-persist";
-import { notifyFiscalMissingAttachment } from "@/lib/notify-fiscal-missing-attachment";
 import {
   validateAttachments,
   ALLOWED_ATTACHMENT_ACCEPT,
   ALLOWED_ATTACHMENT_HINT,
 } from "@/lib/attachment-validation";
-import { useCurrentUserCostCenter, isItemAllowedForCostCenter, isCostCenterAllowedForUser, costCenterBranch, isRateioTypeAllowedForCostCenter } from "@/hooks/useCurrentUserCostCenter";
+import { useCurrentUserCostCenter, isItemAllowedForCostCenter, isCostCenterAllowedForUser, costCenterBranch, isRateioTypeAllowedForCostCenter, isSalesOnlyItemCode } from "@/hooks/useCurrentUserCostCenter";
 import { useCanSeeAllCostCenters } from "@/hooks/useCanSeeAllCostCenters";
 import { useCustomerBrandMap, filterProjectsForCustomer } from "@/hooks/useCustomerBrandMap";
 import { CurrencyField, normalizeCurrencyCode } from "@/components/CurrencyField";
@@ -138,6 +137,12 @@ export interface PagCorpPrefill {
   cardId?: string | number;
   cardLastDigits?: string;
   cardName?: string;
+}
+
+function ensurePagCorpRemarksPrefix(value: string): string {
+  const text = value.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!text) return "PagCorp -";
+  return /^PagCorp\s*-\s*/i.test(text) ? text : `PagCorp - ${text}`;
 }
 
 export type ExpenseMode = "purchase" | "sales";
@@ -482,7 +487,10 @@ export function CreateExpenseModal({
   const filteredItemOptions = useMemo(() => {
     // Vendas: apenas os itens de receita liberados (SV0003 e SV0006).
     if (isSales) return itemOptions.filter((o) => SALES_ALLOWED_ITEMS.includes(o.code));
-    return itemOptions.filter((o) => isItemAllowedForCostCenter(o.code, userCostCenter, bypassCcItemRules));
+    // Compras: itens SV% são exclusivos de venda e nunca aparecem aqui.
+    return itemOptions.filter(
+      (o) => !isSalesOnlyItemCode(o.code) && isItemAllowedForCostCenter(o.code, userCostCenter, bypassCcItemRules),
+    );
   }, [itemOptions, userCostCenter, isSales, bypassCcItemRules]);
 
   // Alçada de CC: quem é do 1.6.1.2 pode lançar em qualquer 1.6.%.
@@ -797,7 +805,7 @@ export function CreateExpenseModal({
     if (open && prefill && !initialized) {
       setInitialized(true);
       if (prefill.description) {
-        setRemarks(prefill.description);
+        setRemarks(origin === "pagcorp" ? ensurePagCorpRemarksPrefix(prefill.description) : prefill.description);
         setItems([{
           description: prefill.description,
           quantity: 1,
@@ -2169,6 +2177,12 @@ export function CreateExpenseModal({
         return;
       }
 
+      // Itens SV% são exclusivos de venda — nunca em pedido de compra.
+      if (!isSales && isSalesOnlyItemCode(it.item_code)) {
+        toast.error(`Item ${n}: itens SV% são exclusivos de pedidos de venda`);
+        return;
+      }
+
 
       // Alçada por CC do usuário logado: IMP% só para 1.2.2.%; FOL% só para 1.5.1.3 (Pessoas e Cultura).
       // CC vazio (sem vínculo no IdP) não bloqueia — evita falso negativo.
@@ -2193,6 +2207,10 @@ export function CreateExpenseModal({
 
     // Centro de custo padrão é opcional — se o usuário tiver CC via IdP,
     // já é pré-preenchido; caso contrário, cada linha pode ter seu próprio CC.
+    if (files.length === 0) {
+      toast.error("Anexo obrigatório: documentos devem ser criados com ao menos 1 anexo.");
+      return;
+    }
 
     // Guard duro anti-double-submit: `isCreating` (estado) protege a UI, mas
     // um duplo clique rápido cabe na janela entre o clique e o setState —
@@ -2319,50 +2337,6 @@ export function CreateExpenseModal({
       }
       toast.success(isSales ? "Pedido de venda criado com sucesso!" : "Despesa criada com sucesso!");
 
-      // Documento integrado ao ERP SEM anexo → notifica fiscal@anagaming.com.br
-      // com o resumo do lançamento para que o time solicite o anexo depois.
-      // Pedidos de venda podem ser integrados sem anexo → não notificar.
-      // Best-effort: falha aqui NÃO deve reverter a criação já concluída.
-      if (!isSales && (!files || files.length === 0)) {
-        try {
-          const { data: userRes } = await supabase.auth.getUser();
-          const requester = userRes?.user;
-          const requesterName =
-            (requester?.user_metadata?.full_name as string | undefined) ||
-            (requester?.user_metadata?.name as string | undefined) ||
-            null;
-          await notifyFiscalMissingAttachment({
-            docType: mode,
-            supplierName: supplier.name,
-            supplierCode: supplier.code || undefined,
-            currency: currency || undefined,
-            docDate: docDate || undefined,
-            dueDate: dueDate || undefined,
-            costCenter: headerCostCenter?.code || undefined,
-            project: headerProject?.code || undefined,
-            remarks: remarks || undefined,
-            origin,
-            companyDb: sapSession?.companyDB ?? null,
-            requesterName,
-            requesterEmail: requester?.email ?? null,
-            items: items.map((it) => ({
-              description: it.description,
-              quantity: Number(it.quantity) || 0,
-              unit_price: Number(it.unit_price) || 0,
-              line_total: Number(it.line_total) || 0,
-              cost_center: it.cost_center || undefined,
-              project: it.project || undefined,
-            })),
-          });
-          toast.info("Documento sem anexo — fiscal@anagaming.com.br foi notificado.", { duration: 6000 });
-        } catch (notifyErr) {
-          console.warn("[fiscal-notify] Falha ao notificar fiscal sobre lançamento sem anexo:", notifyErr);
-          toast.warning(
-            "Lançamento criado, mas não foi possível notificar o fiscal por e-mail. Encaminhe manualmente se necessário.",
-            { duration: 8000 },
-          );
-        }
-      }
       if (draftId) {
         void deleteDraft(draftId);
         setDraftId(null);

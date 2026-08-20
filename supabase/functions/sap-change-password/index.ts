@@ -55,14 +55,14 @@ async function getAdminCreds(admin: ReturnType<typeof createClient>, companyDB: 
     .select("credential_key, credential_value")
     .eq("system_name", "sap")
     .eq("company_db", companyDB)
-    .in("credential_key", ["username", "password", "company_db"]);
+    .in("credential_key", ["username", "password", "company_db", "sap_company_db"]);
   const map = new Map<string, string>();
   (data || []).forEach((r: { credential_key: string; credential_value: string | null }) => {
     if (r.credential_value) map.set(r.credential_key, r.credential_value);
   });
   const configuredUser = map.get("username");
   const configuredPwd = map.get("password");
-  const credCompanyDb = map.get("company_db");
+  const credCompanyDb = map.get("sap_company_db") || map.get("company_db");
   const sapCompanyDb = credCompanyDb && !/^https?:\/\//i.test(credCompanyDb) ? credCompanyDb : companyDB;
 
   if (configuredUser && configuredPwd) {
@@ -221,6 +221,42 @@ async function verifyCurrentPassword(
   return { ok: false, reason: lastReason };
 }
 
+async function resolveManagedTargetUser(
+  admin: ReturnType<typeof service>,
+  input: { targetUserId?: string; targetEmail?: string },
+): Promise<{ id: string; email: string | null }> {
+  const targetUserId = (input.targetUserId || "").trim();
+  const targetEmail = (input.targetEmail || "").trim().toLowerCase();
+
+  if (targetUserId) {
+    const { data, error } = await admin.auth.admin.getUserById(targetUserId);
+    if (error || !data?.user) throw new Error("Usuário-alvo não encontrado para provisionamento");
+    return { id: data.user.id, email: data.user.email || null };
+  }
+
+  if (!targetEmail) throw new Error("target_user_id ou target_email obrigatório para provisionar senha");
+
+  const { data: list, error: listErr } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (listErr) throw new Error(`Falha ao listar usuários: ${listErr.message}`);
+  const users = list?.users || [];
+  const exactMatch = users.find((u) => (u.email || "").toLowerCase() === targetEmail);
+  const targetLocal = targetEmail.split("@")[0];
+  const activeAlias = users
+    .filter((u) => (u.email || "").toLowerCase().split("@")[0] === targetLocal && u.last_sign_in_at)
+    .sort((a, b) => new Date(b.last_sign_in_at || 0).getTime() - new Date(a.last_sign_in_at || 0).getTime())[0];
+  const match = exactMatch?.last_sign_in_at ? exactMatch : (activeAlias || exactMatch);
+  if (match) return { id: match.id, email: match.email || targetEmail };
+
+  const { data: created, error: createErr } = await admin.auth.admin.createUser({
+    email: targetEmail,
+    email_confirm: true,
+  });
+  if (createErr || !created?.user) {
+    throw new Error(`Falha ao criar usuário Cloud para '${targetEmail}': ${createErr?.message || "erro desconhecido"}`);
+  }
+  return { id: created.user.id, email: created.user.email || targetEmail };
+}
+
 Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
   const corsHeaders = corsFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -248,6 +284,8 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
     const userCode = String(body.user_code || callerUserCode || "").trim();
     const newPassword = String(body.new_password || "");
     const targets = Array.isArray(body.company_dbs) ? (body.company_dbs as string[]) : [];
+    const targetUserId = typeof body.target_user_id === "string" ? body.target_user_id : "";
+    const targetEmail = typeof body.target_email === "string" ? body.target_email : "";
 
     if (!userCode) {
       return new Response(JSON.stringify({ error: "user_code obrigatório" }), {
@@ -372,9 +410,20 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
     // "ignoradas"/com erro, onde o SAP mantinha a senha antiga).
     const saveManaged = body.save_managed === true;
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(callerId);
-    const managedUserId = saveManaged && isUuid && userCode.toLowerCase() === (callerUserCode || "").toLowerCase()
+    let managedUserId: string | null = saveManaged && isUuid && userCode.toLowerCase() === (callerUserCode || "").toLowerCase()
       ? callerId
       : null;
+    let managedTargetEmail: string | null = null;
+    if (saveManaged && (targetUserId || targetEmail)) {
+      if (!isAdmin) {
+        return new Response(JSON.stringify({ error: "Apenas administradores podem provisionar senha para outro usuário" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const managedTarget = await resolveManagedTargetUser(admin, { targetUserId, targetEmail });
+      managedUserId = managedTarget.id;
+      managedTargetEmail = managedTarget.email;
+    }
 
     async function persistManagedCredential(companyDb: string): Promise<boolean> {
       if (!managedUserId) return false;
@@ -450,13 +499,18 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
         await sapRequest(session, `Users(${rows[0].InternalKey})`, "PATCH", { Locked: "tNO" }, ctrl.signal).catch(() => null);
         // 2) Trocar apenas a senha em uma chamada dedicada.
         const patch = await sapRequest(session, `Users(${rows[0].InternalKey})`, "PATCH", { UserPassword: newPassword }, ctrl.signal);
+        let alreadyCurrent = false;
         if (!patch.ok) {
           const msg = extractSapError(patch.data, `HTTP ${patch.status}`);
           if (isSamePasswordError(msg)) {
-            return { companyDB: companyDb, displayName, status: "skipped", message: "Senha igual à anterior" };
+            if (!saveManaged) {
+              return { companyDB: companyDb, displayName, status: "skipped", message: "Senha igual à anterior" };
+            }
+            alreadyCurrent = true;
+          } else {
+            console.error(`[sap-change-password] PATCH failed`, { companyDb, userCode, internalKey: rows[0].InternalKey, status: patch.status, msg });
+            return { companyDB: companyDb, displayName, status: "error", message: msg };
           }
-          console.error(`[sap-change-password] PATCH failed`, { companyDb, userCode, internalKey: rows[0].InternalKey, status: patch.status, msg });
-          return { companyDB: companyDb, displayName, status: "error", message: msg };
         }
         // 2.1) Garante "Senha nunca expira" no SAP (best-effort) para que a
         // nova senha não caduque e derrube o usuário/integrações.
@@ -473,7 +527,26 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
         try {
           verifySession = await sapLogin(baseUrl, creds.sapCompanyDb, userCode, newPassword, ctrl.signal);
           const managedSaved = await persistManagedCredential(companyDb);
-          return { companyDB: companyDb, displayName, status: "success", verified: true, managedSaved };
+          if (saveManaged && !managedSaved) {
+            return {
+              companyDB: companyDb,
+              displayName,
+              status: "error",
+              verified: true,
+              managedSaved: false,
+              message: "Senha validada no SAP, mas falhou ao salvar a senha provisionada.",
+            };
+          }
+          return {
+            companyDB: companyDb,
+            displayName,
+            status: "success",
+            verified: true,
+            managedSaved,
+            message: saveManaged
+              ? (alreadyCurrent ? "Senha já era atual no SAP — senha provisionada" : "Senha provisionada e validada")
+              : "Senha redefinida e validada",
+          };
         } catch (e) {
           const raw = e instanceof Error ? e.message : "Falha ao validar nova senha";
           console.error(`[sap-change-password] verify login failed`, { companyDb, userCode, sapCompanyDb: creds.sapCompanyDb, raw });
@@ -515,7 +588,9 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
     // senha errada, podendo bloquear o usuário). Removemos o registro para que
     // o usuário faça login manual nessas bases.
     if (managedUserId) {
-      const stale = results.filter((r) => r.verified !== true).map((r) => r.companyDB);
+      const stale = results
+        .filter((r) => saveManaged ? r.managedSaved !== true : r.verified !== true)
+        .map((r) => r.companyDB);
       if (stale.length > 0) {
         const { error } = await admin
           .from("user_sap_credentials")
@@ -560,6 +635,18 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
           reason: "password_change",
         });
       }
+    }
+
+    if (saveManaged && changedAny) {
+      await admin.from("audit_log").insert({
+        actor_id: callerId && !callerId.startsWith("sap:") ? callerId : null,
+        actor_email: (caller as { email?: string }).email || null,
+        action: "sap_managed_password_provisioned",
+        entity_type: "user_sap_credentials",
+        entity_id: managedUserId,
+        company_db: targets[0] || null,
+        details: { target_email: managedTargetEmail, sap_user: userCode, companies: targets },
+      }).catch(() => null);
     }
 
     return new Response(JSON.stringify({ results, session_revoked: changedAny }), {

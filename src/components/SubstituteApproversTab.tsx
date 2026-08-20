@@ -29,14 +29,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
+import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { UserPlus, XCircle, Users, Loader2, ShieldCheck, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 
@@ -160,8 +155,32 @@ export default function SubstituteApproversTab({ isAdmin = false }: { isAdmin?: 
   }, [usersLoading, sapEligible.length]);
 
   const eligible = useMemo(
-    () => (sapEligible.length > 0 ? sapEligible : dirUsers),
+    () => [...(sapEligible.length > 0 ? sapEligible : dirUsers)]
+      .sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email, "pt-BR", { sensitivity: "base" })),
     [sapEligible, dirUsers],
+  );
+  const eligibleOptions = useMemo(
+    () =>
+      eligible
+        .filter((u) => u.email)
+        .map((u) => ({
+          code: u.email,
+          name: u.name || u.email,
+          extra: u.code || undefined,
+        } satisfies SapSearchOption)),
+    [eligible],
+  );
+  const officialOption = useMemo(
+    () => eligibleOptions.find((u) => u.code.toLowerCase() === officialEmail.toLowerCase()) || null,
+    [eligibleOptions, officialEmail],
+  );
+  const substituteOptions = useMemo(
+    () => eligibleOptions.filter((u) => u.code.toLowerCase() !== officialEmail.toLowerCase()),
+    [eligibleOptions, officialEmail],
+  );
+  const substituteOption = useMemo(
+    () => substituteOptions.find((u) => u.code.toLowerCase() === substituteEmail.toLowerCase()) || null,
+    [substituteOptions, substituteEmail],
   );
   const eligibleLoading = usersLoading || (sapEligible.length === 0 && dirLoading);
 
@@ -414,62 +433,44 @@ export default function SubstituteApproversTab({ isAdmin = false }: { isAdmin?: 
               {selfMode ? (
                 <Input value={officialName ? `${officialName} (${officialEmail})` : officialEmail} disabled />
               ) : (
-                <Select
-                  value={officialEmail}
-                  onValueChange={(v) => {
-                    setOfficialEmail(v);
-                    const u = eligible.find((x) => x.email === v);
+                <CachedSearchCombobox
+                  options={eligibleOptions}
+                  isLoading={eligibleLoading}
+                  value={officialOption}
+                  onChange={(opt) => {
+                    const email = opt?.code || "";
+                    setOfficialEmail(email);
+                    const u = eligible.find((x) => x.email.toLowerCase() === email.toLowerCase());
                     setOfficialName(u?.name || "");
+                    if (email && email.toLowerCase() === substituteEmail.toLowerCase()) {
+                      setSubstituteEmail("");
+                      setSubstituteName("");
+                    }
                   }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={eligibleLoading ? "Carregando usuários..." : "Selecione o oficial"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {eligible.length === 0 && (
-                      <div className="px-2 py-3 text-xs text-muted-foreground">
-                        {eligibleLoading ? "Carregando usuários..." : "Nenhum usuário disponível"}
-                      </div>
-                    )}
-                    {eligible.filter((u) => u.email).map((u) => (
-                      <SelectItem key={`off-${u.email}`} value={u.email}>
-                        {u.name} <span className="opacity-60">({u.email})</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-
-                </Select>
+                  placeholder="Buscar oficial por nome, e-mail ou código..."
+                  required
+                  footerHint={`${eligibleOptions.length} usuário(s) em ordem alfabética`}
+                />
               )}
             </div>
 
 
             <div className="space-y-1.5">
               <Label className="text-xs">Substituto</Label>
-              <Select
-                value={substituteEmail}
-                onValueChange={(v) => {
-                  setSubstituteEmail(v);
-                  const u = eligible.find((x) => x.email === v);
+              <CachedSearchCombobox
+                options={substituteOptions}
+                isLoading={eligibleLoading}
+                value={substituteOption}
+                onChange={(opt) => {
+                  const email = opt?.code || "";
+                  setSubstituteEmail(email);
+                  const u = eligible.find((x) => x.email.toLowerCase() === email.toLowerCase());
                   setSubstituteName(u?.name || "");
                 }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={eligibleLoading ? "Carregando usuários..." : "Selecione o substituto"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {eligible.length === 0 && (
-                    <div className="px-2 py-3 text-xs text-muted-foreground">
-                      {eligibleLoading ? "Carregando usuários..." : "Nenhum usuário disponível"}
-                    </div>
-                  )}
-                  {eligible.filter((u) => u.email && u.email.toLowerCase() !== officialEmail.toLowerCase()).map((u) => (
-                    <SelectItem key={`sub-${u.email}`} value={u.email}>
-                      {u.name} <span className="opacity-60">({u.email})</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-
-              </Select>
+                placeholder="Buscar substituto por nome, e-mail ou código..."
+                required
+                footerHint={`${substituteOptions.length} usuário(s) em ordem alfabética`}
+              />
             </div>
 
             <div className="space-y-1.5">

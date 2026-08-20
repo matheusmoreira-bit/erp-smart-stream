@@ -541,7 +541,7 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
   nfLinks.forEach((nf) => {
     const id = `nf-${nf.id}`;
     nfById[nf.id] = { id, apChildren: [] };
-    const statusOk = /close|paga/i.test(nf.status);
+    const statusOk = /close|paga|completed|linked|lan[çc]ad/i.test(nf.status);
     const nfDocEntryStr = nf.sap_invoice_draft_id ? String(nf.sap_invoice_draft_id) : null;
     const matchesFluxoNf =
       !!fluxoNfId &&
@@ -559,7 +559,7 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
         when: nf.created_at,
         status: nf.status,
         statusTone: statusOk ? "success" : "muted",
-        state: statusOk ? "done" : "pending",
+        state: statusOk ? "done" : "current",
         extra: matchesFluxoNf ? `Vínculo fluxo · NF #${fluxoNfId}` : undefined,
       },
     });

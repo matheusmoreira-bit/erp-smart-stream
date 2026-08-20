@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { RefreshCw, X, PlayCircle, TrendingUp, AlertTriangle, CheckCircle2, Clock, History, Send, Search, Paperclip, ExternalLink, FileText } from "lucide-react";
+import { RefreshCw, X, PlayCircle, TrendingUp, AlertTriangle, CheckCircle2, Clock, History, Send, Search, ExternalLink, FileText } from "lucide-react";
 import { Link } from "react-router-dom";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 
@@ -63,12 +63,6 @@ function categoryLabel(cat: string | null): string {
   return CATEGORY_LABELS[cat] || cat;
 }
 
-/** A falha é de anexo? (categoria gravada pelo retry ou mensagem do SAP) */
-function isAttachmentFailure(row: Pick<Row, "error_category" | "last_error">): boolean {
-  if (row.error_category === "attachment") return true;
-  return /attachment|anexo/i.test(row.last_error || "");
-}
-
 /** Link da trilha unificada do documento (abre a linha do tempo já filtrada). */
 function docTrailLink(row: Pick<Row, "ref_id">): string {
   return `/backoffice/trilha-documento?q=${encodeURIComponent(row.ref_id)}&doc=${encodeURIComponent(row.ref_id)}`;
@@ -98,7 +92,6 @@ export default function BackofficeRetryQueue() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [dispatching, setDispatching] = useState(false);
-  const [skippingId, setSkippingId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -172,36 +165,6 @@ export default function BackofficeRetryQueue() {
     const { error } = await supabase.from("sap_retry_queue").update({ status: "cancelled" }).eq("id", id);
     if (error) toast.error(error.message);
     else toast.success("Cancelado");
-  };
-
-  // Contingência para falhas de anexo: integra o documento no SAP sem o anexo
-  // e envia o arquivo por email para o fiscal da empresa.
-  const integrateWithoutAttachment = async (row: Row) => {
-    setSkippingId(row.id);
-    try {
-      const { data, error } = await supabase.functions.invoke("expense-to-sap", {
-        body: { expense_id: row.ref_id, use_service_account: true, skip_attachments: true },
-      });
-      const failed = error || (data && (data as { success?: boolean }).success === false);
-      if (failed) {
-        const msg = (data as { error?: string })?.error || error?.message || "Falha na integração";
-        toast.error(msg);
-        return;
-      }
-      await supabase
-        .from("sap_retry_queue")
-        .update({
-          status: "succeeded",
-          last_error: "Integrado sem anexo (anexo enviado por email ao fiscal)",
-        })
-        .eq("id", row.id);
-      toast.success("Integrado sem anexo — arquivo enviado por email ao fiscal");
-      load();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha na integração sem anexo");
-    } finally {
-      setSkippingId(null);
-    }
   };
 
 
@@ -614,20 +577,6 @@ export default function BackofficeRetryQueue() {
                       <PlayCircle className="h-3 w-3 mr-1" />Reenviar
                     </Button>
                   )}
-                  {canDispatch && r.doc_type === "expense" && isAttachmentFailure(r) && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={skippingId === r.id}
-                      title="Integra o pedido no SAP sem anexo e envia o arquivo por email para o fiscal da empresa"
-                      onClick={() => integrateWithoutAttachment(r)}
-                    >
-                      <Paperclip className="h-3 w-3 mr-1" />
-                      {skippingId === r.id ? "Integrando..." : "Integrar sem anexo"}
-                    </Button>
-                  )}
-
-
                   {r.status !== "cancelled" && r.status !== "succeeded" && (
                     <Button size="sm" variant="ghost" onClick={() => cancel(r.id)} aria-label="Cancelar">
                       <X className="h-3 w-3" />

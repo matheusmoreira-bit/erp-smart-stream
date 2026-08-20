@@ -1,9 +1,10 @@
 import ExpensesPage from "./Expenses.tsx";
 import SalesReceivables from "./Sales.tsx";
 import SalesNfse from "./SalesNfse.tsx";
+import AdvancePayments from "./AdvancePayments.tsx";
 import SalesRecipientsTab from "@/components/SalesRecipientsTab";
 
-export type SalesTab = "orders" | "nfse" | "receivables" | "recipients";
+export type SalesTab = "orders" | "nfse" | "advances" | "receivables" | "recipients";
 
 /**
  * Hub do ciclo de vendas: Pedido de Venda → NFS-e → Contas a Receber → Destinatários.
@@ -14,6 +15,7 @@ export default function SalesHub({ tab }: { tab: SalesTab }) {
     <div className="min-h-screen bg-background text-foreground">
       {tab === "orders" && <ExpensesPage mode="sales" />}
       {tab === "nfse" && <SalesNfse />}
+      {tab === "advances" && <AdvancePayments advanceType="customer" />}
       {tab === "receivables" && <SalesReceivables />}
       {tab === "recipients" && <SalesRecipientsTab />}
     </div>

@@ -22,6 +22,31 @@ interface RequestBody {
   expenseIds?: (number | string)[];
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function asNumber(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function materialSapDoc(row: Record<string, unknown>): { docEntry: number | null; docNum: number | null } {
+  const response = asRecord(row.sap_response);
+  const purchaseOrder = asRecord(response.purchase_order);
+  const docEntry =
+    asNumber(row.sap_doc_entry) ||
+    asNumber(purchaseOrder.DocEntry) ||
+    asNumber(response.DocEntry) ||
+    asNumber(response.docEntry);
+  const docNum =
+    asNumber(row.sap_doc_num) ||
+    asNumber(purchaseOrder.DocNum) ||
+    asNumber(response.DocNum) ||
+    asNumber(response.docNum);
+  return { docEntry, docNum };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") {
@@ -72,22 +97,35 @@ Deno.serve(async (req) => {
   );
 
   try {
-    // 1. Logs de integração com status success para essas expenses NA EMPRESA.
+    // 1. Logs de integração materialmente concluídos para essas expenses NA EMPRESA.
+    // Alguns fluxos antigos marcavam `status=error` depois de o SAP já ter
+    // criado o pedido/anexo (falha em etapa tardia como audit/notify/backfill).
+    // Para status de tela, DocEntry real prevalece sobre o status textual antigo.
     let integrations: any[] = [];
     if (expenseIds.length > 0) {
       const { data, error } = await admin
         .from("pagcorp_integration_log")
         .select(
-          "pagcorp_expense_id, id, status, sap_doc_num, sap_doc_entry, settlement_status, settlement_payment_doc_num, settlement_error, created_at",
+          "pagcorp_expense_id, id, status, sap_doc_num, sap_doc_entry, sap_payload, sap_response, settlement_status, settlement_payment_doc_num, settlement_error, created_at",
         )
         .eq("company_db", companyDb)
-        .eq("status", "success")
         .in("pagcorp_expense_id", expenseIds)
         // Uma transação pode ter N pedidos (fornecedores diferentes no mesmo
         // comprovante) — devolvemos todos, do mais antigo para o mais novo.
         .order("created_at", { ascending: true });
       if (error) throw error;
-      integrations = data || [];
+      integrations = (data || [])
+        .map((row: Record<string, unknown>) => {
+          const doc = materialSapDoc(row);
+          if (row.status !== "success" && !doc.docEntry) return null;
+          return {
+            ...row,
+            status: "success",
+            sap_doc_entry: doc.docEntry,
+            sap_doc_num: doc.docNum,
+          };
+        })
+        .filter(Boolean);
     }
 
     // 1b. Relações reais no SAP (NF de entrada e pagamento) por pedido —

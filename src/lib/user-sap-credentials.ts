@@ -81,14 +81,24 @@ export interface SapAutoLoginResult {
   sessionTimeout: number;
   /** true quando a sessão veio do cache do servidor (sem novo /Login). */
   cached?: boolean;
+  /** true quando a sessão foi aberta com a credencial de serviço (ApiUser). */
+  service?: boolean;
 }
 
 /**
  * Resolve a sessão do Service Layer no servidor. O backend reaproveita a
  * sessão em cache (tabela `erp_session_cache`) enquanto ela estiver válida;
  * use `force` para descartar o cache quando o SAP recusar a sessão.
+ *
+ * `allowService` (padrão: true) permite o fallback para a credencial de
+ * serviço (ApiUser) da empresa — usado em fluxos de leitura. Ações que
+ * precisam da identidade do próprio usuário devem passar `false`.
  */
-export async function sapAutoLogin(companyDb: string, force = false): Promise<SapAutoLoginResult> {
+export async function sapAutoLogin(
+  companyDb: string,
+  force = false,
+  options?: { allowService?: boolean },
+): Promise<SapAutoLoginResult> {
   if (runtime.isStandaloneLocal) {
     const sapUser = defaultSapUserFromEmail(getFakeAuthEmail()) || "matheus.moreira";
     return {
@@ -104,7 +114,11 @@ export async function sapAutoLogin(companyDb: string, force = false): Promise<Sa
   const res = await authFetch("sap-auto-login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ company_db: companyDb, force }),
+    body: JSON.stringify({
+      company_db: companyDb,
+      force,
+      allow_service: options?.allowService !== false,
+    }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -114,6 +128,7 @@ export async function sapAutoLogin(companyDb: string, force = false): Promise<Sa
   }
   return data as SapAutoLoginResult;
 }
+
 
 /**
  * Guarda no servidor uma sessão criada pelo login interativo (usuário + senha),

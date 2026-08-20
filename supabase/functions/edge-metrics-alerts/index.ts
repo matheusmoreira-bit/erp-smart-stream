@@ -3,9 +3,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
+import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
+import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
 
-const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "";
-const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || "";
+const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "http://63.177.171.140/sender_wpp";
+const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || Deno.env.get("WHATSAPP_API_TOKEN") || "";
 
 const DEFAULT_PHONES: string[] = []; // configure via EDGE_METRICS_ALERT_PHONES
 
@@ -17,6 +19,10 @@ const DENIED_MIN_COUNT = 10; // mínimo absoluto de negações para alertar
 
 
 async function sendWhatsApp(to: string, message: string) {
+  if (!WHATSAPP_TOKEN) {
+    console.warn("[edge-metrics-alerts] WHATSAPP_TOKEN não configurado; notificação ignorada.");
+    return { ok: false, status: 0, body: "WHATSAPP_TOKEN ausente" };
+  }
   const body = new URLSearchParams({ to, message });
   const resp = await fetch(WHATSAPP_URL, {
     method: "POST",
@@ -33,6 +39,10 @@ import { weekendBlockResponse } from "../_shared/weekend-guard.ts";
 
 Deno.serve(withEdgeMetrics("edge-metrics-alerts", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const auth = await requireSchedulerOrAdmin(req, corsHeaders);
+  if (!auth.ok) return auth.response;
+  const disabled = blockIfIntegrationsDisabled(corsHeaders);
+  if (disabled) return disabled;
   const weekendBlock = await weekendBlockResponse(req, corsHeaders);
   if (weekendBlock) return weekendBlock;
 

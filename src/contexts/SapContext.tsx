@@ -349,16 +349,23 @@ export function SapProvider({ children }: { children: ReactNode }) {
       };
     }
 
-    // 2) Senha provisionada → login invisível.
+    // 2) Sessão sob demanda.
+    //    - Leituras (interactive=false): pode usar a credencial de serviço
+    //      (ApiUser) da empresa — nunca pede senha ao usuário.
+    //    - Ações do usuário (interactive=true): exige a credencial dele
+    //      (senha provisionada) e, na falta, abre o modal de login.
     try {
       const { sapAutoLogin } = await import("@/lib/user-sap-credentials");
-      const result = await sapAutoLogin(db);
+      const result = await sapAutoLogin(db, false, { allowService: !interactive });
       const timeoutMin = Math.min(Math.max(result.sessionTimeout || 30, 1), 30);
       const impAct = getImpersonation();
+      // A sessão de serviço não muda a identidade exibida/filtrada do usuário.
       setSession((prev) => ({
         erpType: "sap",
         companyDB: db,
-        userName: impAct?.companyDB === db ? impAct.targetUser : result.sapUser,
+        userName: impAct?.companyDB === db
+          ? impAct.targetUser
+          : (result.service ? (prev?.companyDB === db ? prev.userName : result.sapUser) : result.sapUser),
         sessionId: result.sessionId,
         routeId: result.routeId,
         isSuperUser: prev?.companyDB === db ? prev?.isSuperUser : undefined,
@@ -371,8 +378,9 @@ export function SapProvider({ children }: { children: ReactNode }) {
         userName: result.sapUser,
       };
     } catch {
-      /* sem senha provisionada (ou credencial inválida) → pede ao usuário */
+      /* sem credencial utilizável → pede ao usuário (apenas em ações diretas) */
     }
+
 
     // 3) Modal de login da empresa — apenas em ações diretas no SAP.
     if (!interactive) return null;

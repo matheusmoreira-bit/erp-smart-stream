@@ -1,5 +1,8 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+
+type SynapseIntegrationInsert = Database["public"]["Tables"]["synapse_integrations"]["Insert"];
 
 export interface SynapseIntegration {
   id: string;
@@ -171,6 +174,28 @@ export function useSynapseIntegrations(companyDB?: string) {
       } as any);
     }
 
+    // Ensure SAP Document Link Watcher (relações entre documentos)
+    const { data: dlwData } = await supabase
+      .from("synapse_integrations")
+      .select("id")
+      .eq("integration_key", "sap_document_link_watcher")
+      .eq("company_db", companyDb)
+      .maybeSingle();
+
+    if (!dlwData) {
+      const integration: SynapseIntegrationInsert = {
+        integration_key: "sap_document_link_watcher",
+        display_name: "Watcher de vínculos SAP",
+        description:
+          "Reconcilia vínculos entre PCs, NFs de entrada, adiantamentos, pedidos de venda, NFs de saída, recebimentos e documentos fiscais autorizados.",
+        is_active: false,
+        interval_minutes: 10,
+        parameters: { days_back: 21 },
+        company_db: companyDb,
+      };
+      await supabase.from("synapse_integrations").insert(integration);
+    }
+
     // Ensure JumpCloud Attributes Sync (IdP → mapping)
     const { data: jcaData } = await supabase
       .from("synapse_integrations")
@@ -203,6 +228,7 @@ export function useSynapseIntegrations(companyDB?: string) {
         pagcorp_erp_sync: "synapse-pagcorp-sync",
         purchase_order_notifications: "synapse-po-notify",
         pagcorp_settlement_watcher: "pagcorp-settlement-watcher",
+        sap_document_link_watcher: "sap-document-link-watcher",
         jumpcloud_attributes_sync: "jumpcloud-attributes-sync",
       };
       const functionName = edgeFunctionMap[integrationKey] || "synapse-jc-sync";

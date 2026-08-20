@@ -1,4 +1,5 @@
 import { ChevronDown, Check, LayoutGrid } from "lucide-react";
+import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ interface SubmenuBarProps {
   items: SubmenuItem[];
   active: string;
   onSelect: (key: string) => void;
+  actions?: ReactNode;
 }
 
 /**
@@ -31,15 +33,15 @@ interface SubmenuBarProps {
  * Substitui a antiga régua de abas por um seletor em dropdown,
  * que funciona bem tanto no desktop quanto no mobile.
  */
-export function SubmenuBar({ moduleLabel, moduleHref, items, active, onSelect }: SubmenuBarProps) {
+export function SubmenuBar({ moduleLabel, moduleHref, items, active, onSelect, actions }: SubmenuBarProps) {
   const navigate = useNavigate();
   const current = items.find((i) => i.key === active) ?? items[0];
   const homeHref = moduleHref ?? items[0]?.key ?? "/";
 
   return (
     <div className="sticky top-[var(--app-header-h,72px)] z-20 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 h-12 flex items-center gap-2">
-        <nav aria-label="Trilha de navegação" className="flex items-center gap-2 min-w-0">
+      <div className="mx-auto flex h-12 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
+        <nav aria-label="Trilha de navegação" className="flex min-w-0 items-center gap-2">
           <button
             type="button"
             onClick={() => navigate("/")}
@@ -65,24 +67,16 @@ export function SubmenuBar({ moduleLabel, moduleHref, items, active, onSelect }:
           ) : null}
 
 
-          <span
-            aria-current="page"
-            className="hidden md:inline text-sm font-semibold text-foreground truncate max-w-[28vw]"
-          >
+          <span aria-current="page" className="truncate text-sm font-semibold text-foreground">
             {current?.label}
           </span>
         </nav>
 
-        {items.length <= 1 ? (
-          <span className="md:hidden text-sm font-semibold text-foreground truncate">
-            {current?.label}
-          </span>
-        ) : (
-        <>
-          <span aria-hidden="true" className="hidden md:inline text-muted-foreground/50">/</span>
-
+        <div className="flex shrink-0 items-center gap-2">
+        {items.length > 1 ? (
+          <>
           {/* Desktop: pílulas horizontais */}
-          <nav className="hidden md:flex items-center gap-1 overflow-x-auto rounded-full bg-muted/50 p-1">
+          <nav className="hidden max-w-[52vw] items-center gap-1 overflow-x-auto rounded-full bg-muted/50 p-1 md:flex">
             {items.map((item) => (
               <button
                 key={item.key}
@@ -103,45 +97,47 @@ export function SubmenuBar({ moduleLabel, moduleHref, items, active, onSelect }:
 
           {/* Mobile: dropdown compacto */}
           <div className="md:hidden">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 gap-1.5 px-2 font-semibold text-foreground data-[state=open]:bg-muted/60"
-            >
-              <span className="truncate max-w-[45vw] sm:max-w-none">{current?.label}</span>
-              <ChevronDown className="w-4 h-4 text-muted-foreground" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-64">
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
-              {moduleLabel ? `${moduleLabel} — submódulos` : "Submódulos"}
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {items.map((item) => (
-              <DropdownMenuItem
-                key={item.key}
-                onSelect={() => onSelect(item.key)}
-                className={cn(
-                  "gap-2 cursor-pointer",
-                  item.key === current?.key && "text-primary font-medium",
-                )}
-              >
-                <Check
-                  className={cn(
-                    "w-4 h-4",
-                    item.key === current?.key ? "opacity-100" : "opacity-0",
-                  )}
-                />
-                {item.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-1.5 px-2 font-semibold text-foreground data-[state=open]:bg-muted/60"
+                >
+                  <span className="sr-only">Trocar seção</span>
+                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                  {moduleLabel ? `${moduleLabel} — submódulos` : "Submódulos"}
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {items.map((item) => (
+                  <DropdownMenuItem
+                    key={item.key}
+                    onSelect={() => onSelect(item.key)}
+                    className={cn(
+                      "gap-2 cursor-pointer",
+                      item.key === current?.key && "text-primary font-medium",
+                    )}
+                  >
+                    <Check
+                      className={cn(
+                        "w-4 h-4",
+                        item.key === current?.key ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                    {item.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-        </>
-        )}
+          </>
+        ) : null}
+        {actions}
+        </div>
 
       </div>
     </div>

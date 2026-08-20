@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesInsert } from "@/integrations/supabase/types";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { useSap } from "@/contexts/SapContext";
 
@@ -11,6 +12,8 @@ export type AdvanceStatus =
   | "integrating"
   | "integrated"
   | "failed";
+
+export type AdvanceType = "supplier" | "customer";
 
 export const ADVANCE_STATUS_LABELS: Record<AdvanceStatus, string> = {
   draft: "Rascunho",
@@ -56,6 +59,7 @@ export interface AdvanceItem {
 export interface AdvancePayment {
   id: string;
   company_db: string;
+  advance_type?: AdvanceType;
   supplier_card_code: string;
   supplier_name: string;
   supplier_cnpj?: string | null;
@@ -82,6 +86,7 @@ export interface AdvancePayment {
 
 export interface CreateAdvanceInput {
   company_db: string;
+  advance_type?: AdvanceType;
   supplier_card_code: string;
   supplier_name: string;
   supplier_cnpj?: string;
@@ -92,6 +97,8 @@ export interface CreateAdvanceInput {
   files?: File[];
   submit?: boolean; // true => goes to pending; false => draft
 }
+
+type AdvanceAttachmentInsert = TablesInsert<"advance_payment_attachments">;
 
 async function callAdvanceToSap(advance_id: string) {
   const res = await sapFunctionFetch("advance-to-sap", {
@@ -105,7 +112,7 @@ async function callAdvanceToSap(advance_id: string) {
   return data;
 }
 
-export function useAdvancePayments() {
+export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
   const { session } = useSap();
   const [items, setItems] = useState<AdvancePayment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,30 +127,34 @@ export function useAdvancePayments() {
         setItems([]);
         return;
       }
-      const { data, error: err } = await (supabase.from("advance_payments") as any)
+      const { data, error: err } = await (supabase as any)
+        .from("advance_payments")
         .select("*")
         .eq("company_db", company)
+        .eq("advance_type", advanceType)
         .order("created_at", { ascending: false });
       if (err) throw err;
 
-      const ids = (data || []).map((r: any) => r.id);
+      const ids = (data || []).map((r) => r.id);
       const attMap: Record<string, AdvanceAttachment[]> = {};
       const itemMap: Record<string, AdvanceItem[]> = {};
       if (ids.length) {
         const [{ data: atts }, { data: lines }] = await Promise.all([
-          (supabase.from("advance_payment_attachments") as any).select("*").in("advance_id", ids),
-          (supabase.from("advance_payment_items") as any).select("*").in("advance_id", ids),
+          supabase.from("advance_payment_attachments").select("*").in("advance_id", ids),
+          supabase.from("advance_payment_items").select("*").in("advance_id", ids),
         ]);
-        for (const a of (atts || []) as any[]) {
+        for (const a of atts || []) {
           (attMap[a.advance_id] ||= []).push(a);
         }
-        for (const l of (lines || []) as any[]) {
+        for (const l of lines || []) {
           (itemMap[l.advance_id] ||= []).push(l);
         }
       }
       setItems(
-        (data || []).map((r: any) => ({
+        (data || []).map((r) => ({
           ...r,
+          advance_type: r.advance_type as AdvanceType,
+          status: r.status as AdvanceStatus,
           attachments: attMap[r.id] || [],
           items: itemMap[r.id] || [],
         })),
@@ -154,7 +165,7 @@ export function useAdvancePayments() {
     } finally {
       setLoading(false);
     }
-  }, [session?.companyDB]);
+  }, [session?.companyDB, advanceType]);
 
   useEffect(() => {
     fetchAll();
@@ -182,9 +193,11 @@ export function useAdvancePayments() {
       const headerCc = items.find((i) => i.cost_center)?.cost_center || null;
       const headerCcName = items.find((i) => i.cost_center)?.cost_center_name || null;
 
-      const { data: row, error: err } = await (supabase.from("advance_payments") as any)
+      const { data: row, error: err } = await (supabase as any)
+        .from("advance_payments")
         .insert({
           company_db: input.company_db,
+          advance_type: input.advance_type || advanceType,
           supplier_card_code: input.supplier_card_code,
           supplier_name: input.supplier_name,
           supplier_cnpj: input.supplier_cnpj || null,
@@ -215,12 +228,12 @@ export function useAdvancePayments() {
         project: it.project || null,
         project_name: it.project_name || null,
       }));
-      const { error: iErr } = await (supabase.from("advance_payment_items") as any).insert(itemRows);
+      const { error: iErr } = await supabase.from("advance_payment_items").insert(itemRows);
       if (iErr) throw iErr;
 
       if (input.files?.length) {
         const advId = row.id;
-        const rows: any[] = [];
+        const rows: AdvanceAttachmentInsert[] = [];
         const { uploadExpenseAttachment } = await import("@/lib/attachment-upload");
         for (const file of input.files) {
           const up = await uploadExpenseAttachment({ advanceId: advId }, file);
@@ -234,7 +247,7 @@ export function useAdvancePayments() {
           });
         }
         if (rows.length) {
-          const { error: aErr } = await (supabase.from("advance_payment_attachments") as any).insert(rows);
+          const { error: aErr } = await supabase.from("advance_payment_attachments").insert(rows);
           if (aErr) throw aErr;
         }
       }
@@ -242,23 +255,26 @@ export function useAdvancePayments() {
       await fetchAll();
       return row as AdvancePayment;
     },
-    [session, fetchAll],
+    [session, fetchAll, advanceType],
   );
 
   const approve = useCallback(
     async (id: string) => {
-      const { error: err } = await (supabase.from("advance_payments") as any)
+      const { error: err } = await (supabase as any)
+        .from("advance_payments")
         .update({ status: "approved" })
         .eq("id", id);
       if (err) throw err;
       // Tenta integrar imediatamente
       try {
-        await (supabase.from("advance_payments") as any)
+        await supabase
+          .from("advance_payments")
           .update({ status: "integrating" })
           .eq("id", id);
         await callAdvanceToSap(id);
       } catch (e) {
-        await (supabase.from("advance_payments") as any)
+        await supabase
+          .from("advance_payments")
           .update({ status: "failed", sap_integration_error: e instanceof Error ? e.message : String(e) })
           .eq("id", id);
         throw e;
@@ -271,7 +287,8 @@ export function useAdvancePayments() {
 
   const reject = useCallback(
     async (id: string, reason: string) => {
-      const { error: err } = await (supabase.from("advance_payments") as any)
+      const { error: err } = await (supabase as any)
+        .from("advance_payments")
         .update({ status: "rejected", rejection_reason: reason })
         .eq("id", id);
       if (err) throw err;
@@ -282,13 +299,15 @@ export function useAdvancePayments() {
 
   const retry = useCallback(
     async (id: string) => {
-      await (supabase.from("advance_payments") as any)
+      await (supabase as any)
+        .from("advance_payments")
         .update({ status: "integrating", sap_integration_error: null })
         .eq("id", id);
       try {
         await callAdvanceToSap(id);
       } catch (e) {
-        await (supabase.from("advance_payments") as any)
+        await supabase
+          .from("advance_payments")
           .update({ status: "failed", sap_integration_error: e instanceof Error ? e.message : String(e) })
           .eq("id", id);
         throw e;
@@ -301,7 +320,7 @@ export function useAdvancePayments() {
 
   const remove = useCallback(
     async (id: string) => {
-      const { error: err } = await (supabase.from("advance_payments") as any).delete().eq("id", id);
+      const { error: err } = await supabase.from("advance_payments").delete().eq("id", id);
       if (err) throw err;
       await fetchAll();
     },

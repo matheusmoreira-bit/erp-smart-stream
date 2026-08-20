@@ -348,9 +348,8 @@ export function useUserAssignments(_companyDb?: string) {
       .in("sap_email", keys);
     if (delError) throw new Error(delError.message);
 
-    const { error: insError } = await supabase.from("user_group_assignments").upsert(
+    const { error: insError } = await supabase.from("user_group_assignments").insert(
       { sap_email: email, group_id, company_db: null },
-      { onConflict: "sap_email,group_id" }
     );
     if (insError) throw new Error(insError.message);
     await fetch();
@@ -389,16 +388,30 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
   const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
+    const allKeys = ALL_MODULES.map((m) => m.key);
+    let cancelled = false;
+
+    // Sem sessão ERP ainda: admins da nuvem (identidade Google) continuam com
+    // acesso total — a troca de empresa não depende mais do login do ERP.
     if (!session?.userName) {
-      setUserModules(DEFAULT_MODULES);
-      setPerms(Object.fromEntries(DEFAULT_MODULES.map((k) => [k, defaultPermsFor(k)])));
-      setLoading(false);
-      return;
+      setLoading(true);
+      (async () => {
+        const admin = await getIsCloudAdmin().catch(() => false);
+        if (cancelled) return;
+        if (admin) {
+          setUserModules(allKeys);
+          setPerms(Object.fromEntries(allKeys.map((k) => [k, FULL_PERMS])));
+        } else {
+          setUserModules(DEFAULT_MODULES);
+          setPerms(Object.fromEntries(DEFAULT_MODULES.map((k) => [k, defaultPermsFor(k)])));
+        }
+        setLoading(false);
+      })();
+      return () => { cancelled = true; };
     }
 
-    const allKeys = ALL_MODULES.map((m) => m.key);
     const identifier = session.userName.toLowerCase();
-    let cancelled = false;
+
 
     const grantAll = () => {
       if (cancelled) return;
@@ -422,12 +435,14 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
       // SAP admin (matched by email/prefix)?
       if (await getIsSapUserAdmin(identifier)) { grantAll(); return; }
 
-      // Global assignments — one row per (sap_email, group_id).
+      // Assignments globais ou específicos da empresa atual.
       const allAssignments = await getGroupAssignments();
 
       const myKey = canonicalUserKey(identifier);
       const mine = (allAssignments || []).filter(
-        (a: any) => canonicalUserKey(a.sap_email) === myKey,
+        (a: any) =>
+          (a.company_db === null || a.company_db === session.companyDB) &&
+          canonicalUserKey(a.sap_email) === myKey,
       );
 
       if (cancelled) return;

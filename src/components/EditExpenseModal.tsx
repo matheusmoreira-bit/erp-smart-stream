@@ -28,6 +28,7 @@ import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { useSap } from "@/contexts/SapContext";
 import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
 import { useMyCapabilities } from "@/hooks/useMyCapabilities";
+import { isSalesOnlyItemCode } from "@/hooks/useCurrentUserCostCenter";
 
 import { canViewLotusCostCenters, filterLotusCostCenters } from "@/lib/cost-center-visibility";
 import {
@@ -159,12 +160,17 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
   });
 
   const itemMapRow = useCallback((row: any) => ({ code: row.ItemCode, name: row.ItemName }), []);
-  const { options: itemOptions, isLoading: itemsLoading } = useSapCachedList({
+  const { options: rawItemOptions, isLoading: itemsLoading } = useSapCachedList({
     cacheKey: isSales ? "items_sales_active_v3" : "items_purchase_active_v3",
     endpoint: "Items",
     params: { $filter: "Valid eq 'tYES' and Frozen eq 'tNO'", $select: "ItemCode,ItemName" },
     mapRow: itemMapRow,
   });
+  // Itens SV% são exclusivos de venda — bloqueados em pedidos de compra.
+  const itemOptions = useMemo(
+    () => (isSales ? rawItemOptions : rawItemOptions.filter((o) => !isSalesOnlyItemCode(o.code))),
+    [rawItemOptions, isSales],
+  );
 
   const costCenterMapRow = useCallback(
     (row: any) => ({ code: row.CenterCode, name: row.CenterName }),
