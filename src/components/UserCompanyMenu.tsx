@@ -243,12 +243,8 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
 
           {expanded && (
             <div className="max-h-64 overflow-y-auto py-1">
-              {loadingCreds && (
-                <p className="text-[11px] text-muted-foreground px-3 pb-1">Verificando senhas provisionadas…</p>
-              )}
               {list.map((c) => {
                 const isCurrent = c.company_db === session.companyDB;
-                const hasManaged = c.erp_type === "sap" ? managed.has(c.company_db) : true;
                 return (
                   <button
                     key={c.company_db}
@@ -257,17 +253,14 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
                     className="w-full flex items-center gap-2 rounded-sm pl-8 pr-2 py-1.5 text-left text-sm hover:bg-muted/60 transition-colors disabled:opacity-60"
                   >
                     <span className="flex-1 truncate text-foreground">{c.display_name}</span>
-                    {busyDb === c.company_db ? (
+                    {busyDb === c.company_db && (
                       <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground shrink-0" />
-                    ) : hasManaged ? (
-                      <ShieldCheck className="w-3.5 h-3.5 text-primary shrink-0" aria-label="Senha provisionada" />
-                    ) : (
-                      <KeyRound className="w-3.5 h-3.5 text-muted-foreground shrink-0" aria-label="Requer login" />
                     )}
                     {isCurrent && <Check className="w-3.5 h-3.5 text-success shrink-0" aria-label="Empresa atual" />}
                   </button>
                 );
               })}
+
               {list.length === 0 && (
                 <p className="text-sm text-muted-foreground px-3 py-2">Nenhuma empresa disponível.</p>
               )}
