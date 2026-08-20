@@ -12,6 +12,8 @@ import {
   AlertTriangle,
   ShieldCheck,
   X,
+  Copy,
+
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -334,13 +336,17 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
     else if (alertFilter === "ok") list = list.filter((r) => r.alerts.length === 0);
 
     if (q) {
+      const norm = (v?: string | null) =>
+        (v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      const nq = norm(q);
       list = list.filter(
         (r) =>
-          r.user.UserName?.toLowerCase().includes(q) ||
-          r.user.UserCode?.toLowerCase().includes(q) ||
-          (r.user.eMail?.toLowerCase().includes(q) ?? false),
+          norm(r.user.UserName).includes(nq) ||
+          norm(r.user.UserCode).includes(nq) ||
+          norm(r.user.eMail).includes(nq),
       );
     }
+
 
     const sorted = [...list];
     if (segment === "divergences") {
@@ -506,6 +512,14 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
               <UserPlus className="w-4 h-4 mr-2" />
               Convidar admin
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/backoffice/sap-users/replicate")}
+            >
+              <Copy className="w-4 h-4 mr-2" />
+              Replicar entre bases
+            </Button>
             <Button variant="outline" size="sm" onClick={refreshPage} disabled={pageLoading}>
               <RefreshCw className={`w-4 h-4 mr-2 ${pageLoading ? "animate-spin" : ""}`} />
               Atualizar
@@ -655,7 +669,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
               const initials = getInitials(user.UserName || user.UserCode || "?");
               return (
                 <div
-                  key={user.InternalKey || user.UserCode}
+                  key={user.UserCode || String(user.InternalKey)}
                   className="flex flex-col gap-3 border-b border-border px-4 py-3 last:border-b-0 transition-colors hover:bg-muted/20 sm:flex-row sm:items-center"
                 >
                   <Checkbox

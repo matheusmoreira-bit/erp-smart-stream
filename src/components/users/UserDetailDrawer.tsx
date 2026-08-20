@@ -36,6 +36,8 @@ import {
   type ManagementSegment,
 } from "@/hooks/useManagementSegments";
 import { IDP_STATE_LABEL, type IdpLinkState, type UserAlert } from "@/lib/user-state";
+import UserCompaniesTab from "@/components/users/UserCompaniesTab";
+
 
 export interface UserDrawerData {
   user: SapUser;
@@ -238,13 +240,15 @@ export default function UserDetailDrawer({
           )}
 
           <Tabs defaultValue="acesso" className="mt-4">
-            <TabsList className="w-full grid grid-cols-5">
+            <TabsList className="w-full grid grid-cols-6">
               <TabsTrigger value="identidade">Identidade</TabsTrigger>
               <TabsTrigger value="acesso">Acesso</TabsTrigger>
+              <TabsTrigger value="empresas">Empresas</TabsTrigger>
               <TabsTrigger value="vinculos">Vínculos</TabsTrigger>
               <TabsTrigger value="licenca">Licença</TabsTrigger>
               <TabsTrigger value="atividade">Atividade</TabsTrigger>
             </TabsList>
+
 
             <TabsContent value="identidade" className="space-y-3 pt-4 text-sm">
               <Field label="Nome" value={data.user.UserName || "—"} />
@@ -322,7 +326,18 @@ export default function UserDetailDrawer({
               </Button>
             </TabsContent>
 
+            <TabsContent value="empresas" className="pt-4">
+              <UserCompaniesTab
+                userCode={data.user.UserCode}
+                userName={data.user.UserName || data.user.UserCode}
+                email={data.user.eMail}
+                sourceCompanyDb={companyDb}
+                onChanged={onChanged}
+              />
+            </TabsContent>
+
             <TabsContent value="vinculos" className="space-y-4 pt-4 text-sm">
+
               <div className="rounded-lg border border-border p-3 space-y-1">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">SAP</p>
                 <p className="text-foreground">
