@@ -206,7 +206,6 @@ export function CachedSearchCombobox({
                   : ""
             }`}
             readOnly={!!value}
-            disabled={isLoading}
           />
 
 
@@ -333,4 +332,3 @@ export function CachedSearchCombobox({
     </>
   );
 }
-
