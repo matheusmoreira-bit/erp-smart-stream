@@ -36,6 +36,8 @@ import {
   type ManagementSegment,
 } from "@/hooks/useManagementSegments";
 import { IDP_STATE_LABEL, type IdpLinkState, type UserAlert } from "@/lib/user-state";
+import UserCompaniesTab from "@/components/users/UserCompaniesTab";
+
 
 export interface UserDrawerData {
   user: SapUser;
