@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo, useId } from "react";
 import {
   Plus,
   Loader2,
@@ -514,6 +514,7 @@ export function CreateExpenseModal({
   // File upload + AI
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const attachmentInputId = useId();
   const [aiEnabled, setAiEnabled] = useState(!isSales);
   const [isProcessing, setIsProcessing] = useState(false);
   const [aiConfidence, setAiConfidence] = useState<number | null>(null);
@@ -2554,6 +2555,7 @@ export function CreateExpenseModal({
     <Dialog open={open} onOpenChange={(v) => { if (!v) requestClose(); }}>
       <DialogContent
         ref={setDialogContainer}
+        onInteractOutside={(event) => event.preventDefault()}
         className="w-[100dvw] h-[100dvh] max-w-[100dvw] rounded-none border-0 overflow-x-hidden overflow-y-auto px-3 py-4 sm:w-[95vw] sm:h-auto sm:max-w-5xl sm:max-h-[92vh] sm:rounded-lg sm:border sm:p-8"
       >
       <ModalErrorBoundary onClose={onClose}>
@@ -2841,25 +2843,27 @@ export function CreateExpenseModal({
           {/* File Upload */}
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Documentos (NF, Recibos, Boletos)</label>
+            <input
+              id={attachmentInputId}
+              type="file"
+              accept={ALLOWED_ATTACHMENT_ACCEPT}
+              className="sr-only"
+              multiple
+              onChange={(e) => {
+                if (e.target.files) handleFiles(e.target.files);
+                e.currentTarget.value = "";
+              }}
+            />
             <label
+              htmlFor={attachmentInputId}
+              onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
               onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
               onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); }}
               onDrop={handleDrop}
-              className={`relative max-w-full border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all sm:p-6 ${
+              className={`block w-full max-w-full border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all sm:p-6 ${
                 isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
               }`}
             >
-              <input
-                type="file"
-                accept={ALLOWED_ATTACHMENT_ACCEPT}
-                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                multiple
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => {
-                  if (e.target.files) handleFiles(e.target.files);
-                  e.currentTarget.value = "";
-                }}
-              />
               {isProcessing ? (
                 <div className="flex flex-col items-center gap-2">
                   <Loader2 className="w-6 h-6 text-primary animate-spin" />
