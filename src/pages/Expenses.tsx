@@ -1495,7 +1495,14 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (res.status === 504 || (data as any)?.code === "IDLE_TIMEOUT") {
+          console.warn("[Expenses] listagem SAP demorou demais; seguindo sem dados HANA nesta carga.", data);
+          return [];
+        }
         throw new Error((data as any)?.error || `Falha HANA ${res.status}`);
+      }
+      if ((data as any)?.source === "unavailable") {
+        console.warn("[Expenses] listagem SAP indisponível; seguindo com dados locais/cache.", (data as any)?.notice);
       }
       const rows = Array.isArray((data as any).rows) ? (data as any).rows : [];
       return (rows as any[]).map((r) => ({

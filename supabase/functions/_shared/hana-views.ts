@@ -66,6 +66,8 @@ export interface FetchHanaViewParams {
   limit?: number;
   /** Paginação (V2 apenas): pula N linhas. Inteiro >= 0. */
   offset?: number;
+  /** Timeout por tentativa/IP. Evita que uma view lenta estoure o idle timeout da Edge Function. */
+  timeoutMs?: number;
   /**
    * Filtros de consulta (V2 apenas). Cada chave deve estar no formato
    * `Campo__op` (ex.: `DocNum__eq`, `CardName__ilike`, `DocDate__gte`).
@@ -156,6 +158,7 @@ export async function fetchHanaView(
 ): Promise<Record<string, unknown>[]> {
   const { schema, view, sessionId } = params;
   const dynamicToken = await generateDynamicToken();
+  const timeoutMs = Math.min(Math.max(Number(params.timeoutMs ?? 30_000), 5_000), 90_000);
 
   const primaryBase = (params.hanaApiUrl && params.hanaApiUrl.trim()
     ? params.hanaApiUrl
@@ -200,6 +203,7 @@ export async function fetchHanaView(
           dynamictoken: dynamicToken,
           sessionid: sessionId,
         },
+        signal: AbortSignal.timeout(timeoutMs),
       });
       if (r.ok) {
         void recordHanaCall(base, view, true, r.status, Date.now() - started, null);
@@ -218,15 +222,18 @@ export async function fetchHanaView(
       resp = r;
       break;
     } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
       void recordHanaCall(
         base,
         view,
         false,
         null,
         Date.now() - started,
-        `sem comunicação: ${e instanceof Error ? e.message : String(e)}`,
+        `sem comunicação: ${message}`,
       );
-      lastErr = e;
+      lastErr = new Error(message.toLowerCase().includes("abort") || message.toLowerCase().includes("timeout")
+        ? `timeout após ${timeoutMs}ms em ${base}`
+        : message);
       continue;
     }
   }

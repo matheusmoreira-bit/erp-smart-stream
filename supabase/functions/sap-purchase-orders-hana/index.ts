@@ -15,6 +15,10 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-retry-count, x-sap-session, x-sap-route, x-sap-user, x-sap-auth-token, x-company-db",
 };
 
+const SAP_LOGIN_TIMEOUT_MS = 20_000;
+const HANA_VIEW_TIMEOUT_MS = 35_000;
+const SERVICE_LAYER_TIMEOUT_MS = 30_000;
+
 function buildBaseUrl(raw: string): string {
   let url = raw.replace(/\/+$/, "");
   if (url.includes("/b1s/v1")) url = url.replace("/b1s/v1", "/b1s/v2");
@@ -27,6 +31,7 @@ async function sapLogin(baseUrl: string, u: string, p: string, db: string) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ UserName: u, Password: p, CompanyDB: db }),
+    signal: AbortSignal.timeout(SAP_LOGIN_TIMEOUT_MS),
   });
   if (!r.ok) throw new Error(`Login SAP falhou ${r.status}: ${await r.text().catch(() => "")}`);
   const json = await r.json();
@@ -40,6 +45,7 @@ async function sapLogout(baseUrl: string, s: { sessionId: string; routeId: strin
     await fetch(`${baseUrl}/Logout`, {
       method: "POST",
       headers: { Cookie: `B1SESSION=${s.sessionId}${s.routeId ? `; B1ROUTEID=${s.routeId}` : ""}` },
+      signal: AbortSignal.timeout(10_000),
     });
   } catch { /* ignore */ }
 }
@@ -185,6 +191,11 @@ function isViewMissing(msg: string): boolean {
   return m.includes("404") || m.includes("nao encontrado") || m.includes("não encontrado") || m.includes("not found");
 }
 
+/** Erros transitórios devem degradar a listagem, não derrubar a tela de compras. */
+function isTransientUpstreamError(msg: string): boolean {
+  return /(timeout|abort|network|fetch|connection|econn|etimedout|socket|h?ana view .*falhou|todos os ips|service layer .*falhou 5\d\d)/i.test(msg);
+}
+
 /** Mapeia um pedido de compra do Service Layer para o mesmo shape da view HANA. */
 function mapSlRow(o: Record<string, unknown>, companyDb: string) {
   const docNum = toInt(o.DocNum);
@@ -237,6 +248,7 @@ async function fetchServiceLayerOrders(
       Cookie: `B1SESSION=${session.sessionId}${session.routeId ? `; B1ROUTEID=${session.routeId}` : ""}`,
       Prefer: "odata.maxpagesize=0",
     },
+    signal: AbortSignal.timeout(SERVICE_LAYER_TIMEOUT_MS),
   });
   if (!r.ok) {
     throw new Error(`Service Layer PurchaseOrders falhou ${r.status}: ${(await r.text().catch(() => "")).slice(0, 300)}`);
@@ -348,7 +360,8 @@ Deno.serve(async (req) => {
 
     let rawRows: Record<string, unknown>[] = [];
     let slRows: ReturnType<typeof mapSlRow>[] = [];
-    let source: "hana" | "service_layer" = "hana";
+    let source: "hana" | "service_layer" | "unavailable" = "hana";
+    let notice: string | undefined;
     try {
       try {
         rawRows = await fetchHanaView({
@@ -360,14 +373,23 @@ Deno.serve(async (req) => {
           limit,
           offset,
           filters,
+          timeoutMs: HANA_VIEW_TIMEOUT_MS,
         });
       } catch (e) {
         const msg = String((e as Error)?.message || e);
         // View não publicada nesta base → cai para o Service Layer.
-        if (isViewMissing(msg)) {
-          console.log(`[sap-purchase-orders-hana] view ausente em ${schema}; fallback Service Layer`);
+        if (isViewMissing(msg) || isTransientUpstreamError(msg)) {
+          console.log(`[sap-purchase-orders-hana] HANA indisponível em ${schema}; fallback Service Layer: ${msg}`);
           source = "service_layer";
-          slRows = await fetchServiceLayerOrders(baseUrl, session, companyDb, limit, offset);
+          try {
+            slRows = await fetchServiceLayerOrders(baseUrl, session, companyDb, limit, offset);
+          } catch (slErr) {
+            const slMsg = String((slErr as Error)?.message || slErr);
+            console.log(`[sap-purchase-orders-hana] fallback Service Layer falhou: ${slMsg}`);
+            source = "unavailable";
+            notice = "Não foi possível listar pedidos do ERP agora. A tela seguirá com dados do Flow/cache.";
+            slRows = [];
+          }
         } else {
           throw e;
         }
@@ -376,7 +398,7 @@ Deno.serve(async (req) => {
       await sapLogout(baseUrl, session);
     }
 
-    if (source === "service_layer") {
+    if (source === "service_layer" || source === "unavailable") {
       return new Response(JSON.stringify({
         rows: slRows,
         total: slRows.length,
@@ -384,6 +406,7 @@ Deno.serve(async (req) => {
         limit,
         has_more: slRows.length === limit,
         source,
+        ...(notice ? { notice } : {}),
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
