@@ -138,7 +138,7 @@ function buildRelationsExpense(
 export default function PagCorp() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
-  const { transactions, isLoading, error, fetchTransactions, integrateDirect, integrateConsolidated, classifyDocuments } = usePagCorp();
+  const { transactions, isLoading, error, fetchTransactions, integrateDirect, integrateJournalBatch, integrateConsolidated, classifyDocuments } = usePagCorp();
   const { createExpense } = useExpenses();
   const { fetchCredentials } = useCredentials();
   const { getLabel } = useCompanies(true);
@@ -182,9 +182,10 @@ export default function PagCorp() {
   const [integrateDialog, setIntegrateDialog] = useState<{
     open: boolean;
     tx: PagCorpTransaction | null;
+    transactions: PagCorpTransaction[];
     type: "generic" | "accountability";
     postingType: "purchase_order" | "journal_entry";
-  }>({ open: false, tx: null, type: "generic", postingType: "purchase_order" });
+  }>({ open: false, tx: null, transactions: [], type: "generic", postingType: "purchase_order" });
   const [accountabilityModal, setAccountabilityModal] = useState<{
     open: boolean;
     tx: PagCorpTransaction | null;
@@ -617,7 +618,7 @@ export default function PagCorp() {
     if (type === "accountability" && postingType === "purchase_order") {
       setAccountabilityModal({ open: true, tx: t });
     } else {
-      setIntegrateDialog({ open: true, tx: t, type, postingType });
+      setIntegrateDialog({ open: true, tx: t, transactions: [t], type, postingType });
     }
   };
 
@@ -652,7 +653,7 @@ export default function PagCorp() {
     if (t.hasAccountability && postingType === "purchase_order") {
       setAccountabilityModal({ open: true, tx: t });
     } else {
-      setIntegrateDialog({ open: true, tx: t, type: t.hasAccountability ? "accountability" : "generic", postingType });
+      setIntegrateDialog({ open: true, tx: t, transactions: [t], type: t.hasAccountability ? "accountability" : "generic", postingType });
     }
   };
 
@@ -675,7 +676,7 @@ export default function PagCorp() {
    *
    *  - 1 selected            → open single integrate dialog
    *  - ≥2 selected, all sem prestação → consolidar em 1 PC
-   *  - ≥2 selected, mixed/com prestação → percorrer em lote (uma por uma)
+   *  - ≥2 selected, com indicação LCM → um lançamento contábil em lote
    */
   const proceedBatchUnified = (list: PagCorpTransaction[]) => {
     if (list.length === 0) {
@@ -687,14 +688,25 @@ export default function PagCorp() {
       openIntegrateDialog(t, t.hasAccountability ? "accountability" : "generic");
       return;
     }
-    if (list.every((t) => (t.postingType || (t.hasFiscalDocument ? "purchase_order" : "journal_entry")) === "purchase_order")) {
+    const postingTypes = list.map((t) => t.postingType || (t.hasFiscalDocument ? "purchase_order" : "journal_entry"));
+    if (postingTypes.every((type) => type === "purchase_order")) {
       setConsolidateDialog({ open: true, transactions: list });
       return;
     }
-    setBatchQueue(list);
-    setBatchIndex(0);
-    setBatchActive(true);
-    openBatchItem(list[0]);
+    const currencies = new Set(list.map((item) => String(item.currency || "BRL").toUpperCase()));
+    if (currencies.size > 1) {
+      toast.error("O lote contábil possui moedas diferentes", {
+        description: "Selecione despesas da mesma moeda para gerar um único LCM.",
+      });
+      return;
+    }
+    setIntegrateDialog({
+      open: true,
+      tx: list[0],
+      transactions: list,
+      type: "generic",
+      postingType: "journal_entry",
+    });
   };
 
   const handleIntegrateBatchUnified = async () => {
@@ -704,7 +716,10 @@ export default function PagCorp() {
       toast.info("Selecione ao menos uma transação");
       return;
     }
-    if (selected.length > 1) {
+    const allPurchaseOrders = selected.every((item) =>
+      (item.postingType || (item.hasFiscalDocument ? "purchase_order" : "journal_entry")) === "purchase_order"
+    );
+    if (selected.length > 1 && allPurchaseOrders) {
       // 1) Portadores/cartões divergentes NÃO bloqueiam mais o lançamento
       //    unificado — apenas avisamos o usuário. O fornecedor do PC é
       //    escolhido no diálogo de consolidação.
@@ -756,14 +771,15 @@ export default function PagCorp() {
     options: {
       markNondeductible: boolean;
       postingType: "purchase_order" | "journal_entry";
-      journalEntry?: { debitAccount: string; creditAccount: string; costCenter?: string | null; project?: string | null };
+      journalEntry?: { debitAccount: string; creditAccount: string; costCenter?: string | null; project?: string | null; remarks?: string };
     } = { markNondeductible: false, postingType: "purchase_order" },
   ) => {
     const t = integrateDialog.tx;
+    const selectedTransactions = integrateDialog.transactions.length > 0 ? integrateDialog.transactions : t ? [t] : [];
     if (!t || !session?.companyDB) return;
-    setIntegrating(t.id);
+    setIntegrating(selectedTransactions.length > 1 ? "journal-batch" : t.id);
     programmaticCloseRef.current = true;
-    setIntegrateDialog({ open: false, tx: null, type: "generic", postingType: "purchase_order" });
+    setIntegrateDialog({ open: false, tx: null, transactions: [], type: "generic", postingType: "purchase_order" });
     try {
       const lineOverrides =
         override.costCenter || override.project || override.item
@@ -792,18 +808,25 @@ export default function PagCorp() {
         }
       }
 
-      const result = await integrateDirect(
-        t,
-        integrateDialog.type,
-        session.companyDB,
-        supplier?.code || "",
-        supplier?.name,
-        session.userName || undefined,
-        lineOverrides,
-        asNondeductible,
-        options.postingType,
-        options.journalEntry,
-      );
+      const result = options.postingType === "journal_entry" && selectedTransactions.length > 1 && options.journalEntry
+        ? await integrateJournalBatch(
+            selectedTransactions,
+            session.companyDB,
+            session.userName || undefined,
+            options.journalEntry,
+          )
+        : await integrateDirect(
+            t,
+            integrateDialog.type,
+            session.companyDB,
+            supplier?.code || "",
+            supplier?.name,
+            session.userName || undefined,
+            lineOverrides,
+            asNondeductible,
+            options.postingType,
+            options.journalEntry,
+          );
       if (result.alreadyIntegrated) {
         toast.info("Transação já estava integrada no SAP", {
           description: `DocNum #${result.docNum}`,
@@ -814,6 +837,7 @@ export default function PagCorp() {
         });
       }
       await fetchTransactions(startDate, endDate, session.companyDB);
+      if (selectedTransactions.length > 1) setSelectedIds(new Set());
       if (batchActive) advanceBatch();
     } catch (e) {
       toast.error("Falha na integração", {
@@ -1737,6 +1761,7 @@ export default function PagCorp() {
 
                       const txs = item.txs;
                       const first = txs[0];
+                      const isJournalEntryGroup = first.postingType === "journal_entry";
                       const docNum = first.sapDocNum;
                       const docEntry = first.sapDocEntry;
                       const totals: Record<string, number> = {};
@@ -1767,14 +1792,15 @@ export default function PagCorp() {
                             <div className="flex flex-wrap items-center gap-2 text-sm">
                               <Layers className="w-4 h-4 text-success shrink-0" />
                               <span className="font-semibold text-foreground">
-                                PC consolidado{docNum != null ? ` #${docNum}` : docEntry != null ? ` (DocEntry ${docEntry})` : ""}
+                                {isJournalEntryGroup ? "LCM em lote" : "PC consolidado"}
+                                {docNum != null ? ` #${docNum}` : docEntry != null ? ` (DocEntry ${docEntry})` : ""}
                               </span>
                               <Badge variant="secondary" className="bg-success/20 text-success border-success/30">
                                 {txs.length} transações
                               </Badge>
                               <span className="text-muted-foreground">•</span>
                               <span className="font-medium text-foreground tabular-nums">{totalsStr}</span>
-                              {settledCount > 0 && (
+                              {!isJournalEntryGroup && settledCount > 0 && (
                                 <>
                                   <span className="text-muted-foreground">•</span>
                                   <span className="text-xs text-success inline-flex items-center gap-1">
@@ -1786,7 +1812,7 @@ export default function PagCorp() {
                                 </>
                               )}
                               <div className="ml-auto flex items-center gap-2">
-                                {settledCount < txs.length && (
+                                {!isJournalEntryGroup && settledCount < txs.length && (
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -1847,19 +1873,25 @@ export default function PagCorp() {
         onClose={() => {
           const wasProgrammatic = programmaticCloseRef.current;
           programmaticCloseRef.current = false;
-          setIntegrateDialog({ open: false, tx: null, type: "generic", postingType: "purchase_order" });
+          setIntegrateDialog({ open: false, tx: null, transactions: [], type: "generic", postingType: "purchase_order" });
           if (batchActive && !wasProgrammatic) cancelBatch();
         }}
         transaction={integrateDialog.tx}
+        transactions={integrateDialog.transactions}
         integrationType={integrateDialog.type}
         companyDb={session?.companyDB}
         initialPostingType={integrateDialog.postingType}
         onPostingTypeChange={(postingType) => {
           const tx = integrateDialog.tx;
-          if (postingType !== "purchase_order" || !tx?.hasAccountability) return;
+          if (postingType !== "purchase_order" || !tx) return;
+          const batchTransactions = integrateDialog.transactions;
           programmaticCloseRef.current = true;
-          setIntegrateDialog({ open: false, tx: null, type: "generic", postingType: "purchase_order" });
-          setTimeout(() => setAccountabilityModal({ open: true, tx }), 200);
+          setIntegrateDialog({ open: false, tx: null, transactions: [], type: "generic", postingType: "purchase_order" });
+          if (batchTransactions.length > 1) {
+            setTimeout(() => setConsolidateDialog({ open: true, transactions: batchTransactions }), 200);
+          } else if (tx.hasAccountability) {
+            setTimeout(() => setAccountabilityModal({ open: true, tx }), 200);
+          }
         }}
         onConfirm={handleConfirmIntegrate}
       />
@@ -1885,6 +1917,7 @@ export default function PagCorp() {
           setTimeout(() => setIntegrateDialog({
             open: true,
             tx,
+            transactions: [tx],
             type: "accountability",
             postingType: "journal_entry",
           }), 200);
@@ -1911,6 +1944,24 @@ export default function PagCorp() {
         open={consolidateDialog.open}
         onClose={() => setConsolidateDialog({ open: false, transactions: [] })}
         transactions={consolidateDialog.transactions}
+        onSwitchToJournalEntry={() => {
+          const selectedTransactions = consolidateDialog.transactions;
+          const currencies = new Set(selectedTransactions.map((item) => String(item.currency || "BRL").toUpperCase()));
+          if (currencies.size > 1) {
+            toast.error("O lote contábil possui moedas diferentes", {
+              description: "Selecione despesas da mesma moeda para gerar um único LCM.",
+            });
+            return;
+          }
+          setConsolidateDialog({ open: false, transactions: [] });
+          setTimeout(() => setIntegrateDialog({
+            open: true,
+            tx: selectedTransactions[0] || null,
+            transactions: selectedTransactions,
+            type: "generic",
+            postingType: "journal_entry",
+          }), 200);
+        }}
         onConfirm={handleConfirmConsolidate}
       />
 

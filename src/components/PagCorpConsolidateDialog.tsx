@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Loader2, Layers, CreditCard } from "lucide-react";
+import { Loader2, Layers, CreditCard, BookOpen } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   transactions: PagCorpTransaction[];
+  onSwitchToJournalEntry?: () => void;
   onConfirm: (
     supplier: SapSearchOption,
     lineOverrides: LineOverrideMap,
@@ -51,7 +52,7 @@ function toIsoDate(value: unknown): string | null {
   return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 }
 
-export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfirm }: Props) {
+export function PagCorpConsolidateDialog({ open, onClose, transactions, onSwitchToJournalEntry, onConfirm }: Props) {
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [headerCC, setHeaderCC] = useState<SapSearchOption | null>(null);
@@ -169,10 +170,17 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onConfir
     <Dialog open={open} onOpenChange={(v) => !v && !submitting && onClose()}>
       <DialogContent className="max-w-4xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Layers className="w-5 h-5 text-primary" />
-            Integrar {transactions.length} transações em 1 Pedido de Compra
-          </DialogTitle>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <DialogTitle className="flex items-center gap-2">
+              <Layers className="w-5 h-5 text-primary" />
+              Integrar {transactions.length} transações em 1 Pedido de Compra
+            </DialogTitle>
+            {onSwitchToJournalEntry && (
+              <Button type="button" variant="outline" size="sm" className="gap-2" onClick={onSwitchToJournalEntry}>
+                <BookOpen className="w-4 h-4" /> Lançar como LCM
+              </Button>
+            )}
+          </div>
           <DialogDescription>
             Será criado <strong>um único Pedido de Compra</strong> no SAP, com uma linha por
             transação, todas para o mesmo fornecedor. Você pode escolher o item de cada linha

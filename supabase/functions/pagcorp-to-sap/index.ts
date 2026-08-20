@@ -445,9 +445,6 @@ Deno.serve(async (req) => {
     if (postingType === "journal_entry" && (!journalEntry?.debitAccount || !journalEntry?.creditAccount)) {
       throw new Error("Contas de débito e crédito são obrigatórias para o Lançamento Contábil");
     }
-    if (postingType === "journal_entry" && rawList.length > 1) {
-      throw new Error("Lançamentos contábeis PagCorp devem ser integrados individualmente");
-    }
     for (const t of rawList) {
       if (!t?.id) throw new Error("toda transação precisa de id");
     }
@@ -506,6 +503,12 @@ Deno.serve(async (req) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+    if (postingType === "journal_entry") {
+      const currencies = new Set(transactions.map((item) => String(item.currency || "BRL").toUpperCase()));
+      if (currencies.size > 1) {
+        throw new Error("Todas as despesas do LCM em lote devem possuir a mesma moeda");
+      }
+    }
 
     // 1. Insert pending log row(s) early so we have logId(s) for any failure path
     for (const transaction of transactions) {
@@ -532,6 +535,7 @@ Deno.serve(async (req) => {
             consolidatedWith: isConsolidated ? transactions.map((x) => x.id) : undefined,
             nondeductible,
             postingType,
+            journalRemarks: postingType === "journal_entry" ? String(journalEntry?.remarks || "") : undefined,
           } as any,
           integration_type: postingType === "journal_entry" ? "journal_entry" : integrationType,
           status: "pending",
@@ -692,7 +696,8 @@ Deno.serve(async (req) => {
         return isConsolidated ? `[#${t.id}] ${text}` : text;
       })
       .filter((s) => !!s);
-    const accountabilitySuffix = accountabilityTexts.length > 0 ? ` | PC: ${accountabilityTexts.join(" ; ")}` : "";
+    const documentLabel = postingType === "journal_entry" ? "LCM" : "PC";
+    const accountabilitySuffix = accountabilityTexts.length > 0 ? ` | ${documentLabel}: ${accountabilityTexts.join(" ; ")}` : "";
 
     const descriptionDetails = (
       isConsolidated
@@ -713,30 +718,47 @@ Deno.serve(async (req) => {
     };
 
     if (postingType === "journal_entry") {
-      const date = documentDate || toIsoDate(transaction.date) || new Date().toISOString().slice(0, 10);
-      const amount = Number(transaction.amount) || 0;
+      const transactionDates = transactions
+        .map((item) => toIsoDate(item.date))
+        .filter((value): value is string => !!value)
+        .sort();
+      const date = documentDate || transactionDates[transactionDates.length - 1] || new Date().toISOString().slice(0, 10);
+      const amount = transactions.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
       const currency = String(transaction.currency || "BRL").toUpperCase();
       const isForeignCurrency = currency !== "BRL" && /^[A-Z]{3}$/.test(currency);
-      const commonLine = {
-        LineMemo: truncateSapText(description, 50),
+      const customRemarks = typeof journalEntry.remarks === "string" ? journalEntry.remarks.trim() : "";
+      const journalMemo = customRemarks
+        ? formatPagCorpComments(customRemarks, 190)
+        : description;
+      const commonDimensions = {
         ...(journalEntry.costCenter ? { CostingCode: String(journalEntry.costCenter) } : {}),
         ...(journalEntry.project ? { ProjectCode: String(journalEntry.project) } : {}),
       };
+      const debitLines = transactions.map((item) => ({
+        AccountCode: String(journalEntry.debitAccount),
+        LineMemo: truncateSapText(
+          `PagCorp - ${transactions.length > 1 ? `[#${item.id}] ` : ""}${item.description || journalMemo}`,
+          50,
+        ),
+        ...commonDimensions,
+        ...(isForeignCurrency
+          ? { FCDebit: Number(item.amount) || 0, FCCurrency: currency }
+          : { Debit: Number(item.amount) || 0 }),
+      }));
       const payload: Record<string, unknown> = {
         ReferenceDate: date,
         DueDate: date,
         TaxDate: date,
-        Memo: description,
-        Reference: truncateSapText(`PagCorp ${transaction.id}`, 27),
+        Memo: journalMemo,
+        Reference: truncateSapText(
+          transactions.length > 1 ? `PagCorp lote ${transactions.length}` : `PagCorp ${transaction.id}`,
+          27,
+        ),
         JournalEntryLines: [
-          {
-            AccountCode: String(journalEntry.debitAccount),
-            ...commonLine,
-            ...(isForeignCurrency ? { FCDebit: amount, FCCurrency: currency } : { Debit: amount }),
-          },
+          ...debitLines,
           {
             AccountCode: String(journalEntry.creditAccount),
-            ...commonLine,
+            LineMemo: truncateSapText(journalMemo, 50),
             ...(isForeignCurrency ? { FCCredit: amount, FCCurrency: currency } : { Credit: amount }),
           },
         ],
@@ -771,10 +793,17 @@ Deno.serve(async (req) => {
         await supabase.rpc("insert_audit_log", {
           p_action: "pagcorp_journal_entry_integrated",
           p_entity_type: "pagcorp_transaction",
-          p_entity_id: String(transaction.id),
+          p_entity_id: transactions.map((item) => String(item.id)).join(","),
           p_company_db: companyDb,
           p_actor_email: integratedBy || undefined,
-          p_details: { integration_type: "journal_entry", journal_entry: sapResponses.journal_entry, stages } as any,
+          p_details: {
+            integration_type: "journal_entry",
+            journal_entry: sapResponses.journal_entry,
+            expense_ids: transactions.map((item) => item.id),
+            expense_count: transactions.length,
+            remarks: journalMemo,
+            stages,
+          } as any,
         });
       } catch (auditErr) {
         console.warn("pagcorp-to-sap audit log failed after SAP success:", auditErr);

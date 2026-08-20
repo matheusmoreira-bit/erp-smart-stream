@@ -631,7 +631,7 @@ export function usePagCorp() {
     lineOverrides?: Record<string, { costCenter?: string | null; project?: string | null; item?: string | null }>,
     nondeductible?: boolean,
     postingType: "purchase_order" | "journal_entry" = "purchase_order",
-    journalEntry?: { debitAccount: string; creditAccount: string; costCenter?: string | null; project?: string | null },
+    journalEntry?: { debitAccount: string; creditAccount: string; costCenter?: string | null; project?: string | null; remarks?: string },
   ) => {
     const { sapFunctionFetch } = await import("@/lib/auth-fetch");
     const res = await sapFunctionFetch("pagcorp-to-sap", {
@@ -653,6 +653,33 @@ export function usePagCorp() {
     const result = await res.json().catch(() => ({}));
     if (!res.ok || result.success === false) {
       throw new Error(result.error || `Erro ${res.status}`);
+    }
+    invalidatePagCorpIntegrationStatus(companyDb);
+    return result;
+  }, []);
+
+  const integrateJournalBatch = useCallback(async (
+    transactions: PagCorpTransaction[],
+    companyDb: string,
+    integratedBy: string | undefined,
+    journalEntry: { debitAccount: string; creditAccount: string; costCenter?: string | null; project?: string | null; remarks?: string },
+  ) => {
+    const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+    const response = await sapFunctionFetch("pagcorp-to-sap", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        transactions,
+        companyDb,
+        integrationType: "generic",
+        integratedBy,
+        postingType: "journal_entry",
+        journalEntry,
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.success === false) {
+      throw new Error(result.error || `Erro ${response.status}`);
     }
     invalidatePagCorpIntegrationStatus(companyDb);
     return result;
@@ -719,5 +746,5 @@ export function usePagCorp() {
   }, []);
 
 
-  return { transactions, isLoading, error, fetchTransactions, logIntegration, integrateDirect, integrateConsolidated, classifyDocuments };
+  return { transactions, isLoading, error, fetchTransactions, logIntegration, integrateDirect, integrateJournalBatch, integrateConsolidated, classifyDocuments };
 }

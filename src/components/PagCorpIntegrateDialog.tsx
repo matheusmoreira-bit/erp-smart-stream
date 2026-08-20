@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { SapSearchCombobox, type SapSearchOption } from "@/components/SapSearchCombobox";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
@@ -46,6 +47,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   transaction: PagCorpTransaction | null;
+  transactions?: PagCorpTransaction[];
   integrationType: "generic" | "accountability";
   companyDb?: string;
   initialPostingType?: "purchase_order" | "journal_entry";
@@ -57,7 +59,7 @@ interface Props {
     options: {
       markNondeductible: boolean;
       postingType: "purchase_order" | "journal_entry";
-      journalEntry?: { debitAccount: string; creditAccount: string; costCenter?: string | null; project?: string | null };
+      journalEntry?: { debitAccount: string; creditAccount: string; costCenter?: string | null; project?: string | null; remarks?: string };
     },
   ) => Promise<void>;
 }
@@ -67,6 +69,7 @@ export function PagCorpIntegrateDialog({
   open,
   onClose,
   transaction,
+  transactions,
   integrationType,
   companyDb,
   initialPostingType = "purchase_order",
@@ -83,12 +86,22 @@ export function PagCorpIntegrateDialog({
   const [postingType, setPostingType] = useState<"purchase_order" | "journal_entry">(initialPostingType);
   const [debitAccount, setDebitAccount] = useState<SapSearchOption | null>(null);
   const [creditAccount, setCreditAccount] = useState<SapSearchOption | null>(null);
+  const [remarks, setRemarks] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
   const [aiTried, setAiTried] = useState(false);
   const [aiResult, setAiResult] = useState<SupplierFormPrefill | null>(null);
   const [aiNotice, setAiNotice] = useState<string | null>(null);
   const [supplierRequestOpen, setSupplierRequestOpen] = useState(false);
   const [supplierFormOpen, setSupplierFormOpen] = useState(false);
+  const activeTransactions = useMemo(
+    () => transactions && transactions.length > 0 ? transactions : transaction ? [transaction] : [],
+    [transaction, transactions],
+  );
+  const isBatch = activeTransactions.length > 1;
+  const batchTotal = useMemo(
+    () => activeTransactions.reduce((sum, item) => sum + (Number(item.amount) || 0), 0),
+    [activeTransactions],
+  );
 
   const ccMap = (row: any) => ({ code: row.CenterCode, name: row.CenterName });
   const prMap = (row: any) => ({ code: row.Code, name: row.Name });
@@ -245,7 +258,9 @@ export function PagCorpIntegrateDialog({
     }
   }, [companyDb]);
 
-  const storageKey = transaction ? `pagcorp:integrate:${transaction.id}` : null;
+  const storageKey = transaction
+    ? `pagcorp:integrate:${activeTransactions.map((item) => item.id).join(",")}`
+    : null;
 
   useEffect(() => {
     if (!open || !transaction) return;
@@ -256,6 +271,7 @@ export function PagCorpIntegrateDialog({
     setPostingType(initialPostingType);
     setDebitAccount(null);
     setCreditAccount(null);
+    setRemarks("");
     setSubmitting(false);
     setAiTried(false);
     setAiResult(null);
@@ -273,10 +289,15 @@ export function PagCorpIntegrateDialog({
           if (saved.costCenter) setCostCenter(saved.costCenter);
           if (saved.project) setProject(saved.project);
           if (saved.item) setItem(saved.item);
+          if (saved.debitAccount) setDebitAccount(saved.debitAccount);
+          if (saved.creditAccount) setCreditAccount(saved.creditAccount);
+          if (typeof saved.remarks === "string") setRemarks(saved.remarks);
           restored = !!saved.supplier;
         }
       } catch {/* ignore */}
     }
+
+    if (initialPostingType === "journal_entry") return;
 
     if (!restored && transaction.nondeductibleSupplierCode) {
       setSupplier({
@@ -306,15 +327,22 @@ export function PagCorpIntegrateDialog({
     try {
       sessionStorage.setItem(
         storageKey,
-        JSON.stringify({ supplier, costCenter, project, item }),
+        JSON.stringify({ supplier, costCenter, project, item, debitAccount, creditAccount, remarks }),
       );
     } catch {/* ignore quota */}
-  }, [open, storageKey, supplier, costCenter, project, item]);
+  }, [open, storageKey, supplier, costCenter, project, item, debitAccount, creditAccount, remarks]);
 
 
   const attachmentList = useMemo(
-    () => (transaction ? collectPagCorpAttachments(transaction) : []),
-    [transaction],
+    () => {
+      const seen = new Set<string>();
+      return activeTransactions.flatMap(collectPagCorpAttachments).filter((attachment) => {
+        if (seen.has(attachment.url)) return false;
+        seen.add(attachment.url);
+        return true;
+      });
+    },
+    [activeTransactions],
   );
   const [openingAttachment, setOpeningAttachment] = useState<string | null>(null);
 
@@ -384,6 +412,7 @@ export function PagCorpIntegrateDialog({
                   creditAccount: creditAccount.code,
                   costCenter: costCenter?.code || null,
                   project: project?.code || null,
+                  remarks: remarks.trim() || undefined,
                 },
               }
             : {}),
@@ -437,7 +466,7 @@ export function PagCorpIntegrateDialog({
                 onValueChange={(value) => {
                   if (!value) return;
                   const next = value as "purchase_order" | "journal_entry";
-                  if (integrationType === "accountability" && next === "purchase_order" && onPostingTypeChange) {
+                  if (next === "purchase_order" && onPostingTypeChange && (integrationType === "accountability" || isBatch)) {
                     onPostingTypeChange(next);
                     return;
                   }
@@ -455,7 +484,9 @@ export function PagCorpIntegrateDialog({
                 </ToggleGroupItem>
               </ToggleGroup>
               <p className="text-[11px] text-muted-foreground">
-                Recomendação da IA: {transaction.hasFiscalDocument ? "Pedido de Compra (documento fiscal encontrado)" : "Lançamento Contábil (sem documento fiscal)"}.
+                {isBatch
+                  ? `${activeTransactions.length} despesas selecionadas para um único lançamento contábil.`
+                  : `Recomendação da IA: ${transaction.hasFiscalDocument ? "Pedido de Compra (documento fiscal encontrado)" : "Lançamento Contábil (sem documento fiscal)"}.`}
               </p>
             </div>}
 
@@ -464,10 +495,12 @@ export function PagCorpIntegrateDialog({
               <div className="flex items-start gap-2">
                 <CreditCard className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{transaction.description}</p>
+                  <p className="text-sm font-medium truncate">
+                    {isBatch ? `${activeTransactions.length} despesas PagCorp` : transaction.description}
+                  </p>
                   <p className="text-xs text-muted-foreground">
-                    {transaction.accountAlias || transaction.accountName || "—"}
-                    {transaction.cardLastDigits && ` • •••${transaction.cardLastDigits}`}
+                    {isBatch ? "Lançamento contábil em lote" : transaction.accountAlias || transaction.accountName || "—"}
+                    {!isBatch && transaction.cardLastDigits && ` • •••${transaction.cardLastDigits}`}
                   </p>
             </div>
 
@@ -492,7 +525,7 @@ export function PagCorpIntegrateDialog({
             </label>}
                 <div className="text-right">
                   <p className="text-sm font-semibold tabular-nums">
-                    {formatCurrency(transaction.amount, transaction.currency)}
+                    {formatCurrency(isBatch ? batchTotal : transaction.amount, transaction.currency)}
                   </p>
                   <Badge variant="outline" className="text-[10px] mt-0.5 gap-1">
                     <Wand2 className="w-3 h-3" />
@@ -717,32 +750,48 @@ export function PagCorpIntegrateDialog({
               </div>
 
               {postingType === "journal_entry" && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                      Conta de débito <span className="text-destructive">*</span>
-                    </label>
-                    <CachedSearchCombobox
-                      options={accountOptions}
-                      isLoading={accountLoading}
-                      value={debitAccount}
-                      onChange={setDebitAccount}
-                      placeholder="Selecionar conta de débito..."
-                      required
-                    />
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                        Conta de débito <span className="text-destructive">*</span>
+                      </label>
+                      <CachedSearchCombobox
+                        options={accountOptions}
+                        isLoading={accountLoading}
+                        value={debitAccount}
+                        onChange={setDebitAccount}
+                        placeholder="Selecionar conta de débito..."
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                        Conta de crédito <span className="text-destructive">*</span>
+                      </label>
+                      <CachedSearchCombobox
+                        options={accountOptions}
+                        isLoading={accountLoading}
+                        value={creditAccount}
+                        onChange={setCreditAccount}
+                        placeholder="Selecionar conta de crédito..."
+                        required
+                      />
+                    </div>
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                      Conta de crédito <span className="text-destructive">*</span>
+                    <label htmlFor="pagcorp-journal-remarks" className="text-xs font-medium text-muted-foreground mb-1 block">
+                      Observação
                     </label>
-                    <CachedSearchCombobox
-                      options={accountOptions}
-                      isLoading={accountLoading}
-                      value={creditAccount}
-                      onChange={setCreditAccount}
-                      placeholder="Selecionar conta de crédito..."
-                      required
+                    <Textarea
+                      id="pagcorp-journal-remarks"
+                      value={remarks}
+                      onChange={(event) => setRemarks(event.target.value)}
+                      placeholder="Informe a observação do lançamento contábil..."
+                      maxLength={190}
+                      rows={3}
                     />
+                    <p className="mt-1 text-right text-[10px] text-muted-foreground">{remarks.length}/190</p>
                   </div>
                 </div>
               )}
