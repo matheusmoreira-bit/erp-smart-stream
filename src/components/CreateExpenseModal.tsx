@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo, useId } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   Plus,
   Loader2,
@@ -514,7 +514,6 @@ export function CreateExpenseModal({
   // File upload + AI
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  const attachmentInputId = useId();
   const [aiEnabled, setAiEnabled] = useState(!isSales);
   const [isProcessing, setIsProcessing] = useState(false);
   const [aiConfidence, setAiConfidence] = useState<number | null>(null);
@@ -2843,42 +2842,41 @@ export function CreateExpenseModal({
           {/* File Upload */}
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Documentos (NF, Recibos, Boletos)</label>
-            <input
-              id={attachmentInputId}
-              type="file"
-              accept={ALLOWED_ATTACHMENT_ACCEPT}
-              className="sr-only"
-              multiple
-              onChange={(e) => {
-                if (e.target.files) handleFiles(e.target.files);
-                e.currentTarget.value = "";
-              }}
-            />
-            <label
-              htmlFor={attachmentInputId}
-              onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
-              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
-              onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); }}
-              onDrop={handleDrop}
-              className={`block w-full max-w-full border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all sm:p-6 ${
+            <div
+              className={`relative block w-full max-w-full border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all sm:p-6 ${
                 isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
               }`}
             >
+              <input
+                type="file"
+                accept={ALLOWED_ATTACHMENT_ACCEPT}
+                aria-label="Selecionar documentos"
+                className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+                multiple
+                onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
+                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
+                onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); }}
+                onDrop={handleDrop}
+                onChange={(e) => {
+                  if (e.target.files) handleFiles(e.target.files);
+                  e.currentTarget.value = "";
+                }}
+              />
               {isProcessing ? (
-                <div className="flex flex-col items-center gap-2">
+                <div className="pointer-events-none flex flex-col items-center gap-2">
                   <Loader2 className="w-6 h-6 text-primary animate-spin" />
                   <p className="text-sm text-primary font-medium">Processando com IA...</p>
                 </div>
               ) : (
-                <>
+                <div className="pointer-events-none">
                   <Upload className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
                   <p className="text-sm text-muted-foreground">
                     Arraste seus arquivos ou <span className="text-primary font-medium">clique para selecionar</span>
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">{ALLOWED_ATTACHMENT_HINT}</p>
-                </>
+                </div>
               )}
-            </label>
+            </div>
 
             {files.length > 0 && (
               <div className="mt-2 space-y-1">

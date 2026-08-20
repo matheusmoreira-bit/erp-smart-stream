@@ -111,8 +111,10 @@ export function GoogleAuthGate({ children }: { children: React.ReactNode }) {
     })();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
-      setChecking(true);
-      evaluate(session?.user);
+      // Refresh de token e retorno do seletor nativo de arquivos podem emitir
+      // eventos de autenticação. Não volte ao loading aqui: isso desmonta toda
+      // a aplicação e apaga estados locais, como o modal de nova despesa.
+      void evaluate(session?.user);
     });
 
     return () => {
