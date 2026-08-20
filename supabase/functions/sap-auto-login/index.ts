@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireUser, authErrorResponse } from "../_shared/auth.ts";
 import { decryptSecret } from "../_shared/sap-cred-crypto.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { sapFetch } from "../_shared/sap-fetch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -134,11 +135,23 @@ Deno.serve(async (req) => {
     const baseUrl = await getSapBaseUrl(admin, companyDb);
     const effectiveCompanyDb = await getEffectiveCompanyDb(admin, companyDb);
 
-    const loginResp = await fetch(`${baseUrl}/Login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ UserName: cred.sap_user, Password: password, CompanyDB: effectiveCompanyDb }),
-    });
+    // Timeout curto + 1 retry: nunca deixar a função pendurada até o
+    // idle timeout (150s) da plataforma quando o Service Layer não responde.
+    let loginResp: Response;
+    try {
+      loginResp = await sapFetch(`${baseUrl}/Login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ UserName: cred.sap_user, Password: password, CompanyDB: effectiveCompanyDb }),
+        timeoutMs: 15_000,
+        maxAttempts: 2,
+        baseDelayMs: 500,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[sap-auto-login] Service Layer indisponível:", msg);
+      return json({ error: "sap_unavailable", message: `SAP não respondeu ao login: ${msg}`, status: 504 }, 503);
+    }
 
     if (!loginResp.ok) {
       const errText = await loginResp.text().catch(() => "");
