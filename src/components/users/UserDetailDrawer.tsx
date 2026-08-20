@@ -238,13 +238,15 @@ export default function UserDetailDrawer({
           )}
 
           <Tabs defaultValue="acesso" className="mt-4">
-            <TabsList className="w-full grid grid-cols-5">
+            <TabsList className="w-full grid grid-cols-6">
               <TabsTrigger value="identidade">Identidade</TabsTrigger>
               <TabsTrigger value="acesso">Acesso</TabsTrigger>
+              <TabsTrigger value="empresas">Empresas</TabsTrigger>
               <TabsTrigger value="vinculos">Vínculos</TabsTrigger>
               <TabsTrigger value="licenca">Licença</TabsTrigger>
               <TabsTrigger value="atividade">Atividade</TabsTrigger>
             </TabsList>
+
 
             <TabsContent value="identidade" className="space-y-3 pt-4 text-sm">
               <Field label="Nome" value={data.user.UserName || "—"} />
