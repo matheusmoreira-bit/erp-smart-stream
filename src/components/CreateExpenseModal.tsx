@@ -2177,6 +2177,12 @@ export function CreateExpenseModal({
         return;
       }
 
+      // Itens SV% são exclusivos de venda — nunca em pedido de compra.
+      if (!isSales && isSalesOnlyItemCode(it.item_code)) {
+        toast.error(`Item ${n}: itens SV% são exclusivos de pedidos de venda`);
+        return;
+      }
+
 
       // Alçada por CC do usuário logado: IMP% só para 1.2.2.%; FOL% só para 1.5.1.3 (Pessoas e Cultura).
       // CC vazio (sem vínculo no IdP) não bloqueia — evita falso negativo.
