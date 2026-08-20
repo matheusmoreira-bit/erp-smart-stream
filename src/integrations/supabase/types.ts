@@ -2946,6 +2946,7 @@ export type Database = {
           created_at: string
           expires_at: string
           id: string
+          is_service: boolean
           route_id: string
           sap_user: string
           session_id: string
@@ -2957,6 +2958,7 @@ export type Database = {
           created_at?: string
           expires_at: string
           id?: string
+          is_service?: boolean
           route_id?: string
           sap_user: string
           session_id: string
@@ -2968,6 +2970,7 @@ export type Database = {
           created_at?: string
           expires_at?: string
           id?: string
+          is_service?: boolean
           route_id?: string
           sap_user?: string
           session_id?: string

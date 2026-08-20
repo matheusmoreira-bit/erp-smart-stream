@@ -381,16 +381,30 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
   const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
+    const allKeys = ALL_MODULES.map((m) => m.key);
+    let cancelled = false;
+
+    // Sem sessão ERP ainda: admins da nuvem (identidade Google) continuam com
+    // acesso total — a troca de empresa não depende mais do login do ERP.
     if (!session?.userName) {
-      setUserModules(DEFAULT_MODULES);
-      setPerms(Object.fromEntries(DEFAULT_MODULES.map((k) => [k, defaultPermsFor(k)])));
-      setLoading(false);
-      return;
+      setLoading(true);
+      (async () => {
+        const admin = await getIsCloudAdmin().catch(() => false);
+        if (cancelled) return;
+        if (admin) {
+          setUserModules(allKeys);
+          setPerms(Object.fromEntries(allKeys.map((k) => [k, FULL_PERMS])));
+        } else {
+          setUserModules(DEFAULT_MODULES);
+          setPerms(Object.fromEntries(DEFAULT_MODULES.map((k) => [k, defaultPermsFor(k)])));
+        }
+        setLoading(false);
+      })();
+      return () => { cancelled = true; };
     }
 
-    const allKeys = ALL_MODULES.map((m) => m.key);
     const identifier = session.userName.toLowerCase();
-    let cancelled = false;
+
 
     const grantAll = () => {
       if (cancelled) return;

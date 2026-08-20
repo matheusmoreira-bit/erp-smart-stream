@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Building2, ChevronDown, Compass, Loader2, LogOut, ShieldCheck, KeyRound, Check, UserCog, Sparkles, Infinity as InfinityIcon } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Building2, ChevronDown, Compass, Loader2, LogOut, KeyRound, Check, UserCog, Sparkles, Infinity as InfinityIcon } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { isKeepSessionAlive, setKeepSessionAlive } from "@/lib/session-keepalive";
 
@@ -16,17 +16,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Input } from "@/components/ui/input";
 
-import { Label } from "@/components/ui/label";
 import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,16 +31,11 @@ import { ImpersonationDialog } from "@/components/ImpersonationDialog";
  * com as opções "Trocar de empresa" e "Sair".
  */
 export function UserCompanyMenu({ className = "" }: { className?: string }) {
-  const { session, logout, login, loginManaged } = useSap();
+  const { session, logout, loginIdentity } = useSap();
   const { companies, getLabel } = useCompanies(true);
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [managed, setManaged] = useState<Set<string>>(new Set());
-  const [loadingCreds, setLoadingCreds] = useState(false);
   const [busyDb, setBusyDb] = useState<string | null>(null);
-  const [formDb, setFormDb] = useState<string | null>(null);
-  const [userName, setUserName] = useState("");
-  const [password, setPassword] = useState("");
   const [google, setGoogle] = useState<{ name: string; email: string; avatar: string } | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [impersonateOpen, setImpersonateOpen] = useState(false);
@@ -113,23 +99,6 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
   };
 
 
-  const loadManaged = useCallback(async () => {
-    setLoadingCreds(true);
-    try {
-      const { listUserSapCredentials } = await import("@/lib/user-sap-credentials");
-      const creds = await listUserSapCredentials();
-      setManaged(new Set(creds.map((c) => c.company_db)));
-    } catch {
-      setManaged(new Set());
-    } finally {
-      setLoadingCreds(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (expanded) loadManaged();
-  }, [expanded, loadManaged]);
-
   useEffect(() => {
     if (!open) setExpanded(false);
   }, [open]);
@@ -141,7 +110,6 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
 
   const finish = () => {
     setOpen(false);
-    setFormDb(null);
     window.setTimeout(() => window.location.replace("/"), 300);
   };
 
@@ -150,23 +118,25 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
       setOpen(false);
       return;
     }
-    if (erpType === "sap" && !managed.has(companyDb)) {
-      setUserName("");
-      setPassword("");
-      setFormDb(companyDb);
-      setOpen(false);
-      return;
-    }
     setBusyDb(companyDb);
     try {
-      if (erpType === "sap") {
-        await loginManaged(companyDb);
-      } else {
-        const { data } = await supabase.auth.getSession();
-        const email = data.session?.user?.email || "";
-        if (!email) throw new Error("Sessão Google não encontrada.");
-        await login(email, "", companyDb, erpType as never);
+      // A troca de empresa é validada apenas pela sessão Google (identidade
+      // Lovable Cloud). Nenhum login do ERP é solicitado aqui — a sessão do
+      // Service Layer é criada sob demanda, só quando uma ação exigir.
+      const { data } = await supabase.auth.getSession();
+      const email = data.session?.user?.email || "";
+      if (!email) throw new Error("Sessão Google não encontrada. Entre novamente com sua conta Google.");
+
+      const { canEnterCompany } = await import("@/lib/company-access");
+      const allowed = await canEnterCompany({ email, companyDb, erpType, isAdmin });
+      if (!allowed) {
+        toast.error("Acesso não liberado", {
+          description: `Sua conta ${email} não está autorizada para ${getLabel(companyDb)}.`,
+        });
+        return;
       }
+
+      await loginIdentity(companyDb, erpType as never);
       toast.success(`Conectado a ${getLabel(companyDb)}`);
       finish();
     } catch (e) {
@@ -178,26 +148,6 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
     }
   };
 
-  const handleFormLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formDb || !userName || !password) {
-      toast.error("Preencha usuário e senha");
-      return;
-    }
-    setBusyDb(formDb);
-    try {
-      const sapUser = userName.includes("@") ? userName.split("@")[0].trim() : userName.trim();
-      await login(sapUser, password, formDb, "sap");
-      toast.success(`Conectado a ${getLabel(formDb)}`);
-      finish();
-    } catch (err) {
-      toast.error("Falha no login", {
-        description: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setBusyDb(null);
-    }
-  };
 
   if (!session) return null;
 
@@ -261,12 +211,8 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
 
           {expanded && (
             <div className="max-h-64 overflow-y-auto py-1">
-              {loadingCreds && (
-                <p className="text-[11px] text-muted-foreground px-3 pb-1">Verificando senhas provisionadas…</p>
-              )}
               {list.map((c) => {
                 const isCurrent = c.company_db === session.companyDB;
-                const hasManaged = c.erp_type === "sap" ? managed.has(c.company_db) : true;
                 return (
                   <button
                     key={c.company_db}
@@ -275,17 +221,14 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
                     className="w-full flex items-center gap-2 rounded-sm pl-8 pr-2 py-1.5 text-left text-sm hover:bg-muted/60 transition-colors disabled:opacity-60"
                   >
                     <span className="flex-1 truncate text-foreground">{c.display_name}</span>
-                    {busyDb === c.company_db ? (
+                    {busyDb === c.company_db && (
                       <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground shrink-0" />
-                    ) : hasManaged ? (
-                      <ShieldCheck className="w-3.5 h-3.5 text-primary shrink-0" aria-label="Senha provisionada" />
-                    ) : (
-                      <KeyRound className="w-3.5 h-3.5 text-muted-foreground shrink-0" aria-label="Requer login" />
                     )}
                     {isCurrent && <Check className="w-3.5 h-3.5 text-success shrink-0" aria-label="Empresa atual" />}
                   </button>
                 );
               })}
+
               {list.length === 0 && (
                 <p className="text-sm text-muted-foreground px-3 py-2">Nenhuma empresa disponível.</p>
               )}
@@ -387,48 +330,8 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Dialog open={formDb !== null} onOpenChange={(o) => !o && setFormDb(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Entrar em {formDb ? getLabel(formDb) : ""}</DialogTitle>
-            <DialogDescription>
-              Esta empresa não possui senha provisionada. Informe suas credenciais do ERP.
-            </DialogDescription>
-          </DialogHeader>
 
-          <form onSubmit={handleFormLogin} className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="switch-user">Usuário</Label>
-              <Input
-                id="switch-user"
-                value={userName}
-                onChange={(e) => setUserName(e.target.value)}
-                autoComplete="username"
-                autoFocus
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="switch-pass">Senha</Label>
-              <Input
-                id="switch-pass"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <Button type="button" variant="ghost" onClick={() => setFormDb(null)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={busyDb === formDb}>
-                {busyDb === formDb ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                Entrar
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+
 
       {isAdmin && (
         <ImpersonationDialog open={impersonateOpen} onOpenChange={setImpersonateOpen} />
