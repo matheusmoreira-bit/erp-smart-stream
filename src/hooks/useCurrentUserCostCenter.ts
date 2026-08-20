@@ -74,6 +74,14 @@ export function isItemAllowedForCostCenter(
 }
 
 /**
+ * Itens com código iniciado em "SV" são sempre itens de VENDA e não podem ser
+ * usados em pedidos de compra (inclusive por super-usuários/admins).
+ */
+export function isSalesOnlyItemCode(itemCode: string | null | undefined): boolean {
+  return String(itemCode || "").trim().toUpperCase().startsWith("SV");
+}
+
+/**
  * Fluxos de folha/impostos: rateios sistêmicos em que TODOS os aprovadores
  * precisam enxergar o documento completo (todas as linhas), sem máscara de
  * segmento. Reconhecidos por:
