@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Building2, ChevronDown, Compass, Loader2, LogOut, ShieldCheck, KeyRound, Check, UserCog, Sparkles, Infinity as InfinityIcon } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Building2, ChevronDown, Compass, Loader2, LogOut, KeyRound, Check, UserCog, Sparkles, Infinity as InfinityIcon } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { isKeepSessionAlive, setKeepSessionAlive } from "@/lib/session-keepalive";
 
@@ -16,17 +16,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Input } from "@/components/ui/input";
 
-import { Label } from "@/components/ui/label";
 import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
 import { supabase } from "@/integrations/supabase/client";
@@ -119,7 +110,6 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
 
   const finish = () => {
     setOpen(false);
-    setFormDb(null);
     window.setTimeout(() => window.location.replace("/"), 300);
   };
 
