@@ -117,11 +117,6 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
     if (!open) setExpanded(false);
   }, [open]);
 
-
-  useEffect(() => {
-    if (!open) setExpanded(false);
-  }, [open]);
-
   const list = useMemo(
     () => companies.filter((c) => c.is_active).sort((a, b) => a.display_name.localeCompare(b.display_name, "pt-BR")),
     [companies],
