@@ -324,7 +324,18 @@ export default function UserDetailDrawer({
               </Button>
             </TabsContent>
 
+            <TabsContent value="empresas" className="pt-4">
+              <UserCompaniesTab
+                userCode={data.user.UserCode}
+                userName={data.user.UserName || data.user.UserCode}
+                email={data.user.eMail}
+                sourceCompanyDb={companyDb}
+                onChanged={onChanged}
+              />
+            </TabsContent>
+
             <TabsContent value="vinculos" className="space-y-4 pt-4 text-sm">
+
               <div className="rounded-lg border border-border p-3 space-y-1">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">SAP</p>
                 <p className="text-foreground">
