@@ -20,6 +20,7 @@ import { useSap } from "@/contexts/SapContext";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { normalizeCurrencyCode } from "@/components/CurrencyField";
 import { normalizeText, onlyDigits, formatCnpjCpf } from "@/lib/supplier-search";
+import { omieListarClientesFornecedores } from "@/lib/omie-client";
 
 export interface EnrichedSupplierOption extends SapSearchOption {
   /** Congelado no SAP (Frozen='tYES') — pode ser selecionado, mas exige reativação. */
@@ -57,6 +58,59 @@ const hanaInflight = new Map<string, Promise<any>>();
 export function useMergedSupplierOptions({ companyDb, isSales = false }: Options) {
 
   const { session } = useSap();
+  const isOmie = session?.erpType?.toLowerCase() === "omie";
+
+  const [omieOptions, setOmieOptions] = useState<EnrichedSupplierOption[]>([]);
+  const [omieLoading, setOmieLoading] = useState(false);
+  const [omieReloadTick, setOmieReloadTick] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!companyDb || !isOmie) {
+      setOmieOptions([]);
+      setOmieLoading(false);
+      return;
+    }
+
+    setOmieLoading(true);
+    void omieListarClientesFornecedores(companyDb, { forceRefresh: omieReloadTick > 0 })
+      .then((rows) => {
+        if (cancelled) return;
+        const options = rows
+          .map((row): EnrichedSupplierOption | null => {
+            const code = String(row.codigo_cliente_omie || "").trim();
+            const name = String(row.razao_social || row.nome_fantasia || "").trim();
+            if (!code || !name) return null;
+            const taxId = row.cnpj_cpf ? formatCnpjCpf(row.cnpj_cpf) : undefined;
+            return {
+              code,
+              name,
+              extra: taxId,
+              currency: "BRL",
+              frozen: String(row.inativo || "N").toUpperCase() === "S",
+              syncStatus: "synced",
+              details: {
+                fantasyName: row.nome_fantasia || undefined,
+                taxId,
+              },
+            };
+          })
+          .filter((option): option is EnrichedSupplierOption => option !== null)
+          .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+        setOmieOptions(options);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.warn("[useMergedSupplierOptions] Falha ao carregar clientes/fornecedores da Omie.", error);
+          setOmieOptions([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setOmieLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [companyDb, isOmie, omieReloadTick]);
 
   // 1) Lista SAP — traz todos, incluindo Frozen, para poder marcá-los.
   //    Se a empresa tiver HanaAPI (Apiuser + use_hana_db != false), preferimos
@@ -98,7 +152,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
 
   useEffect(() => {
     let cancelled = false;
-    if (!companyDb) {
+    if (!companyDb || isOmie) {
       setHanaOptions(null);
       setHanaLoaded(true);
       return;
@@ -173,7 +227,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     })();
     return () => { cancelled = true; };
 
-  }, [companyDb, isSales, hanaReloadTick, hanaCacheKey]);
+  }, [companyDb, isSales, isOmie, hanaReloadTick, hanaCacheKey]);
 
 
 
@@ -192,6 +246,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     // dados para esta empresa. Quando já sabemos disso pelo cache em memória,
     // a lista começa a carregar em paralelo, sem esperar o round-trip do HANA.
     enabled:
+      !isOmie &&
       (hanaOptions === null || hanaOptions.length === 0) &&
       (hanaLoaded || hanaMemory.get(`${hanaCacheKey}:${companyDb}`)?.rows.length === 0),
 
@@ -216,9 +271,11 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
 
   });
 
-  const effectiveSapOptions = hanaOptions && hanaOptions.length > 0
-    ? hanaOptions
-    : (sapOptions as EnrichedSupplierOption[]);
+  const effectiveSapOptions = isOmie
+    ? omieOptions
+    : hanaOptions && hanaOptions.length > 0
+      ? hanaOptions
+      : (sapOptions as EnrichedSupplierOption[]);
 
 
   // 2) Linhas locais em public.suppliers da empresa atual — inclui fornecedores
@@ -377,8 +434,13 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
 
   return {
     options: merged,
-    isLoading: sapLoading || (!hanaLoaded && !!companyDb),
+    isLoading: isOmie ? omieLoading : sapLoading || (!hanaLoaded && !!companyDb),
     reload: () => {
+      if (isOmie) {
+        setOmieReloadTick((tick) => tick + 1);
+        void fetchLocal();
+        return;
+      }
       if (companyDb) void invalidateSapCache([hanaCacheKey], companyDb);
       setHanaReloadTick((t) => t + 1);
       reloadSap();

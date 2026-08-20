@@ -29,6 +29,7 @@ function isOmieRedundantError(error: unknown) {
 
 interface OmieCallOptions {
   cacheTtlMs?: number;
+  forceRefresh?: boolean;
 }
 
 /**
@@ -46,11 +47,11 @@ export async function omieCall<T = unknown>(
   const cached = omieResponseCache.get(cacheKey);
   const now = Date.now();
 
-  if (cached && cached.expiresAt > now) {
+  if (!options.forceRefresh && cached && cached.expiresAt > now) {
     return cached.data as T;
   }
 
-  const inFlight = omieInflightRequests.get(cacheKey);
+  const inFlight = options.forceRefresh ? undefined : omieInflightRequests.get(cacheKey);
   if (inFlight) {
     return inFlight as Promise<T>;
   }
@@ -136,6 +137,60 @@ export interface OmiePedidoCompra {
     [key: string]: unknown;
   };
   [key: string]: unknown;
+}
+
+export interface OmieClienteFornecedor {
+  codigo_cliente_omie: number;
+  codigo_cliente_integracao?: string;
+  razao_social?: string;
+  nome_fantasia?: string;
+  cnpj_cpf?: string;
+  email?: string;
+  inativo?: "S" | "N" | string;
+  tags?: Array<{ tag?: string }>;
+  [key: string]: unknown;
+}
+
+interface OmieClientesResponse {
+  clientes_cadastro?: OmieClienteFornecedor[];
+  pagina: number;
+  total_de_paginas: number;
+  registros: number;
+  total_de_registros: number;
+}
+
+/**
+ * Clientes e fornecedores compartilham o mesmo cadastro na Omie.
+ * Busca a lista completa para os comboboxes de compras e vendas.
+ */
+export async function omieListarClientesFornecedores(
+  companyDB: string,
+  options: { maxPages?: number; forceRefresh?: boolean } = {},
+): Promise<OmieClienteFornecedor[]> {
+  const all: OmieClienteFornecedor[] = [];
+  const maxPages = options.maxPages ?? 20;
+  let page = 1;
+
+  while (page <= maxPages) {
+    const response = await omieCall<OmieClientesResponse>(
+      companyDB,
+      "geral/clientes/",
+      {
+        call: "ListarClientes",
+        param: [{
+          pagina: page,
+          registros_por_pagina: 500,
+          apenas_importado_api: "N",
+        }],
+      },
+      { cacheTtlMs: 5 * 60_000, forceRefresh: options.forceRefresh },
+    );
+    all.push(...(response.clientes_cadastro || []));
+    if (page >= (response.total_de_paginas || 1)) break;
+    page++;
+  }
+
+  return all;
 }
 
 /**
