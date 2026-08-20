@@ -100,7 +100,7 @@ export function EditNfEntradaDialog({ item, open, onOpenChange, onSaved }: Props
     (row: any) => ({ code: row.ItemCode, name: row.ItemName }) as SapSearchOption,
     [],
   );
-  const { options: itemOptions, isLoading: itemsLoading } = useSapCachedList({
+  const { options: rawItemOptions, isLoading: itemsLoading } = useSapCachedList({
     cacheKey: "items_purchase_active_v3",
     endpoint: "Items",
     params: {
@@ -109,6 +109,11 @@ export function EditNfEntradaDialog({ item, open, onOpenChange, onSaved }: Props
     },
     mapRow: itemMapRow,
   });
+  // Itens SV% são exclusivos de venda — não aparecem em documentos de compra.
+  const itemOptions = useMemo(
+    () => rawItemOptions.filter((o) => !isSalesOnlyItemCode(o.code)),
+    [rawItemOptions],
+  );
 
   const costCenterMapRow = useCallback(
     (row: any) => ({ code: row.CenterCode, name: row.CenterName }) as SapSearchOption,
