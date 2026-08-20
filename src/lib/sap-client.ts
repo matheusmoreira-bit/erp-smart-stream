@@ -44,14 +44,21 @@ export interface SapSession {
 // Client-side response cache
 const clientCache = new Map<string, { data: unknown; expiry: number }>();
 const CLIENT_CACHE_TTL = 3 * 60 * 1000; // 3 minutes
+const CLIENT_STALE_MAX_AGE = 24 * 60 * 60 * 1000;
 
 function getClientCache(key: string): unknown | null {
   const entry = clientCache.get(key);
   if (!entry) return null;
   if (Date.now() > entry.expiry) {
-    clientCache.delete(key);
+    if (Date.now() - entry.expiry > CLIENT_STALE_MAX_AGE) clientCache.delete(key);
     return null;
   }
+  return entry.data;
+}
+
+function getStaleClientCache(key: string): unknown | null {
+  const entry = clientCache.get(key);
+  if (!entry || Date.now() - entry.expiry > CLIENT_STALE_MAX_AGE) return null;
   return entry.data;
 }
 
@@ -163,7 +170,9 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
   // Circuit breaker por empresa: se a base está em cooldown, falha rápido
   // para não travar filas e telas que dependem de outras bases.
   // O login é sempre permitido (é a forma do usuário sondar a base manualmente).
-  if (action !== "login") assertCircuitClosed(companyDB);
+  if (action !== "login" && action !== "readApprovalsCache" && action !== "writeApprovalsCache") {
+    assertCircuitClosed(companyDB);
+  }
 
   // Autenticação preguiçosa: só agora, no momento da ação, garantimos sessão.
   if (NEEDS_SAP_SESSION.has(action) && !body.sessionId) {
@@ -379,7 +388,7 @@ export async function sapQuery(
   endpoint: string,
   params?: Record<string, string | number>,
   useCache = true,
-): Promise<{ data: unknown; fromCache: boolean }> {
+): Promise<{ data: unknown; fromCache: boolean; stale?: boolean }> {
   const cacheKey = `${session.companyDB}:${endpoint}:${JSON.stringify(params || {})}`;
 
   if (useCache) {
@@ -387,14 +396,21 @@ export async function sapQuery(
     if (cached) return { data: cached, fromCache: true };
   }
 
-  const result = await callProxy({
-    action: "query",
-    sessionId: session.sessionId,
-    routeId: session.routeId,
-    companyDB: session.companyDB,
-    endpoint,
-    params,
-  });
+  let result;
+  try {
+    result = await callProxy({
+      action: "query",
+      sessionId: session.sessionId,
+      routeId: session.routeId,
+      companyDB: session.companyDB,
+      endpoint,
+      params,
+    });
+  } catch (error) {
+    const stale = useCache ? getStaleClientCache(cacheKey) : null;
+    if (stale !== null) return { data: stale, fromCache: true, stale: true };
+    throw error;
+  }
 
   if (useCache) {
     setClientCache(cacheKey, result.data);
@@ -494,7 +510,7 @@ export async function sapQueryView<T = unknown>(
   table: string,
   params?: Record<string, string | number>,
   useCache = true,
-): Promise<{ data: T[]; fromCache: boolean; hanaDisabled?: boolean }> {
+): Promise<{ data: T[]; fromCache: boolean; stale?: boolean; hanaDisabled?: boolean }> {
   const cacheKey = `view:${session.companyDB}:${table}:${JSON.stringify(params || {})}`;
 
   if (useCache) {
@@ -502,14 +518,21 @@ export async function sapQueryView<T = unknown>(
     if (cached) return { data: cached as T[], fromCache: true };
   }
 
-  const result = await callProxy({
-    action: "queryView",
-    sessionId: session.sessionId,
-    routeId: session.routeId,
-    database: session.companyDB,
-    table,
-    params,
-  });
+  let result;
+  try {
+    result = await callProxy({
+      action: "queryView",
+      sessionId: session.sessionId,
+      routeId: session.routeId,
+      database: session.companyDB,
+      table,
+      params,
+    });
+  } catch (error) {
+    const stale = useCache ? getStaleClientCache(cacheKey) : null;
+    if (stale !== null) return { data: stale as T[], fromCache: true, stale: true };
+    throw error;
+  }
 
   if (useCache && !result.hanaDisabled) {
     setClientCache(cacheKey, result.data);
@@ -572,7 +595,7 @@ export async function sapQueryAll(
   endpoint: string,
   params?: Record<string, string | number>,
   useCache = true,
-): Promise<{ data: { value: unknown[]; totalCount: number }; fromCache: boolean }> {
+): Promise<{ data: { value: unknown[]; totalCount: number }; fromCache: boolean; stale?: boolean }> {
   const cacheKey = `all:${session.companyDB}:${endpoint}:${JSON.stringify(params || {})}`;
 
   if (useCache) {
@@ -580,14 +603,27 @@ export async function sapQueryAll(
     if (cached) return { data: cached as { value: unknown[]; totalCount: number }, fromCache: true };
   }
 
-  const result = await callProxy({
-    action: "queryAll",
-    sessionId: session.sessionId,
-    routeId: session.routeId,
-    companyDB: session.companyDB,
-    endpoint,
-    params,
-  });
+  let result;
+  try {
+    result = await callProxy({
+      action: "queryAll",
+      sessionId: session.sessionId,
+      routeId: session.routeId,
+      companyDB: session.companyDB,
+      endpoint,
+      params,
+    });
+  } catch (error) {
+    const stale = useCache ? getStaleClientCache(cacheKey) : null;
+    if (stale !== null) {
+      return {
+        data: stale as { value: unknown[]; totalCount: number },
+        fromCache: true,
+        stale: true,
+      };
+    }
+    throw error;
+  }
 
   if (useCache) {
     setClientCache(cacheKey, result.data);

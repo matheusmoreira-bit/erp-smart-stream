@@ -1303,6 +1303,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   // Origem dos pedidos: sempre "Ambos" — traz ERP Flow + ERP juntos, sem toggle.
   const [sourceMode, setSourceMode] = usePersistedState<"flow" | "both">(filterKey("source"), "both");
   const [sapOrders, setSapOrders] = useState<Expense[]>([]);
+  const sapOrdersRef = useRef<Expense[]>([]);
   const [isLoadingSap, setIsLoadingSap] = useState(false);
   const [isRevalidatingSap, setIsRevalidatingSap] = useState(false);
   const [sapFromCache, setSapFromCache] = useState(false);
@@ -1495,13 +1496,14 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         if (res.status === 504 || (data as any)?.code === "IDLE_TIMEOUT") {
-          console.warn("[Expenses] listagem SAP demorou demais; seguindo sem dados HANA nesta carga.", data);
-          return [];
+          throw new Error("SAP não respondeu a tempo. Exibindo os pedidos armazenados localmente.");
         }
         throw new Error((data as any)?.error || `Falha HANA ${res.status}`);
       }
       if ((data as any)?.source === "unavailable") {
-        console.warn("[Expenses] listagem SAP indisponível; seguindo com dados locais/cache.", (data as any)?.notice);
+        throw new Error(
+          (data as any)?.notice || "SAP indisponível. Exibindo os pedidos armazenados localmente.",
+        );
       }
       const rows = Array.isArray((data as any).rows) ? (data as any).rows : [];
       return (rows as any[]).map((r) => ({
@@ -1546,6 +1548,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       try {
         const mapped = await fetchSapPage(0);
         if (cancelled) return;
+        sapOrdersRef.current = mapped;
         setSapOrders(mapped);
         setSapHasMore(mapped.length === SAP_PAGE_STEP);
         setSapFromCache(false);
@@ -1568,13 +1571,13 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         if (force) toast.success(`Sincronizado com o ERP (${mapped.length} pedidos)`);
       } catch (e) {
         if (cancelled) return;
-        if (sapOrders.length === 0) {
+        if (sapOrdersRef.current.length === 0) {
           toast.error(e instanceof Error ? e.message : "Falha ao carregar pedidos do ERP");
           setSapOrders([]);
           setSapHasMore(false);
         } else {
-          if (force) toast.error(e instanceof Error ? e.message : "Falha ao sincronizar com o ERP");
-          else console.warn("[Expenses] revalidação SAP falhou, mantendo cache:", e);
+          toast.warning(e instanceof Error ? e.message : "SAP indisponível. Exibindo dados armazenados.");
+          console.warn("[Expenses] revalidação SAP falhou, mantendo cache:", e);
         }
       } finally {
         if (!cancelled) {
@@ -1599,6 +1602,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         if (!cancelled && cached && Array.isArray((cached as any).data)) {
           const rows = (cached as any).data as Expense[];
           if (rows.length > 0) {
+            sapOrdersRef.current = rows;
             setSapOrders(rows);
             setSapHasMore(rows.length >= SAP_PAGE_STEP);
             setSapFromCache(true);

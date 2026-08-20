@@ -3898,7 +3898,10 @@ export default function ApprovalsPage() {
         )}
 
         {error && (
-          <div className="glass-card p-4 border-destructive/30 bg-destructive/10 text-sm text-destructive">{error}</div>
+          <div className={`p-4 rounded-md border text-sm ${allApprovals.length > 0
+            ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+            : "border-destructive/30 bg-destructive/10 text-destructive"
+          }`}>{error}</div>
         )}
 
 

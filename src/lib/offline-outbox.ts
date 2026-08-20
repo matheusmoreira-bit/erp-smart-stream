@@ -168,13 +168,17 @@ export function isOfflineError(err: unknown): boolean {
 
 export type OutboxSender = (entry: OutboxEntry) => Promise<void>;
 
-const senders = new Map<OutboxKind, OutboxSender>();
+const senders = new Map<OutboxKind, Set<OutboxSender>>();
 
 /** Registra quem sabe reenviar cada tipo de item da fila. */
 export function registerOutboxSender(kind: OutboxKind, sender: OutboxSender): () => void {
-  senders.set(kind, sender);
+  const registered = senders.get(kind) || new Set<OutboxSender>();
+  registered.add(sender);
+  senders.set(kind, registered);
   return () => {
-    if (senders.get(kind) === sender) senders.delete(kind);
+    const current = senders.get(kind);
+    current?.delete(sender);
+    if (current?.size === 0) senders.delete(kind);
   };
 }
 
@@ -199,7 +203,8 @@ export async function flushOutbox(opts?: { force?: boolean }): Promise<FlushResu
         result.skipped += 1;
         continue;
       }
-      const sender = senders.get(entry.kind);
+      const registered = senders.get(entry.kind);
+      const sender = registered ? Array.from(registered).at(-1) : undefined;
       if (!sender) { result.skipped += 1; continue; }
 
       await updateOutbox(entry.id, { status: "sending" });

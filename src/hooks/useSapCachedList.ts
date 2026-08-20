@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sapQueryAll } from "@/lib/sap-client";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
+import { assertCircuitClosed, recordCircuitFailure, recordCircuitSuccess } from "@/lib/sap-circuit-breaker";
 import { useSap } from "@/contexts/SapContext";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 
@@ -255,6 +257,8 @@ export function useSapCachedList({
   const { session } = useSap();
   const [options, setOptions] = useState<SapSearchOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isStale, setIsStale] = useState(false);
   const loadedRef = useRef(false);
   const lastLoadedAtRef = useRef(0);
   const mapRowRef = useRef(mapRow);
@@ -274,7 +278,7 @@ export function useSapCachedList({
       const companyDB = session?.companyDB;
       // 1. Try Supabase cache first — REQUIRE company_db to avoid leaking
       //    cached data from another company's SAP base.
-      if (!forceRefresh && companyDB) {
+      if (companyDB) {
         const cacheQuery = supabase
           .from("sap_cache")
           .select("data, expires_at")
@@ -298,9 +302,10 @@ export function useSapCachedList({
             cachedData = filterActiveRows(endpoint, cachedData, cacheKey);
             setOptions(cachedData.map(mapRowRef.current));
             hadRenderedData = cachedData.length > 0;
+            setIsStale(isExpired);
 
             // Cache válido (ou sem sessão para revalidar): encerra aqui.
-            if (!isExpired || !session) {
+            if ((!forceRefresh && !isExpired) || !session) {
               lastLoadedAtRef.current = Date.now();
               setIsLoading(false);
               return;
@@ -324,35 +329,64 @@ export function useSapCachedList({
         return;
       }
 
+      try {
+        assertCircuitClosed(companyDB);
+      } catch {
+        setError(`SAP indisponível para ${companyDB}. Exibindo os dados armazenados.`);
+        setIsStale(true);
+        return;
+      }
+
       const effectiveParams = withActiveFilter(endpoint, paramsRef.current, cacheKey);
       let rows: any[] | null = null;
+      let sapUnavailable = false;
       try {
-        const { data: svcData, error: svcErr } = await supabase.functions.invoke(
-          "sap-list-service",
-          { body: { company_db: companyDB, endpoint, params: effectiveParams } },
-        );
-        if (svcErr) throw svcErr;
-        if (svcData?.code === "no_apiuser" || svcData?.code === "sap_unavailable") {
+        const response = await sapFunctionFetch("sap-list-service", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ company_db: companyDB, endpoint, params: effectiveParams }),
+        });
+        const svcData = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(svcData?.error || `HTTP ${response.status}`);
+        if (svcData?.code === "sap_unavailable") {
+          sapUnavailable = true;
+          const message = svcData.warning || "Service Layer do SAP indisponível";
+          recordCircuitFailure(companyDB, message);
+          setError(`Não foi possível atualizar ${cacheKey}. Exibindo os dados armazenados.`);
+          setIsStale(true);
+          rows = [];
+        } else if (svcData?.code === "no_apiuser") {
           rows = null; // fall through to user-session SL below
         } else if (svcData && Array.isArray(svcData.rows)) {
           rows = svcData.rows as any[];
+          recordCircuitSuccess(companyDB);
+          setError(null);
         }
       } catch (e) {
         console.warn(`[useSapCachedList/${cacheKey}] sap-list-service falhou, usando SL do usuário:`, e);
         rows = null;
       }
 
-      if (rows === null) {
+      if (rows === null && !sapUnavailable) {
         // Listas carregadas no mount são auxiliares. Sem uma sessão já ativa,
         // não acionamos o broker (e, portanto, não abrimos login ERP). A ação
         // explícita do usuário continuará autenticando sob demanda.
         if (!session.sessionId) {
           rows = [];
         } else {
-          const { data } = await sapQueryAll(session, endpoint, effectiveParams, false);
-          rows = data?.value || [];
+          try {
+            const { data } = await sapQueryAll(session, endpoint, effectiveParams, false);
+            rows = data?.value || [];
+            setError(null);
+          } catch (error) {
+            setError(`Não foi possível atualizar ${cacheKey}. Exibindo os dados armazenados.`);
+            setIsStale(true);
+            throw error;
+          }
         }
       }
+
+      rows = rows || [];
 
 
       // Filtra centros de custo auto-gerados pelo SAP (prefixo "Centr_")
@@ -388,8 +422,11 @@ export function useSapCachedList({
         return;
       }
       setOptions(rows.map(mapRowRef.current));
+      setIsStale(false);
     } catch (e) {
       console.error(`Failed to load cached list [${cacheKey}]:`, e);
+      setError(`Não foi possível atualizar ${cacheKey}. Exibindo os dados armazenados.`);
+      setIsStale(true);
     } finally {
       setIsLoading(false);
     }
@@ -444,5 +481,5 @@ export function useSapCachedList({
   }, [enabled, cacheKey, load]);
 
 
-  return { options, isLoading, reload };
+  return { options, isLoading, reload, error, isStale };
 }

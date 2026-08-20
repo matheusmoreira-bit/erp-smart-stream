@@ -1,7 +1,7 @@
 import { getImpersonation } from "@/lib/impersonation";
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { sapLogin, sapLogout, ensureSapAuthToken, sapKeepAlive, type SapSession, clearClientCache } from "@/lib/sap-client";
+import { sapLogin, sapLogout, ensureSapAuthToken, sapKeepAlive, type SapSession, clearClientCache, getCircuitState } from "@/lib/sap-client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { clearErpLocalState } from "@/lib/clear-erp-local-state";
@@ -447,6 +447,38 @@ export function SapProvider({ children }: { children: ReactNode }) {
     setCredError(null);
   }, []);
 
+  useEffect(() => {
+    if (session?.erpType !== "sap" || !session.companyDB) return;
+    const circuit = getCircuitState(session.companyDB);
+    if (circuit.state !== "open") return;
+    const mins = Math.max(1, Math.ceil(circuit.retryAfterMs / 60_000));
+    toast.warning(`SAP indisponível para ${session.companyDB}.`, {
+      description: `Exibindo dados armazenados. Nova tentativa automática em aproximadamente ${mins} min.`,
+    });
+  }, [session?.erpType, session?.companyDB]);
+
+  // A primeira falha de conectividade já é informada. O circuito continua
+  // cuidando do cooldown; este evento explica que a tela seguirá com cache.
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      const detail = (ev as CustomEvent).detail as
+        | { companyDB?: string; available?: boolean; reason?: string }
+        | undefined;
+      if (!detail?.companyDB) return;
+      if (detail.available) {
+        toast.success(`Comunicação com o SAP restaurada para ${detail.companyDB}.`, {
+          description: "As atualizações e os envios pendentes serão retomados automaticamente.",
+        });
+      } else {
+        toast.warning(`Não foi possível atualizar os dados do SAP (${detail.companyDB}).`, {
+          description: "O ERP Flow continuará usando os dados já armazenados e tentará novamente automaticamente.",
+        });
+      }
+    };
+    window.addEventListener("erp:sap-connectivity", handler);
+    return () => window.removeEventListener("erp:sap-connectivity", handler);
+  }, []);
+
 
 
   const performLogout = useCallback(async () => {
@@ -524,8 +556,6 @@ export function SapProvider({ children }: { children: ReactNode }) {
         toast.warning(
           `Base ${detail.companyDB} indisponível. Pausando chamadas por ~${mins} min para não afetar as demais rotinas.`,
         );
-      } else if (detail.state === "closed") {
-        toast.success(`Base ${detail.companyDB} voltou a responder.`);
       }
     };
     window.addEventListener("erp:circuit-breaker", handler);

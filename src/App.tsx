@@ -75,6 +75,7 @@ import { DefaultPasswordWarning } from "./components/DefaultPasswordWarning.tsx"
 import { MobileBottomNav } from "./components/MobileBottomNav.tsx";
 import { RequireAuth } from "./components/RequireAuth.tsx";
 import { ModuleRoute } from "./components/ModuleRoute.tsx";
+import { OfflineResilienceAgent } from "./components/OfflineResilienceAgent.tsx";
 import Login from "./pages/Login.tsx";
 
 
@@ -93,6 +94,7 @@ const App = () => (
           <PermissionsV2Provider>
           <TestCompanyVisibilityGate />
           <BrowserRouter>
+            <OfflineResilienceAgent />
             <StickyHeaderMeasure />
             <ModuleSubmenu />
             <RequireAuth>

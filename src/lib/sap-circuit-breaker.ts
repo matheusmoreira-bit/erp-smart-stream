@@ -53,18 +53,73 @@ const BASE_COOLDOWN_MS = 2 * 60_000; // 2 min
 const MAX_COOLDOWN_MS = 10 * 60_000; // 10 min
 
 const circuits = new Map<string, CircuitEntry>();
+const STORAGE_PREFIX = "erp:sap-circuit:";
+const connectivityNotifiedAt = new Map<string, number>();
+const CONNECTIVITY_NOTICE_THROTTLE_MS = 60_000;
 
 function keyOf(companyDB: string | undefined | null): string {
   return (companyDB || "__global__").toUpperCase();
 }
 
+function storageKey(key: string): string {
+  return `${STORAGE_PREFIX}${key}`;
+}
+
+function readPersisted(key: string): CircuitEntry | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(storageKey(key));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<CircuitEntry>;
+    return {
+      failures: Number(parsed.failures || 0),
+      firstFailureAt: Number(parsed.firstFailureAt || 0),
+      openedAt: parsed.openedAt == null ? null : Number(parsed.openedAt),
+      cooldownMs: Number(parsed.cooldownMs || BASE_COOLDOWN_MS),
+      probing: false,
+      lastError: parsed.lastError,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persist(key: string, entry: CircuitEntry | null) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    if (!entry) localStorage.removeItem(storageKey(key));
+    else localStorage.setItem(storageKey(key), JSON.stringify({ ...entry, probing: false }));
+  } catch { /* storage is best-effort */ }
+}
+
 function getEntry(key: string): CircuitEntry {
   let entry = circuits.get(key);
   if (!entry) {
-    entry = { failures: 0, firstFailureAt: 0, openedAt: null, cooldownMs: BASE_COOLDOWN_MS, probing: false };
+    entry = readPersisted(key) || {
+      failures: 0,
+      firstFailureAt: 0,
+      openedAt: null,
+      cooldownMs: BASE_COOLDOWN_MS,
+      probing: false,
+    };
     circuits.set(key, entry);
   }
   return entry;
+}
+
+function emitConnectivity(companyDB: string, available: boolean, reason?: string) {
+  if (typeof window === "undefined") return;
+  const key = keyOf(companyDB);
+  if (!available) {
+    const last = connectivityNotifiedAt.get(key) || 0;
+    if (Date.now() - last < CONNECTIVITY_NOTICE_THROTTLE_MS) return;
+    connectivityNotifiedAt.set(key, Date.now());
+  } else {
+    connectivityNotifiedAt.delete(key);
+  }
+  window.dispatchEvent(new CustomEvent("erp:sap-connectivity", {
+    detail: { companyDB, available, reason },
+  }));
 }
 
 function emit(companyDB: string, state: CircuitState, retryAfterMs = 0, reason?: string) {
@@ -80,7 +135,9 @@ export function getCircuitState(companyDB: string | undefined | null): {
   retryAfterMs: number;
   lastError?: string;
 } {
-  const entry = circuits.get(keyOf(companyDB));
+  const key = keyOf(companyDB);
+  const entry = circuits.get(key) || readPersisted(key);
+  if (entry && !circuits.has(key)) circuits.set(key, entry);
   if (!entry || entry.openedAt === null) {
     return { state: "closed", retryAfterMs: 0, lastError: entry?.lastError };
   }
@@ -110,6 +167,7 @@ export function assertCircuitClosed(companyDB: string | undefined | null): void 
     throw new SapCircuitOpenError(companyDB || "ERP", 5_000);
   }
   entry.probing = true;
+  persist(key, entry);
 }
 
 /** Registra sucesso: fecha o circuito e zera o histórico. */
@@ -117,9 +175,13 @@ export function recordCircuitSuccess(companyDB: string | undefined | null): void
   const key = keyOf(companyDB);
   const entry = circuits.get(key);
   if (!entry) return;
-  const wasOpen = entry.openedAt !== null;
+  const hadFailure = entry.failures > 0 || entry.openedAt !== null;
   circuits.delete(key);
-  if (wasOpen) emit(companyDB || "ERP", "closed");
+  persist(key, null);
+  if (hadFailure) {
+    emit(companyDB || "ERP", "closed");
+    emitConnectivity(companyDB || "ERP", true);
+  }
 }
 
 /**
@@ -131,6 +193,7 @@ export function recordCircuitFailure(companyDB: string | undefined | null, reaso
   const entry = getEntry(key);
   const now = Date.now();
   entry.lastError = reason;
+  emitConnectivity(companyDB || "ERP", false, reason);
 
   // Falhou durante a sondagem half-open → reabre com cooldown maior.
   if (entry.probing) {
@@ -138,6 +201,7 @@ export function recordCircuitFailure(companyDB: string | undefined | null, reaso
     entry.openedAt = now;
     entry.cooldownMs = Math.min(entry.cooldownMs * 2, MAX_COOLDOWN_MS);
     emit(companyDB || "ERP", "open", entry.cooldownMs, reason);
+    persist(key, entry);
     return;
   }
 
@@ -152,15 +216,27 @@ export function recordCircuitFailure(companyDB: string | undefined | null, reaso
     entry.cooldownMs = BASE_COOLDOWN_MS;
     emit(companyDB || "ERP", "open", entry.cooldownMs, reason);
   }
+  persist(key, entry);
 }
 
 /** Reset manual (ex.: novo login ou ação do usuário "tentar novamente"). */
 export function resetCircuit(companyDB?: string | null): void {
   if (companyDB === undefined) {
+    for (const key of circuits.keys()) persist(key, null);
     circuits.clear();
+    if (typeof localStorage !== "undefined") {
+      try {
+        for (let index = localStorage.length - 1; index >= 0; index--) {
+          const key = localStorage.key(index);
+          if (key?.startsWith(STORAGE_PREFIX)) localStorage.removeItem(key);
+        }
+      } catch { /* storage is best-effort */ }
+    }
     return;
   }
-  circuits.delete(keyOf(companyDB));
+  const key = keyOf(companyDB);
+  circuits.delete(key);
+  persist(key, null);
   emit(companyDB || "ERP", "closed");
 }
 

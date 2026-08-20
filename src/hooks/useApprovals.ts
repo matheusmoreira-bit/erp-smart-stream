@@ -4,6 +4,7 @@ import { sapQuery, sapQueryView, sapReadApprovalsCache, sapWriteApprovalsCache, 
 import { supabase } from "@/integrations/supabase/client";
 import { displayUserName } from "@/lib/user-display";
 import { isImpersonating } from "@/lib/impersonation";
+import { recordCircuitFailure, recordCircuitSuccess } from "@/lib/sap-circuit-breaker";
 
 
 
@@ -688,16 +689,19 @@ export function useApprovals() {
     const force = !!opts?.force;
     setError(null);
 
-    // 1) Try cache first (unless forced)
-    if (!force && !skipCache) {
+    // 1) Sempre hidrata pelo cache. Em refresh forçado apenas não encerramos
+    // cedo: os dados locais continuam visíveis durante a revalidação.
+    let cacheHadData = false;
+    if (!skipCache) {
       try {
         const cached = await readApprovalsCache(session as SapSession);
         if (cached) {
+          cacheHadData = cached.docs.length > 0;
           setApprovals(cached.docs);
           setLastUpdatedAt(cached.updatedAt);
           setIsLoading(false);
           const age = Date.now() - new Date(cached.updatedAt).getTime();
-          if (age < APPROVALS_CACHE_TTL_MS) return; // fresh, skip SAP
+          if (!force && age < APPROVALS_CACHE_TTL_MS) return; // fresh, skip SAP
           // stale: fall through to refresh in background
         }
       } catch (e) {
@@ -705,11 +709,12 @@ export function useApprovals() {
       }
     }
 
-    const hasData = approvals.length > 0;
-    if (force || !hasData) setIsLoading(true);
+    const hasData = approvals.length > 0 || cacheHadData;
+    if (!hasData) setIsLoading(true);
     setIsRefreshing(true);
     try {
       const docs = await fetchFromSap();
+      if (SERVICE_LAYER_ONLY_DBS.has(session.companyDB)) recordCircuitSuccess(session.companyDB);
       setApprovals(docs);
       const now = new Date().toISOString();
       setLastUpdatedAt(now);
@@ -718,9 +723,10 @@ export function useApprovals() {
       console.error("Error fetching approvals:", e);
       const msg = e instanceof Error ? e.message : "Erro ao buscar aprovações";
       const transient = /Failed to send a request|Failed to fetch|network|timeout/i.test(msg);
-      // Com dados em cache na tela, uma falha transitória não deve virar erro bloqueante.
+      if (transient) recordCircuitFailure(session.companyDB, msg);
+      // Com cache, o erro é informativo e não bloqueia nem esvazia a listagem.
       if (hasData && transient) {
-        setError(null);
+        setError("SAP indisponível no momento. Exibindo aprovações armazenadas; a atualização será retomada automaticamente.");
       } else {
         setError(transient ? "Não foi possível atualizar as aprovações agora. Tente novamente em instantes." : msg);
       }

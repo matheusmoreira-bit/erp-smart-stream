@@ -244,7 +244,7 @@ Deno.serve(async (req) => {
     );
   } catch (e) {
     const msg = (e as Error).message || "erro desconhecido";
-    const transient = /timeout|network|erro de rede|ECONNRESET|fetch failed|Login SAP falhou/i.test(msg);
+    const transient = /timeout|timed out|idle timeout|AbortError|network|erro de rede|ECONNRESET|ECONNREFUSED|fetch failed|Login SAP falhou|\b50[234]\b/i.test(msg);
     // Falhas transitórias do SAP não devem derrubar a tela: devolvemos 200 com
     // lista vazia + aviso, para o cliente cair no cache/fallback do usuário.
     return new Response(

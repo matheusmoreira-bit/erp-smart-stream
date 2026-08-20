@@ -5,7 +5,7 @@
 // or the new error is not retryable, marks the row as exhausted and notifies
 // admins via email + WhatsApp.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { backoffMinutes, classifySapError, nextAttemptAt, type SapRetryDocType } from "../_shared/sap-retry.ts";
+import { backoffMinutes, classifySapError, nextAttemptAt, shouldExhaustRetry, type SapRetryDocType } from "../_shared/sap-retry.ts";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
 
@@ -234,7 +234,10 @@ Deno.serve(async (req) => {
     }
 
     const cls = classifySapError(httpStatus, errText);
-    const isLastAttempt = !cls.retryable || attempts >= (row.max_attempts || 5);
+    // Quedas de infraestrutura não expiram: o backoff chega ao teto de 120 min
+    // e a fila continua sondando até o serviço voltar. Limite de tentativas só
+    // vale para erros que podem exigir intervenção funcional.
+    const isLastAttempt = shouldExhaustRetry(cls, attempts, row.max_attempts || 5);
 
     // NÃO integrar sem anexo. Falha de anexo é encerrada como "exhausted"
     // para o documento ser corrigido com anexo e reenviado.

@@ -28,6 +28,16 @@ export interface ClassifiedSapError {
   reason: string;
 }
 
+export function shouldExhaustRetry(
+  classification: ClassifiedSapError,
+  attempts: number,
+  maxAttempts: number,
+): boolean {
+  if (!classification.retryable) return true;
+  const infrastructureFailure = ["network", "timeout", "session"].includes(classification.category);
+  return !infrastructureFailure && attempts >= maxAttempts;
+}
+
 // Errors we NEVER want to retry automatically — they need human action.
 const NON_RETRYABLE_PATTERNS: RegExp[] = [
   /not authorized/i,

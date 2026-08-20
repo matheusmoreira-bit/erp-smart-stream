@@ -16,7 +16,6 @@ const MATRIX_FALLBACK_APPROVER_NAME = "Matheus Moreira";
 
 import {
   enqueueOutbox,
-  isErpUnavailable,
   isOfflineError,
   registerOutboxSender,
 } from "@/lib/offline-outbox";
@@ -1043,7 +1042,10 @@ export function useExpenses(
     async (input: CreateExpenseInput) => {
       if (!session) throw new Error("Sessão SAP não encontrada");
 
-      if (isErpUnavailable(session.companyDB)) {
+      // Queda apenas do SAP não impede a criação no ERP Flow: enriquecimentos
+      // usam cache/fallback e a integração será retomada no servidor. A outbox
+      // do navegador fica reservada para falta de internet/Supabase.
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
         const queued = await enqueueOffline(input, "Base do ERP indisponível no momento do lançamento");
         toast.warning(
           "Base do ERP indisponível. O lançamento entrou na fila offline e será enviado automaticamente quando a base voltar.",
