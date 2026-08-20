@@ -369,48 +369,8 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Dialog open={formDb !== null} onOpenChange={(o) => !o && setFormDb(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Entrar em {formDb ? getLabel(formDb) : ""}</DialogTitle>
-            <DialogDescription>
-              Esta empresa não possui senha provisionada. Informe suas credenciais do ERP.
-            </DialogDescription>
-          </DialogHeader>
 
-          <form onSubmit={handleFormLogin} className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="switch-user">Usuário</Label>
-              <Input
-                id="switch-user"
-                value={userName}
-                onChange={(e) => setUserName(e.target.value)}
-                autoComplete="username"
-                autoFocus
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="switch-pass">Senha</Label>
-              <Input
-                id="switch-pass"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <Button type="button" variant="ghost" onClick={() => setFormDb(null)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={busyDb === formDb}>
-                {busyDb === formDb ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                Entrar
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+
 
       {isAdmin && (
         <ImpersonationDialog open={impersonateOpen} onOpenChange={setImpersonateOpen} />
