@@ -487,7 +487,10 @@ export function CreateExpenseModal({
   const filteredItemOptions = useMemo(() => {
     // Vendas: apenas os itens de receita liberados (SV0003 e SV0006).
     if (isSales) return itemOptions.filter((o) => SALES_ALLOWED_ITEMS.includes(o.code));
-    return itemOptions.filter((o) => isItemAllowedForCostCenter(o.code, userCostCenter, bypassCcItemRules));
+    // Compras: itens SV% são exclusivos de venda e nunca aparecem aqui.
+    return itemOptions.filter(
+      (o) => !isSalesOnlyItemCode(o.code) && isItemAllowedForCostCenter(o.code, userCostCenter, bypassCcItemRules),
+    );
   }, [itemOptions, userCostCenter, isSales, bypassCcItemRules]);
 
   // Alçada de CC: quem é do 1.6.1.2 pode lançar em qualquer 1.6.%.
