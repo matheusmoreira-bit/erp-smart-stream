@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import { canonicalUserKey } from "@/lib/user-identity";
@@ -379,15 +379,32 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
   const [perms, setPerms] = useState<Record<string, ModulePerms>>({});
   const [loading, setLoading] = useState(true);
   const [refreshTick, setRefreshTick] = useState(0);
+  const resolvedScopeRef = useRef<string | null>(null);
 
   useEffect(() => {
     const allKeys = ALL_MODULES.map((m) => m.key);
     let cancelled = false;
+    const scopeKey = [
+      session?.userName?.toLowerCase() || "cloud",
+      session?.companyDB || "",
+      session?.erpType || "",
+      session?.isSuperUser ? "super" : "standard",
+    ].join("|");
+    const beginLoading = () => {
+      // Revalidações por foco/Realtime mantêm o snapshot atual renderizado.
+      // Só bloqueamos a rota quando a identidade ou a empresa realmente muda.
+      if (resolvedScopeRef.current !== scopeKey) setLoading(true);
+    };
+    const finishLoading = () => {
+      if (cancelled) return;
+      resolvedScopeRef.current = scopeKey;
+      setLoading(false);
+    };
 
     // Sem sessão ERP ainda: admins da nuvem (identidade Google) continuam com
     // acesso total — a troca de empresa não depende mais do login do ERP.
     if (!session?.userName) {
-      setLoading(true);
+      beginLoading();
       (async () => {
         const admin = await getIsCloudAdmin().catch(() => false);
         if (cancelled) return;
@@ -398,7 +415,7 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
           setUserModules(DEFAULT_MODULES);
           setPerms(Object.fromEntries(DEFAULT_MODULES.map((k) => [k, defaultPermsFor(k)])));
         }
-        setLoading(false);
+        finishLoading();
       })();
       return () => { cancelled = true; };
     }
@@ -410,7 +427,7 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
       if (cancelled) return;
       setUserModules(allKeys);
       setPerms(Object.fromEntries(allKeys.map((k) => [k, FULL_PERMS])));
-      setLoading(false);
+      finishLoading();
     };
 
     // SAP superuser, OMIE company, or "manager" account → grant all
@@ -420,7 +437,7 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
     }
 
     (async () => {
-      setLoading(true);
+      beginLoading();
 
       // Cloud admin?
       if (await getIsCloudAdmin()) { grantAll(); return; }
@@ -443,7 +460,7 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
       if (!mine || mine.length === 0) {
         setUserModules(DEFAULT_MODULES);
         setPerms(Object.fromEntries(DEFAULT_MODULES.map((k) => [k, defaultPermsFor(k)])));
-        setLoading(false);
+        finishLoading();
         return;
       }
 
@@ -483,8 +500,11 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
 
       setPerms(merged);
       setUserModules(keys.length > 0 ? keys : DEFAULT_MODULES);
-      setLoading(false);
-    })();
+      finishLoading();
+    })().catch((error) => {
+      console.error("[useModuleAccess] falha ao atualizar permissões", error);
+      finishLoading();
+    });
 
     return () => { cancelled = true; };
   }, [session?.userName, session?.companyDB, session?.isSuperUser, session?.erpType, refreshTick]);
