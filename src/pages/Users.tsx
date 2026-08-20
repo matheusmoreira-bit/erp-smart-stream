@@ -12,6 +12,8 @@ import {
   AlertTriangle,
   ShieldCheck,
   X,
+  Copy,
+
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
