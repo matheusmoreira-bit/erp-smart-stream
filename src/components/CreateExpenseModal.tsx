@@ -2831,7 +2831,7 @@ export function CreateExpenseModal({
               onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
               onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); }}
               onDrop={handleDrop}
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); inputRef.current?.click(); }}
+              onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
               className={`relative max-w-full border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all sm:p-6 ${
                 isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
               }`}
@@ -2842,6 +2842,7 @@ export function CreateExpenseModal({
                 accept={ALLOWED_ATTACHMENT_ACCEPT}
                 className="hidden"
                 multiple
+                onClick={(e) => e.stopPropagation()}
                 onChange={(e) => {
                   if (e.target.files) handleFiles(e.target.files);
                   e.currentTarget.value = "";
