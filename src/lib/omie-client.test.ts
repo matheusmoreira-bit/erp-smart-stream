@@ -104,4 +104,32 @@ describe("omieListarProdutosServicos", () => {
       }),
     ]));
   });
+
+  it("keeps the available catalog when one Omie list has no records", async () => {
+    publicFunctionFetch.mockImplementation(async (_name: string, init: RequestInit) => {
+      const request = JSON.parse(String(init.body));
+      if (request.endpoint === "servicos/servico/") {
+        return new Response(JSON.stringify({
+          error: "ERROR: Não existem registros para a página [1]!",
+        }), { status: 400, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({
+        data: {
+          pagina: 1,
+          total_de_paginas: 1,
+          produto_servico_cadastro: [{
+            codigo_produto: 30,
+            descricao: "Produto disponivel",
+            inativo: "N",
+          }],
+        },
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+
+    const result = await omieListarProdutosServicos("OMIE_WITHOUT_SERVICES", { forceRefresh: true });
+
+    expect(result).toEqual([
+      expect.objectContaining({ code: "P:30", name: "Produto disponivel", kind: "product" }),
+    ]);
+  });
 });

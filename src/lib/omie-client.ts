@@ -27,6 +27,15 @@ function isOmieRedundantError(error: unknown) {
   );
 }
 
+function isOmieEmptyListError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  const message = error.message
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return message.includes("nao existem registros para a pagina");
+}
+
 interface OmieCallOptions {
   cacheTtlMs?: number;
   forceRefresh?: boolean;
@@ -253,20 +262,26 @@ async function omieListarProdutos(
   const all: OmieCatalogItem[] = [];
   let page = 1;
   while (page <= maxPages) {
-    const response = await omieCall<OmieProdutosResponse>(
-      companyDB,
-      "geral/produtos/",
-      {
-        call: "ListarProdutos",
-        param: [{
-          pagina: page,
-          registros_por_pagina: 500,
-          apenas_importado_api: "N",
-          filtrar_apenas_omiepdv: "N",
-        }],
-      },
-      { cacheTtlMs: 5 * 60_000, forceRefresh },
-    );
+    let response: OmieProdutosResponse;
+    try {
+      response = await omieCall<OmieProdutosResponse>(
+        companyDB,
+        "geral/produtos/",
+        {
+          call: "ListarProdutos",
+          param: [{
+            pagina: page,
+            registros_por_pagina: 500,
+            apenas_importado_api: "N",
+            filtrar_apenas_omiepdv: "N",
+          }],
+        },
+        { cacheTtlMs: 5 * 60_000, forceRefresh },
+      );
+    } catch (error) {
+      if (isOmieEmptyListError(error)) break;
+      throw error;
+    }
     for (const product of response.produto_servico_cadastro || []) {
       const id = Number(product.codigo_produto);
       const name = String(product.descricao || product.codigo || "").trim();
@@ -294,15 +309,21 @@ async function omieListarServicos(
   const all: OmieCatalogItem[] = [];
   let page = 1;
   while (page <= maxPages) {
-    const response = await omieCall<OmieServicosResponse>(
-      companyDB,
-      "servicos/servico/",
-      {
-        call: "ListarCadastroServico",
-        param: [{ nPagina: page, nRegPorPagina: 500 }],
-      },
-      { cacheTtlMs: 5 * 60_000, forceRefresh },
-    );
+    let response: OmieServicosResponse;
+    try {
+      response = await omieCall<OmieServicosResponse>(
+        companyDB,
+        "servicos/servico/",
+        {
+          call: "ListarCadastroServico",
+          param: [{ nPagina: page, nRegPorPagina: 500 }],
+        },
+        { cacheTtlMs: 5 * 60_000, forceRefresh },
+      );
+    } catch (error) {
+      if (isOmieEmptyListError(error)) break;
+      throw error;
+    }
     for (const service of response.cadastros || []) {
       const id = Number(service.intListar?.nCodServ);
       const name = String(service.cabecalho?.cDescricao || service.descricao?.cDescrCompleta || "").trim();

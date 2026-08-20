@@ -11,6 +11,20 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+function isEmptyListFault(data: unknown, params: unknown) {
+  const call = typeof (params as { call?: unknown })?.call === "string"
+    ? String((params as { call: string }).call)
+    : "";
+  const message = typeof (data as { faultstring?: unknown })?.faultstring === "string"
+    ? String((data as { faultstring: string }).faultstring)
+    : "";
+  const normalizedMessage = message
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return call.startsWith("Listar") && normalizedMessage.includes("nao existem registros para a pagina");
+}
+
 
 Deno.serve(async (req) => {
   const foreignOrigin = rejectForeignOrigin(req);
@@ -183,6 +197,14 @@ Deno.serve(async (req) => {
       const data = await omieRes.json();
 
       if (data.faultstring) {
+        // A Omie representa listas vazias como fault HTTP. Para consultas de
+        // listagem isso é um resultado válido e não deve derrubar a interface.
+        if (isEmptyListFault(data, params)) {
+          return new Response(
+            JSON.stringify({ data: {} }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
         return new Response(
           JSON.stringify({ error: data.faultstring }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
