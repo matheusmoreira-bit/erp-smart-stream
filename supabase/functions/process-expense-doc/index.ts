@@ -26,6 +26,97 @@ const FALLBACK_COMPANY_NAMES: Record<string, string[]> = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const AI_MODEL = "google/gemini-2.5-flash";
+const PAGCORP_CACHE_PROMPT_VERSION = "pagcorp-expense-v1";
+
+interface PreparedFile {
+  file: File;
+  bytes: Uint8Array;
+  hash: string;
+}
+
+async function sha256Hex(value: Uint8Array | string): Promise<string> {
+  const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function readPagCorpCache(companyDB: string, documentHash: string): Promise<unknown | null> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+  try {
+    const query = new URLSearchParams({
+      company_db: `eq.${companyDB}`,
+      document_hash: `eq.${documentHash}`,
+      prompt_version: `eq.${PAGCORP_CACHE_PROMPT_VERSION}`,
+      select: "id,ai_result",
+      limit: "1",
+    });
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/pagcorp_ai_document_cache?${query.toString()}`, {
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const rows = await response.json() as Array<{ id: string; ai_result: unknown }>;
+    const hit = rows[0];
+    if (!hit) return null;
+
+    void fetch(`${SUPABASE_URL}/rest/v1/pagcorp_ai_document_cache?id=eq.${encodeURIComponent(hit.id)}`, {
+      method: "PATCH",
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ last_accessed_at: new Date().toISOString() }),
+    }).catch(() => undefined);
+    return hit.ai_result;
+  } catch (error) {
+    console.warn("PagCorp AI cache lookup failed", error);
+    return null;
+  }
+}
+
+async function writePagCorpCache(params: {
+  companyDB: string;
+  documentHash: string;
+  expenseId: number | null;
+  files: PreparedFile[];
+  result: unknown;
+}): Promise<void> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return;
+  const query = new URLSearchParams({ on_conflict: "company_db,document_hash,prompt_version" });
+  const now = new Date().toISOString();
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/pagcorp_ai_document_cache?${query.toString()}`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": "application/json",
+      Prefer: "resolution=merge-duplicates,return=minimal",
+    },
+    body: JSON.stringify({
+      company_db: params.companyDB,
+      document_hash: params.documentHash,
+      prompt_version: PAGCORP_CACHE_PROMPT_VERSION,
+      pagcorp_expense_id: params.expenseId,
+      file_metadata: params.files.map(({ file, hash }) => ({
+        name: file.name,
+        type: file.type || null,
+        size: file.size,
+        sha256: hash,
+      })),
+      ai_result: params.result,
+      model: AI_MODEL,
+      updated_at: now,
+      last_accessed_at: now,
+    }),
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+}
 
 // Configurable name-similarity threshold (Jaccard over meaningful tokens).
 // Values >= threshold count as a match. Default 0.5.
@@ -147,6 +238,9 @@ serve(async (req) => {
     const formData = await req.formData();
     const files = formData.getAll("files") as File[];
     const companyDB = formData.get("company_db") as string || "";
+    const cacheScope = String(formData.get("cache_scope") || "");
+    const expenseIdValue = Number(formData.get("pagcorp_expense_id"));
+    const pagcorpExpenseId = Number.isFinite(expenseIdValue) ? expenseIdValue : null;
 
     if (!files || files.length === 0) {
       return new Response(JSON.stringify({ error: "Nenhum arquivo enviado" }), {
@@ -155,15 +249,28 @@ serve(async (req) => {
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY not configured");
+    const preparedFiles: PreparedFile[] = [];
+    for (const file of files) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      preparedFiles.push({ file, bytes, hash: await sha256Hex(bytes) });
     }
+    const documentHash = await sha256Hex(preparedFiles.map(({ hash }) => hash).sort().join("|"));
+    const cacheEnabled = cacheScope === "pagcorp" && Boolean(companyDB);
+    if (cacheEnabled) {
+      const cached = await readPagCorpCache(companyDB, documentHash);
+      if (cached !== null) {
+        return new Response(JSON.stringify({ result: cached, cached: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
     // Build content parts
     const contentParts: any[] = [];
-    for (const file of files) {
-      const bytes = new Uint8Array(await file.arrayBuffer());
+    for (const { file, bytes } of preparedFiles) {
       const isPdf = file.name.toLowerCase().endsWith(".pdf");
       const isImage = /\.(jpg|jpeg|png|webp|gif)$/i.test(file.name);
 
@@ -277,7 +384,7 @@ Regras IMPORTANTES:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: AI_MODEL,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: contentParts },
@@ -385,7 +492,18 @@ Regras IMPORTANTES:
       }
     }
 
-    return new Response(JSON.stringify({ result: Array.isArray(parsed) ? docs : docs[0] }), {
+    const result = Array.isArray(parsed) ? docs : docs[0];
+    if (cacheEnabled) {
+      await writePagCorpCache({
+        companyDB,
+        documentHash,
+        expenseId: pagcorpExpenseId,
+        files: preparedFiles,
+        result,
+      }).catch((error) => console.warn("PagCorp AI cache write failed", error));
+    }
+
+    return new Response(JSON.stringify({ result, cached: false }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
