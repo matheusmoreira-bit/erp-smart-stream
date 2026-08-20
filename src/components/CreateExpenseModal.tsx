@@ -517,8 +517,6 @@ export function CreateExpenseModal({
   const [aiEnabled, setAiEnabled] = useState(!isSales);
   const [isProcessing, setIsProcessing] = useState(false);
   const [aiConfidence, setAiConfidence] = useState<number | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
   // ─── Fluxo multi-documento ────────────────────────────────────────────
   // Quando o usuário anexa >1 nota/recibo, aplicamos as regras:
   //   1) MESMO fornecedor  → mescla todas as linhas numa despesa só.
@@ -2011,6 +2009,22 @@ export function CreateExpenseModal({
     if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
   };
 
+  useEffect(() => {
+    if (!open) return;
+
+    const preventBrowserFileDrop = (event: DragEvent) => {
+      const types = Array.from(event.dataTransfer?.types || []);
+      if (types.includes("Files")) event.preventDefault();
+    };
+
+    window.addEventListener("dragover", preventBrowserFileDrop, { capture: true });
+    window.addEventListener("drop", preventBrowserFileDrop, { capture: true });
+    return () => {
+      window.removeEventListener("dragover", preventBrowserFileDrop, { capture: true });
+      window.removeEventListener("drop", preventBrowserFileDrop, { capture: true });
+    };
+  }, [open]);
+
   const updateItem = (index: number, field: string, value: string | number) => {
     setItems((prev) => {
       const updated = [...prev];
@@ -2827,20 +2841,18 @@ export function CreateExpenseModal({
           {/* File Upload */}
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Documentos (NF, Recibos, Boletos)</label>
-            <div
+            <label
               onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
               onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); }}
               onDrop={handleDrop}
-              onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
               className={`relative max-w-full border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all sm:p-6 ${
                 isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
               }`}
             >
               <input
-                ref={inputRef}
                 type="file"
                 accept={ALLOWED_ATTACHMENT_ACCEPT}
-                className="hidden"
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                 multiple
                 onClick={(e) => e.stopPropagation()}
                 onChange={(e) => {
@@ -2862,7 +2874,7 @@ export function CreateExpenseModal({
                   <p className="text-xs text-muted-foreground mt-1">{ALLOWED_ATTACHMENT_HINT}</p>
                 </>
               )}
-            </div>
+            </label>
 
             {files.length > 0 && (
               <div className="mt-2 space-y-1">
