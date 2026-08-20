@@ -390,7 +390,6 @@ function ExpenseDetailModal({
     canCancel &&
     (expense.status === "rascunho" || expense.status === "pendente_aprovacao" || cancelPropagatesToErp);
 
-  const hasSapError = !!expense.sap_integration_error && !alreadyInSap;
   // Edição permitida enquanto a NF de entrada NÃO foi lançada no ERP.
   // Se o documento já está no ERP (pc_lancado), a edição retorna o documento
   // ao fluxo de aprovação e, ao final, o pedido é atualizado (patch completo)
@@ -400,7 +399,7 @@ function ExpenseDetailModal({
     expense.status === "rascunho" ||
     expense.status === "pendente_aprovacao" ||
     expense.status === "pc_lancado" ||
-    (expense.status === "aprovado" && (hasSapError || alreadyInSap))
+    expense.status === "aprovado"
   );
   const showRetrySap = canRetrySap && expense.status === "aprovado" && !expense.sap_doc_entry;
   const showEmitNfse = isSalesDoc && alreadyInSap && !nfseEmission;

@@ -10,6 +10,7 @@ import { tryAcquireIntegrationLock, releaseIntegrationLock } from "../_shared/sa
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { normalizeExpenseItems } from "../_shared/expense-items.ts";
 
 
 const corsHeaders = {
@@ -201,7 +202,14 @@ async function patchSapDocument(
 ): Promise<any> {
   const res = await fetch(`${sapBaseUrl}/${endpoint}(${docEntry})`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json", Cookie: cookies, Prefer: "return=representation" },
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: cookies,
+      Prefer: "return=representation",
+      // Sem este header o Service Layer faz merge da coleção e pode manter
+      // linhas antigas ou incompletas. O payload aprovado é a fonte da verdade.
+      "B1S-ReplaceCollectionsOnPatch": "true",
+    },
     body: JSON.stringify(payload),
   });
   if (res.status === 204) return {};
@@ -211,6 +219,44 @@ async function patchSapDocument(
     throw new Error(`SAP ${endpoint}(${docEntry}) update failed [${res.status}]: ${msg}`);
   }
   return body;
+}
+
+async function verifySapDocumentLines(
+  sapBaseUrl: string,
+  cookies: string,
+  endpoint: string,
+  docEntry: number,
+  expected: Array<Record<string, unknown>>,
+): Promise<void> {
+  const res = await fetch(`${sapBaseUrl}/${endpoint}(${docEntry})`, {
+    headers: { Cookie: cookies },
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`PATCH executado, mas a conferência no SAP falhou [${res.status}].`);
+
+  const actual = Array.isArray(body?.DocumentLines) ? body.DocumentLines : [];
+  if (actual.length !== expected.length) {
+    throw new Error(`SAP manteve ${actual.length} linha(s), mas a versão aprovada possui ${expected.length}.`);
+  }
+
+  const text = (value: unknown) => String(value ?? "").trim();
+  const close = (a: unknown, b: unknown) => Math.abs(Number(a) - Number(b)) < 0.005;
+  for (let index = 0; index < expected.length; index++) {
+    const wanted = expected[index];
+    const saved = actual[index] || {};
+    const savedUnitPrice = saved.UnitPrice ?? saved.Price;
+    if (
+      text(saved.ItemCode) !== text(wanted.ItemCode) ||
+      !close(saved.Quantity, wanted.Quantity) ||
+      !close(savedUnitPrice, wanted.UnitPrice) ||
+      text(saved.CostingCode) !== text(wanted.CostingCode) ||
+      text(saved.ProjectCode) !== text(wanted.ProjectCode)
+    ) {
+      throw new Error(
+        `SAP não confirmou item, quantidade, valor, projeto e centro de custo da linha ${index + 1}.`,
+      );
+    }
+  }
 }
 
 /** Só é seguro atualizar documentos abertos e sem documento de destino. */
@@ -708,17 +754,18 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       );
     }
 
-    const { data: items, error: itemsErr } = await supabase
+    const { data: rawItems, error: itemsErr } = await supabase
       .from("expense_items")
       .select("*")
       .eq("expense_id", expenseId);
     if (itemsErr) throw new Error(`Erro ao carregar itens: ${itemsErr.message}`);
-    if (!items || items.length === 0) throw new Error("Despesa sem itens — não é possível lançar no SAP");
+    if (!rawItems || rawItems.length === 0) throw new Error("Despesa sem itens — não é possível lançar no SAP");
+    const isSalesDoc = String((expense as any).doc_type || "") === "sales";
+    const items = normalizeExpenseItems(rawItems, { requireCostCenter: !isSalesDoc });
 
     // Centro de custo é obrigatório em cada linha (cabeçalho como fallback).
     // Sem CC o SAP grava sem apropriação — bloqueamos antes de enviar.
     // Exceção: pedidos de venda usam o CC padrão 1.1.1.1 como fallback.
-    const isSalesDoc = String((expense as any).doc_type || "") === "sales";
     const headerCc = String((expense as any).cost_center || "").trim();
     const missingCcLines: number[] = [];
     (items as any[]).forEach((it, idx) => {
@@ -976,10 +1023,19 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
 
     if (isPatchMode) {
       // Guard-rails: NF de entrada lançada no Flow ou documento fechado no SAP.
-      const { data: nfRows } = await supabase
+      const { data: nfByExpense } = await supabase
         .from("nf_entrada_imports")
         .select("status, sap_invoice_draft_id")
         .eq("expense_id", expenseId);
+      const patchEntry = Number(expense.sap_doc_entry || 0);
+      const { data: nfBySap } = patchEntry > 0
+        ? await supabase
+          .from("nf_entrada_imports")
+          .select("status, sap_invoice_draft_id")
+          .eq("sap_company_db", String(expense.company_db || ""))
+          .eq("sap_matched_po_doc_entry", patchEntry)
+        : { data: [] };
+      const nfRows = [...(nfByExpense || []), ...(nfBySap || [])];
       const nfPosted = (nfRows || []).some((r: any) =>
         r.sap_invoice_draft_id || ["awaiting_invoice", "completed"].includes(String(r.status))
       );
@@ -1120,17 +1176,12 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         const usageLine =
           isSales && Number.isFinite(usageCode) && usageCode > 0 ? { Usage: usageCode } : {};
         const hasItem = !!it.item_code;
-        const qty = Number(it.quantity) || 1;
-        let unit = Number(it.unit_price) || 0;
-        const lineTotal = Number(it.line_total) || 0;
-        // Defense: if unit_price is 0/missing but we have a line_total, derive it.
-        // SAP rejects/zeroes lines with UnitPrice=0, even when LineTotal is set.
-        if (unit === 0 && lineTotal !== 0 && qty !== 0) {
-          unit = lineTotal / qty;
-        }
+        const qty = it.quantity;
+        const unit = it.unit_price;
         const invoiceDesc = truncateSapText(it.description, 100);
         const lineCurrency = String((expense as any).currency || "").toUpperCase().trim();
         const line: Record<string, unknown> = {
+          ...lineCustom,
           Quantity: qty,
           UnitPrice: unit,
           // Zera qualquer desconto herdado do cadastro do parceiro/lista de preços.
@@ -1139,7 +1190,6 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
           DiscountPercent: 0,
           ...(/^[A-Z]{3}$/.test(lineCurrency) && lineCurrency !== "BRL" && lineCurrency !== "R$" ? { Currency: lineCurrency } : {}),
           ...usageLine,
-          ...lineCustom,
         };
 
         if (hasItem) {
@@ -1196,6 +1246,13 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         .map((l, i) => ({ LineNum: i, ...l }));
       lastSapPayload = patchPayload;
       const resp = await patchSapDocument(sap.baseUrl, sap.cookies, sapEndpoint, patchDocEntry, patchPayload);
+      await verifySapDocumentLines(
+        sap.baseUrl,
+        sap.cookies,
+        sapEndpoint,
+        patchDocEntry,
+        patchPayload.DocumentLines as Array<Record<string, unknown>>,
+      );
       return {
         docEntry: patchDocEntry,
         docNum: Number(resp?.DocNum) || Number(expense.sap_doc_num) || 0,

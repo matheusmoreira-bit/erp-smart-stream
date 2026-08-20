@@ -222,6 +222,7 @@ export interface ExpenseAttachment {
 
 export interface Expense {
   id: string;
+  doc_type?: ExpenseDocType;
   supplier_code?: string;
   supplier_name: string;
   total_amount: number;
@@ -240,6 +241,8 @@ export interface Expense {
   sap_attachment_status?: string | null;
   sap_attachment_link_status?: string | null;
   sap_purchase_order_status?: string | null;
+  revision_number?: number;
+  revision_note?: string | null;
   sap_integration_last_attempt_at?: string | null;
   origin?: ExpenseOrigin;
   created_by_email?: string;

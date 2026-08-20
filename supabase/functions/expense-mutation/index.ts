@@ -32,6 +32,7 @@ import { buildSapBaseUrl, loadSapCreds, sapCookieLogin, sapLogout } from "../_sh
 import { sapFetch } from "../_shared/sap-fetch.ts";
 // (buildRateioChain foi substituído por fluxos independentes por segmento)
 import { buildRateioSegments, buildReembolsoSegments, persistRateioSegments } from "../_shared/rateio-segments.ts";
+import { classifyExpenseEdit, normalizeExpenseItems } from "../_shared/expense-items.ts";
 
 
 
@@ -593,21 +594,39 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   const status = current.status as string;
   const hasSapError = !!current.sap_integration_error;
   const alreadyInSap = !!(current.sap_doc_entry || current.sap_doc_num);
+  const editMode = classifyExpenseEdit(status, alreadyInSap);
+
+  if (current.sap_integration_locked_at) {
+    const lockedAt = new Date(current.sap_integration_locked_at).getTime();
+    if (Number.isFinite(lockedAt) && Date.now() - lockedAt < 5 * 60_000) {
+      return json(409, {
+        error: "O pedido está sendo integrado ao ERP neste momento. Aguarde a conclusão antes de editar.",
+      });
+    }
+  }
 
   // Bloqueio definitivo: depois que a NF de entrada foi lançada (ou o documento
   // seguiu para pagamento/finalização) qualquer alteração geraria divergência
   // com o ERP.
-  const lockedStatuses = new Set(["nf_entrada", "pagamento", "finalizado", "cancelado", "rejeitado"]);
-  if (lockedStatuses.has(status)) {
+  if (editMode === "blocked" && ["nf_entrada", "pagamento", "finalizado"].includes(status)) {
     return json(409, {
       error: "Documento com NF de entrada lançada (ou encerrado) — edição não permitida.",
     });
   }
   if (alreadyInSap) {
-    const { data: nfRows } = await admin
+    const { data: nfByExpense } = await admin
       .from("nf_entrada_imports")
       .select("status, sap_invoice_draft_id")
       .eq("expense_id", expenseId);
+    const sapDocEntry = Number(current.sap_doc_entry || 0);
+    const { data: nfBySap } = sapDocEntry > 0
+      ? await admin
+        .from("nf_entrada_imports")
+        .select("status, sap_invoice_draft_id")
+        .eq("sap_company_db", String(current.company_db || ""))
+        .eq("sap_matched_po_doc_entry", sapDocEntry)
+      : { data: [] };
+    const nfRows = [...(nfByExpense || []), ...(nfBySap || [])];
     const nfPosted = (nfRows || []).some((r: any) =>
       r.sap_invoice_draft_id || ["awaiting_invoice", "completed"].includes(String(r.status))
     );
@@ -620,9 +639,10 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
 
   // Documento já integrado ao ERP e ainda sem NF de entrada: pode ser editado.
   // Volta ao nível 1 de aprovação e, ao final, sofre patch completo no ERP.
-  const editableForFix = status === "aprovado" && hasSapError && !alreadyInSap;
-  const editableIntegrated = alreadyInSap && (status === "pc_lancado" || status === "aprovado");
-  if (status !== "rascunho" && status !== "pendente_aprovacao" && !editableForFix && !editableIntegrated) {
+  const editableApproved = editMode === "approved";
+  const editableForFix = editableApproved && hasSapError;
+  const editableIntegrated = editMode === "integrated";
+  if (editMode === "blocked") {
     return json(409, {
       error: "Somente pedidos em rascunho, pendentes de aprovação, com erro de integração ou já lançados sem NF de entrada podem ser alterados.",
     });
@@ -638,7 +658,14 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   if (input.due_date !== undefined) updates.due_date = input.due_date || null;
   if (input.rateio_type !== undefined) updates.rateio_type = input.rateio_type || null;
 
-  const items: any[] | undefined = Array.isArray(input.items) ? input.items : undefined;
+  let items: any[] | undefined;
+  if (input.items !== undefined) {
+    try {
+      items = normalizeExpenseItems(input.items);
+    } catch (error) {
+      return json(400, { error: error instanceof Error ? error.message : String(error) });
+    }
+  }
   if (items && items.length > 0) {
     const itemValidationError = await validateActiveSapItems(
       admin,
@@ -664,7 +691,7 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
         }
       }
     }
-    const totalAmount = items.reduce((s, it) => s + Number(it.line_total || 0), 0);
+    const totalAmount = Math.round(items.reduce((s, it) => s + it.line_total, 0) * 100) / 100;
     updates.total_amount = totalAmount;
 
     // Cabeçalho segue as linhas: ao editar CC/projeto dos itens, o header é
@@ -717,7 +744,7 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   const rateioChanged = !!input.rateio_changed;
   const shouldResubmit =
     status === "pendente_aprovacao" ||
-    editableForFix ||
+    editableApproved ||
     editableIntegrated ||
     (attachmentsChanged && status === "pendente_aprovacao");
   let resubmittedApprover: string | null = null;
@@ -737,6 +764,7 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   }
 
   if (shouldResubmit) {
+    const nextRevision = Math.max(1, Number(current.revision_number || 1)) + 1;
     let nextRuleId = rateioChanged
       ? (input.new_approval_rule_id ?? null)
       : (current.approval_rule_id ?? null);
@@ -807,35 +835,26 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
     updates.current_level_order = resolvedLevel;
     updates.current_approver = resolvedApprover;
     updates.sap_integration_error = null;
+    if (alreadyInSap) updates.sap_purchase_order_status = "update_pending";
+    updates.revision_number = nextRevision;
+    updates.revision_note = alreadyInSap
+      ? `Atualização do PC ${current.sap_doc_num || current.sap_doc_entry} após a versão ${nextRevision - 1}`
+      : `Atualização de pedido aprovado após a versão ${nextRevision - 1}`;
     resubmittedApprover = resolvedApprover;
     resubmittedLevel = resolvedLevel;
     resubmitFallbackUsed = fallbackUsed;
   }
 
-  if (Object.keys(updates).length > 0) {
+  if (items) {
+    const { error: atomicErr } = await admin.rpc("update_expense_with_items", {
+      _expense_id: expenseId,
+      _updates: updates,
+      _items: items,
+    } as any);
+    if (atomicErr) return json(500, { error: `Falha ao atualizar pedido e itens: ${atomicErr.message}` });
+  } else if (Object.keys(updates).length > 0) {
     const { error: upErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
     if (upErr) return json(500, { error: `Falha ao atualizar: ${upErr.message}` });
-  }
-
-  if (items) {
-    const { error: delErr } = await admin.from("expense_items").delete().eq("expense_id", expenseId);
-    if (delErr) return json(500, { error: `Falha ao substituir itens: ${delErr.message}` });
-    if (items.length > 0) {
-      const rows = items.map((it) => ({
-        expense_id: expenseId,
-        item_code: it.item_code || null,
-        description: it.description || "",
-        quantity: Number(it.quantity || 0),
-        unit_price: Number(it.unit_price || 0),
-        line_total: Number(it.line_total || 0),
-        cost_center: it.cost_center || null,
-        project: it.project || null,
-        items_group_code: it.items_group_code ?? null,
-        items_group_name: it.items_group_name ?? null,
-      }));
-      const { error: insErr } = await admin.from("expense_items").insert(rows as any);
-      if (insErr) return json(500, { error: `Falha ao inserir itens: ${insErr.message}` });
-    }
   }
 
   // ── Aplica mudanças de anexos ───────────────────────────────────────────
@@ -912,6 +931,8 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
     const reasons: string[] = [];
     if (rateioChanged) reasons.push("tipo de rateio alterado");
     if (editableForFix) reasons.push("correção após erro de integração SAP");
+    else if (editableApproved) reasons.push("alteração de pedido já aprovado");
+    if (editableIntegrated) reasons.push(`atualização do PC ${current.sap_doc_num || current.sap_doc_entry}`);
     if (attachmentsChanged) reasons.push("anexos alterados");
     if (reasons.length === 0) reasons.push("edição do documento");
 
@@ -944,7 +965,7 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
       approver_name: caller.identity,
       approver_email: caller.email || (caller.identity && caller.identity.includes("@") ? caller.identity : null),
       level_order: resubmittedLevel,
-      remarks: `Reenviado após edição. ${reasonNote} ${routingNote}${attachmentNote}`.trim(),
+      remarks: `Atualização da versão anterior (status: ${status}). ${reasonNote} ${routingNote}${attachmentNote}`.trim(),
     } as any);
   }
 
@@ -960,6 +981,7 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
       new_total: updates.total_amount ?? current.total_amount,
       updated_fields: Object.keys(updates),
       items_count: items?.length,
+      revision_number: updates.revision_number ?? current.revision_number ?? 1,
       resubmitted_to_approval: shouldResubmit,
       new_approver: resubmittedApprover,
     } as any,

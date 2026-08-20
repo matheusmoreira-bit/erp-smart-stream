@@ -1442,12 +1442,13 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
           }),
         });
         const sapBody = await sapRes.json().catch(() => ({}));
-        stageLog("purchase_to_sap_patch", sapRes.ok ? "info" : "error", {
+        const patchOk = sapRes.ok && (sapBody as any)?.success !== false;
+        stageLog("purchase_to_sap_patch", patchOk ? "info" : "error", {
           requestId,
           expenseId,
           status: sapRes.status,
           docEntry: (sapBody as any)?.docEntry ?? null,
-          error: (sapBody as any)?.error ?? null,
+          error: patchOk ? null : ((sapBody as any)?.error ?? `HTTP ${sapRes.status}`),
         });
       } catch (e) {
         stageLog("purchase_to_sap_patch", "error", { requestId, expenseId, error: (e as Error).message });

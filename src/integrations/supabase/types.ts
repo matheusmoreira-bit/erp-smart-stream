@@ -3493,6 +3493,8 @@ export type Database = {
           sap_integration_last_attempt_at: string | null
           sap_integration_locked_at: string | null
           sap_purchase_order_status: string | null
+          revision_number: number
+          revision_note: string | null
           sap_status_last_check_at: string | null
           sap_sync_attempts: number
           sap_sync_next_retry_at: string | null
@@ -3535,6 +3537,8 @@ export type Database = {
           sap_integration_last_attempt_at?: string | null
           sap_integration_locked_at?: string | null
           sap_purchase_order_status?: string | null
+          revision_number?: number
+          revision_note?: string | null
           sap_status_last_check_at?: string | null
           sap_sync_attempts?: number
           sap_sync_next_retry_at?: string | null
@@ -3577,6 +3581,8 @@ export type Database = {
           sap_integration_last_attempt_at?: string | null
           sap_integration_locked_at?: string | null
           sap_purchase_order_status?: string | null
+          revision_number?: number
+          revision_note?: string | null
           sap_status_last_check_at?: string | null
           sap_sync_attempts?: number
           sap_sync_next_retry_at?: string | null

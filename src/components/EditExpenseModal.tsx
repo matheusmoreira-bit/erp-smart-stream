@@ -371,7 +371,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
     try {
       await onSave({
         supplier_name: supplierName.trim(),
-        supplier_code: supplier?.code || null,
+        supplier_code: supplier?.code || expense.supplier_code || null,
         remarks: remarks || null,
         doc_date: docDate || null,
         due_date: dueDate || null,
@@ -390,8 +390,8 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
       });
       const rateioChanged = !isSales && rateioType !== initialRateioTypeRef.current;
       const attachmentsChanged = newFiles.length > 0 || removedIds.length > 0;
-      if (rateioChanged || attachmentsChanged) {
-        toast.success("Pedido atualizado e fluxo de aprovação reiniciado.");
+      if (expense.status !== "rascunho" || rateioChanged || attachmentsChanged) {
+        toast.success("Nova versão salva e enviada novamente para aprovação.");
       } else {
         toast.success("Pedido atualizado com sucesso!");
       }
@@ -424,9 +424,9 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
           <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
             <span>
-              Este pedido já está lançado no ERP e ainda não tem NF de entrada. As alterações
-              retornam o documento ao fluxo de aprovação e, após a aprovação final, o documento
-              no ERP é atualizado integralmente (itens, valores, centros de custo e projeto).
+              Este pedido já está lançado no ERP e ainda não tem NF de entrada. A integração será
+              pausada e a alteração voltará para aprovação como uma nova versão. Após a aprovação
+              final, o mesmo PC será atualizado integralmente no ERP.
             </span>
           </div>
         )}

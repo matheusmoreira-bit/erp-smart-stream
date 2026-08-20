@@ -1750,10 +1750,14 @@ function ApprovalDetailModal({
 
 function mapInternalExpense(e: Expense, ruleName?: string | null): ApprovalDoc & { __internalId?: string } {
   const isPagcorp = e.origin === "pagcorp";
+  const isRevision = Number(e.revision_number || 1) > 1;
+  const internalType = isRevision
+    ? `Atualização de Pedido de ${e.doc_type === "sales" ? "Venda" : "Compra"} · v${e.revision_number}`
+    : "Despesa Interna";
   return {
     approvalRequestId: -Math.abs(parseInt(e.id.replace(/\D/g, "").slice(0, 9) || "0", 10) || 1),
-    docType: isPagcorp ? "Despesa PagCorp" : "Despesa Interna",
-    docTypeName: isPagcorp ? "Despesa PagCorp" : "Despesa Interna",
+    docType: isPagcorp ? "Despesa PagCorp" : internalType,
+    docTypeName: isPagcorp ? "Despesa PagCorp" : internalType,
     docNum: Number(e.sap_doc_num || 0),
     docEntry: 0,
     docTotal: Number(e.total_amount || 0),
