@@ -100,6 +100,74 @@ Deno.serve(async (req) => {
     const cookies = `B1SESSION=${sid}${rid ? `; ROUTEID=${rid}` : ""}`;
 
     const endpoint = expense.doc_type === "sales" ? "Orders" : "PurchaseOrders";
+
+    if (bulkSwap) {
+      // Troca em lote: mantém quantidades/valores exatamente como estão no SAP.
+      const getRes = await fetch(
+        `${baseUrl}/${endpoint}(${expense.sap_doc_entry})?$select=DocumentLines`,
+        { headers: { Cookie: cookies } },
+      );
+      if (!getRes.ok) {
+        const t = await getRes.text().catch(() => "");
+        return json({ error: `Falha ao ler o documento no SAP [${getRes.status}]: ${t.slice(0, 300)}` }, 502);
+      }
+      const doc = await getRes.json();
+      const sapLines: Record<string, unknown>[] = Array.isArray(doc?.DocumentLines) ? doc.DocumentLines : [];
+      const changed = sapLines.filter((l) => String(l.ItemCode || "").trim() === fromItemCode).length;
+      if (!changed) return json({ error: `Nenhuma linha com o item ${fromItemCode} no SAP.` }, 400);
+
+      const payloadLines = sapLines.map((l) => {
+        const isTarget = String(l.ItemCode || "").trim() === fromItemCode;
+        const out: Record<string, unknown> = {
+          LineNum: l.LineNum,
+          ItemCode: isTarget ? toItemCode : l.ItemCode,
+          Quantity: l.Quantity,
+          UnitPrice: l.UnitPrice,
+        };
+        if (l.ItemDescription != null) out.ItemDescription = l.ItemDescription;
+        if (l.CostingCode != null) out.CostingCode = l.CostingCode;
+        if (l.CostingCode2 != null) out.CostingCode2 = l.CostingCode2;
+        if (l.CostingCode3 != null) out.CostingCode3 = l.CostingCode3;
+        if (l.ProjectCode != null) out.ProjectCode = l.ProjectCode;
+        if (l.WarehouseCode != null) out.WarehouseCode = l.WarehouseCode;
+        if (l.TaxCode != null) out.TaxCode = l.TaxCode;
+        if (l.AccountCode != null) out.AccountCode = l.AccountCode;
+        if (l.Usage != null) out.Usage = l.Usage;
+        if (l.FreeText != null) out.FreeText = l.FreeText;
+        return out;
+      });
+
+      const patchRes = await fetch(`${baseUrl}/${endpoint}(${expense.sap_doc_entry})`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Cookie: cookies },
+        body: JSON.stringify({ DocumentLines: payloadLines }),
+      });
+      if (!patchRes.ok) {
+        const t = await patchRes.text().catch(() => "");
+        return json({ error: `SAP recusou o PATCH [${patchRes.status}]: ${t.slice(0, 500)}` }, 502);
+      }
+
+      await supabase
+        .from("expense_items")
+        .update({ item_code: toItemCode })
+        .eq("expense_id", expenseId)
+        .eq("item_code", fromItemCode);
+
+      await supabase.from("audit_log").insert({
+        action: "expense_line_item_bulk_swapped",
+        table_name: "expense_items",
+        record_id: expenseId,
+        new_values: { expense_id: expenseId, from_item_code: fromItemCode, to_item_code: toItemCode, lines: changed },
+      }).then(() => {}, () => {});
+
+      return json({
+        success: true,
+        doc_entry: expense.sap_doc_entry,
+        doc_num: expense.sap_doc_num,
+        lines_changed: changed,
+      });
+    }
+
     const line: Record<string, unknown> = { LineNum: lineNum, ItemCode: itemCode };
     if (description) line.ItemDescription = description;
 
@@ -133,6 +201,7 @@ Deno.serve(async (req) => {
     }).then(() => {}, () => {});
 
     return json({ success: true, doc_entry: expense.sap_doc_entry, doc_num: expense.sap_doc_num, item_code: itemCode });
+
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
