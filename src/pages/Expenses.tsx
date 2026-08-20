@@ -2194,10 +2194,10 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     setIsRetrying(true);
     try {
       await retrySapIntegration(id);
-      toast.success("Despesa integrada no SAP com sucesso!");
+      toast.success(`Despesa integrada no ${erpLabel} com sucesso!`);
       setSelectedExpense(null);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha ao reintegrar no SAP");
+      toast.error(e instanceof Error ? e.message : "Falha ao reintegrar no ERP");
     } finally {
       setIsRetrying(false);
     }
@@ -2987,7 +2987,10 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         canCancel={selectedExpense ? canCancel(selectedExpense) : false}
         canReactivate={selectedExpense ? canCancel(selectedExpense) : false}
         canEdit={selectedExpense ? canCancel(selectedExpense) : false}
-        canRetrySap={session.erpType === "sap" && !!session?.isSuperUser}
+        canRetrySap={
+          (String(session.erpType || "").toLowerCase() === "sap" && !!session?.isSuperUser) ||
+          (String(session.erpType || "").toLowerCase() === "omie" && isAdmin)
+        }
         canApprove={selectedExpense ? canApprove(selectedExpense) : false}
         canAddAttachments={
           !!selectedExpense &&

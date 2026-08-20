@@ -5,7 +5,7 @@ import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { assertCircuitClosed, recordCircuitFailure, recordCircuitSuccess } from "@/lib/sap-circuit-breaker";
 import { useSap } from "@/contexts/SapContext";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
-import { omieListarProdutosServicos } from "@/lib/omie-client";
+import { omieListarCategorias, omieListarProdutosServicos } from "@/lib/omie-client";
 
 const DEFAULT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
 // Chaves com atualização mais frequente (dados que mudam com frequência no ERP)
@@ -16,6 +16,8 @@ const CACHE_TTL_OVERRIDES: Record<string, number> = {
   items_purchase_active_v4: FIVE_MIN_MS,
   items_sales_active_v3: FIVE_MIN_MS,
   items_active_v2: FIVE_MIN_MS,
+  omie_categories_expense_v1: FIVE_MIN_MS,
+  omie_categories_revenue_v1: FIVE_MIN_MS,
   suppliers_active_v2: FIVE_MIN_MS,
   suppliers_active_v3: FIVE_MIN_MS,
   customers_active_v2: FIVE_MIN_MS,
@@ -348,6 +350,34 @@ export function useSapCachedList({
           }, { onConflict: "cache_key,company_db" });
         }
         setOptions(activeRows.map(mapRowRef.current));
+        setIsStale(false);
+        lastLoadedAtRef.current = Date.now();
+        return;
+      }
+
+      if (
+        session?.erpType?.toLowerCase() === "omie" &&
+        (endpoint === "CostCenters" || endpoint === "ProfitCenters") &&
+        companyDB
+      ) {
+        const categoryType = cacheKey.includes("revenue") ? "R" : "D";
+        const categories = await omieListarCategorias(companyDB, { type: categoryType, forceRefresh });
+        const rows = categories.map((category) => ({
+          CenterCode: category.codigo,
+          CenterName: category.descricao || category.descricao_padrao || category.codigo,
+          Active: "tYES",
+        }));
+        if (rows.length > 0) {
+          const expiresAt = new Date(Date.now() + getCacheTtlMs(cacheKey)).toISOString();
+          markSelfCacheWrite(cacheKey, companyDB);
+          await supabase.from("sap_cache").upsert({
+            cache_key: cacheKey,
+            company_db: companyDB,
+            data: rows as any,
+            expires_at: expiresAt,
+          }, { onConflict: "cache_key,company_db" });
+        }
+        setOptions(rows.map(mapRowRef.current));
         setIsStale(false);
         lastLoadedAtRef.current = Date.now();
         return;

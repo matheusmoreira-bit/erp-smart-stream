@@ -178,7 +178,9 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
     [],
   );
   const { options: rawCostCenterOptions, isLoading: costCentersLoading } = useSapCachedList({
-    cacheKey: "cost_centers",
+    cacheKey: isOmie
+      ? (isSales ? "omie_categories_revenue_v1" : "omie_categories_expense_v1")
+      : "cost_centers",
     endpoint: "ProfitCenters",
     params: { $filter: "Active eq 'tYES'", $select: "CenterCode,CenterName" },
     mapRow: costCenterMapRow,
@@ -736,7 +738,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
 
                     <div className="grid grid-cols-2 gap-2">
                       <CachedSearchCombobox
-                        label="Centro de Custo *"
+                        label={`${isOmie ? "Categoria Omie" : "Centro de Custo"} *`}
                         options={costCenterOptions}
                         isLoading={costCentersLoading}
                         value={item.sapCostCenter || null}
@@ -762,7 +764,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
                             return updated;
                           });
                         }}
-                        placeholder="Buscar centro de custo..."
+                        placeholder={`Buscar ${isOmie ? "categoria" : "centro de custo"}...`}
                         suggestedQuery={!item.sapCostCenter && item.cost_center ? item.cost_center : undefined}
                         portalContainer={dialogContainer}
                         required

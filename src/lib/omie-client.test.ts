@@ -6,7 +6,7 @@ const { publicFunctionFetch } = vi.hoisted(() => ({
 
 vi.mock("@/lib/auth-fetch", () => ({ publicFunctionFetch }));
 
-import { omieListarClientesFornecedores, omieListarProdutosServicos } from "./omie-client";
+import { omieListarCategorias, omieListarClientesFornecedores, omieListarProdutosServicos } from "./omie-client";
 
 describe("omieListarClientesFornecedores", () => {
   beforeEach(() => {
@@ -131,5 +131,41 @@ describe("omieListarProdutosServicos", () => {
     expect(result).toEqual([
       expect.objectContaining({ code: "P:30", name: "Produto disponivel", kind: "product" }),
     ]);
+  });
+});
+
+describe("omieListarCategorias", () => {
+  beforeEach(() => {
+    publicFunctionFetch.mockReset();
+  });
+
+  it("loads active expense categories and removes hidden or totalizer entries", async () => {
+    publicFunctionFetch.mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        pagina: 1,
+        total_de_paginas: 1,
+        categoria_cadastro: [
+          { codigo: "2.01", descricao: "Compras", conta_inativa: "N" },
+          { codigo: "2.02", descricao: "Oculta", nao_exibir: "S" },
+          { codigo: "2.03", descricao: "Grupo", totalizadora: "S" },
+        ],
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    const result = await omieListarCategorias("OMIE_CATEGORIES", { type: "D", forceRefresh: true });
+
+    expect(result.map((category) => category.codigo)).toEqual(["2.01"]);
+    expect(JSON.parse(String(publicFunctionFetch.mock.calls[0][1].body))).toMatchObject({
+      endpoint: "geral/categorias/",
+      params: {
+        call: "ListarCategorias",
+        param: [{
+          pagina: 1,
+          registros_por_pagina: 500,
+          filtrar_apenas_ativo: "S",
+          filtrar_por_tipo: "D",
+        }],
+      },
+    });
   });
 });

@@ -352,7 +352,7 @@ async function invokeExpenseToSap(body: Record<string, unknown>) {
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.error || `Edge function returned ${res.status}`);
-  if (data && data.success === false) throw new Error(data.error || "Falha ao integrar no SAP");
+  if (data && data.success === false) throw new Error(data.error || "Falha ao integrar no ERP");
   return data;
 }
 
@@ -707,7 +707,7 @@ export function useExpenses(
 
   const createExpenseCore = useCallback(
     async (input: CreateExpenseInput) => {
-      if (!session) throw new Error("Sessão SAP não encontrada");
+      if (!session) throw new Error("Sessão ERP não encontrada");
 
       const totalAmount = input.items.reduce((sum, item) => sum + item.line_total, 0);
       const origin: ExpenseOrigin = input.origin || "manual";
@@ -729,7 +729,8 @@ export function useExpenses(
       let matchedRuleId: string | null = null;
 
       // Enrich items with SAP item group (used both for rule context and for persistence)
-      const enriched = await enrichItemsWithGroup(input.items, session);
+      const isSapSession = String(session.erpType || "").toLowerCase() === "sap";
+      const enriched = isSapSession ? await enrichItemsWithGroup(input.items, session) : {};
       const itemCtx = buildItemCtx(input.items, enriched);
 
       // Evaluate approval rules for manual expenses only.
@@ -779,7 +780,9 @@ export function useExpenses(
           const candidateCcs = headerCc ? [headerCc] : itemCostCenters;
 
           // Enriquece atributos do fornecedor (CNPJ / status) para regras baseadas em Fornecedor.
-          const supplierAttrs = await fetchSupplierAttributes(input.supplier_code, session);
+          const supplierAttrs = isSapSession
+            ? await fetchSupplierAttributes(input.supplier_code, session)
+            : { cnpj: "", status: "ativo" };
 
           let match: Awaited<ReturnType<typeof findMatchingRule>> = null;
           for (const cc of (candidateCcs.length > 0 ? candidateCcs : [""])) {
@@ -1040,7 +1043,7 @@ export function useExpenses(
 
   const createExpense = useCallback(
     async (input: CreateExpenseInput) => {
-      if (!session) throw new Error("Sessão SAP não encontrada");
+      if (!session) throw new Error("Sessão ERP não encontrada");
 
       // Queda apenas do SAP não impede a criação no ERP Flow: enriquecimentos
       // usam cache/fallback e a integração será retomada no servidor. A outbox
@@ -1102,7 +1105,9 @@ export function useExpenses(
 
       let enrichedItems: any[] | undefined;
       if (input.items) {
-        const enrichedUpd = await enrichItemsWithGroup(input.items, session);
+        const enrichedUpd = String(session.erpType || "").toLowerCase() === "sap"
+          ? await enrichItemsWithGroup(input.items, session)
+          : {};
         enrichedItems = input.items.map((item) => {
           const code = (item.item_code || "").trim();
           const e = code ? enrichedUpd[code] : undefined;
@@ -1422,7 +1427,7 @@ export function useExpenses(
           }
           } catch { /* silent */ }
 
-          if (session?.erpType === "sap") {
+          if (["sap", "omie"].includes(String(session?.erpType || "").toLowerCase())) {
           // Defesa contra race: mesmo que o servidor tenha respondido
           // finalized=true, revalidamos o status ANTES de invocar o SAP.
           // Se ainda não estiver "aprovado" (propagação/leitura em réplica),
@@ -1449,7 +1454,7 @@ export function useExpenses(
           }
           if (!confirmedApproved) {
             await logExpenseDecision(expenseId, "integration_failed", {
-              remarks: "Aprovação registrada, mas status não propagou para 'aprovado' a tempo — integração SAP não disparada automaticamente.",
+              remarks: "Aprovação registrada, mas status não propagou para 'aprovado' a tempo — integração ERP não disparada automaticamente.",
             });
             return;
           }
@@ -1504,20 +1509,25 @@ export function useExpenses(
 
   const retrySapIntegration = useCallback(
     async (expenseId: string) => {
-      if (!session || session.erpType !== "sap") throw new Error("Faça login no SAP pela tela antes de integrar.");
-      if (!session.isSuperUser) {
-        throw new Error("Apenas super-usuários podem reintegrar manualmente ao SAP.");
+      if (!session || !["sap", "omie"].includes(String(session.erpType || "").toLowerCase())) {
+        throw new Error("Selecione uma empresa com integração ERP antes de integrar.");
+      }
+      const isSap = String(session.erpType).toLowerCase() === "sap";
+      if (isSap && !session.isSuperUser) {
+        throw new Error("Apenas super-usuários podem reintegrar manualmente ao ERP.");
       }
       try {
         const data = await invokeExpenseToSap({
           expense_id: expenseId,
           // "Reintegrar ao SAP" (manual, super-user) reusa a sessão SAP do
           // usuário logado — evita depender do Apiuser em cenários de auditoria.
-          use_service_account: false,
-          sap_session_id: session.sessionId,
-          sap_route_id: session.routeId,
-          sap_company_db: session.companyDB,
-          sap_session_expires_at: session.expiresAt,
+          use_service_account: !isSap,
+          ...(isSap ? {
+            sap_session_id: session.sessionId,
+            sap_route_id: session.routeId,
+            sap_company_db: session.companyDB,
+            sap_session_expires_at: session.expiresAt,
+          } : {}),
         });
         await logExpenseDecision(expenseId, "integrated", { approverName: session.userName });
         await fetchExpenses();

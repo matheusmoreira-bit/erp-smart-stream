@@ -4,23 +4,8 @@
 // Mantemos leitura direta (fetch) para evitar duplicar a camada de omie-proxy do front.
 
 import { normalizeCnpj } from "../fiscal-match.ts";
+import { callOmieApi, loadOmieCredentials, type OmieCredentials } from "../omie-api.ts";
 import type { AdapterContext, ContaPagaERP, ErpAdapter } from "./types.ts";
-
-const OMIE_API = "https://app.omie.com.br/api/v1/financas/contapagar/";
-
-async function loadOmieCreds(supabase: any, companyDb: string): Promise<{ app_key: string; app_secret: string } | null> {
-  const { data } = await supabase
-    .from("system_credentials")
-    .select("credential_key, credential_value")
-    .eq("system_name", "omie")
-    .eq("company_db", companyDb);
-  const kv: Record<string, string> = {};
-  for (const r of (data || []) as Array<{ credential_key: string; credential_value: string }>) {
-    kv[r.credential_key] = r.credential_value ?? "";
-  }
-  if (!kv.app_key || !kv.app_secret) return null;
-  return { app_key: kv.app_key, app_secret: kv.app_secret };
-}
 
 function toBrDate(iso: string): string {
   const [y, m, d] = iso.split("-");
@@ -51,33 +36,15 @@ interface OmieContaCadastro {
   pagamentos?: Array<{ data_pagamento?: string; valor_pago?: number; forma_pagamento?: string }>;
 }
 
-async function omieCall(cred: { app_key: string; app_secret: string }, call: string, param: unknown): Promise<any> {
-  const res = await fetch(OMIE_API, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      call,
-      app_key: cred.app_key,
-      app_secret: cred.app_secret,
-      param: [param],
-    }),
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok || json?.faultstring) {
-    throw new Error(`Omie ${call}: ${json?.faultstring || res.status}`);
-  }
-  return json;
-}
-
 async function listarPagos(
-  cred: { app_key: string; app_secret: string },
+  cred: OmieCredentials,
   periodoInicio: string, periodoFim: string,
 ): Promise<OmieContaCadastro[]> {
   const out: OmieContaCadastro[] = [];
   let pagina = 1;
   const registrosPorPagina = 500;
   for (;;) {
-    const resp = await omieCall(cred, "ListarContasPagar", {
+    const resp = await callOmieApi<any>(cred, "financas/contapagar/", "ListarContasPagar", {
       pagina,
       registros_por_pagina: registrosPorPagina,
       apenas_importado_api: "N",
@@ -128,8 +95,12 @@ function pickBaixa(row: OmieContaCadastro, periodo_inicio: string, periodo_fim: 
 export const OmieAdapter: ErpAdapter = {
   erp_origem: "omie",
   async getContasPagas(ctx: AdapterContext): Promise<ContaPagaERP[]> {
-    const cred = await loadOmieCreds(ctx.supabase, ctx.company_db);
-    if (!cred) return [];
+    let cred: OmieCredentials;
+    try {
+      cred = await loadOmieCredentials(ctx.supabase, ctx.company_db);
+    } catch {
+      return [];
+    }
     const rows = await listarPagos(cred, ctx.periodo_inicio, ctx.periodo_fim);
     return rows.map((r) => {
       const sup = extractSupplier(r);

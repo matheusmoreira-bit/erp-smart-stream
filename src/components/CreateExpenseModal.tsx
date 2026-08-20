@@ -204,7 +204,7 @@ export function CreateExpenseModal({
   ];
   const isSales = mode === "sales";
   const isOmie = sapSession?.erpType?.toLowerCase() === "omie";
-  const isProjectRequired = sapSession?.companyDB !== "SBO_CACTUS";
+  const isProjectRequired = !isOmie && sapSession?.companyDB !== "SBO_CACTUS";
 
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
   // Capacidade do GRUPO: cadastrar direto no ERP ou apenas solicitar cadastro.
@@ -278,7 +278,9 @@ export function CreateExpenseModal({
 
   const costCenterMapRow = useCallback((row: any) => ({ code: row.CenterCode, name: row.CenterName }), []);
   const { options: rawCostCenterOptions, isLoading: costCentersLoading } = useSapCachedList({
-    cacheKey: "cost_centers",
+    cacheKey: isOmie
+      ? (isSales ? "omie_categories_revenue_v1" : "omie_categories_expense_v1")
+      : "cost_centers",
     endpoint: "ProfitCenters",
     params: { $filter: "Active eq 'tYES'", $select: "CenterCode,CenterName" },
     mapRow: costCenterMapRow,
@@ -508,9 +510,9 @@ export function CreateExpenseModal({
   // admins/super-usuário) continuam vendo todos os centros de custo.
   const ccBranch = costCenterBranch(userCostCenter);
   const allowedCostCenterOptions = useMemo(() => {
-    if (bypassCcItemRules || !ccBranch) return costCenterOptions;
+    if (isOmie || bypassCcItemRules || !ccBranch) return costCenterOptions;
     return costCenterOptions.filter((o) => isCostCenterAllowedForUser(o.code, userCostCenter, false));
-  }, [costCenterOptions, userCostCenter, ccBranch, bypassCcItemRules]);
+  }, [costCenterOptions, userCostCenter, ccBranch, isOmie, bypassCcItemRules]);
 
 
   // Se o usuário perder a alçada do tipo de rateio selecionado, volta ao padrão.
@@ -781,6 +783,10 @@ export function CreateExpenseModal({
   useEffect(() => {
     if (!open || isSales) return;
     if (ccPrefillDoneRef.current) return;
+    if (isOmie) {
+      ccPrefillDoneRef.current = true;
+      return;
+    }
     // Aguarda o carregamento dos grupos para não vincular CC indevidamente.
     if (canSeeAllLoading) return;
     if (bypassCcItemRules) {
@@ -805,7 +811,7 @@ export function CreateExpenseModal({
         cost_center: it.cost_center || opt.code,
       })),
     );
-  }, [open, isSales, userCostCenter, costCenterOptions, headerCostCenter, bypassCcItemRules, canSeeAllLoading]);
+  }, [open, isSales, isOmie, userCostCenter, costCenterOptions, headerCostCenter, bypassCcItemRules, canSeeAllLoading]);
 
 
   // Apply prefill when modal opens
@@ -3352,7 +3358,7 @@ export function CreateExpenseModal({
             <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Padrões para itens</p>
             <div className="grid max-w-full min-w-0 grid-cols-1 gap-3 rounded-md border border-dashed border-border bg-muted/20 p-2.5 sm:grid-cols-2 sm:p-3">
               <CachedSearchCombobox
-                label="Centro de Custo (padrão p/ itens)"
+                label={`${isOmie ? "Categoria" : "Centro de Custo"} (padrão p/ itens)`}
                 options={allowedCostCenterOptions}
 
                 isLoading={costCentersLoading}
@@ -3484,7 +3490,7 @@ export function CreateExpenseModal({
                   </div>
                   <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
                     <CachedSearchCombobox
-                      label={`Centro de Custo (Dimensão)${isSales ? "" : " *"}`}
+                      label={`${isOmie ? "Categoria Omie" : "Centro de Custo (Dimensão)"}${isSales ? "" : " *"}`}
                       required={!isSales}
 
                       options={allowedCostCenterOptions}

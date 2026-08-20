@@ -11,6 +11,8 @@ import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { normalizeExpenseItems } from "../_shared/expense-items.ts";
+import { callOmieApi, loadOmieCredentials } from "../_shared/omie-api.ts";
+import { buildOmiePurchaseOrderPayload } from "../_shared/omie-purchase-order.ts";
 
 
 const corsHeaders = {
@@ -599,7 +601,6 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
   const foreignOrigin = rejectForeignOrigin(req);
   if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  { const _pause = await getIntegrationPause("sap_b1"); if (_pause) return pauseResponse(_pause, corsHeaders); }
 
   // Bypass user auth when called internally (background retry job) with
   // the service role key. Cron / retry workers don't have a Cloud JWT or
@@ -614,7 +615,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       await requireUserOrSapSession(req);
     } catch (err) {
       return new Response(
-        JSON.stringify({ success: false, error: "Faça login no SAP pela tela antes de integrar." }),
+        JSON.stringify({ success: false, error: "Faça login no ERP Flow antes de integrar." }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -635,6 +636,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
   // anexo não é mais permitida; a flag passa pela trava antes do POST/PATCH.
   let skipAttachments = false;
   let expenseSnapshot: any = null;
+  let expenseErpType = "sap";
   // Captured outside the try/catch so the error path can return the same
   // payload that was actually sent to SAP (used by the integration log UI).
   let lastSapPayload: Record<string, unknown> | null = null;
@@ -720,6 +722,16 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     if (expErr || !expense) throw new Error(`Despesa não encontrada: ${expErr?.message ?? ""}`);
     expenseSnapshot = expense;
 
+    const { data: company } = await supabase
+      .from("companies")
+      .select("erp_type")
+      .eq("company_db", expense.company_db)
+      .maybeSingle();
+    expenseErpType = String(company?.erp_type || "sap").toLowerCase();
+    const integrationSystem = expenseErpType === "omie" ? "omie" : "sap_b1";
+    const integrationPause = await getIntegrationPause(integrationSystem);
+    if (integrationPause) return pauseResponse(integrationPause, corsHeaders);
+
     // Guard: somente despesas totalmente aprovadas podem ser integradas ao SAP.
     // Se uma tela/aba antiga tentar integrar enquanto ainda há nível pendente,
     // tratamos como no-op seguro. Isso evita mostrar erro ao aprovador e, mais
@@ -730,7 +742,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
           success: true,
           skipped: true,
           reason: "pending_approval",
-          message: "Documento ainda possui nível de aprovação pendente; integração SAP não executada.",
+          message: "Documento ainda possui nível de aprovação pendente; integração ERP não executada.",
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
@@ -759,7 +771,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       .select("*")
       .eq("expense_id", expenseId);
     if (itemsErr) throw new Error(`Erro ao carregar itens: ${itemsErr.message}`);
-    if (!rawItems || rawItems.length === 0) throw new Error("Despesa sem itens — não é possível lançar no SAP");
+    if (!rawItems || rawItems.length === 0) throw new Error("Despesa sem itens — não é possível lançar no ERP");
     const isSalesDoc = String((expense as any).doc_type || "") === "sales";
     const items = normalizeExpenseItems(rawItems, { requireCostCenter: !isSalesDoc });
 
@@ -773,8 +785,9 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       if (!lineCc && !headerCc) missingCcLines.push(idx + 1);
     });
     if (missingCcLines.length > 0 && !isSalesDoc) {
+      const allocationLabel = expenseErpType === "omie" ? "Categoria Omie" : "Centro de custo";
       throw new Error(
-        `Centro de custo é obrigatório. Linha(s) sem centro de custo: ${missingCcLines.join(", ")}.`,
+        `${allocationLabel}: preenchimento obrigatório. Linha(s) sem preenchimento: ${missingCcLines.join(", ")}.`,
       );
     }
 
@@ -787,7 +800,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         return new Response(
           JSON.stringify({
             success: false,
-            error: "Esta despesa já está sendo integrada ao SAP por outro processo. Aguarde alguns minutos e tente novamente.",
+            error: "Esta despesa já está sendo integrada ao ERP por outro processo. Aguarde alguns minutos e tente novamente.",
             alreadyProcessing: true,
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -801,6 +814,153 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
 
     if (!expense.supplier_code) {
       throw new Error(`${bpLabel} (CardCode) não informado`);
+    }
+
+    if (expenseErpType === "omie") {
+      if (isSales) {
+        throw new Error("Integração de Pedido de Venda Omie ainda não está habilitada neste fluxo.");
+      }
+      if (expense.sap_doc_entry) {
+        if (body.patch_document === true) {
+          throw new Error("Atualização de Pedido de Compra Omie já integrado ainda não está habilitada.");
+        }
+        return new Response(
+          JSON.stringify({
+            success: true,
+            alreadyIntegrated: true,
+            docEntry: expense.sap_doc_entry,
+            docNum: expense.sap_doc_num,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const { data: localAttachments, error: localAttachmentsError } = await supabase
+        .from("expense_attachments")
+        .select("id")
+        .eq("expense_id", expenseId)
+        .limit(1);
+      if (localAttachmentsError) {
+        throw new Error(`Erro ao validar anexos do pedido: ${localAttachmentsError.message}`);
+      }
+      if (!localAttachments || localAttachments.length === 0) {
+        attachmentStatus = "failed";
+        throw new Error("Documento sem anexo interno. Anexe ao menos 1 arquivo antes de integrar à Omie.");
+      }
+      attachmentStatus = "success";
+      attachmentLinkStatus = "not_applicable";
+
+      let omiePayload: ReturnType<typeof buildOmiePurchaseOrderPayload>;
+      let credentials: Awaited<ReturnType<typeof loadOmieCredentials>>;
+      try {
+        omiePayload = buildOmiePurchaseOrderPayload(expense, items as any[]);
+        credentials = await loadOmieCredentials(supabase, String(expense.company_db || ""));
+      } catch (error) {
+        purchaseOrderStatus = "failed";
+        throw error;
+      }
+      const requestPayload = {
+        call: "IncluirPedCompra",
+        param: [omiePayload],
+      };
+      lastSapPayload = requestPayload;
+      let omieResponse: Record<string, unknown>;
+      try {
+        omieResponse = await callOmieApi<Record<string, unknown>>(
+          credentials,
+          "produtos/pedidocompra/",
+          "IncluirPedCompra",
+          omiePayload,
+        );
+      } catch (error) {
+        purchaseOrderStatus = "failed";
+        throw error;
+      }
+      lastSapResponse = omieResponse;
+      const omieDocumentId = Number(omieResponse.nCodPed);
+      const omieDocumentNumber = Number(omieResponse.cNumero);
+      if (!Number.isFinite(omieDocumentId) || omieDocumentId <= 0) {
+        purchaseOrderStatus = "failed";
+        const statusDescription = String(omieResponse.cDescStatus || omieResponse.descricao_status || "").trim();
+        throw new Error(
+          statusDescription || "A Omie não retornou o código interno do Pedido de Compra criado.",
+        );
+      }
+      purchaseOrderStatus = "success";
+
+      const { error: omiePersistError } = await supabase
+        .from("expenses")
+        .update({
+          status: "pc_lancado",
+          sap_doc_entry: omieDocumentId,
+          sap_doc_num: Number.isFinite(omieDocumentNumber) && omieDocumentNumber > 0 ? omieDocumentNumber : null,
+          sap_attachment_status: attachmentStatus,
+          sap_purchase_order_status: purchaseOrderStatus,
+          sap_attachment_link_status: attachmentLinkStatus,
+          sap_integration_error: null,
+          sap_integration_last_attempt_at: new Date().toISOString(),
+        })
+        .eq("id", expenseId);
+      if (omiePersistError) {
+        throw new Error(
+          `Pedido ${omieDocumentId} criado na Omie, mas não foi possível salvar o vínculo local: ${omiePersistError.message}`,
+        );
+      }
+
+      await supabase.rpc("insert_audit_log", {
+        p_action: "omie_purchase_order_created",
+        p_entity_type: "expense",
+        p_entity_id: expenseId,
+        p_company_db: expense.company_db || null,
+        p_details: {
+          erp_type: "omie",
+          omie_document_id: omieDocumentId,
+          omie_document_number: Number.isFinite(omieDocumentNumber) ? omieDocumentNumber : null,
+          stage_status: {
+            attachment: attachmentStatus,
+            purchase_order: purchaseOrderStatus,
+            attachment_link: attachmentLinkStatus,
+          },
+        },
+      });
+
+      await writePagCorpLog(
+        "success",
+        undefined,
+        omieDocumentId,
+        Number.isFinite(omieDocumentNumber) ? omieDocumentNumber : undefined,
+        requestPayload,
+        omieResponse,
+      );
+      await notifyErpIntegration({
+        status: "success",
+        source: "expense",
+        entityId: expenseId || "",
+        companyDb: expense.company_db,
+        docEntry: omieDocumentId,
+        docNum: Number.isFinite(omieDocumentNumber) ? omieDocumentNumber : null,
+        requester: expense.requester_name,
+        supplier: expense.supplier_name,
+        amount: expense.total_amount,
+        currency: expense.currency,
+      });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          erpType: "omie",
+          docEntry: omieDocumentId,
+          docNum: Number.isFinite(omieDocumentNumber) ? omieDocumentNumber : null,
+          sapPayload: requestPayload,
+          sapResponse: omieResponse,
+          stages: {
+            attachment: attachmentStatus,
+            purchase_order: purchaseOrderStatus,
+            attachment_link: attachmentLinkStatus,
+          },
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     // 2. SAP session resolution.
@@ -1401,13 +1561,15 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     // Enqueue for automatic retry when the error is classified as transient.
     try {
       if (supabase && expenseId) {
-        const { classifyAndEnqueue } = await import("../_shared/sap-retry.ts");
-        await classifyAndEnqueue(supabase, {
-          doc_type: "expense",
-          ref_id: expenseId,
-          company_db: expenseSnapshot?.company_db ?? null,
-          errorBody: msg,
-        });
+        if (expenseErpType !== "omie") {
+          const { classifyAndEnqueue } = await import("../_shared/sap-retry.ts");
+          await classifyAndEnqueue(supabase, {
+            doc_type: "expense",
+            ref_id: expenseId,
+            company_db: expenseSnapshot?.company_db ?? null,
+            errorBody: msg,
+          });
+        }
       }
     } catch (retryErr) {
       console.warn("expense-to-sap enqueueRetry failed:", (retryErr as Error).message);

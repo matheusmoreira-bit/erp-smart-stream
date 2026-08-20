@@ -200,6 +200,17 @@ export interface OmieCatalogItem {
   inactive: boolean;
 }
 
+export interface OmieCategoria {
+  codigo: string;
+  descricao?: string;
+  descricao_padrao?: string;
+  tipo_categoria?: string;
+  conta_inativa?: "S" | "N" | string;
+  nao_exibir?: "S" | "N" | string;
+  totalizadora?: "S" | "N" | string;
+  [key: string]: unknown;
+}
+
 interface OmieClientesResponse {
   clientes_cadastro?: OmieClienteFornecedor[];
   pagina: number;
@@ -218,6 +229,12 @@ interface OmieServicosResponse {
   cadastros?: OmieServico[];
   nPagina: number;
   nTotPaginas: number;
+}
+
+interface OmieCategoriasResponse {
+  categoria_cadastro?: OmieCategoria[];
+  pagina: number;
+  total_de_paginas: number;
 }
 
 /**
@@ -355,6 +372,46 @@ export async function omieListarProdutosServicos(
     omieListarServicos(companyDB, maxPages, forceRefresh),
   ]);
   return [...products, ...services].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+}
+
+/** Categorias financeiras usadas como centro de custo nos formulários Omie. */
+export async function omieListarCategorias(
+  companyDB: string,
+  options: { type?: "D" | "R"; maxPages?: number; forceRefresh?: boolean } = {},
+): Promise<OmieCategoria[]> {
+  const all: OmieCategoria[] = [];
+  const maxPages = options.maxPages ?? 20;
+  let page = 1;
+  while (page <= maxPages) {
+    let response: OmieCategoriasResponse;
+    try {
+      response = await omieCall<OmieCategoriasResponse>(
+        companyDB,
+        "geral/categorias/",
+        {
+          call: "ListarCategorias",
+          param: [{
+            pagina: page,
+            registros_por_pagina: 500,
+            filtrar_apenas_ativo: "S",
+            ...(options.type ? { filtrar_por_tipo: options.type } : {}),
+          }],
+        },
+        { cacheTtlMs: 5 * 60_000, forceRefresh: options.forceRefresh },
+      );
+    } catch (error) {
+      if (isOmieEmptyListError(error)) break;
+      throw error;
+    }
+    all.push(...(response.categoria_cadastro || []));
+    if (page >= (response.total_de_paginas || 1)) break;
+    page++;
+  }
+  return all.filter((category) =>
+    String(category.conta_inativa || "N").toUpperCase() !== "S" &&
+    String(category.nao_exibir || "N").toUpperCase() !== "S" &&
+    String(category.totalizadora || "N").toUpperCase() !== "S"
+  );
 }
 
 /**

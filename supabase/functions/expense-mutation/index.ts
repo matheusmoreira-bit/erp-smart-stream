@@ -212,6 +212,18 @@ async function validateActiveSapItems(
   );
   if (codes.length === 0 || docType === "sales") return null;
 
+  const { data: company } = await admin
+    .from("companies")
+    .select("erp_type")
+    .eq("company_db", companyDb)
+    .maybeSingle();
+  if (String(company?.erp_type || "sap").toLowerCase() === "omie") {
+    const invalid = codes.filter((code) => !/^P:\d+$/i.test(code));
+    return invalid.length > 0
+      ? `Pedido de Compra Omie aceita apenas produtos ativos selecionados no catálogo (códigos P:<id>). Item(ns) inválido(s): ${invalid.join(", ")}.`
+      : null;
+  }
+
   const creds = await loadSapCreds(admin as unknown as ReturnType<typeof createClient>, companyDb, { requireApiuser: false });
   if (!creds) {
     return "Não foi possível validar os itens no ERP: credenciais SAP não configuradas para esta empresa.";
