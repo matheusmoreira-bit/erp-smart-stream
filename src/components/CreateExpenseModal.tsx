@@ -203,6 +203,7 @@ export function CreateExpenseModal({
     "03-Rec Cactus Distr",
   ];
   const isSales = mode === "sales";
+  const isProjectRequired = sapSession?.companyDB !== "SBO_CACTUS";
 
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
   // Capacidade do GRUPO: cadastrar direto no ERP ou apenas solicitar cadastro.
@@ -2185,14 +2186,15 @@ export function CreateExpenseModal({
         toast.error(`Item ${n}: preço unitário deve ser maior ou igual a R$ 0,01`);
         return;
       }
-      // Em vendas, centro de custo é opcional; projeto é obrigatório.
+      // Em vendas, centro de custo é opcional. Na Cactus Tecnologia, projeto
+      // também pode ficar vazio e será omitido do payload enviado ao SAP.
       if (!isSales) {
         if (!it.cost_center || !String(it.cost_center).trim()) {
           toast.error(`Item ${n}: centro de custo é obrigatório`);
           return;
         }
       }
-      if (!it.project || !String(it.project).trim()) {
+      if (isProjectRequired && (!it.project || !String(it.project).trim())) {
         toast.error(`Item ${n}: projeto é obrigatório`);
         return;
       }
@@ -3509,8 +3511,8 @@ export function CreateExpenseModal({
                       portalContainer={dialogContainer}
                     />
                     <CachedSearchCombobox
-                      label="Projeto (Dimensão) *"
-                      required
+                      label={`Projeto (Dimensão)${isProjectRequired ? " *" : ""}`}
+                      required={isProjectRequired}
 
 
                       options={projectOptionsForCc(item.sapCostCenter?.code ?? item.cost_center)}

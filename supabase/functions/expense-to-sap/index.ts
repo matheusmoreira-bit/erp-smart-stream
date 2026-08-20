@@ -1216,7 +1216,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         const companiesWithoutProjects = new Set(["cactus_providers"]);
         const resolvedProject = companiesWithoutProjects.has(expense.company_db)
           ? ""
-          : (it.project || expense.project || projectFallback);
+          : String(it.project || expense.project || projectFallback).trim();
         if (resolvedProject) line.ProjectCode = resolvedProject;
         for (const k of Object.keys(line)) if (line[k] === undefined) delete line[k];
         return line;
