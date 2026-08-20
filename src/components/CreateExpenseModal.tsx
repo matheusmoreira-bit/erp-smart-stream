@@ -2006,6 +2006,7 @@ export function CreateExpenseModal({
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(false);
     if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
   };
@@ -2678,6 +2679,7 @@ export function CreateExpenseModal({
                     (isCreating), pois cancelar uma gravação parcial seria pior. */}
                 {(isProcessing || deferredGroups.length > 0) && !isCreating && (
                   <Button
+                    type="button"
                     variant="ghost"
                     size="sm"
                     className="h-7 gap-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
@@ -2692,6 +2694,7 @@ export function CreateExpenseModal({
                     auto-avanço para o próximo grupo quando o atual terminar. */}
                 {deferredGroups.length > 0 && !isPaused && (
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     className="h-7 gap-1.5 text-xs"
@@ -2704,6 +2707,7 @@ export function CreateExpenseModal({
                 )}
                 {isPaused && deferredGroups.length > 0 && !isCreating && !isProcessing && (
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     className="h-7 gap-1.5 text-xs text-primary border-primary/40"
@@ -2718,6 +2722,7 @@ export function CreateExpenseModal({
                     dobrado em `processWithAI` para chamadas paralelas). */}
                 {justCancelled && !isProcessing && !isCreating && files.length > 0 && (
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     className="h-7 gap-1.5 text-xs"
@@ -2732,6 +2737,7 @@ export function CreateExpenseModal({
                     sem chamar a IA de novo. Mantém os grupos concluídos. */}
                 {justCancelled && !isProcessing && !isCreating && cancelledGroupsRef.current.length > 0 && (
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     className="h-7 gap-1.5 text-xs"
@@ -2756,6 +2762,7 @@ export function CreateExpenseModal({
                   if (failedKeys.length === 0) return null;
                   return (
                     <Button
+                      type="button"
                       variant="outline"
                       size="sm"
                       className="h-7 gap-1.5 text-xs"
@@ -2821,10 +2828,10 @@ export function CreateExpenseModal({
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Documentos (NF, Recibos, Boletos)</label>
             <div
-              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-              onDragLeave={() => setIsDragging(false)}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
+              onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); }}
               onDrop={handleDrop}
-              onClick={() => inputRef.current?.click()}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); inputRef.current?.click(); }}
               className={`relative max-w-full border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all sm:p-6 ${
                 isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
               }`}
@@ -2835,7 +2842,10 @@ export function CreateExpenseModal({
                 accept={ALLOWED_ATTACHMENT_ACCEPT}
                 className="hidden"
                 multiple
-                onChange={(e) => e.target.files && handleFiles(e.target.files)}
+                onChange={(e) => {
+                  if (e.target.files) handleFiles(e.target.files);
+                  e.currentTarget.value = "";
+                }}
               />
               {isProcessing ? (
                 <div className="flex flex-col items-center gap-2">
@@ -2878,7 +2888,7 @@ export function CreateExpenseModal({
                     <FileSpreadsheet className="w-4 h-4 text-primary shrink-0" />
                     <span className="text-xs text-foreground truncate flex-1 underline decoration-dotted">{file.name}</span>
                     <span className="hidden text-[10px] text-muted-foreground sm:inline">{(file.size / 1024).toFixed(0)} KB</span>
-                    <button onClick={(e) => { e.stopPropagation(); removeFile(i); }} className="text-muted-foreground hover:text-foreground">
+                    <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeFile(i); }} className="text-muted-foreground hover:text-foreground">
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -2893,7 +2903,7 @@ export function CreateExpenseModal({
                   IA preencheu os campos com {Math.round(aiConfidence * 100)}% de confiança
                 </span>
                 {!aiEnabled && files.length > 0 && (
-                  <Button variant="ghost" size="sm" className="h-6 text-xs text-primary" onClick={() => processWithAI(files)} disabled={isProcessing}>
+                  <Button type="button" variant="ghost" size="sm" className="h-6 text-xs text-primary" onClick={() => processWithAI(files)} disabled={isProcessing}>
                     Reprocessar
                   </Button>
                 )}
@@ -2901,7 +2911,7 @@ export function CreateExpenseModal({
             )}
 
             {aiEnabled && files.length > 0 && aiConfidence === null && !isProcessing && (
-              <Button variant="outline" size="sm" className="mt-2 gap-1.5 text-xs" onClick={() => processWithAI(files)}>
+              <Button type="button" variant="outline" size="sm" className="mt-2 gap-1.5 text-xs" onClick={() => processWithAI(files)}>
                 <Sparkles className="w-3.5 h-3.5" /> Processar com IA
               </Button>
             )}
@@ -2912,7 +2922,7 @@ export function CreateExpenseModal({
             <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30">
               <span className="text-destructive text-sm">⚠️</span>
               <p className="text-sm text-destructive whitespace-pre-line">{aiWarning}</p>
-              <button onClick={() => setAiWarning(null)} className="ml-auto text-destructive/70 hover:text-destructive">
+              <button type="button" onClick={() => setAiWarning(null)} className="ml-auto text-destructive/70 hover:text-destructive">
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -3032,6 +3042,7 @@ export function CreateExpenseModal({
                   </p>
                 </div>
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => setSupplierRequestOpen(true)}
@@ -3120,7 +3131,7 @@ export function CreateExpenseModal({
             <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30">
               <span className="text-destructive text-sm">⚠️</span>
               <p className="text-sm text-destructive">{currencyWarning}</p>
-              <button onClick={() => setCurrencyWarning(null)} className="ml-auto text-destructive/70 hover:text-destructive">
+              <button type="button" onClick={() => setCurrencyWarning(null)} className="ml-auto text-destructive/70 hover:text-destructive">
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -3328,7 +3339,7 @@ export function CreateExpenseModal({
                 <div className="h-4 w-1 rounded-full bg-primary/70" />
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Itens / Linhas</h3>
               </div>
-              <Button variant="ghost" size="sm" onClick={addItem} className="h-7 shrink-0 gap-1 px-2 text-xs">
+              <Button type="button" variant="ghost" size="sm" onClick={addItem} className="h-7 shrink-0 gap-1 px-2 text-xs">
                 <Plus className="w-3 h-3" /> <span className="hidden min-[380px]:inline">Adicionar Item</span><span className="min-[380px]:hidden">Adicionar</span>
               </Button>
             </div>
@@ -3337,7 +3348,7 @@ export function CreateExpenseModal({
                 <div key={i} className="max-w-full overflow-hidden rounded-lg border border-border/50 bg-muted/10 p-2.5 space-y-2 sm:p-3">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-medium text-muted-foreground uppercase">Item {i + 1}</span>
-                    <Button variant="ghost" size="icon" onClick={() => removeItem(i)} disabled={items.length <= 1} className="h-6 w-6 text-muted-foreground hover:text-destructive">
+                    <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(i)} disabled={items.length <= 1} className="h-6 w-6 text-muted-foreground hover:text-destructive">
                       <Trash2 className="w-3 h-3" />
                     </Button>
                   </div>
@@ -3491,8 +3502,8 @@ export function CreateExpenseModal({
           </section>
 
           <div className="sticky bottom-0 -mx-3 flex justify-end gap-2 border-t border-border bg-background/95 px-3 py-3 backdrop-blur sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:pt-4 sm:backdrop-blur-0">
-            <Button variant="outline" onClick={requestClose} disabled={isCreating} className="shrink-0 px-3">Cancelar</Button>
-            <Button onClick={handleSubmit} disabled={isCreating || isProcessing} className="min-w-0 flex-1 gap-1.5 px-3 sm:flex-none">
+            <Button type="button" variant="outline" onClick={requestClose} disabled={isCreating} className="shrink-0 px-3">Cancelar</Button>
+            <Button type="button" onClick={handleSubmit} disabled={isCreating || isProcessing} className="min-w-0 flex-1 gap-1.5 px-3 sm:flex-none">
               {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
               <span className="truncate">
                 {isCreating
@@ -3604,7 +3615,7 @@ export function CreateExpenseModal({
           <AlertDialogCancel className="sm:mr-auto" autoFocus>
             Continuar editando
           </AlertDialogCancel>
-          <Button variant="outline" onClick={handleDiscardAndClose}>
+          <Button type="button" variant="outline" onClick={handleDiscardAndClose}>
             Sair sem salvar
           </Button>
           <AlertDialogAction
@@ -4004,6 +4015,7 @@ export function CreateExpenseModal({
             if (failedKeys.length === 0) return null;
             return (
               <Button
+                type="button"
                 variant="outline"
                 className="gap-1.5"
                 onClick={() => setConfirmRetryFailed(true)}
@@ -4015,6 +4027,7 @@ export function CreateExpenseModal({
           })()}
           {failedGroupsRef.current.size > 0 && (
             <Button
+              type="button"
               variant="ghost"
               className="gap-1.5 text-muted-foreground hover:text-foreground"
               onClick={() => {
@@ -4041,17 +4054,18 @@ export function CreateExpenseModal({
             </Button>
           )}
           {cancelledGroupsRef.current.length > 0 && (
-            <Button variant="outline" className="gap-1.5" onClick={resumeCancelledQueue}>
+            <Button type="button" variant="outline" className="gap-1.5" onClick={resumeCancelledQueue}>
               ▶ Retomar fila ({cancelledGroupsRef.current.length})
             </Button>
           )}
           {isPaused && deferredGroups.length > 0 && (
-            <Button variant="outline" className="gap-1.5 text-primary border-primary/40" onClick={resumeFromPause}>
+            <Button type="button" variant="outline" className="gap-1.5 text-primary border-primary/40" onClick={resumeFromPause}>
               <Play className="w-4 h-4" />
               Retomar da pausa ({deferredGroups.length})
             </Button>
           )}
           <Button
+            type="button"
             variant="outline"
             className="gap-1.5"
             disabled={queueHistory.length === 0}
@@ -4087,6 +4101,7 @@ export function CreateExpenseModal({
             Exportar PDF
           </Button>
           <Button
+            type="button"
             variant="outline"
             className="gap-1.5"
             disabled={queueHistory.length === 0}
@@ -4125,6 +4140,7 @@ export function CreateExpenseModal({
             Exportar JSON
           </Button>
           <Button
+            type="button"
             variant="outline"
             className="gap-1.5"
             disabled={queueHistory.length === 0}
@@ -4184,6 +4200,7 @@ export function CreateExpenseModal({
             return (
               <>
                 <Button
+                  type="button"
                   variant="outline"
                   className="gap-1.5 border-amber-500/50 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10"
                   onClick={() => {
@@ -4202,6 +4219,7 @@ export function CreateExpenseModal({
                   Revisão PDF ({lowCount})
                 </Button>
                 <Button
+                  type="button"
                   variant="outline"
                   className="gap-1.5 border-amber-500/50 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10"
                   onClick={() => {
@@ -4229,6 +4247,7 @@ export function CreateExpenseModal({
               grupos adiados. Útil para diagnosticar demora e revisar backlog. */}
           {sapSession?.isSuperUser && queueHistory.length > 0 && (
             <Button
+              type="button"
               variant="outline"
               disabled={isGeneratingFlowReport}
               className="gap-1.5 border-primary/50 text-primary hover:bg-primary/10"
