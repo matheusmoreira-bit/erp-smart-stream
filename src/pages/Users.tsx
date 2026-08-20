@@ -42,12 +42,11 @@ import type { SapUser } from "@/lib/cache-repository";
 import CreateUserDialog from "@/components/CreateUserDialog";
 import AdminUsersManager from "@/components/AdminUsersManager";
 import { useSap } from "@/contexts/SapContext";
-import { listSapTargetCompanies, changePasswordInCompanies } from "@/lib/sap-multi-password";
 import { useUserPhones } from "@/hooks/useUserPhones";
 import EditPhoneDialog from "@/components/EditPhoneDialog";
 import { toast } from "sonner";
 import { PageTitle } from "@/components/PageTitle";
-import { ProvisionSapAccessDialog } from "@/components/ProvisionSapAccessDialog";
+import { BackofficeChangePasswordDialog } from "@/components/BackofficeChangePasswordDialog";
 import { useUserGroupAdmin } from "@/hooks/useUserGroupAdmin";
 import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
 import {
@@ -97,7 +96,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
   const [params, setParams] = useSearchParams();
   const { session } = useSap();
   const { isAdmin: isCloudAdmin } = useAuth();
-  const { users, isLoading, error, actionLoading, refresh, toggleLock, resetPassword, createUser } = useSapUsers();
+  const { users, isLoading, error, actionLoading, refresh, toggleLock, createUser } = useSapUsers();
   const { phones, upsertPhone } = useUserPhones();
   const { isPrivileged } = useMyPermissionGroups();
   const { groups: permissionGroups, groupOf, setGroup } = useUserGroupAdmin();
@@ -203,54 +202,13 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
 
   const [drawerUser, setDrawerUser] = useState<SapUser | null>(null);
   const [phoneUser, setPhoneUser] = useState<SapUser | null>(null);
-  const [provisionUser, setProvisionUser] = useState<SapUser | null>(null);
   const [lockUser, setLockUser] = useState<SapUser | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulk, setBulk] = useState<BulkAction>(null);
   const [bulkRunning, setBulkRunning] = useState(false);
 
-  // Multi-company password reset
   const [pwdUser, setPwdUser] = useState<SapUser | null>(null);
-  const [otherCompanies, setOtherCompanies] = useState<{ company_db: string; display_name: string }[]>([]);
-  const [pwdSelected, setPwdSelected] = useState<Set<string>>(new Set());
-  const [pwdSubmitting, setPwdSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (!pwdUser || !session) return;
-    listSapTargetCompanies(session.companyDB).then((cs) =>
-      setOtherCompanies(cs.map((c) => ({ company_db: c.company_db, display_name: c.display_name }))),
-    );
-    setPwdSelected(new Set());
-  }, [pwdUser, session]);
-
-  const handleResetPassword = async () => {
-    if (!pwdUser) return;
-    setPwdSubmitting(true);
-    try {
-      await resetPassword(pwdUser);
-      let extra: Awaited<ReturnType<typeof changePasswordInCompanies>> = [];
-      if (pwdSelected.size > 0) {
-        extra = await changePasswordInCompanies(pwdUser.UserCode, "Sap@2025", Array.from(pwdSelected));
-      }
-      const failures = extra.filter((r) => r.status === "error");
-      const successes = extra.filter((r) => r.status === "success");
-      if (extra.length === 0) toast.success(`Senha de ${pwdUser.UserName} alterada para Sap@2025`);
-      else if (failures.length === 0) toast.success(`Senha alterada em ${1 + successes.length} empresa(s).`);
-      else toast.warning(`Alterada em ${1 + successes.length} empresa(s). Falhas: ${failures.map((f) => f.displayName).join(", ")}`);
-      await logAuditAction({
-        action: "user_password_reset",
-        entity_type: "user",
-        entity_id: pwdUser.UserCode,
-        company_db: session?.companyDB,
-      });
-      setPwdUser(null);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao redefinir senha");
-    } finally {
-      setPwdSubmitting(false);
-    }
-  };
 
   /** Estado composto por usuário — calculado a partir dos dados do ERP Flow. */
   const rows = useMemo(() => {
@@ -749,14 +707,9 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
                               <MoreHorizontal className="w-4 h-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-56">
-                            <DropdownMenuItem onClick={() => setDrawerUser(user)}>Editar acesso</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setPwdUser(user)}>Redefinir senha</DropdownMenuItem>
-                            {user.eMail && (
-                              <DropdownMenuItem onClick={() => setProvisionUser(user)}>
-                                Provisionar / reenviar credenciais
-                              </DropdownMenuItem>
-                            )}
+                            <DropdownMenuContent align="end" className="w-56">
+                              <DropdownMenuItem onClick={() => setDrawerUser(user)}>Editar acesso</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setPwdUser(user)}>Redefinir senha</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => navigate("/usuarios/atividade")}>
                               Ver atividade
                             </DropdownMenuItem>
@@ -865,49 +818,18 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
         </DialogContent>
       </Dialog>
 
-      {/* Redefinição de senha multi-empresa */}
-      <Dialog open={!!pwdUser} onOpenChange={(o) => { if (!o) setPwdUser(null); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Redefinir Senha</DialogTitle>
-            <DialogDescription>
-              A senha de <span className="font-medium text-foreground">{pwdUser?.UserName}</span> será redefinida para{" "}
-              <span className="font-mono">Sap@2025</span> na empresa atual.
-            </DialogDescription>
-          </DialogHeader>
-          {otherCompanies.length > 0 && (
-            <div className="space-y-2 pt-2">
-              <p className="text-sm font-medium">Aplicar também em outras empresas</p>
-              <div className="max-h-48 overflow-y-auto space-y-2 rounded-md border border-border p-2">
-                {otherCompanies.map((c) => (
-                  <label key={c.company_db} className="flex items-center gap-2 cursor-pointer text-sm">
-                    <Checkbox
-                      checked={pwdSelected.has(c.company_db)}
-                      onCheckedChange={() =>
-                        setPwdSelected((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(c.company_db)) next.delete(c.company_db);
-                          else next.add(c.company_db);
-                          return next;
-                        })
-                      }
-                    />
-                    <span className="text-foreground">{c.display_name}</span>
-                    <span className="text-xs text-muted-foreground">({c.company_db})</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPwdUser(null)} disabled={pwdSubmitting}>Cancelar</Button>
-            <Button onClick={handleResetPassword} disabled={pwdSubmitting}>
-              {pwdSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              Confirmar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {pwdUser && (scopedCompanyDb || adminUserCompanies[pwdUser.UserCode.toLowerCase()]?.[0]) && (
+        <BackofficeChangePasswordDialog
+          open={!!pwdUser}
+          onOpenChange={(open) => { if (!open) setPwdUser(null); }}
+          userCode={pwdUser.UserCode}
+          userName={pwdUser.UserName || undefined}
+          targetEmail={pwdUser.eMail || directory.emailOf(pwdUser.UserCode)}
+          currentCompanyDb={scopedCompanyDb || adminUserCompanies[pwdUser.UserCode.toLowerCase()][0]}
+          currentCompanyName={scopedCompanyDb || adminUserCompanies[pwdUser.UserCode.toLowerCase()][0]}
+          onDone={refreshPage}
+        />
+      )}
 
       {/* Convite de admin backoffice */}
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
@@ -934,16 +856,6 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
         onEditPhone={(u) => { setDrawerUser(null); setPhoneUser(u); }}
         onChanged={() => { refreshPage(); directory.refresh(); refreshSegments(); }}
       />
-
-      {provisionUser?.eMail && (
-        <ProvisionSapAccessDialog
-          open={!!provisionUser}
-          onOpenChange={(o) => { if (!o) setProvisionUser(null); }}
-          targetEmail={provisionUser.eMail}
-          initialSapUser={provisionUser.UserCode}
-          initialCompanyDbs={session ? [session.companyDB] : []}
-        />
-      )}
 
       {phoneUser && (
         <EditPhoneDialog

@@ -21,6 +21,7 @@ type LicenseRow = { user_code: string; company_db: string; has_license: boolean;
 export function useUsersDirectoryState(companyDb?: string | null) {
   const [logins, setLogins] = useState<Record<string, FlowLoginInfo>>({});
   const [idp, setIdp] = useState<Record<string, IdpLinkState>>({});
+  const [idpEmails, setIdpEmails] = useState<Record<string, string>>({});
   const [licenses, setLicenses] = useState<LicenseRow[]>([]);
   const [admins, setAdmins] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -45,6 +46,7 @@ export function useUsersDirectoryState(companyDb?: string | null) {
     }
 
     const nextIdp: Record<string, IdpLinkState> = {};
+    const nextIdpEmails: Record<string, string> = {};
     for (const row of (idpRes.data || []) as { sap_user_code: string; sap_email: string | null; status: string }[]) {
       const state: IdpLinkState =
         row.status === "linked" ? "linked" : row.status === "disabled_by_idp" ? "removed" : "none";
@@ -52,6 +54,7 @@ export function useUsersDirectoryState(companyDb?: string | null) {
         const key = canonicalUserKey(id);
         if (!key) continue;
         if (!nextIdp[key] || nextIdp[key] === "none") nextIdp[key] = state;
+        if (row.sap_email) nextIdpEmails[key] = row.sap_email;
       }
     }
 
@@ -67,6 +70,7 @@ export function useUsersDirectoryState(companyDb?: string | null) {
 
     setLogins(nextLogins);
     setIdp(nextIdp);
+    setIdpEmails(nextIdpEmails);
     setLicenses((licRes.data || []) as LicenseRow[]);
     setAdmins(nextAdmins);
     setLoading(false);
@@ -111,6 +115,10 @@ export function useUsersDirectoryState(companyDb?: string | null) {
         for (const key of keysOf(ids)) if (idp[key]) return idp[key];
         return "none" as IdpLinkState;
       },
+      emailOf: (...ids: (string | null | undefined)[]) => {
+        for (const key of keysOf(ids)) if (idpEmails[key]) return idpEmails[key];
+        return null;
+      },
       licenseOf: (...ids: (string | null | undefined)[]) => {
         const rows = rowsOf(ids);
         const match = companyDb ? rows.find((r) => r.company_db === companyDb) : rows[0];
@@ -121,7 +129,7 @@ export function useUsersDirectoryState(companyDb?: string | null) {
       isAdminUser: (...ids: (string | null | undefined)[]) =>
         keysOf(ids).some((key) => admins.has(key)),
     };
-  }, [logins, idp, licenseIndex, admins, companyDb]);
+  }, [logins, idp, idpEmails, licenseIndex, admins, companyDb]);
 
   return { loading, refresh, sapCompanies, ...helpers };
 }
