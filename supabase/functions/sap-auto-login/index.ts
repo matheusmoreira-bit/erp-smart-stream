@@ -75,12 +75,7 @@ async function getServiceCredentials(
   const username = (map.get("username") || "").trim();
   const rawPassword = map.get("password") || "";
   if (!username || !rawPassword) return null;
-  let password = rawPassword;
-  try {
-    // A senha de serviço pode estar cifrada com o mesmo esquema das do usuário.
-    if (rawPassword.includes(":")) password = await decryptSecret(rawPassword);
-  } catch { password = rawPassword; }
-  return { username, password };
+  return { username, password: rawPassword };
 }
 
 Deno.serve(async (req) => {
