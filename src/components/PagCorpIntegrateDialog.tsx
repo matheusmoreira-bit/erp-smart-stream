@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Loader2, CreditCard, Sparkles, Upload, Plus, AlertCircle, Paperclip, ExternalLink, Wand2, ShieldOff } from "lucide-react";
+import { Loader2, CreditCard, Sparkles, Upload, Plus, AlertCircle, Paperclip, ExternalLink, Wand2, ShieldOff, FileText, BookOpen } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +24,8 @@ import { usePagCorpCardMapping } from "@/hooks/usePagCorpCardMapping";
 import { hashUrls, withAiCache } from "@/lib/ai-file-cache";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { toast } from "sonner";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { collectPagCorpAttachments } from "@/lib/pagcorp-document-classification";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
@@ -32,43 +34,6 @@ function formatCurrency(value: number, currency: string = "BRL") {
   } catch {
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
   }
-}
-
-// Coleta TODOS os anexos da transação a partir das variações de payload
-// que o PagCorp pode retornar (receipts, attachments, files, file, etc.).
-function collectAttachments(
-  receipts: any[] | undefined,
-  attachments: any[] | undefined,
-): { name: string; url: string }[] {
-  const out: { name: string; url: string }[] = [];
-  const seen = new Set<string>();
-  const push = (rawUrl: unknown, rawName?: unknown) => {
-    if (typeof rawUrl !== "string") return;
-    const url = rawUrl.trim();
-    if (!url || seen.has(url)) return;
-    seen.add(url);
-    const name =
-      (typeof rawName === "string" && rawName.trim()) ||
-      url.split("/").pop()?.split("?")[0] ||
-      "Anexo";
-    out.push({ name, url });
-  };
-  const visit = (entry: any) => {
-    if (!entry || typeof entry !== "object") return;
-    push(entry.downloadUrl, entry.fileName || entry.name);
-    push(entry.receiptUrl, entry.fileName || entry.name);
-    push(entry.imageUrl, entry.fileName || entry.name);
-    push(entry.url, entry.fileName || entry.name);
-    if (entry.file && typeof entry.file === "object") {
-      push(entry.file.url, entry.file.name || entry.fileName);
-      push(entry.file.downloadUrl, entry.file.name || entry.fileName);
-    }
-    if (Array.isArray(entry.files)) entry.files.forEach(visit);
-    if (Array.isArray(entry.attachments)) entry.attachments.forEach(visit);
-  };
-  (receipts || []).forEach(visit);
-  (attachments || []).forEach(visit);
-  return out;
 }
 
 export interface PagCorpLineOverride {
@@ -83,10 +48,17 @@ interface Props {
   transaction: PagCorpTransaction | null;
   integrationType: "generic" | "accountability";
   companyDb?: string;
+  initialPostingType?: "purchase_order" | "journal_entry";
+  onPostingTypeChange?: (type: "purchase_order" | "journal_entry") => void;
+  allowPostingTypeOverride?: boolean;
   onConfirm: (
-    supplier: SapSearchOption,
+    supplier: SapSearchOption | null,
     override: PagCorpLineOverride,
-    options: { markNondeductible: boolean },
+    options: {
+      markNondeductible: boolean;
+      postingType: "purchase_order" | "journal_entry";
+      journalEntry?: { debitAccount: string; creditAccount: string; costCenter?: string | null; project?: string | null };
+    },
   ) => Promise<void>;
 }
 
@@ -97,6 +69,9 @@ export function PagCorpIntegrateDialog({
   transaction,
   integrationType,
   companyDb,
+  initialPostingType = "purchase_order",
+  onPostingTypeChange,
+  allowPostingTypeOverride = true,
   onConfirm,
 }: Props) {
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
@@ -105,6 +80,9 @@ export function PagCorpIntegrateDialog({
   const [item, setItem] = useState<SapSearchOption | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [markNondeductible, setMarkNondeductible] = useState(false);
+  const [postingType, setPostingType] = useState<"purchase_order" | "journal_entry">(initialPostingType);
+  const [debitAccount, setDebitAccount] = useState<SapSearchOption | null>(null);
+  const [creditAccount, setCreditAccount] = useState<SapSearchOption | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiTried, setAiTried] = useState(false);
   const [aiResult, setAiResult] = useState<SupplierFormPrefill | null>(null);
@@ -132,6 +110,12 @@ export function PagCorpIntegrateDialog({
     endpoint: "Items",
     params: { $filter: "Valid eq 'tYES' and Frozen eq 'tNO'", $select: "ItemCode,ItemName" },
     mapRow: itMap,
+  });
+  const { options: accountOptions, isLoading: accountLoading } = useSapCachedList({
+    cacheKey: "chart_of_accounts_active",
+    endpoint: "ChartOfAccounts",
+    params: { $filter: "ActiveAccount eq 'tYES'", $select: "Code,Name,FormatCode" },
+    mapRow: (row: any) => ({ code: row.Code, name: row.Name, extra: row.FormatCode || undefined }),
   });
 
   // Mapeamento por cartão (fallback) — usado para mostrar valores aplicados automaticamente
@@ -269,6 +253,9 @@ export function PagCorpIntegrateDialog({
     setCostCenter(null);
     setProject(null);
     setItem(null);
+    setPostingType(initialPostingType);
+    setDebitAccount(null);
+    setCreditAccount(null);
     setSubmitting(false);
     setAiTried(false);
     setAiResult(null);
@@ -304,7 +291,7 @@ export function PagCorpIntegrateDialog({
     // Auto-trigger AI extraction
     setAiTried(true);
     void runAi(transaction);
-  }, [open, transaction?.id, runAi, transaction, storageKey]);
+  }, [open, transaction?.id, runAi, transaction, storageKey, initialPostingType]);
 
   useEffect(() => {
     if (!open || !transaction || !cardMappingLoaded) return;
@@ -326,7 +313,7 @@ export function PagCorpIntegrateDialog({
 
 
   const attachmentList = useMemo(
-    () => (transaction ? collectAttachments(transaction.receipts, transaction.attachments as any[]) : []),
+    () => (transaction ? collectPagCorpAttachments(transaction) : []),
     [transaction],
   );
   const [openingAttachment, setOpeningAttachment] = useState<string | null>(null);
@@ -376,7 +363,8 @@ export function PagCorpIntegrateDialog({
   if (!transaction) return null;
 
   const handleSubmit = async () => {
-    if (!supplier) return;
+    if (postingType === "purchase_order" && !supplier) return;
+    if (postingType === "journal_entry" && (!debitAccount || !creditAccount)) return;
     setSubmitting(true);
     try {
       await onConfirm(
@@ -386,7 +374,20 @@ export function PagCorpIntegrateDialog({
           project: project?.code || null,
           item: item?.code || null,
         },
-        { markNondeductible },
+        {
+          markNondeductible,
+          postingType,
+          ...(postingType === "journal_entry" && debitAccount && creditAccount
+            ? {
+                journalEntry: {
+                  debitAccount: debitAccount.code,
+                  creditAccount: creditAccount.code,
+                  costCenter: costCenter?.code || null,
+                  project: project?.code || null,
+                },
+              }
+            : {}),
+        },
       );
       if (storageKey) {
         try { sessionStorage.removeItem(storageKey); } catch {/* ignore */}
@@ -423,13 +424,41 @@ export function PagCorpIntegrateDialog({
               Integrar ao ERP
             </DialogTitle>
             <DialogDescription>
-              {integrationType === "generic"
-                ? <>Transação <strong>sem prestação de contas</strong> será integrada como <strong>despesa indedutível</strong>.</>
-                : <>Será criado <strong>Pedido de Compra</strong> no SAP, sem passar por aprovações.</>}
+              A IA recomenda o tipo de lançamento, mas você pode alterá-lo antes de integrar.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-5 py-2">
+            {allowPostingTypeOverride && <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Tipo de lançamento</label>
+              <ToggleGroup
+                type="single"
+                value={postingType}
+                onValueChange={(value) => {
+                  if (!value) return;
+                  const next = value as "purchase_order" | "journal_entry";
+                  if (integrationType === "accountability" && next === "purchase_order" && onPostingTypeChange) {
+                    onPostingTypeChange(next);
+                    return;
+                  }
+                  setPostingType(next);
+                }}
+                className="grid grid-cols-2 rounded-md border border-border p-1"
+              >
+                <ToggleGroupItem value="purchase_order" className="gap-2">
+                  <FileText className="w-4 h-4" />
+                  <span className="hidden sm:inline">Pedido de Compra</span><span className="sm:hidden">PC</span>
+                </ToggleGroupItem>
+                <ToggleGroupItem value="journal_entry" className="gap-2">
+                  <BookOpen className="w-4 h-4" />
+                  <span className="hidden sm:inline">Lançamento Contábil</span><span className="sm:hidden">LCM</span>
+                </ToggleGroupItem>
+              </ToggleGroup>
+              <p className="text-[11px] text-muted-foreground">
+                Recomendação da IA: {transaction.hasFiscalDocument ? "Pedido de Compra (documento fiscal encontrado)" : "Lançamento Contábil (sem documento fiscal)"}.
+              </p>
+            </div>}
+
             {/* ====== Transação de origem ====== */}
             <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5">
               <div className="flex items-start gap-2">
@@ -443,7 +472,7 @@ export function PagCorpIntegrateDialog({
             </div>
 
             {/* ====== Toggle: marcar como indedutível ====== */}
-            <label className="flex items-start gap-2 rounded-lg border border-border p-3 cursor-pointer hover:bg-muted/30 transition-colors">
+            {postingType === "purchase_order" && <label className="flex items-start gap-2 rounded-lg border border-border p-3 cursor-pointer hover:bg-muted/30 transition-colors">
               <input
                 type="checkbox"
                 checked={markNondeductible}
@@ -460,7 +489,7 @@ export function PagCorpIntegrateDialog({
                   A marcação prevalece sobre a configuração do cartão.
                 </p>
               </div>
-            </label>
+            </label>}
                 <div className="text-right">
                   <p className="text-sm font-semibold tabular-nums">
                     {formatCurrency(transaction.amount, transaction.currency)}
@@ -474,7 +503,7 @@ export function PagCorpIntegrateDialog({
             </div>
 
             {/* ====== Padrões aplicados (fallback do cartão) ====== */}
-            {cardDefaults.source && (
+            {postingType === "purchase_order" && cardDefaults.source && (
               <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 p-3">
                 <div className="flex items-center gap-2 mb-1.5">
                   <Wand2 className="w-3.5 h-3.5 text-primary" />
@@ -539,14 +568,14 @@ export function PagCorpIntegrateDialog({
               </div>
             )}
 
-            {aiBusy && (
+            {postingType === "purchase_order" && aiBusy && (
               <div className="rounded-md bg-primary/10 border border-primary/30 p-3 flex items-center gap-2 text-sm">
                 <Loader2 className="w-4 h-4 animate-spin text-primary" />
                 <span>Identificando fornecedor com IA…</span>
               </div>
             )}
 
-            {!aiBusy && aiNotice && (
+            {postingType === "purchase_order" && !aiBusy && aiNotice && (
               <div className="rounded-md bg-warning/10 border border-warning/30 p-3 flex items-start gap-2 text-sm">
                 <AlertCircle className="w-4 h-4 mt-0.5 text-warning shrink-0" />
                 <div className="flex-1">
@@ -605,7 +634,7 @@ export function PagCorpIntegrateDialog({
             )}
 
             {/* ====== Cabeçalho da Integração ====== */}
-            <div className="space-y-3">
+            {postingType === "purchase_order" && <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <div className="h-px flex-1 bg-border" />
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -648,7 +677,7 @@ export function PagCorpIntegrateDialog({
                   topResults={50}
                 />
               </div>
-            </div>
+            </div>}
 
             {/* ====== Linhas da Integração ====== */}
             <div className="space-y-3">
@@ -687,7 +716,38 @@ export function PagCorpIntegrateDialog({
                 </div>
               </div>
 
-              <div>
+              {postingType === "journal_entry" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                      Conta de débito <span className="text-destructive">*</span>
+                    </label>
+                    <CachedSearchCombobox
+                      options={accountOptions}
+                      isLoading={accountLoading}
+                      value={debitAccount}
+                      onChange={setDebitAccount}
+                      placeholder="Selecionar conta de débito..."
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                      Conta de crédito <span className="text-destructive">*</span>
+                    </label>
+                    <CachedSearchCombobox
+                      options={accountOptions}
+                      isLoading={accountLoading}
+                      value={creditAccount}
+                      onChange={setCreditAccount}
+                      placeholder="Selecionar conta de crédito..."
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              {postingType === "purchase_order" && <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">
                   Item
                 </label>
@@ -698,7 +758,7 @@ export function PagCorpIntegrateDialog({
                   onChange={setItem}
                   placeholder={cardDefaultIT ? `Auto: ${cardDefaultIT.name}` : "Padrão do mapeamento…"}
                 />
-              </div>
+              </div>}
             </div>
           </div>
 
@@ -707,9 +767,12 @@ export function PagCorpIntegrateDialog({
             <Button variant="outline" onClick={onClose} disabled={submitting}>
               Cancelar
             </Button>
-            <Button onClick={handleSubmit} disabled={!supplier || submitting}>
+            <Button
+              onClick={handleSubmit}
+              disabled={submitting || (postingType === "purchase_order" ? !supplier : !debitAccount || !creditAccount)}
+            >
               {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Integrar ao ERP
+              {postingType === "purchase_order" ? "Criar Pedido de Compra" : "Criar Lançamento Contábil"}
             </Button>
           </DialogFooter>
         </DialogContent>

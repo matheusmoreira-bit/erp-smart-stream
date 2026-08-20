@@ -426,6 +426,7 @@ Deno.serve(async (req) => {
         .from("pagcorp_integration_log")
           .select("id, pagcorp_expense_id, company_db, sap_doc_entry, pagcorp_data")
         .eq("id", body.logId)
+        .neq("integration_type", "journal_entry")
         .limit(1);
       if (error) throw new Error(error.message);
       logs = (data || []) as LogRow[];
@@ -441,6 +442,7 @@ Deno.serve(async (req) => {
         .from("pagcorp_integration_log")
         .select("id, pagcorp_expense_id, company_db, sap_doc_entry, pagcorp_data")
         .eq("company_db", body.companyDb)
+        .neq("integration_type", "journal_entry")
         .not("sap_doc_entry", "is", null)
         .limit(BATCH_SIZE);
       if (error) throw new Error(error.message);
@@ -460,6 +462,7 @@ Deno.serve(async (req) => {
         .from("pagcorp_integration_log")
         .select("id, pagcorp_expense_id, company_db, sap_doc_entry, pagcorp_data")
         .not("sap_doc_entry", "is", null)
+        .neq("integration_type", "journal_entry")
         .order("updated_at", { ascending: false })
         .limit(BATCH_SIZE * 3);
       if (error) throw new Error(error.message);

@@ -1,0 +1,153 @@
+import { publicFunctionFetch, sapFunctionFetch } from "@/lib/auth-fetch";
+import type { PagCorpTransaction } from "@/hooks/usePagCorp";
+
+export interface PagCorpAttachment {
+  name: string;
+  url: string;
+}
+
+export interface PagCorpDocumentClassification {
+  status: "completed" | "error";
+  hasFiscalDocument: boolean | null;
+  documentKinds: string[];
+  confidence: number | null;
+  errorMessage?: string;
+}
+
+export function hasInvoiceEquivalent(documents: unknown[]): boolean {
+  const invoiceKinds = new Set([
+    "invoice",
+    "commercial_invoice",
+    "nota_fiscal",
+    "nfe",
+    "nfse",
+    "nfce",
+    "cupom_fiscal",
+  ]);
+  return documents.some((value) => {
+    const document = value && typeof value === "object" ? value as Record<string, unknown> : {};
+    return document.is_invoice_equivalent === true ||
+      (document.is_invoice_equivalent == null && invoiceKinds.has(String(document.document_kind || "").toLowerCase()));
+  });
+}
+
+export function collectPagCorpAttachments(transaction: Pick<PagCorpTransaction, "receipts" | "attachments">): PagCorpAttachment[] {
+  const out: PagCorpAttachment[] = [];
+  const seen = new Set<string>();
+  const push = (rawUrl: unknown, rawName?: unknown) => {
+    if (typeof rawUrl !== "string") return;
+    const url = rawUrl.trim();
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    out.push({
+      url,
+      name: typeof rawName === "string" && rawName.trim()
+        ? rawName.trim()
+        : url.split("/").pop()?.split("?")[0] || "documento",
+    });
+  };
+  const visit = (value: unknown) => {
+    const entry = value && typeof value === "object" ? value as Record<string, unknown> : null;
+    if (!entry || typeof entry !== "object") return;
+    push(entry.downloadUrl, entry.fileName || entry.name);
+    push(entry.fileUrl, entry.fileName || entry.name);
+    push(entry.receiptUrl, entry.fileName || entry.name);
+    push(entry.imageUrl, entry.fileName || entry.name);
+    push(entry.url, entry.fileName || entry.name);
+    if (entry.file && typeof entry.file === "object") visit(entry.file);
+    if (Array.isArray(entry.files)) entry.files.forEach(visit);
+    if (Array.isArray(entry.attachments)) entry.attachments.forEach(visit);
+  };
+  (transaction.receipts || []).forEach(visit);
+  (transaction.attachments || []).forEach(visit);
+  return out;
+}
+
+async function persist(
+  companyDb: string,
+  expenseId: string | number,
+  classification: object,
+) {
+  const response = await sapFunctionFetch("pagcorp-integration-status", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ companyDb, classification: { expenseId, ...classification } }),
+  });
+  if (!response.ok) throw new Error(`Falha ao salvar classificação (${response.status})`);
+}
+
+export async function classifyPagCorpDocuments(
+  transaction: PagCorpTransaction,
+  companyDb: string,
+): Promise<PagCorpDocumentClassification> {
+  const attachments = collectPagCorpAttachments(transaction);
+  if (attachments.length === 0) {
+    const result: PagCorpDocumentClassification = {
+      status: "completed",
+      hasFiscalDocument: false,
+      documentKinds: [],
+      confidence: 1,
+    };
+    await persist(companyDb, transaction.id, result);
+    return result;
+  }
+
+  await persist(companyDb, transaction.id, { status: "processing" });
+  try {
+    const files: File[] = [];
+    for (const attachment of attachments.slice(0, 8)) {
+      const params = new URLSearchParams({ action: "receipt", url: attachment.url, companyDb });
+      const response = await sapFunctionFetch(`pagcorp-proxy?${params.toString()}`);
+      if (!response.ok) continue;
+      const blob = await response.blob();
+      files.push(new File([blob], attachment.name, { type: blob.type || "application/octet-stream" }));
+    }
+    if (files.length === 0) throw new Error("Não foi possível baixar os anexos para análise");
+
+    const formData = new FormData();
+    files.forEach((file) => formData.append("files", file));
+    formData.append("company_db", companyDb);
+    const response = await publicFunctionFetch("process-expense-doc", {
+      method: "POST",
+      body: formData,
+    });
+    const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+    if (!response.ok) throw new Error(String(payload.error || `IA retornou HTTP ${response.status}`));
+    const docs: unknown[] = (Array.isArray(payload.result) ? payload.result : [payload.result]).filter(Boolean);
+    if (docs.length === 0) throw new Error("IA não retornou classificação dos anexos");
+
+    const hasFiscalDocument = hasInvoiceEquivalent(docs);
+    const documentKinds: string[] = Array.from(
+      new Set<string>(docs.map((value) => {
+        const document = value && typeof value === "object" ? value as Record<string, unknown> : {};
+        return String(document.document_kind || "outro");
+      })),
+    );
+    const confidenceValues = docs
+      .map((value) => {
+        const document = value && typeof value === "object" ? value as Record<string, unknown> : {};
+        return Number(document.confidence);
+      })
+      .filter((value): value is number => Number.isFinite(value));
+    const confidence = confidenceValues.length > 0 ? Math.max(...confidenceValues) : null;
+    const result: PagCorpDocumentClassification = {
+      status: "completed",
+      hasFiscalDocument,
+      documentKinds,
+      confidence,
+    };
+    await persist(companyDb, transaction.id, result);
+    return result;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const result: PagCorpDocumentClassification = {
+      status: "error",
+      hasFiscalDocument: null,
+      documentKinds: [],
+      confidence: null,
+      errorMessage,
+    };
+    await persist(companyDb, transaction.id, result).catch(() => undefined);
+    return result;
+  }
+}

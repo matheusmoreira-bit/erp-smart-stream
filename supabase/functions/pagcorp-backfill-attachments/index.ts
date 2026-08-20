@@ -171,7 +171,8 @@ Deno.serve(async (req) => {
   let q = supabase
     .from("pagcorp_integration_log")
     .select("id, company_db, status, sap_doc_entry, sap_payload, sap_response, pagcorp_data, integration_type")
-    .not("sap_doc_entry", "is", null);
+    .not("sap_doc_entry", "is", null)
+    .neq("integration_type", "journal_entry");
   if (companyDbFilter) q = q.eq("company_db", companyDbFilter);
   if (logIdsFilter?.length) q = q.in("id", logIdsFilter);
   const { data: rows, error: rowsErr } = await q.order("created_at", { ascending: false }).limit(limit);

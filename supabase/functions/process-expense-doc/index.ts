@@ -200,6 +200,7 @@ Analise os documentos enviados e extraia as seguintes informações em formato J
 
 {
   "is_fiscal_document": true,
+  "is_invoice_equivalent": true,
   "document_kind": "invoice | receipt | nota_fiscal | comprovante_pagamento | boleto | contrato | outro",
   "supplier_name": "Nome do fornecedor/empresa emissora (quem VENDEU/prestou serviço)",
   "supplier_cnpj": "Identificação fiscal do fornecedor — CNPJ/CPF (BR), EIN (US), VAT-ID (UE/UK), RFC (MX), CUIT (AR), RUT (CL/UY), NIF/CIF (ES/PT), etc. Sem máscara/pontuação para BR; mantém o formato original para internacional.",
@@ -265,6 +266,8 @@ Regras IMPORTANTES:
 - supplier_address.state: BR = sigla UF de 2 letras maiúsculas; internacional = nome ou sigla conforme aparece.
 - supplier_country e supplier_address.country: SEMPRE em ISO-3166 alpha-2 (2 letras maiúsculas, ex.: 'BR', 'US', 'GB', 'DE', 'PT').
 - CLASSIFICAÇÃO (is_fiscal_document): marque TRUE se o arquivo é NOTA FISCAL, RECIBO, COMPROVANTE DE PAGAMENTO, INVOICE, BOLETO ou qualquer documento que gera uma despesa (tem fornecedor + itens/valor + data). Marque FALSE para contratos genéricos, propostas comerciais, imagens/fotos sem informação fiscal, planilhas de apoio, PDFs de política, cartas, e-mails, apresentações, manuais, etc. Nesses casos preencha "document_kind" com "outro" e devolva os demais campos como null — o arquivo será salvo apenas como anexo, sem preencher a despesa.
+- CLASSIFICAÇÃO PARA PAGCORP (is_invoice_equivalent): marque TRUE SOMENTE quando o arquivo for Nota Fiscal (NF-e, NFS-e, NFC-e, cupom fiscal), commercial invoice/fatura internacional ou documento fiscal equivalente emitido pelo fornecedor. Marque FALSE para recibo simples sem natureza fiscal, comprovante de cartão/PIX, boleto, extrato, pedido, orçamento e demais documentos de apoio.
+- Quando vários arquivos forem enviados juntos, is_invoice_equivalent deve ser TRUE se AO MENOS UM deles for Nota Fiscal, invoice ou equivalente, mesmo que os demais sejam apenas comprovantes ou documentos de apoio.
 - document_kind: use "invoice" para invoices internacionais, "nota_fiscal" para NFs BR, "receipt" para recibos, "comprovante_pagamento" para comprovantes bancários/PIX, "boleto" para boletos, "contrato" para contratos, "outro" para o resto.`;
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {

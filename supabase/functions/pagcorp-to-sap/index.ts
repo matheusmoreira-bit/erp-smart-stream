@@ -134,7 +134,10 @@ async function postSapDocument(
     const msg = body?.error?.message?.value || JSON.stringify(body);
     throw new Error(`SAP ${endpoint} falhou [${res.status}]: ${msg}`);
   }
-  return { docEntry: body.DocEntry, docNum: body.DocNum, response: body };
+  const docEntry = Number(body.DocEntry ?? body.JdtNum ?? body.TransId ?? body.Number);
+  const docNum = Number(body.DocNum ?? body.Number ?? body.JdtNum ?? body.TransId);
+  if (!Number.isFinite(docEntry)) throw new Error(`SAP ${endpoint} não retornou o identificador do documento`);
+  return { docEntry, docNum: Number.isFinite(docNum) ? docNum : docEntry, response: body };
 }
 
 /**
@@ -375,6 +378,7 @@ Deno.serve(async (req) => {
   const stages: Record<string, "pending" | "success" | "failed" | "skipped"> = {
     attachment_upload: "skipped",
     purchase_order: "pending",
+    journal_entry: "skipped",
   };
   const sapPayloads: Record<string, unknown> = {};
   const sapResponses: Record<string, unknown> = {};
@@ -401,6 +405,14 @@ Deno.serve(async (req) => {
     const supplierName: string | undefined = body.supplierName;
     const integratedBy: string | null = body.integratedBy || null;
     const nondeductible: boolean = body.nondeductible === true;
+    const postingType: "purchase_order" | "journal_entry" = body.postingType === "journal_entry"
+      ? "journal_entry"
+      : "purchase_order";
+    const journalEntry = body.journalEntry && typeof body.journalEntry === "object" ? body.journalEntry : null;
+    if (postingType === "journal_entry") {
+      stages.purchase_order = "skipped";
+      stages.journal_entry = "pending";
+    }
     // Data do documento informada pelo usuário (ex.: emissão da NF do Google
     // Cloud, que fatura no mês seguinte às compras). Só é aceita no formato
     // ISO e dentro de uma janela de ±1 ano para evitar o erro do SAP
@@ -429,7 +441,13 @@ Deno.serve(async (req) => {
 
     if (rawList.length === 0) throw new Error("transaction(s) inválido(s)");
     if (!companyDb) throw new Error("companyDb obrigatório");
-    if (!supplierCode) throw new Error("supplierCode (CardCode) obrigatório");
+    if (postingType === "purchase_order" && !supplierCode) throw new Error("supplierCode (CardCode) obrigatório");
+    if (postingType === "journal_entry" && (!journalEntry?.debitAccount || !journalEntry?.creditAccount)) {
+      throw new Error("Contas de débito e crédito são obrigatórias para o Lançamento Contábil");
+    }
+    if (postingType === "journal_entry" && rawList.length > 1) {
+      throw new Error("Lançamentos contábeis PagCorp devem ser integrados individualmente");
+    }
     for (const t of rawList) {
       if (!t?.id) throw new Error("toda transação precisa de id");
     }
@@ -463,6 +481,7 @@ Deno.serve(async (req) => {
       .from("pagcorp_integration_log")
       .select("id, pagcorp_expense_id, status, sap_doc_entry, sap_doc_num")
       .in("pagcorp_expense_id", ids)
+      .eq("company_db", companyDb)
       .eq("status", "success");
     const alreadyIntegratedIds = new Set((existingLogs || []).map((r: any) => r.pagcorp_expense_id));
     const transactions = positiveList.filter((t) => !alreadyIntegratedIds.has(Number(t.id)));
@@ -512,8 +531,9 @@ Deno.serve(async (req) => {
             consolidated: isConsolidated,
             consolidatedWith: isConsolidated ? transactions.map((x) => x.id) : undefined,
             nondeductible,
+            postingType,
           } as any,
-          integration_type: integrationType,
+          integration_type: postingType === "journal_entry" ? "journal_entry" : integrationType,
           status: "pending",
           company_db: companyDb,
           integrated_by: integratedBy,
@@ -533,7 +553,7 @@ Deno.serve(async (req) => {
     const sap = await loginSap(sapCreds);
 
     // 3. Resolve mappings (per transaction so each line can have its own cost center/item)
-    const lineMappings = await Promise.all(
+    const lineMappings = postingType === "purchase_order" ? await Promise.all(
       transactions.map(async (t) => {
         const acctMapping = await resolveAccountMapping(supabase!, t.accountCode || null);
         const cardMapping = await resolveCardMapping(
@@ -545,7 +565,7 @@ Deno.serve(async (req) => {
           cardMapping?.item_code || (await resolveItemCode(supabase!, t.accountCode || null));
         return { tx: t, acctMapping, cardMapping, itemCode };
       }),
-    );
+    ) : [];
     const missing = lineMappings.find((m) => {
       const ov = lineOverrides[String(m.tx.id)] || {};
       return !ov.item && !m.itemCode;
@@ -558,10 +578,12 @@ Deno.serve(async (req) => {
 
     // Falha cedo (com mensagem clara) quando o item mapeado/escolhido está
     // inativo ou bloqueado no SAP.
-    await assertItemsActive(
-      sap,
-      lineMappings.map((m) => (lineOverrides[String(m.tx.id)]?.item || m.itemCode) as string),
-    );
+    if (postingType === "purchase_order") {
+      await assertItemsActive(
+        sap,
+        lineMappings.map((m) => (lineOverrides[String(m.tx.id)]?.item || m.itemCode) as string),
+      );
+    }
 
 
     // (Pagamento desabilitado: integração agora cria apenas o Pedido de Compra)
@@ -592,7 +614,10 @@ Deno.serve(async (req) => {
     let attachmentEntry: number | null = null;
     {
       const allReceipts = transactions.flatMap((t) =>
-        Array.isArray(t.receipts) ? t.receipts : [],
+        [
+          ...(Array.isArray(t.receipts) ? t.receipts : []),
+          ...(Array.isArray(t.attachments) ? t.attachments : []),
+        ],
       );
       if (allReceipts.length > 0) {
         stages.attachment_upload = "pending";
@@ -686,6 +711,96 @@ Deno.serve(async (req) => {
       const d = new Date(s);
       return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
     };
+
+    if (postingType === "journal_entry") {
+      const date = documentDate || toIsoDate(transaction.date) || new Date().toISOString().slice(0, 10);
+      const amount = Number(transaction.amount) || 0;
+      const currency = String(transaction.currency || "BRL").toUpperCase();
+      const isForeignCurrency = currency !== "BRL" && /^[A-Z]{3}$/.test(currency);
+      const commonLine = {
+        LineMemo: truncateSapText(description, 50),
+        ...(journalEntry.costCenter ? { CostingCode: String(journalEntry.costCenter) } : {}),
+        ...(journalEntry.project ? { ProjectCode: String(journalEntry.project) } : {}),
+      };
+      const payload: Record<string, unknown> = {
+        ReferenceDate: date,
+        DueDate: date,
+        TaxDate: date,
+        Memo: description,
+        Reference: truncateSapText(`PagCorp ${transaction.id}`, 27),
+        JournalEntryLines: [
+          {
+            AccountCode: String(journalEntry.debitAccount),
+            ...commonLine,
+            ...(isForeignCurrency ? { FCDebit: amount, FCCurrency: currency } : { Debit: amount }),
+          },
+          {
+            AccountCode: String(journalEntry.creditAccount),
+            ...commonLine,
+            ...(isForeignCurrency ? { FCCredit: amount, FCCurrency: currency } : { Credit: amount }),
+          },
+        ],
+        ...(attachmentEntry ? { AttachmentEntry: attachmentEntry } : {}),
+      };
+      sapPayloads.journal_entry = payload;
+      let result;
+      try {
+        result = await postSapDocument(sap, payload, "JournalEntries");
+        stages.journal_entry = "success";
+        sapResponses.journal_entry = {
+          JdtNum: result.response?.JdtNum ?? result.docEntry,
+          TransId: result.response?.TransId ?? result.docEntry,
+        };
+      } catch (error) {
+        stages.journal_entry = "failed";
+        throw error;
+      }
+
+      await supabase
+        .from("pagcorp_integration_log")
+        .update({
+          status: "success",
+          sap_doc_entry: result.docEntry,
+          sap_doc_num: result.docNum,
+          sap_payload: sapPayloads as any,
+          sap_response: { ...sapResponses, stages, attachmentEntry, postingType } as any,
+        } as any)
+        .in("id", consolidatedLogIds);
+
+      try {
+        await supabase.rpc("insert_audit_log", {
+          p_action: "pagcorp_journal_entry_integrated",
+          p_entity_type: "pagcorp_transaction",
+          p_entity_id: String(transaction.id),
+          p_company_db: companyDb,
+          p_actor_email: integratedBy || undefined,
+          p_details: { integration_type: "journal_entry", journal_entry: sapResponses.journal_entry, stages } as any,
+        });
+      } catch (auditErr) {
+        console.warn("pagcorp-to-sap audit log failed after SAP success:", auditErr);
+      }
+
+      try {
+        await notifyErpIntegration({
+          status: "success",
+          entityIds: snapshot.txIds,
+          companyDb: snapshot.companyDb,
+          docEntry: result.docEntry,
+          docNum: result.docNum,
+          totalAmount: snapshot.totalAmount,
+          currency: snapshot.currency,
+          integratedBy: snapshot.integratedBy,
+        });
+      } catch (notifyErr) {
+        console.warn("pagcorp-to-sap notification failed after SAP success:", notifyErr);
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        stages,
+        journalEntry: sapResponses.journal_entry,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     const documentLines = lineMappings.map(({ tx, acctMapping, cardMapping, itemCode }) => {
       const override = lineOverrides[String(tx.id)] || {};
@@ -840,7 +955,14 @@ Deno.serve(async (req) => {
     console.error("pagcorp-to-sap error:", msg);
     if (supabase && consolidatedLogIds.length > 0) {
       const po = sapResponses.purchase_order as { DocEntry?: number | null; DocNum?: number | null } | undefined;
-      const materialSuccess = stages.purchase_order === "success" && Number(po?.DocEntry || 0) > 0;
+      const journal = sapResponses.journal_entry as { JdtNum?: number | null; TransId?: number | null } | undefined;
+      const materialDoc = stages.journal_entry === "success"
+        ? { DocEntry: journal?.TransId ?? journal?.JdtNum, DocNum: journal?.JdtNum ?? journal?.TransId }
+        : po;
+      const materialSuccess = (
+        (stages.purchase_order === "success" || stages.journal_entry === "success") &&
+        Number(materialDoc?.DocEntry || 0) > 0
+      );
       await supabase
         .from("pagcorp_integration_log")
         .update({
@@ -848,8 +970,8 @@ Deno.serve(async (req) => {
           error_message: materialSuccess ? null : msg,
           ...(materialSuccess
             ? {
-                sap_doc_entry: po?.DocEntry ?? null,
-                sap_doc_num: po?.DocNum ?? null,
+                sap_doc_entry: materialDoc?.DocEntry ?? null,
+                sap_doc_num: materialDoc?.DocNum ?? null,
               }
             : {}),
           sap_payload: sapPayloads as any,

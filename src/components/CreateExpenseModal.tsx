@@ -15,6 +15,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   ClipboardCopy,
+  FileText,
+  BookOpen,
 } from "lucide-react";
 import { exportQueueSummaryPdf, exportQueueSummaryJson, exportQueueSummaryCsv, exportLowConfidenceReviewPdf, exportLowConfidenceReviewCsv, exportPurchaseFlowReportPdf, QUEUE_SUMMARY_JSON_SCHEMA_VERSION } from "@/lib/report-pdf";
 import { Button } from "@/components/ui/button";
@@ -67,6 +69,7 @@ import { RegistrationRequestModal } from "@/components/RegistrationRequestModal"
 import { UserPlus, RefreshCw, Building2 } from "lucide-react";
 import { usePagCorpCardMapping, type CardMappingStatus } from "@/hooks/usePagCorpCardMapping";
 import { PagCorpCardMappingBanner } from "@/components/PagCorpCardMappingBanner";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { saveDraft, deleteDraft } from "@/hooks/useDocumentDrafts";
 import { supabase } from "@/integrations/supabase/client";
 import { useMergedSupplierOptions, type CrossCompanyMatch, type EnrichedSupplierOption } from "@/hooks/useMergedSupplierOptions";
@@ -168,6 +171,7 @@ export function CreateExpenseModal({
   onDraftConsumed,
   onInitialFilesConsumed,
   lowAiConfidenceThreshold = 0.75,
+  onPagcorpPostingTypeChange,
 }: {
   open: boolean;
   onClose: () => void;
@@ -188,6 +192,7 @@ export function CreateExpenseModal({
   /** Limite (0–1) abaixo do qual a confiança média da IA por grupo é
    *  destacada visualmente como "provavelmente precisa de revisão". */
   lowAiConfidenceThreshold?: number;
+  onPagcorpPostingTypeChange?: (type: "purchase_order" | "journal_entry") => void;
 }) {
   // Vendas: itens de receita liberados no formulário de pedido de venda.
   const SALES_ALLOWED_ITEMS = ["SV0003", "SV0006"];
@@ -2562,6 +2567,27 @@ export function CreateExpenseModal({
         <DialogHeader className="pr-8 text-left">
           <DialogTitle className="text-base sm:text-lg">{title || (isSales ? "Novo Pedido de Venda" : "Nova Despesa")}</DialogTitle>
         </DialogHeader>
+
+        {origin === "pagcorp" && onPagcorpPostingTypeChange && (
+          <div className="mt-3 space-y-2">
+            <label className="text-xs font-medium text-muted-foreground">Tipo de lançamento</label>
+            <ToggleGroup
+              type="single"
+              value="purchase_order"
+              onValueChange={(value) => value && onPagcorpPostingTypeChange(value as "purchase_order" | "journal_entry")}
+              className="grid grid-cols-2 rounded-md border border-border p-1"
+            >
+              <ToggleGroupItem value="purchase_order" className="gap-2">
+                <FileText className="w-4 h-4" />
+                <span className="hidden sm:inline">Pedido de Compra</span><span className="sm:hidden">PC</span>
+              </ToggleGroupItem>
+              <ToggleGroupItem value="journal_entry" className="gap-2">
+                <BookOpen className="w-4 h-4" />
+                <span className="hidden sm:inline">Lançamento Contábil</span><span className="sm:hidden">LCM</span>
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+        )}
 
         {/* Barra de progresso do fluxo: classificação IA, salvamento e fila
             de despesas encadeadas (deferredGroups da regra de fornecedores

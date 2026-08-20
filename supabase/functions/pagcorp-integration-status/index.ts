@@ -20,6 +20,14 @@ const corsHeaders = {
 interface RequestBody {
   companyDb?: string;
   expenseIds?: (number | string)[];
+  classification?: {
+    expenseId?: number | string;
+    status?: "processing" | "completed" | "error";
+    hasFiscalDocument?: boolean | null;
+    documentKinds?: string[];
+    confidence?: number | null;
+    errorMessage?: string | null;
+  };
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -97,6 +105,30 @@ Deno.serve(async (req) => {
   );
 
   try {
+    if (body.classification) {
+      const expenseId = Number(body.classification.expenseId);
+      if (!Number.isFinite(expenseId)) throw new Error("classification.expenseId inválido");
+      const status = body.classification.status || "processing";
+      const { data, error } = await admin
+        .from("pagcorp_document_classification")
+        .upsert({
+          company_db: companyDb,
+          pagcorp_expense_id: expenseId,
+          status,
+          has_fiscal_document: body.classification.hasFiscalDocument ?? null,
+          document_kinds: body.classification.documentKinds || [],
+          confidence: body.classification.confidence ?? null,
+          error_message: body.classification.errorMessage ?? null,
+          analyzed_at: status === "completed" || status === "error" ? new Date().toISOString() : null,
+        }, { onConflict: "company_db,pagcorp_expense_id" })
+        .select("*")
+        .single();
+      if (error) throw error;
+      return new Response(JSON.stringify({ classification: data }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // 1. Logs de integração materialmente concluídos para essas expenses NA EMPRESA.
     // Alguns fluxos antigos marcavam `status=error` depois de o SAP já ter
     // criado o pedido/anexo (falha em etapa tardia como audit/notify/backfill).
@@ -106,7 +138,7 @@ Deno.serve(async (req) => {
       const { data, error } = await admin
         .from("pagcorp_integration_log")
         .select(
-          "pagcorp_expense_id, id, status, sap_doc_num, sap_doc_entry, sap_payload, sap_response, settlement_status, settlement_payment_doc_num, settlement_error, created_at",
+          "pagcorp_expense_id, id, status, integration_type, pagcorp_data, sap_doc_num, sap_doc_entry, sap_payload, sap_response, settlement_status, settlement_payment_doc_num, settlement_error, created_at",
         )
         .eq("company_db", companyDb)
         .in("pagcorp_expense_id", expenseIds)
@@ -161,6 +193,17 @@ Deno.serve(async (req) => {
       ndExpenses = data || [];
     }
 
+    let classifications: any[] = [];
+    if (expenseIds.length > 0) {
+      const { data, error } = await admin
+        .from("pagcorp_document_classification")
+        .select("pagcorp_expense_id,status,has_fiscal_document,document_kinds,confidence,error_message,analyzed_at")
+        .eq("company_db", companyDb)
+        .in("pagcorp_expense_id", expenseIds);
+      if (error) throw error;
+      classifications = data || [];
+    }
+
     return new Response(
       JSON.stringify({
         integrations,
@@ -168,6 +211,7 @@ Deno.serve(async (req) => {
 
         nondeductibleCards: ndCards || [],
         nondeductibleExpenses: ndExpenses,
+        classifications,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );

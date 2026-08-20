@@ -138,7 +138,7 @@ function buildRelationsExpense(
 export default function PagCorp() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
-  const { transactions, isLoading, error, fetchTransactions, integrateDirect, integrateConsolidated } = usePagCorp();
+  const { transactions, isLoading, error, fetchTransactions, integrateDirect, integrateConsolidated, classifyDocuments } = usePagCorp();
   const { createExpense } = useExpenses();
   const { fetchCredentials } = useCredentials();
   const { getLabel } = useCompanies(true);
@@ -183,7 +183,8 @@ export default function PagCorp() {
     open: boolean;
     tx: PagCorpTransaction | null;
     type: "generic" | "accountability";
-  }>({ open: false, tx: null, type: "generic" });
+    postingType: "purchase_order" | "journal_entry";
+  }>({ open: false, tx: null, type: "generic", postingType: "purchase_order" });
   const [accountabilityModal, setAccountabilityModal] = useState<{
     open: boolean;
     tx: PagCorpTransaction | null;
@@ -219,6 +220,7 @@ export default function PagCorp() {
     });
   // True when modal close is programmatic (after success), so we don't cancel the batch
   const programmaticCloseRef = useRef(false);
+  const classificationInflightRef = useRef(new Set<string | number>());
 
   const handleStartDateChange = (value: string) => {
     setStartDate(value);
@@ -244,6 +246,24 @@ export default function PagCorp() {
     if (!session?.companyDB) return;
     fetchTransactions(startDate, endDate, session.companyDB);
   }, [fetchTransactions, session?.companyDB]);
+
+  useEffect(() => {
+    const companyDb = session?.companyDB;
+    if (!companyDb) return;
+    const pending = transactions.filter((transaction) =>
+      !transaction.integrated &&
+      !transaction.isReversed &&
+      (!transaction.documentAnalysisStatus || transaction.documentAnalysisStatus === "pending") &&
+      !classificationInflightRef.current.has(transaction.id)
+    );
+    const availableSlots = Math.max(0, 3 - classificationInflightRef.current.size);
+    for (const transaction of pending.slice(0, availableSlots)) {
+      classificationInflightRef.current.add(transaction.id);
+      void classifyDocuments(transaction, companyDb).finally(() => {
+        classificationInflightRef.current.delete(transaction.id);
+      });
+    }
+  }, [classifyDocuments, session?.companyDB, transactions]);
 
   const handleRefresh = () => fetchTransactions(startDate, endDate, session?.companyDB);
 
@@ -593,10 +613,11 @@ export default function PagCorp() {
 
   const openIntegrateDialog = async (t: PagCorpTransaction, type: "generic" | "accountability") => {
     if (!(await checkSapCredentials())) return;
-    if (type === "accountability") {
+    const postingType = t.postingType || (t.hasFiscalDocument ? "purchase_order" : "journal_entry");
+    if (type === "accountability" && postingType === "purchase_order") {
       setAccountabilityModal({ open: true, tx: t });
     } else {
-      setIntegrateDialog({ open: true, tx: t, type });
+      setIntegrateDialog({ open: true, tx: t, type, postingType });
     }
   };
 
@@ -610,7 +631,7 @@ export default function PagCorp() {
   };
 
   const selectableTransactions = useMemo(
-    () => filteredTransactions.filter((t) => !t.integrated && !t.isReversed),
+    () => filteredTransactions.filter((t) => !t.integrated && !t.isReversed && t.documentAnalysisStatus === "completed"),
     [filteredTransactions],
   );
 
@@ -627,10 +648,11 @@ export default function PagCorp() {
   };
 
   const openBatchItem = (t: PagCorpTransaction) => {
-    if (t.hasAccountability) {
+    const postingType = t.postingType || (t.hasFiscalDocument ? "purchase_order" : "journal_entry");
+    if (t.hasAccountability && postingType === "purchase_order") {
       setAccountabilityModal({ open: true, tx: t });
     } else {
-      setIntegrateDialog({ open: true, tx: t, type: "generic" });
+      setIntegrateDialog({ open: true, tx: t, type: t.hasAccountability ? "accountability" : "generic", postingType });
     }
   };
 
@@ -665,8 +687,14 @@ export default function PagCorp() {
       openIntegrateDialog(t, t.hasAccountability ? "accountability" : "generic");
       return;
     }
-    // ≥2 selecionadas → SEMPRE consolida em 1 PC (independente de prestação).
-    setConsolidateDialog({ open: true, transactions: list });
+    if (list.every((t) => (t.postingType || (t.hasFiscalDocument ? "purchase_order" : "journal_entry")) === "purchase_order")) {
+      setConsolidateDialog({ open: true, transactions: list });
+      return;
+    }
+    setBatchQueue(list);
+    setBatchIndex(0);
+    setBatchActive(true);
+    openBatchItem(list[0]);
   };
 
   const handleIntegrateBatchUnified = async () => {
@@ -723,15 +751,19 @@ export default function PagCorp() {
   };
 
   const handleConfirmIntegrate = async (
-    supplier: SapSearchOption,
+    supplier: SapSearchOption | null,
     override: { costCenter?: string | null; project?: string | null; item?: string | null } = {},
-    options: { markNondeductible: boolean } = { markNondeductible: false },
+    options: {
+      markNondeductible: boolean;
+      postingType: "purchase_order" | "journal_entry";
+      journalEntry?: { debitAccount: string; creditAccount: string; costCenter?: string | null; project?: string | null };
+    } = { markNondeductible: false, postingType: "purchase_order" },
   ) => {
     const t = integrateDialog.tx;
     if (!t || !session?.companyDB) return;
     setIntegrating(t.id);
     programmaticCloseRef.current = true;
-    setIntegrateDialog({ open: false, tx: null, type: "generic" });
+    setIntegrateDialog({ open: false, tx: null, type: "generic", postingType: "purchase_order" });
     try {
       const lineOverrides =
         override.costCenter || override.project || override.item
@@ -739,10 +771,12 @@ export default function PagCorp() {
           : undefined;
       // Sem prestação ⇒ indedutível por padrão; toggle do usuário tem prioridade
       const asNondeductible =
-        options.markNondeductible || integrateDialog.type === "generic" || !!t.isNondeductible;
+        options.markNondeductible ||
+        (integrateDialog.type === "generic" && !t.hasFiscalDocument) ||
+        !!t.isNondeductible;
 
       // Persiste marcação a nível de compra (override do cartão) — B4
-      if (options.markNondeductible) {
+      if (options.markNondeductible && supplier) {
         try {
           await supabase
             .from("pagcorp_nondeductible_expenses" as any)
@@ -762,19 +796,21 @@ export default function PagCorp() {
         t,
         integrateDialog.type,
         session.companyDB,
-        supplier.code,
-        supplier.name,
+        supplier?.code || "",
+        supplier?.name,
         session.userName || undefined,
         lineOverrides,
         asNondeductible,
+        options.postingType,
+        options.journalEntry,
       );
       if (result.alreadyIntegrated) {
         toast.info("Transação já estava integrada no SAP", {
           description: `DocNum #${result.docNum}`,
         });
       } else {
-        toast.success(asNondeductible ? "PC indedutível criado no SAP" : "Pedido de Compra criado no SAP", {
-          description: `PC #${result.purchaseOrder?.DocNum}`,
+        toast.success(options.postingType === "journal_entry" ? "Lançamento Contábil criado no SAP" : asNondeductible ? "PC indedutível criado no SAP" : "Pedido de Compra criado no SAP", {
+          description: options.postingType === "journal_entry" ? `LCM #${result.journalEntry?.JdtNum || result.journalEntry?.TransId}` : `PC #${result.purchaseOrder?.DocNum}`,
         });
       }
       await fetchTransactions(startDate, endDate, session.companyDB);
@@ -1395,7 +1431,7 @@ export default function PagCorp() {
                         data-state={isSelected ? "selected" : undefined}
                       >
                         <TableCell className="w-10">
-                          {!t.integrated && !t.isReversed && (
+                          {!t.integrated && !t.isReversed && t.documentAnalysisStatus === "completed" && (
                             <Checkbox
                               checked={isSelected}
                               onCheckedChange={() => toggleSelect(t.id)}
@@ -1460,6 +1496,24 @@ export default function PagCorp() {
                             return (
                               <div className="flex items-center justify-center gap-2">
                                 {statusBadge}
+                                {!t.integrated && !t.isReversed && (
+                                  t.documentAnalysisStatus === "completed" ? (
+                                    <Badge
+                                      variant="outline"
+                                      className={t.hasFiscalDocument
+                                        ? "text-[10px] border-success/40 text-success"
+                                        : "text-[10px] border-warning/40 text-warning"}
+                                    >
+                                      {t.hasFiscalDocument ? "Documento fiscal" : "Sem documento fiscal"}
+                                    </Badge>
+                                  ) : t.documentAnalysisStatus === "error" ? (
+                                    <Badge variant="destructive" className="text-[10px]">Falha na leitura IA</Badge>
+                                  ) : (
+                                    <Badge variant="secondary" className="text-[10px] gap-1">
+                                      <Loader2 className="w-3 h-3 animate-spin" /> Analisando documentos
+                                    </Badge>
+                                  )
+                                )}
                                 {receiptCount > 0 && (
                                   <button
                                     type="button"
@@ -1477,7 +1531,11 @@ export default function PagCorp() {
                         </TableCell>
                         <TableCell className="text-center">
                           {t.integrated ? (
-                            <div className="flex flex-col items-center gap-1">
+                            t.postingType === "journal_entry" ? (
+                              <Badge variant="secondary" className="gap-1 bg-success/15 text-success border-success/30">
+                                <CheckCircle2 className="w-3 h-3" /> LCM #{t.sapDocNum ?? t.sapDocEntry ?? "integrado"}
+                              </Badge>
+                            ) : <div className="flex flex-col items-center gap-1">
                               {(() => {
                                 const st = t.settlementStatus;
                                 const isRunning = settling === t.id;
@@ -1634,6 +1692,20 @@ export default function PagCorp() {
                             </Badge>
                           ) : integrating === t.id ? (
                             <Loader2 className="w-4 h-4 animate-spin mx-auto text-primary" />
+                          ) : t.documentAnalysisStatus === "error" ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1 text-xs"
+                              title={t.documentAnalysisError || undefined}
+                              onClick={() => session?.companyDB && classifyDocuments(t, session.companyDB)}
+                            >
+                              <RefreshCw className="w-3 h-3" /> Reanalisar
+                            </Button>
+                          ) : t.documentAnalysisStatus !== "completed" ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              <Loader2 className="w-3 h-3 animate-spin" /> Leitura IA
+                            </span>
                           ) : t.hasAccountability ? (
                             <Button
                               variant="outline"
@@ -1775,12 +1847,20 @@ export default function PagCorp() {
         onClose={() => {
           const wasProgrammatic = programmaticCloseRef.current;
           programmaticCloseRef.current = false;
-          setIntegrateDialog({ open: false, tx: null, type: "generic" });
+          setIntegrateDialog({ open: false, tx: null, type: "generic", postingType: "purchase_order" });
           if (batchActive && !wasProgrammatic) cancelBatch();
         }}
         transaction={integrateDialog.tx}
         integrationType={integrateDialog.type}
         companyDb={session?.companyDB}
+        initialPostingType={integrateDialog.postingType}
+        onPostingTypeChange={(postingType) => {
+          const tx = integrateDialog.tx;
+          if (postingType !== "purchase_order" || !tx?.hasAccountability) return;
+          programmaticCloseRef.current = true;
+          setIntegrateDialog({ open: false, tx: null, type: "generic", postingType: "purchase_order" });
+          setTimeout(() => setAccountabilityModal({ open: true, tx }), 200);
+        }}
         onConfirm={handleConfirmIntegrate}
       />
 
@@ -1797,6 +1877,18 @@ export default function PagCorp() {
         title="Integrar Prestação de Conta"
         origin="pagcorp"
         skipRules
+        onPagcorpPostingTypeChange={(postingType) => {
+          if (postingType !== "journal_entry" || !accountabilityModal.tx) return;
+          const tx = accountabilityModal.tx;
+          programmaticCloseRef.current = true;
+          setAccountabilityModal({ open: false, tx: null });
+          setTimeout(() => setIntegrateDialog({
+            open: true,
+            tx,
+            type: "accountability",
+            postingType: "journal_entry",
+          }), 200);
+        }}
         prefill={
           accountabilityModal.tx
             ? {

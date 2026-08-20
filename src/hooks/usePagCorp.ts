@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { classifyPagCorpDocuments } from "@/lib/pagcorp-document-classification";
 
 // ---------------------------------------------------------------------------
 // In-memory cache for pagcorp-integration-status
@@ -15,6 +16,7 @@ type IntegrationStatusPayload = {
   relations: any[];
   nondeductibleCards: any[];
   nondeductibleExpenses: any[];
+  classifications: any[];
 };
 
 const integrationStatusCache = new Map<string, { at: number; data: IntegrationStatusPayload }>();
@@ -49,6 +51,7 @@ async function fetchIntegrationStatus(
       relations: [],
       nondeductibleCards: [],
       nondeductibleExpenses: [],
+      classifications: [],
     };
     const seenCards = new Set<string>();
 
@@ -68,11 +71,13 @@ async function fetchIntegrationStatus(
         relations = [],
         nondeductibleCards = [],
         nondeductibleExpenses = [],
+        classifications = [],
       } = await res.json();
 
       merged.integrations.push(...(integrations as any[]));
       merged.relations.push(...(relations as any[]));
       merged.nondeductibleExpenses.push(...(nondeductibleExpenses as any[]));
+      merged.classifications.push(...(classifications as any[]));
       // Cartões não dependem de expenseIds; dedupe por card_identifier.
       for (const c of nondeductibleCards as any[]) {
         const cid = String(c?.card_identifier ?? "");
@@ -128,6 +133,11 @@ export interface PagCorpTransaction {
   merchantName?: string | null;
   /** CNPJ do estabelecimento (aiAnalysis) — pode ser alfanumérico; sempre string. */
   merchantTaxId?: string | null;
+  documentAnalysisStatus?: "pending" | "processing" | "completed" | "error";
+  hasFiscalDocument?: boolean | null;
+  documentKinds?: string[];
+  documentAnalysisError?: string | null;
+  postingType?: "purchase_order" | "journal_entry";
 
   hasAccountability?: boolean;
   accountabilityApproved?: boolean;
@@ -155,6 +165,7 @@ export interface PagCorpTransaction {
     nfFound?: boolean;
     /** Pagamento (baixa) encontrado no SAP para o pedido. */
     paymentFound?: boolean;
+    postingType?: "purchase_order" | "journal_entry";
   }>;
   settlementStatus?: string | null;
   settlementPaymentDocNum?: number | null;
@@ -191,7 +202,19 @@ async function applyIntegrationStatus(
       relations = [],
       nondeductibleCards = [],
       nondeductibleExpenses = [],
+      classifications = [],
     } = await fetchIntegrationStatus(companyDb, expenseIds);
+
+    const classificationMap = new Map<number, any>();
+    (classifications as any[]).forEach((row) => classificationMap.set(Number(row.pagcorp_expense_id), row));
+    items.forEach((transaction) => {
+      const row = classificationMap.get(Number(transaction.id));
+      transaction.documentAnalysisStatus = row?.status || "pending";
+      transaction.hasFiscalDocument = row?.has_fiscal_document ?? null;
+      transaction.documentKinds = Array.isArray(row?.document_kinds) ? row.document_kinds : [];
+      transaction.documentAnalysisError = row?.error_message ?? null;
+      transaction.postingType = row?.has_fiscal_document === true ? "purchase_order" : row?.status === "completed" ? "journal_entry" : undefined;
+    });
 
     // Relações reais no SAP (NF de entrada / pagamento) por log.
     const relByLog = new Map<string, { nf: boolean; pay: boolean }>();
@@ -204,6 +227,9 @@ async function applyIntegrationStatus(
     (integrations as any[]).forEach((log) => {
       const key = Number(log.pagcorp_expense_id);
       const rel = relByLog.get(String(log.id));
+      const postingType = log.integration_type === "journal_entry" || log.pagcorp_data?.postingType === "journal_entry"
+        ? "journal_entry"
+        : "purchase_order";
       const link: Link = {
         logId: log.id,
         docNum: log.sap_doc_num ?? null,
@@ -213,6 +239,7 @@ async function applyIntegrationStatus(
         settlementError: log.settlement_error ?? null,
         nfFound: rel?.nf ?? false,
         paymentFound: rel?.pay ?? false,
+        postingType,
       };
       const list = integratedMap.get(key);
       if (list) list.push(link);
@@ -234,6 +261,7 @@ async function applyIntegrationStatus(
       t.integrated = true;
       t.integrationLinks = links;
       t.integrationLogId = hit.logId;
+      t.postingType = hit.postingType;
       t.sapDocNum = hit.docNum;
       t.sapDocEntry = hit.docEntry;
       // Fatos do SAP: NF/pagamento existentes valem para todos os pedidos.
@@ -602,6 +630,8 @@ export function usePagCorp() {
     integratedBy?: string,
     lineOverrides?: Record<string, { costCenter?: string | null; project?: string | null; item?: string | null }>,
     nondeductible?: boolean,
+    postingType: "purchase_order" | "journal_entry" = "purchase_order",
+    journalEntry?: { debitAccount: string; creditAccount: string; costCenter?: string | null; project?: string | null },
   ) => {
     const { sapFunctionFetch } = await import("@/lib/auth-fetch");
     const res = await sapFunctionFetch("pagcorp-to-sap", {
@@ -616,6 +646,8 @@ export function usePagCorp() {
         integratedBy,
         lineOverrides: lineOverrides || {},
         nondeductible: !!nondeductible,
+        postingType,
+        journalEntry,
       }),
     });
     const result = await res.json().catch(() => ({}));
@@ -623,6 +655,25 @@ export function usePagCorp() {
       throw new Error(result.error || `Erro ${res.status}`);
     }
     invalidatePagCorpIntegrationStatus(companyDb);
+    return result;
+  }, []);
+
+  const classifyDocuments = useCallback(async (transaction: PagCorpTransaction, companyDb: string) => {
+    setTransactions((current) => current.map((item) =>
+      item.id === transaction.id ? { ...item, documentAnalysisStatus: "processing", documentAnalysisError: null } : item
+    ));
+    const result = await classifyPagCorpDocuments(transaction, companyDb);
+    invalidatePagCorpIntegrationStatus(companyDb);
+    setTransactions((current) => current.map((item) => item.id === transaction.id
+      ? {
+          ...item,
+          documentAnalysisStatus: result.status,
+          hasFiscalDocument: result.hasFiscalDocument,
+          documentKinds: result.documentKinds,
+          documentAnalysisError: result.errorMessage ?? null,
+          postingType: result.hasFiscalDocument ? "purchase_order" : result.status === "completed" ? "journal_entry" : undefined,
+        }
+      : item));
     return result;
   }, []);
 
@@ -668,5 +719,5 @@ export function usePagCorp() {
   }, []);
 
 
-  return { transactions, isLoading, error, fetchTransactions, logIntegration, integrateDirect, integrateConsolidated };
+  return { transactions, isLoading, error, fetchTransactions, logIntegration, integrateDirect, integrateConsolidated, classifyDocuments };
 }

@@ -86,6 +86,7 @@ Deno.serve(async (req) => {
         .select("id, company_db, sap_doc_entry, settlement_status")
         .eq("company_db", companyDb)
         .eq("status", "success")
+        .neq("integration_type", "journal_entry")
         .in("sap_doc_entry", poList)
         .neq("settlement_status", "settled");
       if (logErr) {

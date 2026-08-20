@@ -602,6 +602,7 @@ Deno.serve(async (req) => {
         .from("pagcorp_integration_log")
         .select("id, company_db, sap_doc_entry, sap_doc_num, pagcorp_data, settlement_status, settlement_attempts")
         .eq("status", "success")
+        .neq("integration_type", "journal_entry")
         .not("sap_doc_entry", "is", null)
         .not("company_db", "is", null);
       if (manualLogId) {

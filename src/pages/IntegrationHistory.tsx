@@ -660,6 +660,7 @@ export default function IntegrationHistory() {
       </Dialog>
 
       <PagCorpIntegrateDialog
+        allowPostingTypeOverride={false}
         open={retryDialog.open}
         onClose={() => setRetryDialog({ open: false, log: null, transaction: null })}
         transaction={retryDialog.transaction}
