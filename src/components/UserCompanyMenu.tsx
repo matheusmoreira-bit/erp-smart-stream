@@ -150,23 +150,25 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
       setOpen(false);
       return;
     }
-    if (erpType === "sap" && !managed.has(companyDb)) {
-      setUserName("");
-      setPassword("");
-      setFormDb(companyDb);
-      setOpen(false);
-      return;
-    }
     setBusyDb(companyDb);
     try {
-      if (erpType === "sap") {
-        await loginManaged(companyDb);
-      } else {
-        const { data } = await supabase.auth.getSession();
-        const email = data.session?.user?.email || "";
-        if (!email) throw new Error("Sessão Google não encontrada.");
-        await login(email, "", companyDb, erpType as never);
+      // A troca de empresa é validada apenas pela sessão Google (identidade
+      // Lovable Cloud). Nenhum login do ERP é solicitado aqui — a sessão do
+      // Service Layer é criada sob demanda, só quando uma ação exigir.
+      const { data } = await supabase.auth.getSession();
+      const email = data.session?.user?.email || "";
+      if (!email) throw new Error("Sessão Google não encontrada. Entre novamente com sua conta Google.");
+
+      const { canEnterCompany } = await import("@/lib/company-access");
+      const allowed = await canEnterCompany({ email, companyDb, erpType, isAdmin });
+      if (!allowed) {
+        toast.error("Acesso não liberado", {
+          description: `Sua conta ${email} não está autorizada para ${getLabel(companyDb)}.`,
+        });
+        return;
       }
+
+      await loginIdentity(companyDb, erpType as never);
       toast.success(`Conectado a ${getLabel(companyDb)}`);
       finish();
     } catch (e) {
@@ -178,26 +180,6 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
     }
   };
 
-  const handleFormLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formDb || !userName || !password) {
-      toast.error("Preencha usuário e senha");
-      return;
-    }
-    setBusyDb(formDb);
-    try {
-      const sapUser = userName.includes("@") ? userName.split("@")[0].trim() : userName.trim();
-      await login(sapUser, password, formDb, "sap");
-      toast.success(`Conectado a ${getLabel(formDb)}`);
-      finish();
-    } catch (err) {
-      toast.error("Falha no login", {
-        description: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setBusyDb(null);
-    }
-  };
 
   if (!session) return null;
 
