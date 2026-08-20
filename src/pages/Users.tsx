@@ -510,6 +510,14 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
               <UserPlus className="w-4 h-4 mr-2" />
               Convidar admin
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/backoffice/sap-users/replicate")}
+            >
+              <Copy className="w-4 h-4 mr-2" />
+              Replicar entre bases
+            </Button>
             <Button variant="outline" size="sm" onClick={refreshPage} disabled={pageLoading}>
               <RefreshCw className={`w-4 h-4 mr-2 ${pageLoading ? "animate-spin" : ""}`} />
               Atualizar
@@ -659,7 +667,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
               const initials = getInitials(user.UserName || user.UserCode || "?");
               return (
                 <div
-                  key={user.InternalKey || user.UserCode}
+                  key={user.UserCode || String(user.InternalKey)}
                   className="flex flex-col gap-3 border-b border-border px-4 py-3 last:border-b-0 transition-colors hover:bg-muted/20 sm:flex-row sm:items-center"
                 >
                   <Checkbox
