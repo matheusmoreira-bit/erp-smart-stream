@@ -50,9 +50,15 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const expenseId = String(body.expense_id || "").trim();
     const itemCode = String(body.item_code || "").trim();
+    const fromItemCode = String(body.from_item_code || "").trim();
+    const toItemCode = String(body.to_item_code || "").trim();
+    const bulkSwap = Boolean(fromItemCode && toItemCode);
     const description = typeof body.description === "string" ? body.description.trim() : "";
     const lineNum = Number.isFinite(Number(body.line_num)) ? Number(body.line_num) : 0;
-    if (!expenseId || !itemCode) return json({ error: "expense_id e item_code são obrigatórios" }, 400);
+    if (!expenseId || (!itemCode && !bulkSwap)) {
+      return json({ error: "expense_id e item_code (ou from_item_code/to_item_code) são obrigatórios" }, 400);
+    }
+
 
     const { data: expense, error: expErr } = await supabase
       .from("expenses")
