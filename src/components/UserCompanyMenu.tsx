@@ -40,16 +40,11 @@ import { ImpersonationDialog } from "@/components/ImpersonationDialog";
  * com as opções "Trocar de empresa" e "Sair".
  */
 export function UserCompanyMenu({ className = "" }: { className?: string }) {
-  const { session, logout, login, loginManaged } = useSap();
+  const { session, logout, loginIdentity } = useSap();
   const { companies, getLabel } = useCompanies(true);
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [managed, setManaged] = useState<Set<string>>(new Set());
-  const [loadingCreds, setLoadingCreds] = useState(false);
   const [busyDb, setBusyDb] = useState<string | null>(null);
-  const [formDb, setFormDb] = useState<string | null>(null);
-  const [userName, setUserName] = useState("");
-  const [password, setPassword] = useState("");
   const [google, setGoogle] = useState<{ name: string; email: string; avatar: string } | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [impersonateOpen, setImpersonateOpen] = useState(false);
