@@ -113,22 +113,10 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
   };
 
 
-  const loadManaged = useCallback(async () => {
-    setLoadingCreds(true);
-    try {
-      const { listUserSapCredentials } = await import("@/lib/user-sap-credentials");
-      const creds = await listUserSapCredentials();
-      setManaged(new Set(creds.map((c) => c.company_db)));
-    } catch {
-      setManaged(new Set());
-    } finally {
-      setLoadingCreds(false);
-    }
-  }, []);
-
   useEffect(() => {
-    if (expanded) loadManaged();
-  }, [expanded, loadManaged]);
+    if (!open) setExpanded(false);
+  }, [open]);
+
 
   useEffect(() => {
     if (!open) setExpanded(false);
