@@ -2206,6 +2206,7 @@ export default function ApprovalsPage() {
   // nível atual já resolvidos, com pintura imediata a partir do cache local.
   const {
     docs: feedDocs,
+    privileged: feedPrivileged,
     isLoading: isLoadingFeed,
     refresh: refreshFeed,
     removeLocal: removeFeedLocal,
@@ -2760,6 +2761,11 @@ export default function ApprovalsPage() {
     ? allApprovals
     : allApprovals.filter(
         (a) =>
+          // Para documentos internos, o `approvals-feed` já aplica no servidor
+          // o recorte por aliases, grupos, diretoria, substituição e aprovadores
+          // do nível atual. Usuários sem privilégio devem ver esse snapshot como
+          // fonte de verdade; o navegador nem sempre conhece todos os aliases.
+          (!feedPrivileged && Boolean((a as unknown as { __internalId?: string }).__internalId)) ||
           isCurrentUserApprover(a) ||
           codeEq(a.requesterCode, a) ||
           approverMatches(a.requester, sessionUserName) ||

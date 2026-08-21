@@ -251,6 +251,14 @@ async function substituteOfficialAliases(
   return out;
 }
 
+function levelApproverCandidates(value: unknown): unknown[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const row = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
+    return [row.name, row.email].filter(Boolean);
+  });
+}
+
 function ownsExpense(
   row: Record<string, unknown>,
   aliases: Set<string>,
@@ -258,12 +266,14 @@ function ownsExpense(
   substituteAliases?: Set<string> | null,
 ): boolean {
   if (costCenterInBranch(row.cost_center, directorateBranch)) return true;
+  const levelCandidates = levelApproverCandidates(row.level_approvers);
   const candidates = [
     row.requester_email,
     row.requester_name,
     row.created_by_email,
     row.current_approver,
     row.original_approver,
+    ...levelCandidates,
   ];
   for (const c of candidates) {
     if (!c) continue;
@@ -273,7 +283,7 @@ function ownsExpense(
   }
   // Substituto ativo: herda apenas a fila de aprovação do titular.
   if (substituteAliases && substituteAliases.size > 0) {
-    for (const c of [row.current_approver, row.original_approver]) {
+    for (const c of [row.current_approver, row.original_approver, ...levelCandidates]) {
       if (!c) continue;
       for (const alias of substituteAliases) {
         if (identityMatches(c, alias) || personListMatches(c, alias)) return true;
