@@ -8752,6 +8752,10 @@ export type Database = {
         Args: { _name: string; _ttl_minutes?: number }
         Returns: boolean
       }
+      update_expense_with_items: {
+        Args: { _expense_id: string; _items: Json; _updates: Json }
+        Returns: undefined
+      }
       verify_audit_chain: {
         Args: { _limit?: number }
         Returns: {
