@@ -7,7 +7,7 @@ export interface PagCorpAttachment {
 }
 
 export interface PagCorpDocumentClassification {
-  status: "completed" | "error";
+  status: "processing" | "completed" | "error";
   hasFiscalDocument: boolean | null;
   documentKinds: string[];
   confidence: number | null;
@@ -76,10 +76,40 @@ async function persist(
   if (!response.ok) throw new Error(`Falha ao salvar classificação (${response.status})`);
 }
 
+async function readPersisted(
+  companyDb: string,
+  expenseId: string | number,
+): Promise<PagCorpDocumentClassification | null> {
+  const response = await sapFunctionFetch("pagcorp-integration-status", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ companyDb, expenseIds: [expenseId] }),
+  });
+  if (!response.ok) return null;
+  const payload = await response.json().catch(() => ({})) as { classifications?: any[] };
+  const row = Array.isArray(payload.classifications)
+    ? payload.classifications.find((item) => Number(item?.pagcorp_expense_id) === Number(expenseId))
+    : null;
+  if (!row || !["processing", "completed", "error"].includes(String(row.status))) return null;
+  return {
+    status: row.status,
+    hasFiscalDocument: row.has_fiscal_document ?? null,
+    documentKinds: Array.isArray(row.document_kinds) ? row.document_kinds : [],
+    confidence: row.confidence == null ? null : Number(row.confidence),
+    errorMessage: row.error_message || undefined,
+  };
+}
+
 export async function classifyPagCorpDocuments(
   transaction: PagCorpTransaction,
   companyDb: string,
+  options: { force?: boolean } = {},
 ): Promise<PagCorpDocumentClassification> {
+  if (!options.force) {
+    const persisted = await readPersisted(companyDb, transaction.id);
+    if (persisted) return persisted;
+  }
+
   const attachments = collectPagCorpAttachments(transaction);
   if (attachments.length === 0) {
     const result: PagCorpDocumentClassification = {

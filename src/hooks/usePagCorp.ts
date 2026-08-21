@@ -340,13 +340,13 @@ export function usePagCorp() {
         const { readCache } = await import("@/lib/external-cache");
         const cached = await readCache<PagCorpTransaction[]>(cacheKey, companyDb);
         if (cached?.data?.length) {
-          setTransactions(cached.data);
           hadCache = true;
           // O cache guarda os dados do PagCorp, mas o status de integração /
-          // NF / baixa muda no SAP a qualquer momento: revalida já na pintura.
-          void applyIntegrationStatus(cached.data, companyDb).then(() => {
-            setTransactions([...cached.data]);
-          });
+          // NF / baixa muda no SAP a qualquer momento. Revalida ANTES de
+          // publicar na tela para não disparar IA sobre status `pending`
+          // armazenado em cache visual antigo.
+          await applyIntegrationStatus(cached.data, companyDb);
+          setTransactions([...cached.data]);
         }
 
       } catch {/* ignore cache errors */}
@@ -685,11 +685,15 @@ export function usePagCorp() {
     return result;
   }, []);
 
-  const classifyDocuments = useCallback(async (transaction: PagCorpTransaction, companyDb: string) => {
+  const classifyDocuments = useCallback(async (
+    transaction: PagCorpTransaction,
+    companyDb: string,
+    options: { force?: boolean } = {},
+  ) => {
     setTransactions((current) => current.map((item) =>
       item.id === transaction.id ? { ...item, documentAnalysisStatus: "processing", documentAnalysisError: null } : item
     ));
-    const result = await classifyPagCorpDocuments(transaction, companyDb);
+    const result = await classifyPagCorpDocuments(transaction, companyDb, options);
     invalidatePagCorpIntegrationStatus(companyDb);
     setTransactions((current) => current.map((item) => item.id === transaction.id
       ? {

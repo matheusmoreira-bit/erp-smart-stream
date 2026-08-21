@@ -1722,7 +1722,7 @@ export default function PagCorp() {
                               size="sm"
                               className="gap-1 text-xs"
                               title={t.documentAnalysisError || undefined}
-                              onClick={() => session?.companyDB && classifyDocuments(t, session.companyDB)}
+                              onClick={() => session?.companyDB && classifyDocuments(t, session.companyDB, { force: true })}
                             >
                               <RefreshCw className="w-3 h-3" /> Reanalisar
                             </Button>
