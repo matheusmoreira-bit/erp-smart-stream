@@ -760,11 +760,15 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
     }
   }
   if (items && items.length > 0) {
+    // Edição é uma operação interna: não abre uma sessão no SAP nem consulta
+    // item a item. A lista ativa já está cacheada localmente e a integração
+    // só acontece após uma nova aprovação.
     const itemValidationError = await validateActiveSapItems(
       admin,
       String(current.company_db || ""),
       items,
       String(current.doc_type || "purchase"),
+      { liveSap: false },
     );
     if (itemValidationError) return json(400, { error: itemValidationError });
 

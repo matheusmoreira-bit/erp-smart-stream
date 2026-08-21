@@ -64,6 +64,23 @@ function normalizeSapTextValue(value: string) {
   return value.trim().replace(/\s+—\s+.*$/, "");
 }
 
+function hasItemChanges(current: EditItem[], original: ExpenseItem[]) {
+  if (current.length !== original.length) return true;
+  return current.some((item, index) => {
+    const previous = original[index];
+    if (!previous) return true;
+    return (
+      String(item.item_code || "").trim() !== String(previous.item_code || "").trim() ||
+      String(item.description || "").trim() !== String(previous.description || "").trim() ||
+      Number(item.quantity || 0) !== Number(previous.quantity || 0) ||
+      Number(item.unit_price || 0) !== Number(previous.unit_price || 0) ||
+      Number(item.line_total || 0) !== Number(previous.line_total || 0) ||
+      String(item.cost_center || "").trim() !== String(previous.cost_center || "").trim() ||
+      String(item.project || "").trim() !== String(previous.project || "").trim()
+    );
+  });
+}
+
 function ValidLabel({
   children,
   filled,
@@ -372,6 +389,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
 
     setIsSaving(true);
     try {
+      const itemsChanged = hasItemChanges(items, expense.items || []);
       await onSave({
         supplier_name: supplierName.trim(),
         supplier_code: supplier?.code || expense.supplier_code || null,
@@ -379,7 +397,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
         doc_date: docDate || null,
         due_date: dueDate || null,
         rateio_type: !isSales ? rateioType : undefined,
-        items: items.map((it) => ({
+        items: itemsChanged ? items.map((it) => ({
           item_code: it.item_code,
           description: it.description,
           quantity: it.quantity,
@@ -387,7 +405,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
           line_total: it.line_total,
           cost_center: it.cost_center,
           project: it.project,
-        })),
+        })) : undefined,
         new_attachment_files: newFiles.length > 0 ? newFiles : undefined,
         remove_attachment_ids: removedIds.length > 0 ? removedIds : undefined,
       });
