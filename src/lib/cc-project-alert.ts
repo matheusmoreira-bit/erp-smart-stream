@@ -4,19 +4,18 @@ import { normalizeUpper } from "@/lib/text-normalize";
 /**
  * Alerta de casamento entre Centro de Custo e Projeto (pedidos de compra).
  *
- * Regra: centros de custo operacionais dos grupos abaixo devem, em geral, ter
- * o custo segregado por marca/projeto — nunca no projeto institucional da
- * empresa. Ao selecionar um desses CCs, o usuário confirma ou altera.
+ * Regra: o alerta é disparado SOMENTE quando um centro de custo institucional
+ * (1.8.%, 1.9.%, 1.10.%, 1.11.%, 1.14.%) é combinado com um projeto que tem o
+ * nome da empresa (institucional/corporativo). CC sem projeto não dispara nada.
  */
 export const CC_ALERT_PREFIXES = [
+  "1.8.",
+  "1.9.",
   "1.10.",
   "1.11.",
   "1.14.",
-  "1.4.",
-  "1.7.",
-  "1.8.",
-  "1.9.",
 ];
+
 
 /** Projetos institucionais/corporativos (nome ou código no SAP). */
 export const INSTITUTIONAL_PROJECTS = [
@@ -75,6 +74,22 @@ export function costCenterNeedsAlert(code?: string | null): boolean {
   if (!c) return false;
   return CC_ALERT_PREFIXES.some((p) => c.startsWith(p));
 }
+
+/**
+ * Único gatilho válido do alerta: CC institucional + projeto institucional
+ * (nome da empresa). Sem projeto selecionado → nunca alerta.
+ */
+export function shouldAlertCcProject(
+  costCenterCode?: string | null,
+  projectCodeOrName?: string | null,
+  projectAlt?: string | null,
+): boolean {
+  if (!costCenterNeedsAlert(costCenterCode)) return false;
+  const project = (projectCodeOrName || projectAlt || "").trim();
+  if (!project) return false;
+  return isInstitutionalProject(projectCodeOrName) || isInstitutionalProject(projectAlt);
+}
+
 
 export interface CcProjectAlertPayload {
   companyDb?: string | null;

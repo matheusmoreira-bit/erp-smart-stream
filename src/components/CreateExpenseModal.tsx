@@ -31,9 +31,10 @@ import { DecimalInput } from "@/components/DecimalInput";
 import { DateInputBR } from "@/components/DateInputBR";
 import { sapQuery } from "@/lib/sap-client";
 import {
-  costCenterNeedsAlert,
+  shouldAlertCcProject,
   isInstitutionalProject,
   logCcProjectAlert,
+
   recordCcProjectAlertDecision,
 } from "@/lib/cc-project-alert";
 import { CcProjectAlertDialog, type CcProjectAlertInfo } from "@/components/CcProjectAlertDialog";
@@ -433,7 +434,7 @@ export function CreateExpenseModal({
   const maybeTriggerCcAlert = useCallback(
     (lineIndex: number, cc: SapSearchOption | null, project: SapSearchOption | null) => {
       if (!ccAlertEnabled) return;
-      if (!costCenterNeedsAlert(cc?.code)) return;
+      if (!shouldAlertCcProject(cc?.code, project?.name, project?.code)) return;
       openCcAlert(buildCcAlertInfo(lineIndex, cc, project));
     },
     [ccAlertEnabled, openCcAlert, buildCcAlertInfo],
@@ -443,14 +444,17 @@ export function CreateExpenseModal({
   const maybeTriggerCcAlertForAllLines = useCallback(
     (cc: SapSearchOption | null, lines: Array<{ sapProject?: SapSearchOption | null }>) => {
       if (!ccAlertEnabled) return;
-      if (!costCenterNeedsAlert(cc?.code)) return;
-      const infos = lines.map((l, i) => buildCcAlertInfo(i, cc, l.sapProject || null));
+      const infos = lines
+        .map((l, i) => ({ i, p: l.sapProject || null }))
+        .filter(({ p }) => shouldAlertCcProject(cc?.code, p?.name, p?.code))
+        .map(({ i, p }) => buildCcAlertInfo(i, cc, p));
       if (!infos.length) return;
       ccAlertQueueRef.current = infos.slice(1);
       openCcAlert(infos[0]);
     },
     [ccAlertEnabled, openCcAlert, buildCcAlertInfo],
   );
+
 
   const advanceCcAlertQueue = useCallback(() => {
     const next = ccAlertQueueRef.current.shift();
@@ -3534,7 +3538,9 @@ export function CreateExpenseModal({
                           updated[i] = { ...updated[i], sapProject: val, project: val?.code || "" };
                           return updated;
                         });
+                        maybeTriggerCcAlert(i, item.sapCostCenter || null, val);
                       }}
+
                       placeholder={
                         origin === "pagcorp" && mappingInfo?.missingFields.includes("Projeto")
                           ? "Sem mapeamento — selecione manualmente"
