@@ -3478,6 +3478,8 @@ export type Database = {
           nfse_split_mode: string
           origin: string
           original_approver: string | null
+          payment_terms_code: string | null
+          payment_terms_name: string | null
           project: string | null
           rateio_type: string | null
           remarks: string | null
@@ -3520,6 +3522,8 @@ export type Database = {
           nfse_split_mode?: string
           origin?: string
           original_approver?: string | null
+          payment_terms_code?: string | null
+          payment_terms_name?: string | null
           project?: string | null
           rateio_type?: string | null
           remarks?: string | null
@@ -3562,6 +3566,8 @@ export type Database = {
           nfse_split_mode?: string
           origin?: string
           original_approver?: string | null
+          payment_terms_code?: string | null
+          payment_terms_name?: string | null
           project?: string | null
           rateio_type?: string | null
           remarks?: string | null
