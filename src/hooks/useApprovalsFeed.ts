@@ -62,6 +62,9 @@ export function useApprovalsFeed() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef<Promise<void> | null>(null);
+  // Snapshot do estado atual para decidir se uma resposta menor deve ser aceita.
+  const stateRef = useRef<FeedState>(state);
+  stateRef.current = state;
 
   const load = useCallback(async () => {
     if (!companyDb) {
@@ -71,7 +74,7 @@ export function useApprovalsFeed() {
     }
     if (inFlight.current) return inFlight.current;
 
-    const fetchOnce = async (): Promise<{ docs: ApprovalFeedDoc[]; degraded: boolean; generatedAt: string }> => {
+    const fetchOnce = async (): Promise<FeedState & { degraded: boolean }> => {
       const res = await sapFunctionFetch("approvals-feed", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -81,6 +84,7 @@ export function useApprovalsFeed() {
       if (!res.ok) throw new Error(body?.error || `approvals-feed ${res.status}`);
       return {
         docs: (body?.docs || []) as ApprovalFeedDoc[],
+        privileged: Boolean(body?.privileged),
         degraded: Boolean(body?.degraded),
         generatedAt: body?.generated_at || new Date().toISOString(),
       };
@@ -97,31 +101,22 @@ export function useApprovalsFeed() {
         // lista veio vazia depois de ter documentos, confirmamos com uma
         // segunda leitura antes de aceitar o resultado menor.
         const hadDocs = stateRef.current.docs.length > 0;
-        const shrankToEmpty = hadDocs && result.docs.length === 0;
-        if (result.degraded || shrankToEmpty) {
+        if (result.degraded || (hadDocs && result.docs.length === 0)) {
           await new Promise((r) => setTimeout(r, 1200));
           const confirm = await fetchOnce().catch(() => null);
-          if (!confirm || confirm.degraded) {
-            // Continua degradado: mantém o que já estava em tela.
-            return;
-          }
-          if (hadDocs && confirm.docs.length === 0 && result.docs.length === 0) {
-            result = confirm; // confirmado vazio de verdade
-          } else {
-            result = confirm;
-          }
+          // Continua degradado/indisponível: mantém o que já está em tela.
+          if (!confirm || confirm.degraded) return;
+          result = confirm;
         }
 
         const next: FeedState = {
           docs: result.docs,
-          privileged: false,
+          privileged: result.privileged,
           generatedAt: result.generatedAt,
         };
-        setState((prev) => {
-          const merged = { ...next, privileged: prev.privileged };
-          return merged;
-        });
+        setState(next);
         if (key) writeCache(key, next);
+
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erro ao carregar aprovações");
       } finally {
