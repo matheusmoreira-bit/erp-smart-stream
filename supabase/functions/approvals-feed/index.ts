@@ -96,37 +96,43 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
   }
 
   const tWave = Date.now();
+  let degraded = false;
+  const flag = <T>(fallback: T) => (): T => {
+    degraded = true;
+    return fallback;
+  };
   // Todas as consultas de identidade/permissão em UMA rodada paralela.
   // (Antes eram até 5 idas sequenciais ao banco — ~1,3 s só de autenticação.)
   const [adminRole, sapAdmin, viewAll, branch, aliases] = await Promise.all([
     cloudUser
-      ? admin.rpc("has_role", { _user_id: cloudUser.id, _role: "admin" }).then(({ data }) => data === true).catch(() => false)
+      ? admin.rpc("has_role", { _user_id: cloudUser.id, _role: "admin" }).then(({ data }) => data === true).catch(flag(false))
       : Promise.resolve(false),
     sap
       ? admin
           .rpc("is_sap_user_admin", { _sap_username: sap.userName.toLowerCase() })
           .then(({ data }) => data === true)
-          .catch(() => false)
+          .catch(flag(false))
       : Promise.resolve(false),
     identity || email || userName
-      ? canViewAllDocuments(admin, [identity, email, userName]).catch(() => false)
+      ? canViewAllDocuments(admin, [identity, email, userName]).catch(flag(false))
       : Promise.resolve(false),
     identity || email || userName
-      ? resolveDirectorateBranch(admin, [identity, email, userName]).catch(() => null)
+      ? resolveDirectorateBranch(admin, [identity, email, userName]).catch(flag(null as string | null))
       : Promise.resolve(null),
     resolveCallerAliases(admin, {
       id,
       email: email ?? undefined,
       userName: userName ?? identity ?? undefined,
-    }),
+    }).catch(flag(new Set<string>())),
   ]);
 
   authPhaseTimings = { identify_ms: tWave - tIdent, perms_ms: Date.now() - tWave };
   privileged = privileged || adminRole || sapAdmin || viewAll;
   const directorateBranch = privileged ? null : branch;
 
-  return { identity, privileged, directorateBranch, aliases };
+  return { identity, privileged, directorateBranch, aliases, degraded };
 }
+
 
 /**
  * Cache em dois níveis:
