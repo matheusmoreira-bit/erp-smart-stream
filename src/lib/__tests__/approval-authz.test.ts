@@ -65,6 +65,15 @@ describe("matchesApproverIdentity — aliases entre empresas", () => {
     )).toBe(true);
   });
 
+  it("casa login cloud por e-mail com aprovador atual salvo apenas por nome", () => {
+    expect(matchesApproverIdentity(
+      ["servico.sap", "ketlhenn.monteiro@anagaming.com.br"],
+      null,
+      "Ketlhenn Monteiro",
+      null,
+    )).toBe(true);
+  });
+
   it("não mistura pessoas com o mesmo primeiro nome", () => {
     expect(matchesApproverIdentity(
       ["felipe.coelho@anagaming.com.br"],

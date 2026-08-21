@@ -123,6 +123,62 @@ function json(status: number, body: unknown) {
   });
 }
 
+function isMissingUpdateExpenseRpc(error: unknown): boolean {
+  const err = (error || {}) as { code?: string; message?: string; details?: string; hint?: string };
+  const text = [err.code, err.message, err.details, err.hint].filter(Boolean).join(" ").toLowerCase();
+  return (
+    text.includes("pgrst202") ||
+    (text.includes("update_expense_with_items") && text.includes("schema cache")) ||
+    (text.includes("could not find the function") && text.includes("update_expense_with_items"))
+  );
+}
+
+async function updateExpenseWithItems(
+  admin: SupabaseClient,
+  expenseId: string,
+  updates: Record<string, unknown>,
+  items: any[],
+): Promise<string | null> {
+  const { error: atomicErr } = await admin.rpc("update_expense_with_items", {
+    _expense_id: expenseId,
+    _updates: updates,
+    _items: items,
+  } as any);
+  if (!atomicErr) return null;
+  if (!isMissingUpdateExpenseRpc(atomicErr)) return atomicErr.message;
+
+  console.warn("[expense-mutation] update_expense_with_items ausente; usando fallback compatível", {
+    expense_id: expenseId,
+    code: (atomicErr as { code?: string }).code,
+    message: atomicErr.message,
+  });
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return "O pedido precisa ter ao menos um item";
+  }
+
+  const { error: upErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
+  if (upErr) return upErr.message;
+
+  const { error: delErr } = await admin.from("expense_items").delete().eq("expense_id", expenseId);
+  if (delErr) return delErr.message;
+
+  const rows = items.map((it) => ({
+    expense_id: expenseId,
+    item_code: it.item_code || null,
+    description: String(it.description || "").trim(),
+    quantity: Number(it.quantity || 0),
+    unit_price: Number(it.unit_price || 0),
+    line_total: Number(it.line_total || 0),
+    cost_center: it.cost_center || null,
+    project: it.project || null,
+    items_group_code: it.items_group_code ?? null,
+    items_group_name: it.items_group_name ?? null,
+  }));
+  const { error: insErr } = await admin.from("expense_items").insert(rows as any);
+  return insErr?.message || null;
+}
+
 function runAfterResponse(task: Promise<unknown>) {
   const edgeRuntime = (globalThis as unknown as {
     EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
@@ -905,12 +961,8 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   }
 
   if (items) {
-    const { error: atomicErr } = await admin.rpc("update_expense_with_items", {
-      _expense_id: expenseId,
-      _updates: updates,
-      _items: items,
-    } as any);
-    if (atomicErr) return json(500, { error: `Falha ao atualizar pedido e itens: ${atomicErr.message}` });
+    const updateErr = await updateExpenseWithItems(admin, expenseId, updates, items);
+    if (updateErr) return json(500, { error: `Falha ao atualizar pedido e itens: ${updateErr}` });
   } else if (Object.keys(updates).length > 0) {
     const { error: upErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
     if (upErr) return json(500, { error: `Falha ao atualizar: ${upErr.message}` });

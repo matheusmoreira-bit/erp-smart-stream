@@ -2198,7 +2198,7 @@ function MyRequestsTab() {
 
 export default function ApprovalsPage() {
   const { session, logout } = useSap();
-  const { isAdmin: isLovableAdmin } = useAuth();
+  const { user: authUser, isAdmin: isLovableAdmin } = useAuth();
   const navigate = useNavigate();
   const { approvals, isLoading, isRefreshing, error, lastUpdatedAt, refresh, refreshCache, removeLocal: removeApprovalLocal } = useApprovals();
   // Documentos internos pendentes vêm de UM único feed servidor-side
@@ -2582,16 +2582,40 @@ export default function ApprovalsPage() {
   const sessionUserName = session?.userName || "";
   const sessionCompanyDb = session?.companyDB || "";
   const sessionUser = sessionUserName.toLowerCase().trim();
+  const authEmail = authUser?.email || "";
+  const authDisplayName = String(
+    authUser?.user_metadata?.full_name ||
+    authUser?.user_metadata?.name ||
+    authUser?.user_metadata?.display_name ||
+    "",
+  );
   const impersonation = getImpersonation();
   // Uma pessoa pode ter UserCode, nome e e-mails em domínios diferentes. Na
   // impersonação, a sessão técnica pode ser do admin, portanto o alvo salvo é
   // parte obrigatória da identidade usada para filtrar e autorizar.
-  const currentUserIdentities = [
-    sessionUserName,
-    impersonation?.companyDB === sessionCompanyDb ? impersonation.targetUser : null,
-    impersonation?.companyDB === sessionCompanyDb ? impersonation.targetEmail : null,
-    impersonation?.companyDB === sessionCompanyDb ? impersonation.targetName : null,
-  ];
+  // O feed servidor-side também usa a conta Supabase/IdP para resolver aliases;
+  // sem ela, usuários que entram por login gerenciado veem a fila mas o botão
+  // local não reconhece que eles são o aprovador atual.
+  const currentUserIdentities = useMemo(
+    () => [
+      sessionUserName,
+      authEmail,
+      authDisplayName,
+      impersonation?.companyDB === sessionCompanyDb ? impersonation.targetUser : null,
+      impersonation?.companyDB === sessionCompanyDb ? impersonation.targetEmail : null,
+      impersonation?.companyDB === sessionCompanyDb ? impersonation.targetName : null,
+    ],
+    [
+      sessionUserName,
+      authEmail,
+      authDisplayName,
+      impersonation?.companyDB,
+      impersonation?.targetUser,
+      impersonation?.targetEmail,
+      impersonation?.targetName,
+      sessionCompanyDb,
+    ],
+  );
   const isCurrentUserApprover = (doc: ApprovalDoc): boolean =>
     matchesApproverIdentity(
       currentUserIdentities,
@@ -2755,7 +2779,7 @@ export default function ApprovalsPage() {
       });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sessionUserName, sessionUser, identifiersForDoc, ccScopeAllows, isSuperUser],
+    [sessionUserName, sessionUser, currentUserIdentities, identifiersForDoc, ccScopeAllows, isSuperUser],
   );
   const userApprovals = effectiveShowAll
     ? allApprovals
@@ -4141,7 +4165,7 @@ export default function ApprovalsPage() {
         actionPhase={actionPhase}
         isSuperUser={isSuperUser}
         currentUserName={session.userName}
-        currentUserEmail={session.userName}
+        currentUserEmail={authEmail || session.userName}
         approverCCs={getCostCentersForEmail(selectedDoc?.approverEmail || "")}
         formatCostCenter={formatCostCenter}
         rules={rules}
