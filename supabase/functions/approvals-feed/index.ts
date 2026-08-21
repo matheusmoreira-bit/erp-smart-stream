@@ -192,6 +192,9 @@ async function identifyCallerCached(req: Request, admin: SupabaseClient): Promis
 
   const value = await identifyCaller(req, admin);
   authPhaseTimings = { ...authPhaseTimings, identify_ms: identMs };
+  // Resultado degradado (alguma consulta de permissão falhou) não vira cache:
+  // seria congelar por 10 min uma visibilidade menor do que a real.
+  if (value.degraded) return value;
   if (value.identity) {
     admin
       .from("auth_caller_cache")
@@ -208,6 +211,7 @@ async function identifyCallerCached(req: Request, admin: SupabaseClient): Promis
   }
   return memoize(value);
 }
+
 
 /**
  * Titulares que o caller substitui hoje (grant vigente e não revogado).
