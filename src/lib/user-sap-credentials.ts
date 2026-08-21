@@ -95,7 +95,7 @@ export async function sapAutoLogin(
     details.retryable = data.retryable === true;
     throw err;
   }
-  return data as SapAutoLoginResult;
+  return data as unknown as SapAutoLoginResult;
 }
 
 
