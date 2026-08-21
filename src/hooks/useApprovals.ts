@@ -715,10 +715,14 @@ export function useApprovals() {
     try {
       const docs = await fetchFromSap();
       if (SERVICE_LAYER_ONLY_DBS.has(session.companyDB)) recordCircuitSuccess(session.companyDB);
+      // `null` = consulta não realizada (sem sessão técnica). Nunca substitui a
+      // lista já exibida por uma resposta que não representa a fila real.
+      if (docs === null) return;
       setApprovals(docs);
       const now = new Date().toISOString();
       setLastUpdatedAt(now);
       if (!skipCache) writeApprovalsCache(session as SapSession, docs).catch((e) => console.warn("approvals cache write failed:", e));
+
     } catch (e) {
       console.error("Error fetching approvals:", e);
       const msg = e instanceof Error ? e.message : "Erro ao buscar aprovações";
