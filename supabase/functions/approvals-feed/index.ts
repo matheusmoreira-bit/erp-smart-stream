@@ -44,7 +44,15 @@ interface Caller {
   privileged: boolean;
   directorateBranch: string | null;
   aliases: Set<string>;
+  /**
+   * `true` quando alguma consulta de permissão/identidade falhou. Um caller
+   * degradado NUNCA é cacheado (nem em memória, nem no cache compartilhado):
+   * caso contrário uma falha momentânea de banco escondia a fila do aprovador
+   * por até 10 minutos — o sintoma de "a aprovação aparece e some".
+   */
+  degraded?: boolean;
 }
+
 
 let authPhaseTimings: Record<string, number> = {};
 
