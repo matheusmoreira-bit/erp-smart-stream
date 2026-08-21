@@ -1,0 +1,2 @@
+DELETE FROM public.expense_create_idempotency i USING public.expenses e WHERE e.id = i.expense_id AND e.status IN ('cancelado','rejeitado');
+DELETE FROM public.expense_create_idempotency i WHERE i.expense_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.expenses e WHERE e.id = i.expense_id);
