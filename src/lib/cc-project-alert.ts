@@ -75,6 +75,22 @@ export function costCenterNeedsAlert(code?: string | null): boolean {
   return CC_ALERT_PREFIXES.some((p) => c.startsWith(p));
 }
 
+/**
+ * Único gatilho válido do alerta: CC institucional + projeto institucional
+ * (nome da empresa). Sem projeto selecionado → nunca alerta.
+ */
+export function shouldAlertCcProject(
+  costCenterCode?: string | null,
+  projectCodeOrName?: string | null,
+  projectAlt?: string | null,
+): boolean {
+  if (!costCenterNeedsAlert(costCenterCode)) return false;
+  const project = (projectCodeOrName || projectAlt || "").trim();
+  if (!project) return false;
+  return isInstitutionalProject(projectCodeOrName) || isInstitutionalProject(projectAlt);
+}
+
+
 export interface CcProjectAlertPayload {
   companyDb?: string | null;
   sapUserName?: string | null;
