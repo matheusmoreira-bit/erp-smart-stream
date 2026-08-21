@@ -55,6 +55,33 @@ function materialSapDoc(row: Record<string, unknown>): { docEntry: number | null
   return { docEntry, docNum };
 }
 
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object") {
+    const rec = err as Record<string, unknown>;
+    const msg = rec.message || rec.details || rec.hint || rec.code;
+    if (msg) return String(msg);
+    try {
+      return JSON.stringify(rec);
+    } catch {
+      return Object.prototype.toString.call(err);
+    }
+  }
+  return String(err);
+}
+
+function isMissingClassificationStore(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const rec = error as Record<string, unknown>;
+  const text = [
+    rec.code,
+    rec.message,
+    rec.details,
+    rec.hint,
+  ].filter(Boolean).join(" ");
+  return /42P01|PGRST205|pagcorp_document_classification|does not exist|Could not find/i.test(text);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") {
@@ -123,7 +150,19 @@ Deno.serve(async (req) => {
         }, { onConflict: "company_db,pagcorp_expense_id" })
         .select("*")
         .single();
-      if (error) throw error;
+      if (error) {
+        if (isMissingClassificationStore(error)) {
+          console.warn("[pagcorp-integration-status] classification store unavailable", errorMessage(error));
+          return new Response(JSON.stringify({
+            classification: null,
+            classificationStoreUnavailable: true,
+            warning: errorMessage(error),
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        throw error;
+      }
       return new Response(JSON.stringify({ classification: data }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -194,14 +233,23 @@ Deno.serve(async (req) => {
     }
 
     let classifications: any[] = [];
+    let classificationStoreUnavailable = false;
     if (expenseIds.length > 0) {
       const { data, error } = await admin
         .from("pagcorp_document_classification")
         .select("pagcorp_expense_id,status,has_fiscal_document,document_kinds,confidence,error_message,analyzed_at")
         .eq("company_db", companyDb)
         .in("pagcorp_expense_id", expenseIds);
-      if (error) throw error;
-      classifications = data || [];
+      if (error) {
+        if (isMissingClassificationStore(error)) {
+          classificationStoreUnavailable = true;
+          console.warn("[pagcorp-integration-status] classification read skipped", errorMessage(error));
+        } else {
+          throw error;
+        }
+      } else {
+        classifications = data || [];
+      }
     }
 
     return new Response(
@@ -212,13 +260,14 @@ Deno.serve(async (req) => {
         nondeductibleCards: ndCards || [],
         nondeductibleExpenses: ndExpenses,
         classifications,
+        classificationStoreUnavailable,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
-    console.error("[pagcorp-integration-status] error", err);
+    console.error("[pagcorp-integration-status] error", errorMessage(err), err);
     return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
+      JSON.stringify({ error: errorMessage(err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
