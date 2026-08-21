@@ -25,12 +25,6 @@ function formatWhen(iso: string) {
   }
 }
 
-function daysUntil(iso: string) {
-  const ms = new Date(iso).getTime() - Date.now();
-  const d = Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
-  return d;
-}
-
 export function DraftsPopover({ docType, companyDb, onResume }: Props) {
   const { drafts, isLoading, refresh } = useDocumentDrafts(docType, companyDb);
   const [open, setOpen] = useState(false);
@@ -71,7 +65,7 @@ export function DraftsPopover({ docType, companyDb, onResume }: Props) {
         <div className="px-4 py-3 border-b border-border">
           <p className="text-sm font-medium text-foreground">Esboços pendentes</p>
           <p className="text-[11px] text-muted-foreground">
-            Salvamos automaticamente enquanto você preenche. Expiram em 15 dias.
+            Salvamos automaticamente enquanto você preenche. Ficam aqui até enviar ou descartar.
           </p>
         </div>
         <div className="max-h-80 overflow-y-auto">
@@ -93,7 +87,7 @@ export function DraftsPopover({ docType, companyDb, onResume }: Props) {
                         {d.preview || "Esboço sem título"}
                       </p>
                       <p className="text-[11px] text-muted-foreground mt-0.5">
-                        Atualizado {formatWhen(d.updated_at)} · expira em {daysUntil(d.expires_at)}d
+                        Atualizado {formatWhen(d.updated_at)}
                       </p>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">

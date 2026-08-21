@@ -15,13 +15,7 @@ export interface DocumentDraft {
   expires_at: string;
 }
 
-async function purgeExpired() {
-  try {
-    await supabase.from("document_drafts").delete().lt("expires_at", new Date().toISOString());
-  } catch {
-    // silent
-  }
-}
+const NON_EXPIRING_DRAFT_DATE = "9999-12-31T23:59:59.999Z";
 
 export function useDocumentDrafts(docType: DraftDocType, companyDb: string | undefined | null) {
   const [drafts, setDrafts] = useState<DocumentDraft[]>([]);
@@ -34,7 +28,6 @@ export function useDocumentDrafts(docType: DraftDocType, companyDb: string | und
     }
     setIsLoading(true);
     try {
-      await purgeExpired();
       const { data, error } = await supabase
         .from("document_drafts")
         .select("*")
@@ -71,12 +64,10 @@ export async function saveDraft(params: {
     const userId = userData.user?.id;
     if (!userId) return null;
 
-    const nextExpires = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString();
-
     if (draftId) {
       const { error } = await supabase
         .from("document_drafts")
-        .update({ payload, preview, expires_at: nextExpires })
+        .update({ payload, preview, expires_at: NON_EXPIRING_DRAFT_DATE })
         .eq("id", draftId);
       if (error) throw error;
       return draftId;
@@ -92,7 +83,7 @@ export async function saveDraft(params: {
           doc_type: docType,
           payload,
           preview,
-          expires_at: nextExpires,
+          expires_at: NON_EXPIRING_DRAFT_DATE,
         },
         { onConflict: "user_id,company_db,doc_type" },
       )
