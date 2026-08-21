@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { classifyPagCorpDocuments } from "@/lib/pagcorp-document-classification";
+import { classifyPagCorpDocuments, isPagCorpAiEligible } from "@/lib/pagcorp-document-classification";
 
 // ---------------------------------------------------------------------------
 // In-memory cache for pagcorp-integration-status
@@ -708,6 +708,14 @@ export function usePagCorp() {
     companyDb: string,
     options: { force?: boolean } = {},
   ) => {
+    if (!isPagCorpAiEligible(transaction)) {
+      return {
+        status: "pending" as const,
+        hasFiscalDocument: null,
+        documentKinds: [],
+        confidence: null,
+      };
+    }
     setTransactions((current) => current.map((item) =>
       item.id === transaction.id ? { ...item, documentAnalysisStatus: "processing", documentAnalysisError: null } : item
     ));

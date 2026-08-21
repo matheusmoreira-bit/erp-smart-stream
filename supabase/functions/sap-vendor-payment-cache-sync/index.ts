@@ -2,7 +2,6 @@
 // Sincronização incremental de VendorPayments (baixas a fornecedores) para
 // public.sap_vendor_payment_cache. Usa helpers compartilhados em _shared/sap-cache.ts.
 
-import { isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import {
   buildSapBaseUrl,
   loadSapCreds,
@@ -52,7 +51,6 @@ function sumApplied(p: SapVendorPayment, key: "SumApplied" | "AppliedFC"): numbe
 
 
 async function syncCompany(sb: Sb, companyDb: string, _opts: RunnerOpts): Promise<WatcherResult> {
-  if (isTestCompanyDb(companyDb)) return { companyDb, synced: 0, skipped: "test_base" };
   const creds = await loadSapCreds(sb, companyDb, { requireApiuser: true });
   if (!creds) return { companyDb, synced: 0, skipped: "no_credentials_or_not_apiuser" };
 

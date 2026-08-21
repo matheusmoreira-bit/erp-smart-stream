@@ -521,13 +521,11 @@ export default function NfEntrada() {
                             <DetailField
                               label="Watcher"
                               value={
-                                watcherState(it).frozen
-                                  ? "Base congelada (teste) — só reconferência manual"
-                                  : watcherState(it).stale
-                                    ? "Varredura atrasada"
-                                    : watcherState(it).awaitsSap
-                                      ? "Ativo"
-                                      : "Não aplicável"
+                                watcherState(it).stale
+                                  ? "Varredura atrasada"
+                                  : watcherState(it).awaitsSap
+                                    ? "Ativo"
+                                    : "Não aplicável"
                               }
                             />
                             <div className="col-span-2 md:col-span-2">

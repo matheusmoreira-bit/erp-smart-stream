@@ -7,11 +7,20 @@ export interface PagCorpAttachment {
 }
 
 export interface PagCorpDocumentClassification {
-  status: "processing" | "completed" | "error";
+  status: "pending" | "processing" | "completed" | "error";
   hasFiscalDocument: boolean | null;
   documentKinds: string[];
   confidence: number | null;
   errorMessage?: string;
+}
+
+export function isPagCorpAiEligible(
+  transaction: Pick<PagCorpTransaction, "accountabilityApproved" | "integrated" | "integrationStatusResolved" | "isReversed">,
+): boolean {
+  return transaction.integrationStatusResolved === true &&
+    transaction.accountabilityApproved === true &&
+    transaction.integrated !== true &&
+    transaction.isReversed !== true;
 }
 
 export function hasInvoiceEquivalent(documents: unknown[]): boolean {
@@ -67,7 +76,7 @@ async function persist(
   companyDb: string,
   expenseId: string | number,
   classification: object,
-) {
+): Promise<{ blocked: boolean }> {
   const response = await sapFunctionFetch("pagcorp-integration-status", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -77,9 +86,11 @@ async function persist(
   if (!response.ok) {
     throw new Error(String(payload.error || payload.warning || `Falha ao salvar classificação (${response.status})`));
   }
+  if (payload.classificationBlocked) return { blocked: true };
   if (payload.classificationStoreUnavailable) {
     throw new Error(String(payload.warning || "Armazenamento da classificação IA indisponível"));
   }
+  return { blocked: false };
 }
 
 async function readPersisted(
@@ -93,9 +104,11 @@ async function readPersisted(
       body: JSON.stringify({ companyDb, expenseIds: [expenseId] }),
     });
     if (!response.ok) return null;
-    const payload = await response.json().catch(() => ({})) as { classifications?: any[] };
+    const payload = await response.json().catch(() => ({})) as { classifications?: unknown[] };
     const row = Array.isArray(payload.classifications)
-      ? payload.classifications.find((item) => Number(item?.pagcorp_expense_id) === Number(expenseId))
+      ? payload.classifications
+        .map((item) => item && typeof item === "object" ? item as Record<string, unknown> : {})
+        .find((item) => Number(item.pagcorp_expense_id) === Number(expenseId))
       : null;
     if (!row || !["processing", "completed", "error"].includes(String(row.status))) return null;
     return {
@@ -115,6 +128,15 @@ export async function classifyPagCorpDocuments(
   companyDb: string,
   options: { force?: boolean } = {},
 ): Promise<PagCorpDocumentClassification> {
+  if (!isPagCorpAiEligible(transaction)) {
+    return {
+      status: "pending",
+      hasFiscalDocument: null,
+      documentKinds: [],
+      confidence: null,
+    };
+  }
+
   if (!options.force) {
     const persisted = await readPersisted(companyDb, transaction.id);
     if (persisted) return persisted;
@@ -133,7 +155,19 @@ export async function classifyPagCorpDocuments(
       return result;
     }
 
-    await persist(companyDb, transaction.id, { status: "processing" });
+    const claim = await persist(companyDb, transaction.id, {
+      status: "processing",
+      accountabilityApproved: true,
+      requireUnintegrated: true,
+    });
+    if (claim.blocked) {
+      return {
+        status: "pending",
+        hasFiscalDocument: null,
+        documentKinds: [],
+        confidence: null,
+      };
+    }
     const files: File[] = [];
     for (const attachment of attachments.slice(0, 8)) {
       const params = new URLSearchParams({ action: "receipt", url: attachment.url, companyDb });

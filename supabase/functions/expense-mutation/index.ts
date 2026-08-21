@@ -41,7 +41,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db, x-sap-auth-token",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Expose-Headers": "X-Function-Version",
 };
+
+const FUNCTION_VERSION = "2026-08-21.3";
 
 /**
  * Reavalia a matriz de aprovação para um documento que está sem `approval_rule_id`.
@@ -117,9 +120,16 @@ async function rematchRuleFromMatrix(
 
 
 function json(status: number, body: unknown) {
-  return new Response(JSON.stringify(body), {
+  const payload = body && typeof body === "object" && !Array.isArray(body)
+    ? { ...(body as Record<string, unknown>), function_version: FUNCTION_VERSION }
+    : body;
+  return new Response(JSON.stringify(payload), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      "X-Function-Version": FUNCTION_VERSION,
+    },
   });
 }
 
@@ -1528,6 +1538,8 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { return json(400, { error: "Corpo inválido" }); }
 
   const action = String(body?.action || "");
+  if (action === "version") return json(200, { ok: true, version: FUNCTION_VERSION });
+
   const admin = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,

@@ -3,7 +3,6 @@
 // para cada empresa SAP com credenciais Apiuser configuradas.
 
 import { fetchHanaView } from "../_shared/hana-views.ts";
-import { isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import {
   buildSapBaseUrl,
   loadSapCreds,
@@ -101,7 +100,6 @@ function mapRow(raw: Record<string, unknown>, companyDb: string) {
 }
 
 async function syncCompany(sb: Sb, companyDb: string, _opts: RunnerOpts): Promise<WatcherResult> {
-  if (isTestCompanyDb(companyDb)) return { companyDb, synced: 0, skipped: "test_base" };
   const creds = await loadSapCreds(sb, companyDb, { requireApiuser: true, requireHana: true });
   if (!creds) return { companyDb, synced: 0, skipped: "no_credentials_or_not_apiuser" };
 

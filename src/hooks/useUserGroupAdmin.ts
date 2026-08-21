@@ -55,31 +55,53 @@ export function useUserGroupAdmin() {
     async (opts: { userCode: string; email?: string | null; groupId: string | null; companyDb?: string | null }) => {
       const identities = [opts.userCode, opts.email].filter(Boolean) as string[];
       const companyDb = opts.companyDb ?? null;
-      const stale = assignments.filter((as) =>
-        as.company_db === companyDb &&
-        identities.some((id) => identityMatches(as.sap_email, id)),
+      const key = canonicalUserKey(opts.userCode || opts.email);
+      if (!key) throw new Error("Usuário SAP inválido");
+
+      let query = supabase
+        .from("user_group_assignments")
+        .select("id, sap_email, group_id, company_db");
+      query = companyDb === null
+        ? query.is("company_db", null)
+        : query.eq("company_db", companyDb);
+      const { data: current, error: readError } = await query;
+      if (readError) throw new Error(readError.message);
+
+      const scoped = ((current || []) as Assignment[]).filter((assignment) =>
+        identities.some((id) => identityMatches(assignment.sap_email, id)),
       );
-      if (stale.length > 0) {
+
+      if (!opts.groupId) {
+        if (scoped.length === 0) return;
         const { error } = await supabase
           .from("user_group_assignments")
           .delete()
-          .in("id", stale.map((s) => s.id));
+          .in("id", scoped.map((assignment) => assignment.id));
         if (error) throw new Error(error.message);
-      }
-
-      if (opts.groupId) {
-        // Uma pessoa = um usuário SAP: grava SEMPRE a chave canônica única.
-        const key = canonicalUserKey(opts.userCode || opts.email);
-        if (!key) throw new Error("Usuário SAP inválido");
+      } else if (scoped.length === 0) {
         const { error } = await supabase.from("user_group_assignments").insert(
           [{ sap_email: key, group_id: opts.groupId, company_db: companyDb }],
         );
+        if (error) throw new Error(error.message);
+      } else {
+        const [primary, ...duplicates] = scoped;
+        if (duplicates.length > 0) {
+          const { error } = await supabase
+            .from("user_group_assignments")
+            .delete()
+            .in("id", duplicates.map((assignment) => assignment.id));
+          if (error) throw new Error(error.message);
+        }
+        const { error } = await supabase
+          .from("user_group_assignments")
+          .update({ sap_email: key, group_id: opts.groupId })
+          .eq("id", primary.id);
         if (error) throw new Error(error.message);
       }
 
       await refresh();
     },
-    [assignments, refresh],
+    [refresh],
   );
 
   return { groups, loading, groupOf, setGroup, refresh };

@@ -2,7 +2,6 @@
 // Sincronização incremental de PurchaseInvoices (NF de Entrada) para
 // public.sap_nf_entrada_cache. Usa helpers compartilhados em _shared/sap-cache.ts.
 
-import { isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import {
   buildSapBaseUrl,
   loadSapCreds,
@@ -42,7 +41,6 @@ function extractBasePo(inv: SapPurchaseInvoice): number | null {
 const SELECT = "DocEntry,DocNum,Series,CardCode,CardName,DocDate,DocDueDate,TaxDate,DocTotal,DocCurrency,DocumentStatus,Cancelled,UpdateDate,UpdateTime,DocumentLines";
 
 async function syncCompany(sb: Sb, companyDb: string, _opts: RunnerOpts): Promise<WatcherResult> {
-  if (isTestCompanyDb(companyDb)) return { companyDb, synced: 0, skipped: "test_base" };
   // NF de Entrada mantém comportamento original: aceita qualquer usuário SAP configurado.
   const creds = await loadSapCreds(sb, companyDb);
   if (!creds) return { companyDb, synced: 0, skipped: "no_credentials" };

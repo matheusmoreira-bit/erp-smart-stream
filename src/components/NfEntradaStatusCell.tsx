@@ -1,16 +1,10 @@
 import { Badge } from "@/components/ui/badge";
-import { Snowflake, Clock, AlertTriangle } from "lucide-react";
+import { Clock, AlertTriangle } from "lucide-react";
 import type { NfEntradaImport, NfEntradaStatus } from "@/hooks/useNfEntrada";
 
 type StatusVariant = "default" | "secondary" | "destructive" | "outline";
 
 export type StatusPresentation = { label: string; variant: StatusVariant; hint: string; next?: string };
-
-/** Bases de teste não são varridas pelo watcher automático (mesma regra da edge function). */
-export function isTestCompanyDb(db: string | null | undefined): boolean {
-  if (!db) return false;
-  return /^(SBO_TESTE_|TST[_-]?)/i.test(db);
-}
 
 /** De onde vem o status exibido: do fluxo interno ou de uma leitura do SAP. */
 export function statusOrigin(it: NfEntradaImport): { source: "erpflow" | "sap"; label: string; hint: string } {
@@ -43,17 +37,16 @@ function relativeTime(iso: string): string {
 
 export function watcherState(it: NfEntradaImport) {
   const awaitsSap = it.status === "awaiting_sap" || it.status === "awaiting_invoice";
-  const frozen = awaitsSap && isTestCompanyDb(it.sap_company_db);
   const lastPollAt = it.last_poll_at ?? null;
   const ageMs = lastPollAt ? Date.now() - new Date(lastPollAt).getTime() : null;
-  const stale = awaitsSap && !frozen && (ageMs === null || ageMs > STALE_HOURS * 3600_000);
-  return { awaitsSap, frozen, lastPollAt, stale };
+  const stale = awaitsSap && (ageMs === null || ageMs > STALE_HOURS * 3600_000);
+  return { awaitsSap, lastPollAt, stale };
 }
 
-/** Célula de Status com origem, última varredura e aviso de base congelada. */
+/** Célula de status com origem, última varredura e aviso de atraso. */
 export function NfEntradaStatusCell({ item, presentation }: { item: NfEntradaImport; presentation: StatusPresentation }) {
   const origin = statusOrigin(item);
-  const { awaitsSap, frozen, lastPollAt, stale } = watcherState(item);
+  const { awaitsSap, lastPollAt, stale } = watcherState(item);
 
   return (
     <div className="space-y-1 max-w-[240px]">
@@ -82,14 +75,7 @@ export function NfEntradaStatusCell({ item, presentation }: { item: NfEntradaImp
 
       {awaitsSap && (
         <div className="flex flex-wrap items-center gap-1 text-[10px]">
-          {frozen ? (
-            <span
-              title="Base de teste: o watcher automático não varre esta base. Use “Reconferir no SAP” para checar manualmente."
-              className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 font-medium text-amber-700 dark:text-amber-400"
-            >
-              <Snowflake className="w-2.5 h-2.5" aria-hidden="true" /> Base congelada
-            </span>
-          ) : stale ? (
+          {stale ? (
             <span
               title={`Sem leitura do SAP há mais de ${STALE_HOURS}h — o watcher pode não estar rodando.`}
               className="inline-flex items-center gap-1 rounded-full border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 font-medium text-destructive"

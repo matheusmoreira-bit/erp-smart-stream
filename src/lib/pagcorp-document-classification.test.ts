@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { classifyPagCorpDocuments, hasInvoiceEquivalent } from "./pagcorp-document-classification";
+import {
+  classifyPagCorpDocuments,
+  hasInvoiceEquivalent,
+  isPagCorpAiEligible,
+} from "./pagcorp-document-classification";
+import type { PagCorpTransaction } from "@/hooks/usePagCorp";
 
 const mocks = vi.hoisted(() => ({
   publicFunctionFetch: vi.fn(),
@@ -31,6 +36,69 @@ describe("classifyPagCorpDocuments", () => {
     mocks.sapFunctionFetch.mockReset();
   });
 
+  const eligibleTransaction = {
+    accountabilityApproved: true,
+    integrated: false,
+    integrationStatusResolved: true,
+    isReversed: false,
+  };
+
+  it("only considers approved, unintegrated transactions eligible for AI", () => {
+    expect(isPagCorpAiEligible(eligibleTransaction)).toBe(true);
+    expect(isPagCorpAiEligible({ ...eligibleTransaction, accountabilityApproved: false })).toBe(false);
+    expect(isPagCorpAiEligible({ ...eligibleTransaction, integrated: true })).toBe(false);
+    expect(isPagCorpAiEligible({ ...eligibleTransaction, integrationStatusResolved: false })).toBe(false);
+    expect(isPagCorpAiEligible({ ...eligibleTransaction, isReversed: true })).toBe(false);
+  });
+
+  it("does not call storage or AI for an unapproved transaction", async () => {
+    const result = await classifyPagCorpDocuments({
+      id: 100,
+      ...eligibleTransaction,
+      accountabilityApproved: false,
+      receipts: [{ downloadUrl: "https://example.test/nf.pdf", fileName: "nf.pdf" }],
+      attachments: [],
+    } as unknown as PagCorpTransaction, "EMPRESA");
+
+    expect(result.status).toBe("pending");
+    expect(mocks.sapFunctionFetch).not.toHaveBeenCalled();
+    expect(mocks.publicFunctionFetch).not.toHaveBeenCalled();
+  });
+
+  it("does not call storage or AI for an integrated transaction", async () => {
+    const result = await classifyPagCorpDocuments({
+      id: 101,
+      ...eligibleTransaction,
+      integrated: true,
+      receipts: [{ downloadUrl: "https://example.test/nf.pdf", fileName: "nf.pdf" }],
+      attachments: [],
+    } as unknown as PagCorpTransaction, "EMPRESA", { force: true });
+
+    expect(result.status).toBe("pending");
+    expect(mocks.sapFunctionFetch).not.toHaveBeenCalled();
+    expect(mocks.publicFunctionFetch).not.toHaveBeenCalled();
+  });
+
+  it("does not invoke AI when the server detects an existing integration", async () => {
+    mocks.sapFunctionFetch
+      .mockResolvedValueOnce(new Response(JSON.stringify({ classifications: [] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        classificationBlocked: true,
+        reason: "already_integrated",
+      }), { status: 200 }));
+
+    const result = await classifyPagCorpDocuments({
+      id: 102,
+      ...eligibleTransaction,
+      receipts: [{ downloadUrl: "https://example.test/nf.pdf", fileName: "nf.pdf" }],
+      attachments: [],
+    } as unknown as PagCorpTransaction, "EMPRESA");
+
+    expect(result.status).toBe("pending");
+    expect(mocks.sapFunctionFetch).toHaveBeenCalledTimes(2);
+    expect(mocks.publicFunctionFetch).not.toHaveBeenCalled();
+  });
+
   it("returns the persisted classification without invoking AI again", async () => {
     mocks.sapFunctionFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       classifications: [{
@@ -44,9 +112,10 @@ describe("classifyPagCorpDocuments", () => {
 
     const result = await classifyPagCorpDocuments({
       id: 123,
+      ...eligibleTransaction,
       receipts: [{ downloadUrl: "https://example.test/nf.pdf", fileName: "nf.pdf" }],
       attachments: [],
-    } as any, "EMPRESA");
+    } as unknown as PagCorpTransaction, "EMPRESA");
 
     expect(result).toEqual({
       status: "completed",
@@ -67,9 +136,10 @@ describe("classifyPagCorpDocuments", () => {
 
     const result = await classifyPagCorpDocuments({
       id: 456,
+      ...eligibleTransaction,
       receipts: [{ downloadUrl: "https://example.test/nf.pdf", fileName: "nf.pdf" }],
       attachments: [],
-    } as any, "EMPRESA");
+    } as unknown as PagCorpTransaction, "EMPRESA");
 
     expect(result.status).toBe("error");
     expect(result.errorMessage).toBe("Tabela indisponível");
@@ -88,9 +158,10 @@ describe("classifyPagCorpDocuments", () => {
 
     const result = await classifyPagCorpDocuments({
       id: 789,
+      ...eligibleTransaction,
       receipts: [{ downloadUrl: "https://example.test/nf.pdf", fileName: "nf.pdf" }],
       attachments: [],
-    } as any, "EMPRESA");
+    } as unknown as PagCorpTransaction, "EMPRESA");
 
     expect(result.status).toBe("error");
     expect(result.errorMessage).toBe("Store indisponível");

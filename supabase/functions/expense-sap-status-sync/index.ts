@@ -6,7 +6,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
+import { tryWatcherLock, releaseWatcherLock } from "../_shared/watcher-lock.ts";
 import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 
@@ -137,10 +137,6 @@ Deno.serve(async (req) => {
     const byCompany = new Map<string, ExpenseRow[]>();
     for (const r of (rows || []) as ExpenseRow[]) {
       if (!r.company_db || r.sap_doc_entry == null) continue;
-      if (isTestCompanyDb(r.company_db)) {
-        results.push({ id: r.id, error: "test_base" });
-        continue;
-      }
       const arr = byCompany.get(r.company_db) || [];
       arr.push(r);
       byCompany.set(r.company_db, arr);
@@ -298,7 +294,6 @@ Deno.serve(async (req) => {
 
     const errors = results.filter((r) => r.error);
     const updated = results.filter((r) => r.expenseStatus);
-    const skipped = results.filter((r) => r.error === "test_base");
     if (runId) {
       await sb.from("expense_sap_sync_runs").update({
         status: "ok",
@@ -307,7 +302,7 @@ Deno.serve(async (req) => {
         processed_count: results.length,
         updated_count: updated.length,
         error_count: errors.length,
-        skipped_count: skipped.length,
+        skipped_count: 0,
         results,
         errors,
       }).eq("id", runId);

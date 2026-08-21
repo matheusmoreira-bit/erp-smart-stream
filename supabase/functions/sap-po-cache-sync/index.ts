@@ -2,7 +2,6 @@
 // Sincronização incremental de PurchaseOrders (Pedidos de Compra) para
 // public.sap_purchase_order_cache. Usa helpers compartilhados em _shared/sap-cache.ts.
 
-import { isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import {
   buildSapBaseUrl,
   loadSapCreds,
@@ -34,7 +33,6 @@ interface SapPurchaseOrder extends OdataDoc {
 const SELECT = "DocEntry,DocNum,Series,CardCode,CardName,DocDate,DocDueDate,DocTotal,DocTotalFc,DocCurrency,DocumentStatus,Cancelled,UpdateDate,UpdateTime";
 
 async function syncCompany(sb: Sb, companyDb: string, opts: RunnerOpts): Promise<WatcherResult> {
-  if (isTestCompanyDb(companyDb)) return { companyDb, synced: 0, skipped: "test_base" };
   const creds = await loadSapCreds(sb, companyDb, { requireApiuser: true });
   if (!creds) return { companyDb, synced: 0, skipped: "no_credentials_or_not_apiuser" };
 

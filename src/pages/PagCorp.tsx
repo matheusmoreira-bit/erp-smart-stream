@@ -78,6 +78,7 @@ import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { generatePagCorpPresentation, type PresentationPeriod } from "@/lib/pagcorp-presentation";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { PageTitle } from "@/components/PageTitle";
+import { isPagCorpAiEligible } from "@/lib/pagcorp-document-classification";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
@@ -252,9 +253,7 @@ export default function PagCorp() {
     const companyDb = session?.companyDB;
     if (!companyDb) return;
     const pending = transactions.filter((transaction) =>
-      transaction.integrationStatusResolved === true &&
-      !transaction.integrated &&
-      !transaction.isReversed &&
+      isPagCorpAiEligible(transaction) &&
       (!transaction.documentAnalysisStatus || transaction.documentAnalysisStatus === "pending") &&
       ((transaction.receipts?.length || 0) > 0 || (transaction.attachments?.length || 0) > 0) &&
       !classificationInflightRef.current.has(transaction.id)
@@ -1446,6 +1445,7 @@ export default function PagCorp() {
                     const renderTxRow = (t: PagCorpTransaction, opts: { inGroup?: boolean } = {}) => {
                       const isSelected = selectedIds.has(t.id);
                       const inGroup = !!opts.inGroup;
+                      const aiEligible = isPagCorpAiEligible(t);
                       return (
                       <TableRow
                         key={t.id}
@@ -1522,7 +1522,7 @@ export default function PagCorp() {
                             return (
                               <div className="flex items-center justify-center gap-2">
                                 {statusBadge}
-                                {!t.integrated && !t.isReversed && t.integrationStatusResolved === true && (
+                                {aiEligible && (
                                   t.documentAnalysisStatus === "completed" ? (
                                     <Badge
                                       variant="outline"
@@ -1722,7 +1722,7 @@ export default function PagCorp() {
                             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                               <Loader2 className="w-3 h-3 animate-spin" /> Status
                             </span>
-                          ) : t.documentAnalysisStatus === "error" ? (
+                          ) : !aiEligible ? null : t.documentAnalysisStatus === "error" ? (
                             <Button
                               variant="outline"
                               size="sm"

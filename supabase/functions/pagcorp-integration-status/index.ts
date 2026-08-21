@@ -27,6 +27,8 @@ interface RequestBody {
     documentKinds?: string[];
     confidence?: number | null;
     errorMessage?: string | null;
+    accountabilityApproved?: boolean;
+    requireUnintegrated?: boolean;
   };
 }
 
@@ -136,6 +138,37 @@ Deno.serve(async (req) => {
       const expenseId = Number(body.classification.expenseId);
       if (!Number.isFinite(expenseId)) throw new Error("classification.expenseId inválido");
       const status = body.classification.status || "processing";
+
+      if (status === "processing") {
+        if (body.classification.accountabilityApproved !== true) {
+          return new Response(JSON.stringify({
+            classification: null,
+            classificationBlocked: true,
+            reason: "accountability_not_approved",
+          }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+
+        if (body.classification.requireUnintegrated) {
+          const { data: logs, error: logsError } = await admin
+            .from("pagcorp_integration_log")
+            .select("status,sap_doc_entry,sap_response")
+            .eq("company_db", companyDb)
+            .eq("pagcorp_expense_id", expenseId)
+            .limit(50);
+          if (logsError) throw logsError;
+          const alreadyIntegrated = (logs || []).some((row: Record<string, unknown>) =>
+            row.status === "success" || materialSapDoc(row).docEntry != null
+          );
+          if (alreadyIntegrated) {
+            return new Response(JSON.stringify({
+              classification: null,
+              classificationBlocked: true,
+              reason: "already_integrated",
+            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+        }
+      }
+
       const { data, error } = await admin
         .from("pagcorp_document_classification")
         .upsert({
