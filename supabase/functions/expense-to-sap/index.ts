@@ -732,6 +732,17 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     const integrationPause = await getIntegrationPause(integrationSystem);
     if (integrationPause) return pauseResponse(integrationPause, corsHeaders);
 
+    if ((expense as any).sap_integration_cancelled_at && body.override_cancelled !== true) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          cancelled: true,
+          error: "Integração cancelada manualmente no monitor. Reative com Disparar agora.",
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     // Guard: somente despesas totalmente aprovadas podem ser integradas ao SAP.
     // Se uma tela/aba antiga tentar integrar enquanto ainda há nível pendente,
     // tratamos como no-op seguro. Isso evita mostrar erro ao aprovador e, mais

@@ -16,9 +16,9 @@ import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 //     email-prefix / exact name tokens, OR is a Cloud admin / SAP superuser /
 //     mapped SAP admin (via public.is_sap_user_admin RPC).
 //
-// Notifications and SAP integration remain on the client side so we don't
-// duplicate that logic; the response tells the client what happened so it can
-// notify the next approver / requester and trigger `expense-to-sap`.
+// Final approval and ERP dispatch happen on the server. The browser only
+// refreshes the UI, so closing the tab cannot leave an approved document
+// waiting indefinitely for integration.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
@@ -44,6 +44,7 @@ import { notifyActionCompleted } from "../_shared/action-notify.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { resolveCallerAliases, normalizeIdentity } from "../_shared/user-aliases.ts";
 import { emailLocalPart, identityMatches, normalizeText, stripDiacritics as baseStripDiacritics, tokenizePerson } from "../_shared/text-normalize.ts";
+import { isNativeErpExpenseOrigin } from "../_shared/expense-origin.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -82,6 +83,10 @@ type Stage =
   | "update_reject"
   | "update_advance_level"
   | "update_final_approve"
+  | "purchase_to_sap"
+  | "purchase_to_sap_patch"
+  | "sales_to_sap"
+  | "sales_to_sap_patch"
   | "success";
 
 function stageLog(stage: Stage, level: "info" | "warn" | "error", data: Record<string, unknown>) {
@@ -93,6 +98,17 @@ function stageLog(stage: Stage, level: "info" | "warn" | "error", data: Record<s
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function runAfterResponse(task: Promise<unknown>) {
+  const edgeRuntime = (globalThis as unknown as {
+    EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
+  }).EdgeRuntime;
+  if (edgeRuntime?.waitUntil) {
+    edgeRuntime.waitUntil(task);
+    return;
+  }
+  await task;
 }
 
 
@@ -1385,8 +1401,8 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     });
   }
 
-  // Final level → mark approved. SAP integration is triggered by the client
-  // (it already holds the SAP session and calls `expense-to-sap`).
+  // Final level → mark approved. ERP integration is dispatched below with
+  // the company's service account, independently from the approver's browser.
   const updates: Record<string, unknown> = { status: "aprovado" };
   if (remarks) updates.remarks = remarks;
   const { error: updErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
@@ -1416,93 +1432,107 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     ],
   });
 
-  // Pedido de COMPRA que já existe no SAP e foi editado + reaprovado no Flow:
-  // reenvia em modo PATCH para refletir a alteração no ERP. Antes essa etapa
-  // dependia do cliente, que apenas registrava "já existe no ERP" e parava —
-  // a alteração nunca chegava ao SAP.
-  if (String((exp as any).doc_type) !== "sales" && (exp as any).sap_doc_entry) {
-    const originStr = String((exp as any).origin || "").toLowerCase();
-    const nativeErp = ["sap", "erp", "sap_erp"].includes(originStr);
-    if (!nativeErp) {
-      try {
-        const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-        const svcUrl = Deno.env.get("SUPABASE_URL") || "";
-        const sapRes = await fetch(`${svcUrl}/functions/v1/expense-to-sap`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${svcKey}`,
-            apikey: svcKey,
-            "x-internal-retry": "1",
-          },
-          body: JSON.stringify({
-            expense_id: expenseId,
-            patch_document: true,
-            use_service_account: true,
-          }),
-        });
-        const sapBody = await sapRes.json().catch(() => ({}));
-        const patchOk = sapRes.ok && (sapBody as any)?.success !== false;
-        stageLog("purchase_to_sap_patch", patchOk ? "info" : "error", {
-          requestId,
-          expenseId,
-          status: sapRes.status,
-          docEntry: (sapBody as any)?.docEntry ?? null,
-          error: patchOk ? null : ((sapBody as any)?.error ?? `HTTP ${sapRes.status}`),
-        });
-      } catch (e) {
-        stageLog("purchase_to_sap_patch", "error", { requestId, expenseId, error: (e as Error).message });
-      }
-    }
-  }
-
-  if (String((exp as any).doc_type) === "sales") {
-    // Pedido de venda aprovado no ERP Flow → integra ao SAP (Orders) usando o
-    // Apiuser da empresa. Não depende da sessão SAP do aprovador.
-    {
-      // Se o pedido já existe no SAP, reenviamos em modo PATCH para refletir
-      // ajustes feitos no Flow (valores, itens, CC/projeto) após a reaprovação.
-      const alreadyInSap = !!(exp as any).sap_doc_entry;
-      try {
-        const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-        const svcUrl = Deno.env.get("SUPABASE_URL") || "";
-        const sapRes = await fetch(`${svcUrl}/functions/v1/expense-to-sap`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${svcKey}`,
-            apikey: svcKey,
-            "x-internal-retry": "1",
-          },
-          body: JSON.stringify({ expense_id: expenseId, patch_document: alreadyInSap }),
-        });
-        const sapBody = await sapRes.json().catch(() => ({}));
-        stageLog(alreadyInSap ? "sales_to_sap_patch" : "sales_to_sap", sapRes.ok ? "info" : "error", {
-          requestId,
-          expenseId,
-          status: sapRes.status,
-          docEntry: (sapBody as any)?.doc_entry ?? null,
-          error: (sapBody as any)?.error ?? null,
-        });
-      } catch (e) {
-        stageLog("sales_to_sap", "error", { requestId, expenseId, error: (e as Error).message });
+  const dispatchToErp = (async () => {
+    // Pedido de COMPRA aprovado no Flow: cria no ERP na primeira aprovação ou
+    // atualiza em modo PATCH quando já existe. O servidor é o responsável pelo
+    // disparo para que a integração não dependa da aba do aprovador continuar
+    // aberta após a resposta.
+    if (String((exp as any).doc_type) !== "sales") {
+      const nativeErp = isNativeErpExpenseOrigin((exp as any).origin);
+      if (!nativeErp) {
+        const alreadyInSap = !!(exp as any).sap_doc_entry;
+        try {
+          const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+          const svcUrl = Deno.env.get("SUPABASE_URL") || "";
+          const sapRes = await fetch(`${svcUrl}/functions/v1/expense-to-sap`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${svcKey}`,
+              apikey: svcKey,
+              "x-internal-retry": "1",
+            },
+            body: JSON.stringify({
+              expense_id: expenseId,
+              patch_document: alreadyInSap,
+              use_service_account: true,
+            }),
+          });
+          const sapBody = await sapRes.json().catch(() => ({}));
+          const patchOk = sapRes.ok && (sapBody as any)?.success !== false;
+          stageLog(alreadyInSap ? "purchase_to_sap_patch" : "purchase_to_sap", patchOk ? "info" : "error", {
+            requestId,
+            expenseId,
+            status: sapRes.status,
+            docEntry: (sapBody as any)?.docEntry ?? null,
+            error: patchOk ? null : ((sapBody as any)?.error ?? `HTTP ${sapRes.status}`),
+          });
+        } catch (e) {
+          stageLog(alreadyInSap ? "purchase_to_sap_patch" : "purchase_to_sap", "error", {
+            requestId,
+            expenseId,
+            error: (e as Error).message,
+          });
+        }
       }
     }
 
-    await notifySalesMilestone(admin, {
-      milestone: "approved",
-      companyDb: (exp as any).company_db,
-      refId: expenseId,
-      link: "/vendas/pedidos",
-      summary: "Um pedido de venda foi aprovado e está pronto para emissão de NFS-e.",
-      details: [
-        { label: "Cliente", value: (exp as any).supplier_name },
-        { label: "Valor", value: `${(exp as any).currency || "BRL"} ${Number((exp as any).total_amount || 0).toFixed(2)}` },
-        { label: "Empresa", value: (exp as any).company_db },
-        { label: "Solicitante", value: (exp as any).requester_name },
-      ],
+    if (String((exp as any).doc_type) === "sales") {
+      // Pedido de venda aprovado no ERP Flow → integra ao SAP (Orders) usando o
+      // Apiuser da empresa. Não depende da sessão SAP do aprovador.
+      {
+        // Se o pedido já existe no SAP, reenviamos em modo PATCH para refletir
+        // ajustes feitos no Flow (valores, itens, CC/projeto) após a reaprovação.
+        const alreadyInSap = !!(exp as any).sap_doc_entry;
+        try {
+          const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+          const svcUrl = Deno.env.get("SUPABASE_URL") || "";
+          const sapRes = await fetch(`${svcUrl}/functions/v1/expense-to-sap`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${svcKey}`,
+              apikey: svcKey,
+              "x-internal-retry": "1",
+            },
+            body: JSON.stringify({ expense_id: expenseId, patch_document: alreadyInSap }),
+          });
+          const sapBody = await sapRes.json().catch(() => ({}));
+          stageLog(alreadyInSap ? "sales_to_sap_patch" : "sales_to_sap", sapRes.ok ? "info" : "error", {
+            requestId,
+            expenseId,
+            status: sapRes.status,
+            docEntry: (sapBody as any)?.doc_entry ?? null,
+            error: (sapBody as any)?.error ?? null,
+          });
+        } catch (e) {
+          stageLog("sales_to_sap", "error", { requestId, expenseId, error: (e as Error).message });
+        }
+      }
+
+      await notifySalesMilestone(admin, {
+        milestone: "approved",
+        companyDb: (exp as any).company_db,
+        refId: expenseId,
+        link: "/vendas/pedidos",
+        summary: "Um pedido de venda foi aprovado e está pronto para emissão de NFS-e.",
+        details: [
+          { label: "Cliente", value: (exp as any).supplier_name },
+          { label: "Valor", value: `${(exp as any).currency || "BRL"} ${Number((exp as any).total_amount || 0).toFixed(2)}` },
+          { label: "Empresa", value: (exp as any).company_db },
+          { label: "Solicitante", value: (exp as any).requester_name },
+        ],
+      });
+    }
+  })().catch((error) => {
+    stageLog(String((exp as any).doc_type) === "sales" ? "sales_to_sap" : "purchase_to_sap", "error", {
+      requestId,
+      expenseId,
+      error: error instanceof Error ? error.message : String(error),
     });
-  }
+  });
+
+  await runAfterResponse(dispatchToErp);
 
   return await respond(200, {
     ok: true,

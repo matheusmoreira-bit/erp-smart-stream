@@ -11,6 +11,7 @@ import { isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
+import { isNativeErpExpenseOrigin } from "../_shared/expense-origin.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -104,6 +105,7 @@ Deno.serve(async (req) => {
       .eq("status", "aprovado")
       .eq("doc_type", "purchase")
       .is("sap_doc_entry", null)
+      .is("sap_integration_cancelled_at", null)
       .or("sap_purchase_order_status.is.null,sap_purchase_order_status.neq.success")
       .or(`sap_integration_last_attempt_at.is.null,sap_integration_last_attempt_at.lt.${cutoff}`)
       .order("sap_integration_last_attempt_at", { ascending: true, nullsFirst: true })
@@ -138,8 +140,10 @@ Deno.serve(async (req) => {
 
   for (const exp of candidates || []) {
     // Pular docs originados no ERP — a integração criaria duplicata.
-    const origin = String((exp as any).origin || "").toLowerCase();
-    if (["sap", "erp", "sap_erp", "erp_flow"].includes(origin)) {
+    // `erp_flow` significa criado nesta aplicação, portanto deve ser enviado.
+    // Apenas origens que representam um documento já existente no ERP são
+    // excluídas para evitar duplicidade.
+    if (isNativeErpExpenseOrigin((exp as any).origin)) {
       results.push({ id: exp.id, ok: false, error: "originado no ERP — ignorado" });
       continue;
     }

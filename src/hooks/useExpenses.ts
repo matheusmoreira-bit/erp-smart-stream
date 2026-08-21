@@ -1322,8 +1322,6 @@ export function useExpenses(
 
   const approveExpense = useCallback(
     async (expenseId: string, remarks?: string, idempotencyKey?: string, opts?: { skipRefresh?: boolean }) => {
-      const actor = session?.userName || "";
-
       // Server-side authorization: the edge function verifies that the caller
       // (SAP session or Cloud admin) is the designated approver for the
       // CURRENT level before flipping the status. This is the security
@@ -1370,7 +1368,8 @@ export function useExpenses(
         return { replayed };
       }
 
-      // Final level → notify requester and trigger SAP integration.
+      // Final level → notify requester. ERP integration is dispatched by
+      // expense-approval-action so it survives tab/session closure.
       // Em caso de replay (retry idempotente), pulamos a notificação para
       // não duplicá-la, mas ainda garantimos o refresh da lista.
       if (!replayed) {
@@ -1390,84 +1389,13 @@ export function useExpenses(
           }
           } catch { /* silent */ }
 
-          if (["sap", "omie"].includes(String(session?.erpType || "").toLowerCase())) {
-          // Defesa contra race: mesmo que o servidor tenha respondido
-          // finalized=true, revalidamos o status ANTES de invocar o SAP.
-          // Se ainda não estiver "aprovado" (propagação/leitura em réplica),
-          // tentamos por até ~1.5s antes de desistir — evita chamar
-          // expense-to-sap com status ainda "pendente_aprovacao".
-          let confirmedApproved = false;
-          let alreadyInErp = false;
-          let originFromErp = false;
-          for (let attempt = 0; attempt < 5; attempt++) {
-            const { data: fresh } = await expenseRead("expenses")
-              .select("status,sap_doc_entry,origin")
-              .eq("id", expenseId)
-              .maybeSingle();
-            const freshAny = fresh as any;
-            if (freshAny?.status === "aprovado") {
-              confirmedApproved = true;
-              alreadyInErp = !!freshAny?.sap_doc_entry;
-              originFromErp = ["sap", "erp", "sap_erp", "erp_flow"].includes(
-                String(freshAny?.origin || "").toLowerCase(),
-              );
-              break;
-            }
-            await new Promise((r) => setTimeout(r, 300));
-          }
-          if (!confirmedApproved) {
-            await logExpenseDecision(expenseId, "integration_failed", {
-              remarks: "Aprovação registrada, mas status não propagou para 'aprovado' a tempo — integração ERP não disparada automaticamente.",
-            });
-            return;
-          }
-
-          // Se o documento veio do ERP (origem ERP OU já existe no SAP com
-          // sap_doc_entry), NÃO criamos um novo pedido de compra — isso
-          // duplicaria o documento. Quando ele já existe no SAP e foi editado
-          // no Flow, o próprio servidor (expense-approval-action) reenvia em
-          // modo PATCH; aqui apenas registramos a trilha.
-          if (originFromErp || alreadyInErp) {
-            await logExpenseDecision(expenseId, "integrated", {
-              approverName: actor,
-              remarks: alreadyInErp
-                ? "Documento já existente no ERP — alteração reenviada ao SAP em modo atualização (PATCH)."
-                : "Documento originado no ERP — apenas a decisão de aprovação foi registrada.",
-            });
-            return;
-          }
-
-
-
-          // Integração ao SAP é DESACOPLADA da aprovação: a aprovação já
-          // foi persistida com sucesso pelo servidor. Se a integração
-          // falhar, apenas registramos no audit log — o aprovador NÃO
-          // deve ver essa falha como erro dele. Um super-usuário pode
-          // reintegrar manualmente depois via "Reintegrar ao SAP".
-          try {
-            await invokeExpenseToSap({
-              expense_id: expenseId,
-              // Integração automática após o último nível de aprovação usa
-              // sempre o Apiuser configurado nas credenciais da empresa —
-              // não depende do aprovador estar logado no SAP.
-              use_service_account: true,
-            });
-            await logExpenseDecision(expenseId, "integrated", { approverName: actor });
-          } catch (sapErr) {
-            const msg = sapErr instanceof Error ? sapErr.message : "Erro desconhecido";
-            console.warn("[approval] Integração SAP falhou (aprovação preservada):", msg);
-            await logExpenseDecision(expenseId, "integration_failed", { remarks: msg });
-            // NÃO relançamos: aprovação está registrada e o documento
-            // seguirá para reintegração assíncrona / manual.
-          }
-          }
         })().catch((e) => console.warn("[approval] Pós-aprovação em background falhou:", e));
       }
 
       await refreshIfNeeded();
       return { replayed };
     },
-    [fetchExpenses, session]
+    [fetchExpenses]
   );
 
   const retrySapIntegration = useCallback(
@@ -1525,7 +1453,7 @@ export function useExpenses(
       if (!opts?.skipRefresh) await fetchExpenses();
       return { replayed: !!payload.replayed };
     },
-    [fetchExpenses, session]
+    [fetchExpenses]
   );
 
 

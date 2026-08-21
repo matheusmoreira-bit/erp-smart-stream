@@ -15,6 +15,8 @@ import {
   CreditCard,
   ShoppingCart,
   AlertCircle,
+  Ban,
+  PlayCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -48,6 +50,9 @@ import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
 import { PageTitle } from "@/components/PageTitle";
 import { expenseRead } from "@/lib/expense-read";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { useModuleAccess } from "@/hooks/usePermissions";
 
 /* ───────────────── Types ───────────────── */
 
@@ -65,7 +70,7 @@ interface UnifiedIntegration {
   amount: number | null;
   currency: string | null;
   initiated_by: string | null;
-  status: "success" | "failed" | "pending" | "skipped";
+  status: "success" | "failed" | "pending" | "skipped" | "cancelled";
   sap_doc_entry: number | null;
   sap_doc_num: number | null;
   // Expense-only
@@ -94,6 +99,8 @@ interface ExpenseIntegrationRow extends Record<string, unknown> {
   sap_purchase_order_status: StageStatus;
   sap_attachment_link_status: StageStatus;
   sap_integration_error: string | null;
+  sap_integration_cancelled_at: string | null;
+  sap_integration_cancelled_by: string | null;
   sap_integration_last_attempt_at: string | null;
   sap_status_last_check_at: string | null;
 }
@@ -249,6 +256,7 @@ function StatusBadge({ status }: { status: UnifiedIntegration["status"] }) {
     failed: { label: "Falhou", className: "bg-destructive/15 text-destructive border-destructive/30", Icon: XCircle },
     pending: { label: "Pendente", className: "bg-warning/15 text-warning border-warning/30", Icon: Clock },
     skipped: { label: "Não integrado", className: "bg-muted text-muted-foreground border-border", Icon: AlertCircle },
+    cancelled: { label: "Cancelado", className: "bg-muted text-muted-foreground border-border", Icon: Ban },
   };
   const { label, className, Icon } = cfg[status];
   return (
@@ -264,6 +272,7 @@ function StatusBadge({ status }: { status: UnifiedIntegration["status"] }) {
 export default function IntegrationsMonitor() {
   const navigate = useNavigate();
   const { session } = useSap();
+  const { can } = useModuleAccess("integration_history");
   const [items, setItems] = useState<UnifiedIntegration[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -272,6 +281,8 @@ export default function IntegrationsMonitor() {
   const [statusFilter, setStatusFilter] = useState<"all" | UnifiedIntegration["status"]>("all");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<UnifiedIntegration | null>(null);
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
+  const [pendingCancel, setPendingCancel] = useState<UnifiedIntegration | null>(null);
 
   const fetchData = useCallback(
     async (showSpinner = true) => {
@@ -283,7 +294,7 @@ export default function IntegrationsMonitor() {
         // Expenses with any sign of integration activity
         let expenseQuery = expenseRead("expenses").viewAll()
           .select(
-            "id, created_at, company_db, supplier_name, total_amount, currency, requester_name, status, sap_doc_entry, sap_doc_num, sap_attachment_entry, sap_attachment_status, sap_purchase_order_status, sap_attachment_link_status, sap_integration_error, sap_integration_last_attempt_at, sap_status_last_check_at, origin",
+            "id, created_at, company_db, supplier_name, total_amount, currency, requester_name, status, sap_doc_entry, sap_doc_num, sap_attachment_entry, sap_attachment_status, sap_purchase_order_status, sap_attachment_link_status, sap_integration_error, sap_integration_cancelled_at, sap_integration_cancelled_by, sap_integration_last_attempt_at, sap_status_last_check_at, origin",
           )
           .order("sap_integration_last_attempt_at", { ascending: false, nullsFirst: false })
           .limit(500);
@@ -315,8 +326,10 @@ export default function IntegrationsMonitor() {
         const expenseRows: UnifiedIntegration[] = ((expRes.data || []) as ExpenseIntegrationRow[]).map((e) => {
           const hasError = !!e.sap_integration_error;
           const hasDoc = !!e.sap_doc_entry;
+          const isCancelled = !!e.sap_integration_cancelled_at;
           let status: UnifiedIntegration["status"];
           if (hasDoc) status = "success";
+          else if (isCancelled) status = "cancelled";
           else if (hasError) status = "failed";
           else if (e.sap_purchase_order_status === "pending" || e.sap_attachment_status === "pending") status = "pending";
           else status = "skipped";
@@ -324,7 +337,7 @@ export default function IntegrationsMonitor() {
           return {
             id: e.id,
             source: "expense",
-            created_at: e.sap_integration_last_attempt_at || e.created_at,
+            created_at: e.sap_integration_cancelled_at || e.sap_integration_last_attempt_at || e.created_at,
             last_check_at: e.sap_status_last_check_at || e.sap_integration_last_attempt_at || null,
             company_db: e.company_db,
             external_ref: e.id.slice(0, 8),
@@ -413,13 +426,43 @@ export default function IntegrationsMonitor() {
     });
   }, [items, sourceFilter, statusFilter, search]);
 
+  const controlExpenseIntegration = useCallback(async (item: UnifiedIntegration, action: "dispatch" | "cancel") => {
+    if (item.source !== "expense") return;
+    const key = `${action}:${item.id}`;
+    setActionBusy(key);
+    try {
+      const response = await sapFunctionFetch("expense-integration-control", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expense_id: item.id, action }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload?.success === false) {
+        throw new Error(payload?.error || `Falha ao ${action === "dispatch" ? "disparar" : "cancelar"} integração`);
+      }
+      toast.success(
+        action === "dispatch"
+          ? (payload?.alreadyProcessing ? "Integração já está em processamento" : "Integração disparada")
+          : "Integração cancelada",
+      );
+      setSelected(null);
+      await fetchData(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao controlar integração");
+    } finally {
+      setActionBusy(null);
+      setPendingCancel(null);
+    }
+  }, [fetchData]);
+
   const counts = useMemo(() => {
-    const totals = { all: items.length, expense: 0, pagcorp: 0, success: 0, failed: 0, pending: 0 };
+    const totals = { all: items.length, expense: 0, pagcorp: 0, success: 0, failed: 0, pending: 0, cancelled: 0 };
     for (const it of items) {
       totals[it.source]++;
       if (it.status === "success") totals.success++;
       else if (it.status === "failed") totals.failed++;
       else if (it.status === "pending") totals.pending++;
+      else if (it.status === "cancelled") totals.cancelled++;
     }
     return totals;
   }, [items]);
@@ -440,7 +483,7 @@ export default function IntegrationsMonitor() {
               <div>
                 <h1 className="text-lg font-semibold">Monitor de Integrações</h1>
                 <p className="text-xs text-muted-foreground">
-                  {counts.all} registros • {counts.success} ok • {counts.failed} com erro • {counts.pending} pendentes
+                  {counts.all} registros • {counts.success} ok • {counts.failed} com erro • {counts.pending} pendentes • {counts.cancelled} cancelados
                 </p>
               </div>
             </div>
@@ -484,6 +527,7 @@ export default function IntegrationsMonitor() {
               <SelectItem value="failed">Com erro</SelectItem>
               <SelectItem value="pending">Pendente</SelectItem>
               <SelectItem value="skipped">Não integrado</SelectItem>
+              <SelectItem value="cancelled">Cancelado</SelectItem>
             </SelectContent>
           </Select>
 
@@ -523,6 +567,7 @@ export default function IntegrationsMonitor() {
                   <TableHead>SAP Doc</TableHead>
                   <TableHead className="w-[150px]">Integrado em</TableHead>
                   <TableHead className="w-[150px]">Último polling</TableHead>
+                  {can.view && <TableHead className="w-[104px] text-right">Ações</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -590,6 +635,40 @@ export default function IntegrationsMonitor() {
                         ? (it.last_check_at ? formatDate(it.last_check_at) : "—")
                         : "—"}
                     </TableCell>
+                    {can.view && (
+                      <TableCell className="text-right whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
+                        {it.source === "expense" && !it.sap_doc_entry && String(it.raw.status) === "aprovado" && (
+                          <div className="inline-flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              aria-label="Disparar integração agora"
+                              title="Disparar integração agora"
+                              disabled={actionBusy !== null}
+                              onClick={() => controlExpenseIntegration(it, "dispatch")}
+                            >
+                              {actionBusy === `dispatch:${it.id}`
+                                ? <Loader2 className="h-4 w-4 animate-spin" />
+                                : <PlayCircle className="h-4 w-4" />}
+                            </Button>
+                            {!it.raw.sap_integration_cancelled_at && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive"
+                                aria-label="Cancelar integração"
+                                title="Cancelar integração"
+                                disabled={actionBusy !== null}
+                                onClick={() => setPendingCancel(it)}
+                              >
+                                <Ban className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -713,6 +792,16 @@ export default function IntegrationsMonitor() {
           )}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!pendingCancel}
+        onOpenChange={(open) => !open && setPendingCancel(null)}
+        title="Cancelar esta integração?"
+        description="O pedido continuará aprovado, mas não será enviado automaticamente ao ERP até que alguém use Disparar integração agora."
+        confirmLabel="Cancelar integração"
+        destructive
+        onConfirm={() => pendingCancel && controlExpenseIntegration(pendingCancel, "cancel")}
+      />
     </div>
   );
 }
