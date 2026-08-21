@@ -334,12 +334,16 @@ Deno.serve(async (req) => {
         docs,
         privileged: caller.privileged,
         directorate_branch: caller.directorateBranch,
+        // O cliente usa isto para NÃO substituir uma lista boa por uma
+        // resposta calculada com permissões incompletas.
+        degraded: !!caller.degraded,
         generated_at: new Date().toISOString(),
         took_ms: Date.now() - startedAt,
         timings: { auth_ms: authMs, data_ms: Date.now() - tQuery, ...authPhaseTimings },
       },
       cors,
     );
+
   } catch (error) {
     if (error instanceof AuthError) {
       return json(error.status ?? 401, { error: error.message }, cors);
