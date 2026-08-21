@@ -1355,7 +1355,7 @@ async function createFingerprint(caller: Caller, body: any): Promise<string> {
   }));
 }
 
-async function runCreateOnce(admin: SupabaseClient, caller: Caller, body: any, req: Request) {
+async function runCreateOnce(admin: SupabaseClient, caller: Caller, body: any, req: Request, depth = 0) {
   const fingerprint = await createFingerprint(caller, body);
   const headerKey = (req.headers.get("x-idempotency-key") || "").trim().slice(0, 200);
   const key = headerKey || `fp:${fingerprint}`;
@@ -1371,17 +1371,51 @@ async function runCreateOnce(admin: SupabaseClient, caller: Caller, body: any, r
     // 23505 = chave já reservada → requisição repetida.
     const { data: prev } = await admin
       .from("expense_create_idempotency")
-      .select("expense_id, response, status_code, completed_at")
+      .select("expense_id, response, status_code, completed_at, created_at")
       .eq("idempotency_key", key)
       .maybeSingle();
     const row = prev as any;
+
+    // A chave é derivada do conteúdo do pedido. Se o documento anterior deixou
+    // de existir ou foi cancelado/rejeitado, o usuário está legitimamente
+    // recriando o mesmo pedido: libera a chave em vez de devolver o documento
+    // morto (que depois recusava os anexos).
+    const releaseAndRetry = async () => {
+      await admin.from("expense_create_idempotency").delete().eq("idempotency_key", key);
+      if (depth >= 1) {
+        return json(409, {
+          error: "Não foi possível concluir a criação. Tente novamente em instantes.",
+        });
+      }
+      return await runCreateOnce(admin, caller, body, req, depth + 1);
+    };
+
     if (row?.completed_at && row?.response) {
+      const prevId = row.expense_id ? String(row.expense_id) : "";
+      if (!prevId) return await releaseAndRetry();
+      const { data: prevExpense } = await admin
+        .from("expenses")
+        .select("id, status")
+        .eq("id", prevId)
+        .maybeSingle();
+      const prevStatus = String((prevExpense as any)?.status || "");
+      if (!prevExpense || prevStatus === "cancelado" || prevStatus === "rejeitado") {
+        return await releaseAndRetry();
+      }
       return json(Number(row.status_code) || 200, row.response);
     }
+
+    // Reserva em curso mas travada (função caiu no meio): libera após 5 min.
+    const claimedAt = row?.created_at ? Date.parse(String(row.created_at)) : NaN;
+    if (Number.isFinite(claimedAt) && Date.now() - claimedAt > 5 * 60 * 1000) {
+      return await releaseAndRetry();
+    }
+
     return json(409, {
       error: "Este pedido já está sendo criado. Aguarde a confirmação antes de tentar novamente.",
     });
   }
+
 
   let res: Response;
   try {
