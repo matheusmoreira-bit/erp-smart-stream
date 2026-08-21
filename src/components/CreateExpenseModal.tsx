@@ -31,9 +31,10 @@ import { DecimalInput } from "@/components/DecimalInput";
 import { DateInputBR } from "@/components/DateInputBR";
 import { sapQuery } from "@/lib/sap-client";
 import {
-  costCenterNeedsAlert,
+  shouldAlertCcProject,
   isInstitutionalProject,
   logCcProjectAlert,
+
   recordCcProjectAlertDecision,
 } from "@/lib/cc-project-alert";
 import { CcProjectAlertDialog, type CcProjectAlertInfo } from "@/components/CcProjectAlertDialog";
