@@ -112,11 +112,11 @@ async function readPersisted(
       : null;
     if (!row || !["processing", "completed", "error"].includes(String(row.status))) return null;
     return {
-      status: row.status,
-      hasFiscalDocument: row.has_fiscal_document ?? null,
-      documentKinds: Array.isArray(row.document_kinds) ? row.document_kinds : [],
+      status: String(row.status) as PagCorpDocumentClassification["status"],
+      hasFiscalDocument: row.has_fiscal_document == null ? null : row.has_fiscal_document === true,
+      documentKinds: Array.isArray(row.document_kinds) ? row.document_kinds.map((kind) => String(kind)) : [],
       confidence: row.confidence == null ? null : Number(row.confidence),
-      errorMessage: row.error_message || undefined,
+      errorMessage: row.error_message == null ? undefined : String(row.error_message),
     };
   } catch {
     return null;
