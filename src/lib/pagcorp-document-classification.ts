@@ -73,31 +73,38 @@ async function persist(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ companyDb, classification: { expenseId, ...classification } }),
   });
-  if (!response.ok) throw new Error(`Falha ao salvar classificação (${response.status})`);
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+    throw new Error(String(payload.error || payload.warning || `Falha ao salvar classificação (${response.status})`));
+  }
 }
 
 async function readPersisted(
   companyDb: string,
   expenseId: string | number,
 ): Promise<PagCorpDocumentClassification | null> {
-  const response = await sapFunctionFetch("pagcorp-integration-status", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ companyDb, expenseIds: [expenseId] }),
-  });
-  if (!response.ok) return null;
-  const payload = await response.json().catch(() => ({})) as { classifications?: any[] };
-  const row = Array.isArray(payload.classifications)
-    ? payload.classifications.find((item) => Number(item?.pagcorp_expense_id) === Number(expenseId))
-    : null;
-  if (!row || !["processing", "completed", "error"].includes(String(row.status))) return null;
-  return {
-    status: row.status,
-    hasFiscalDocument: row.has_fiscal_document ?? null,
-    documentKinds: Array.isArray(row.document_kinds) ? row.document_kinds : [],
-    confidence: row.confidence == null ? null : Number(row.confidence),
-    errorMessage: row.error_message || undefined,
-  };
+  try {
+    const response = await sapFunctionFetch("pagcorp-integration-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ companyDb, expenseIds: [expenseId] }),
+    });
+    if (!response.ok) return null;
+    const payload = await response.json().catch(() => ({})) as { classifications?: any[] };
+    const row = Array.isArray(payload.classifications)
+      ? payload.classifications.find((item) => Number(item?.pagcorp_expense_id) === Number(expenseId))
+      : null;
+    if (!row || !["processing", "completed", "error"].includes(String(row.status))) return null;
+    return {
+      status: row.status,
+      hasFiscalDocument: row.has_fiscal_document ?? null,
+      documentKinds: Array.isArray(row.document_kinds) ? row.document_kinds : [],
+      confidence: row.confidence == null ? null : Number(row.confidence),
+      errorMessage: row.error_message || undefined,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function classifyPagCorpDocuments(
@@ -111,19 +118,19 @@ export async function classifyPagCorpDocuments(
   }
 
   const attachments = collectPagCorpAttachments(transaction);
-  if (attachments.length === 0) {
-    const result: PagCorpDocumentClassification = {
-      status: "completed",
-      hasFiscalDocument: false,
-      documentKinds: [],
-      confidence: 1,
-    };
-    await persist(companyDb, transaction.id, result);
-    return result;
-  }
-
-  await persist(companyDb, transaction.id, { status: "processing" });
   try {
+    if (attachments.length === 0) {
+      const result: PagCorpDocumentClassification = {
+        status: "completed",
+        hasFiscalDocument: false,
+        documentKinds: [],
+        confidence: 1,
+      };
+      await persist(companyDb, transaction.id, result);
+      return result;
+    }
+
+    await persist(companyDb, transaction.id, { status: "processing" });
     const files: File[] = [];
     for (const attachment of attachments.slice(0, 8)) {
       const params = new URLSearchParams({ action: "receipt", url: attachment.url, companyDb });

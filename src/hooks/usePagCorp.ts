@@ -64,7 +64,8 @@ async function fetchIntegrationStatus(
         body: JSON.stringify({ companyDb, expenseIds: chunk }),
       });
       if (!res.ok) {
-        throw new Error(`pagcorp-integration-status ${res.status}`);
+        const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+        throw new Error(String(body.error || body.warning || `pagcorp-integration-status ${res.status}`));
       }
       const {
         integrations = [],
@@ -693,7 +694,13 @@ export function usePagCorp() {
     setTransactions((current) => current.map((item) =>
       item.id === transaction.id ? { ...item, documentAnalysisStatus: "processing", documentAnalysisError: null } : item
     ));
-    const result = await classifyPagCorpDocuments(transaction, companyDb, options);
+    const result = await classifyPagCorpDocuments(transaction, companyDb, options).catch((error) => ({
+      status: "error" as const,
+      hasFiscalDocument: null,
+      documentKinds: [],
+      confidence: null,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    }));
     invalidatePagCorpIntegrationStatus(companyDb);
     setTransactions((current) => current.map((item) => item.id === transaction.id
       ? {

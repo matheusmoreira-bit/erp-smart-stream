@@ -58,4 +58,22 @@ describe("classifyPagCorpDocuments", () => {
     expect(mocks.publicFunctionFetch).not.toHaveBeenCalled();
     expect(mocks.sapFunctionFetch).toHaveBeenCalledTimes(1);
   });
+
+  it("returns an error without invoking AI when classification persistence fails", async () => {
+    mocks.sapFunctionFetch
+      .mockResolvedValueOnce(new Response(JSON.stringify({ classifications: [] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "Tabela indisponível" }), { status: 500 }))
+      .mockResolvedValueOnce(new Response(null, { status: 500 }));
+
+    const result = await classifyPagCorpDocuments({
+      id: 456,
+      receipts: [{ downloadUrl: "https://example.test/nf.pdf", fileName: "nf.pdf" }],
+      attachments: [],
+    } as any, "EMPRESA");
+
+    expect(result.status).toBe("error");
+    expect(result.errorMessage).toBe("Tabela indisponível");
+    expect(mocks.publicFunctionFetch).not.toHaveBeenCalled();
+    expect(mocks.sapFunctionFetch).toHaveBeenCalledTimes(3);
+  });
 });
