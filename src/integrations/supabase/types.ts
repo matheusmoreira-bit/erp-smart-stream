@@ -3485,6 +3485,8 @@ export type Database = {
           remarks: string | null
           requester_email: string | null
           requester_name: string
+          revision_note: string | null
+          revision_number: number
           sales_usage: string | null
           sap_attachment_entry: number | null
           sap_attachment_link_status: string | null
@@ -3529,6 +3531,8 @@ export type Database = {
           remarks?: string | null
           requester_email?: string | null
           requester_name: string
+          revision_note?: string | null
+          revision_number?: number
           sales_usage?: string | null
           sap_attachment_entry?: number | null
           sap_attachment_link_status?: string | null
@@ -3573,6 +3577,8 @@ export type Database = {
           remarks?: string | null
           requester_email?: string | null
           requester_name?: string
+          revision_note?: string | null
+          revision_number?: number
           sales_usage?: string | null
           sap_attachment_entry?: number | null
           sap_attachment_link_status?: string | null
