@@ -451,6 +451,16 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     doc_type: docType,
     doc_date: input.doc_date || null,
     due_date: input.due_date || null,
+    payment_terms_code: (() => {
+      const code = (input as { payment_terms_code?: unknown }).payment_terms_code;
+      const s = code == null ? "" : String(code).trim();
+      return s.length > 0 && s.length <= 50 ? s : null;
+    })(),
+    payment_terms_name: (() => {
+      const name = (input as { payment_terms_name?: unknown }).payment_terms_name;
+      const s = name == null ? "" : String(name).trim();
+      return s.length > 0 && s.length <= 255 ? s : null;
+    })(),
     rateio_type: input.rateio_type || null,
     nfse_split_mode:
       (input as { nfse_split_mode?: string }).nfse_split_mode === "per_brand" ? "per_brand" : "unified",

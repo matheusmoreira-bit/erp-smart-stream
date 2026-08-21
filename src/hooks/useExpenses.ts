@@ -249,6 +249,8 @@ export interface Expense {
   branch_id?: number;
   doc_date?: string;
   due_date?: string;
+  payment_terms_code?: string | null;
+  payment_terms_name?: string | null;
   rateio_type?: string | null;
   approval_rule_id?: string | null;
   current_level_order?: number | null;
@@ -274,6 +276,8 @@ export interface CreateExpenseInput {
   doc_type?: ExpenseDocType;
   doc_date?: string;
   due_date?: string;
+  payment_terms_code?: string;
+  payment_terms_name?: string;
   rateio_type?: RateioType | null;
   /** Vendas: emitir NFS-e unificada ou uma nota por marca/projeto. */
   nfse_split_mode?: "unified" | "per_brand";
@@ -914,6 +918,8 @@ export function useExpenses(
           doc_type: effectiveDocType,
           doc_date: input.doc_date || null,
           due_date: input.due_date || null,
+          payment_terms_code: input.payment_terms_code || null,
+          payment_terms_name: input.payment_terms_name || null,
           rateio_type: input.rateio_type || null,
           nfse_split_mode: input.nfse_split_mode || "unified",
           sales_usage: input.sales_usage || null,

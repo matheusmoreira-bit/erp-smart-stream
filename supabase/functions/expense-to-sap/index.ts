@@ -1257,6 +1257,12 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     };
     let docDate = normalizeDate((expense as any).doc_date);
     let dueDate = normalizeDate((expense as any).due_date ?? (expense as any).doc_date);
+    const paymentGroupCode = (() => {
+      const raw = (expense as any).payment_terms_code;
+      if (raw === undefined || raw === null || raw === "") return null;
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : null;
+    })();
 
     // Regra PagCorp: o vencimento é sempre a data da compra. Se o lançamento
     // acontecer fora do mês da compra (período contábil já fechado no SAP),
@@ -1294,6 +1300,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       DocDate: today,
       DocDueDate: dueDate,
       TaxDate: docDate,
+      ...(paymentGroupCode !== null ? { PaymentGroupCode: paymentGroupCode } : {}),
       BPL_IDAssignedToInvoice: branchId,
       // Observação enviada ao SAP: "{código da despesa} - {observação}",
       // limitada a 190 caracteres.

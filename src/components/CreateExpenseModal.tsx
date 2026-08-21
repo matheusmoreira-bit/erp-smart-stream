@@ -222,6 +222,7 @@ export function CreateExpenseModal({
   const [loadingCurrencies, setLoadingCurrencies] = useState(false);
   const [docDate, setDocDate] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [paymentTerms, setPaymentTerms] = useState<SapSearchOption | null>(null);
   const [remarks, setRemarks] = useState("");
   const [items, setItems] = useState<(Omit<ExpenseItem, "id"> & { sapItem?: SapSearchOption | null; sapCostCenter?: SapSearchOption | null; sapProject?: SapSearchOption | null; searchHint?: string })[]>([
     { description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" },
@@ -313,6 +314,21 @@ export function CreateExpenseModal({
     endpoint: "Projects",
     params: { $filter: "Active eq 'tYES'", $select: "Code,Name" },
     mapRow: projectMapRow,
+  });
+
+  const paymentTermsMapRow = useCallback(
+    (row: any) => ({
+      code: String(row.GroupNumber ?? row.GroupNum ?? row.Code ?? ""),
+      name: row.PaymentTermsGroupName || row.PymntGroup || row.Name || "",
+    }),
+    [],
+  );
+  const { options: paymentTermsOptions, isLoading: paymentTermsLoading } = useSapCachedList({
+    cacheKey: "payment_terms_v1",
+    endpoint: "PaymentTermsTypes",
+    params: { $select: "GroupNumber,PaymentTermsGroupName" },
+    mapRow: paymentTermsMapRow,
+    enabled: !isSales && !isOmie,
   });
 
   // Vendas: lista de "Utilização" (NotaFiscalUsage) da empresa ativa no SAP.
@@ -863,6 +879,7 @@ export function CreateExpenseModal({
       setCurrencyOptions(null);
       setDocDate("");
       setDueDate("");
+      setPaymentTerms(null);
       setRemarks("");
       setAiWarning(null);
       setSuggestedSupplierName(undefined);
@@ -986,6 +1003,7 @@ export function CreateExpenseModal({
     }
     if (p.docDate) setDocDate(p.docDate);
     if (p.dueDate) setDueDate(p.dueDate);
+    if (p.paymentTerms) setPaymentTerms(p.paymentTerms);
     if (p.remarks) setRemarks(p.remarks);
     if (p.headerCostCenter) setHeaderCostCenter(p.headerCostCenter);
     if (p.headerProject) setHeaderProject(p.headerProject);
@@ -1022,6 +1040,7 @@ export function CreateExpenseModal({
       currency,
       docDate,
       dueDate,
+      paymentTerms,
       remarks,
       items,
       headerCostCenter,
@@ -1046,7 +1065,7 @@ export function CreateExpenseModal({
     }, 1000);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, isCreating, supplier, currency, docDate, dueDate, remarks, items, headerCostCenter, headerProject, files]);
+  }, [open, isCreating, supplier, currency, docDate, dueDate, paymentTerms, remarks, items, headerCostCenter, headerProject, files]);
 
 
   const extractUrlsFromObject = (obj: any): string[] => {
@@ -2010,6 +2029,7 @@ export function CreateExpenseModal({
     setCurrencyOptions(null);
     setDocDate("");
     setDueDate("");
+    setPaymentTerms(null);
     setRemarks("");
     setHeaderCostCenter(null);
     setHeaderProject(null);
@@ -2167,6 +2187,10 @@ export function CreateExpenseModal({
     }
     if (!dueDate) {
       toast.error("Informe a data de vencimento");
+      return;
+    }
+    if (!isSales && !isOmie && paymentTermsOptions.length > 0 && !paymentTerms) {
+      toast.error("Informe a forma de pagamento");
       return;
     }
     if (isSales && filteredUsageOptions.length > 0 && !salesUsage) {
@@ -2331,6 +2355,8 @@ export function CreateExpenseModal({
         doc_type: mode,
         doc_date: docDate || undefined,
         due_date: dueDate || undefined,
+        payment_terms_code: !isSales ? paymentTerms?.code || undefined : undefined,
+        payment_terms_name: !isSales ? paymentTerms?.name || undefined : undefined,
         rateio_type: !isSales ? rateioType : undefined,
         nfse_split_mode: isSales ? nfseSplitMode : undefined,
         sales_usage: isSales ? salesUsage?.code || undefined : undefined,
@@ -2455,6 +2481,7 @@ export function CreateExpenseModal({
     if (currency) return true;
     if (docDate) return true;
     if (dueDate) return true;
+    if (paymentTerms) return true;
     if (remarks && remarks.trim().length > 0) return true;
     if (headerCostCenter) return true;
     if (headerProject) return true;
@@ -2482,6 +2509,7 @@ export function CreateExpenseModal({
     currency,
     docDate,
     dueDate,
+    paymentTerms,
     remarks,
     headerCostCenter,
     headerProject,
@@ -2521,6 +2549,7 @@ export function CreateExpenseModal({
           currency,
           docDate,
           dueDate,
+          paymentTerms,
           remarks,
           items,
           headerCostCenter,
@@ -2548,6 +2577,7 @@ export function CreateExpenseModal({
     currency,
     docDate,
     dueDate,
+    paymentTerms,
     remarks,
     headerCostCenter,
     headerProject,
@@ -3283,6 +3313,21 @@ export function CreateExpenseModal({
               </div>
             );
           })()}
+
+          {!isSales && !isOmie && (
+            <div className="space-y-1.5">
+              <CachedSearchCombobox
+                label={paymentTermsOptions.length > 0 ? "Forma de pagamento *" : "Forma de pagamento"}
+                options={paymentTermsOptions}
+                isLoading={paymentTermsLoading}
+                value={paymentTerms}
+                onChange={setPaymentTerms}
+                placeholder="Selecione a condição de pagamento…"
+                portalContainer={dialogContainer}
+                required={paymentTermsOptions.length > 0 && !paymentTerms}
+              />
+            </div>
+          )}
 
 
 
