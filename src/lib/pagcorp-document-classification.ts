@@ -73,9 +73,12 @@ async function persist(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ companyDb, classification: { expenseId, ...classification } }),
   });
+  const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
     throw new Error(String(payload.error || payload.warning || `Falha ao salvar classificação (${response.status})`));
+  }
+  if (payload.classificationStoreUnavailable) {
+    throw new Error(String(payload.warning || "Armazenamento da classificação IA indisponível"));
   }
 }
 

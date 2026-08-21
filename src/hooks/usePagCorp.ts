@@ -21,6 +21,7 @@ type IntegrationStatusPayload = {
 
 const integrationStatusCache = new Map<string, { at: number; data: IntegrationStatusPayload }>();
 const integrationStatusInflight = new Map<string, Promise<IntegrationStatusPayload>>();
+let lastIntegrationStatusWarnAt = 0;
 
 function integrationStatusKey(companyDb: string, ids: number[]): string {
   // Ordena e junta para gerar chave estável independente da ordem do array.
@@ -135,6 +136,8 @@ export interface PagCorpTransaction {
   /** CNPJ do estabelecimento (aiAnalysis) — pode ser alfanumérico; sempre string. */
   merchantTaxId?: string | null;
   documentAnalysisStatus?: "pending" | "processing" | "completed" | "error";
+  /** True only after pagcorp-integration-status was read successfully for this row. */
+  integrationStatusResolved?: boolean;
   hasFiscalDocument?: boolean | null;
   documentKinds?: string[];
   documentAnalysisError?: string | null;
@@ -193,7 +196,7 @@ export interface PagCorpTransaction {
 async function applyIntegrationStatus(
   items: PagCorpTransaction[],
   companyDb: string,
-): Promise<void> {
+): Promise<boolean> {
   const expenseIds = items
     .map((t) => Number(t.id))
     .filter((id) => Number.isFinite(id) && !Number.isNaN(id));
@@ -205,6 +208,10 @@ async function applyIntegrationStatus(
       nondeductibleExpenses = [],
       classifications = [],
     } = await fetchIntegrationStatus(companyDb, expenseIds);
+
+    items.forEach((transaction) => {
+      transaction.integrationStatusResolved = true;
+    });
 
     const classificationMap = new Map<number, any>();
     (classifications as any[]).forEach((row) => classificationMap.set(Number(row.pagcorp_expense_id), row));
@@ -320,8 +327,17 @@ async function applyIntegrationStatus(
       });
     }
   } catch (e) {
-    console.warn("PagCorp integration-status fetch failed:", e);
+    items.forEach((transaction) => {
+      transaction.integrationStatusResolved = false;
+    });
+    const now = Date.now();
+    if (now - lastIntegrationStatusWarnAt > 30_000) {
+      lastIntegrationStatusWarnAt = now;
+      console.warn("PagCorp integration-status fetch failed:", e);
+    }
+    return false;
   }
+  return true;
 }
 
 export function usePagCorp() {
@@ -487,6 +503,7 @@ export function usePagCorp() {
 
           receipts,
           integrated: false,
+          integrationStatusResolved: false,
           isReversed: Number(item.amount || item.value || item.expenseValue || 0) === 0,
         };
       });

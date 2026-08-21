@@ -252,9 +252,11 @@ export default function PagCorp() {
     const companyDb = session?.companyDB;
     if (!companyDb) return;
     const pending = transactions.filter((transaction) =>
+      transaction.integrationStatusResolved === true &&
       !transaction.integrated &&
       !transaction.isReversed &&
       (!transaction.documentAnalysisStatus || transaction.documentAnalysisStatus === "pending") &&
+      ((transaction.receipts?.length || 0) > 0 || (transaction.attachments?.length || 0) > 0) &&
       !classificationInflightRef.current.has(transaction.id)
     );
     const availableSlots = Math.max(0, 3 - classificationInflightRef.current.size);
@@ -1520,7 +1522,7 @@ export default function PagCorp() {
                             return (
                               <div className="flex items-center justify-center gap-2">
                                 {statusBadge}
-                                {!t.integrated && !t.isReversed && (
+                                {!t.integrated && !t.isReversed && t.integrationStatusResolved === true && (
                                   t.documentAnalysisStatus === "completed" ? (
                                     <Badge
                                       variant="outline"
@@ -1716,6 +1718,10 @@ export default function PagCorp() {
                             </Badge>
                           ) : integrating === t.id ? (
                             <Loader2 className="w-4 h-4 animate-spin mx-auto text-primary" />
+                          ) : t.integrationStatusResolved !== true ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              <Loader2 className="w-3 h-3 animate-spin" /> Status
+                            </span>
                           ) : t.documentAnalysisStatus === "error" ? (
                             <Button
                               variant="outline"

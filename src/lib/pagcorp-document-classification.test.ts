@@ -76,4 +76,25 @@ describe("classifyPagCorpDocuments", () => {
     expect(mocks.publicFunctionFetch).not.toHaveBeenCalled();
     expect(mocks.sapFunctionFetch).toHaveBeenCalledTimes(3);
   });
+
+  it("does not invoke AI when the classification store is unavailable", async () => {
+    mocks.sapFunctionFetch
+      .mockResolvedValueOnce(new Response(JSON.stringify({ classifications: [] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        classificationStoreUnavailable: true,
+        warning: "Store indisponível",
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 500 }));
+
+    const result = await classifyPagCorpDocuments({
+      id: 789,
+      receipts: [{ downloadUrl: "https://example.test/nf.pdf", fileName: "nf.pdf" }],
+      attachments: [],
+    } as any, "EMPRESA");
+
+    expect(result.status).toBe("error");
+    expect(result.errorMessage).toBe("Store indisponível");
+    expect(mocks.publicFunctionFetch).not.toHaveBeenCalled();
+    expect(mocks.sapFunctionFetch).toHaveBeenCalledTimes(3);
+  });
 });
