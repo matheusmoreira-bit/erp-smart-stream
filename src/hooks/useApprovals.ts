@@ -587,14 +587,17 @@ export function useApprovals() {
   const silentLoginTriedRef = useRef<string | null>(null);
 
 
-  const fetchFromSap = useCallback(async (): Promise<ApprovalDoc[]> => {
+  const fetchFromSap = useCallback(async (): Promise<ApprovalDoc[] | null> => {
     // Aprovações originadas no SAP só devem ser consultadas quando já existe
     // uma sessão técnica ativa. Abrir a tela nunca pode disparar o login ERP:
     // a autenticação é solicitada apenas ao executar uma ação no Service Layer.
     // Sem sessão técnica no navegador o servidor resolve a leitura com a
     // credencial da empresa (só a leitura — ações continuam exigindo sessão).
-    if (!session || session.erpType !== "sap") return [];
-    if (!session.sessionId && SERVICE_LAYER_ONLY_DBS.has(session.companyDB)) return [];
+    // Retorna `null` (= "não consultado") em vez de lista vazia, para que a
+    // fila já exibida não seja apagada.
+    if (!session || session.erpType !== "sap") return null;
+    if (!session.sessionId && SERVICE_LAYER_ONLY_DBS.has(session.companyDB)) return null;
+
     const companyDb = session.companyDB;
 
     // Empresas sem HANA: consulta direto no Service Layer.
@@ -715,10 +718,14 @@ export function useApprovals() {
     try {
       const docs = await fetchFromSap();
       if (SERVICE_LAYER_ONLY_DBS.has(session.companyDB)) recordCircuitSuccess(session.companyDB);
+      // `null` = consulta não realizada (sem sessão técnica). Nunca substitui a
+      // lista já exibida por uma resposta que não representa a fila real.
+      if (docs === null) return;
       setApprovals(docs);
       const now = new Date().toISOString();
       setLastUpdatedAt(now);
       if (!skipCache) writeApprovalsCache(session as SapSession, docs).catch((e) => console.warn("approvals cache write failed:", e));
+
     } catch (e) {
       console.error("Error fetching approvals:", e);
       const msg = e instanceof Error ? e.message : "Erro ao buscar aprovações";

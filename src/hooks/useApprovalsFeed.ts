@@ -62,6 +62,9 @@ export function useApprovalsFeed() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef<Promise<void> | null>(null);
+  // Snapshot do estado atual para decidir se uma resposta menor deve ser aceita.
+  const stateRef = useRef<FeedState>(state);
+  stateRef.current = state;
 
   const load = useCallback(async () => {
     if (!companyDb) {
@@ -71,24 +74,49 @@ export function useApprovalsFeed() {
     }
     if (inFlight.current) return inFlight.current;
 
+    const fetchOnce = async (): Promise<FeedState & { degraded: boolean }> => {
+      const res = await sapFunctionFetch("approvals-feed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_db: companyDb }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(body?.error || `approvals-feed ${res.status}`);
+      return {
+        docs: (body?.docs || []) as ApprovalFeedDoc[],
+        privileged: Boolean(body?.privileged),
+        degraded: Boolean(body?.degraded),
+        generatedAt: body?.generated_at || new Date().toISOString(),
+      };
+    };
+
     const run = (async () => {
       setIsRefreshing(true);
       setError(null);
       try {
-        const res = await sapFunctionFetch("approvals-feed", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ company_db: companyDb }),
-        });
-        const body = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(body?.error || `approvals-feed ${res.status}`);
+        let result = await fetchOnce();
+
+        // A fila do aprovador nunca pode ser esvaziada por uma resposta
+        // incompleta: se o servidor sinalizou permissões degradadas, ou se a
+        // lista veio vazia depois de ter documentos, confirmamos com uma
+        // segunda leitura antes de aceitar o resultado menor.
+        const hadDocs = stateRef.current.docs.length > 0;
+        if (result.degraded || (hadDocs && result.docs.length === 0)) {
+          await new Promise((r) => setTimeout(r, 1200));
+          const confirm = await fetchOnce().catch(() => null);
+          // Continua degradado/indisponível: mantém o que já está em tela.
+          if (!confirm || confirm.degraded) return;
+          result = confirm;
+        }
+
         const next: FeedState = {
-          docs: (body?.docs || []) as ApprovalFeedDoc[],
-          privileged: Boolean(body?.privileged),
-          generatedAt: body?.generated_at || new Date().toISOString(),
+          docs: result.docs,
+          privileged: result.privileged,
+          generatedAt: result.generatedAt,
         };
         setState(next);
         if (key) writeCache(key, next);
+
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erro ao carregar aprovações");
       } finally {
@@ -100,6 +128,7 @@ export function useApprovalsFeed() {
     inFlight.current = run;
     return run;
   }, [companyDb, key]);
+
 
   // Troca de empresa: repinta do cache daquela empresa antes de revalidar.
   useEffect(() => {
