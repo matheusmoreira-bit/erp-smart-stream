@@ -44,7 +44,7 @@ const corsHeaders = {
   "Access-Control-Expose-Headers": "X-Function-Version",
 };
 
-const FUNCTION_VERSION = "2026-08-21.3";
+const FUNCTION_VERSION = "2026-08-21.4";
 
 /**
  * Reavalia a matriz de aprovação para um documento que está sem `approval_rule_id`.
@@ -131,6 +131,13 @@ function json(status: number, body: unknown) {
       "X-Function-Version": FUNCTION_VERSION,
     },
   });
+}
+
+function withoutUnsupportedExpenseColumns(updates: Record<string, unknown>) {
+  const safeUpdates = { ...updates };
+  // Compatibilidade com bases cujo schema ainda não possui essa coluna.
+  delete safeUpdates.revision_note;
+  return safeUpdates;
 }
 
 async function updateExpenseWithItems(
@@ -952,11 +959,12 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
     resubmitFallbackUsed = fallbackUsed;
   }
 
+  const persistedUpdates = withoutUnsupportedExpenseColumns(updates);
   if (items) {
-    const updateErr = await updateExpenseWithItems(admin, expenseId, updates, items);
+    const updateErr = await updateExpenseWithItems(admin, expenseId, persistedUpdates, items);
     if (updateErr) return json(500, { error: `Falha ao atualizar pedido e itens: ${updateErr}` });
-  } else if (Object.keys(updates).length > 0) {
-    const { error: upErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
+  } else if (Object.keys(persistedUpdates).length > 0) {
+    const { error: upErr } = await admin.from("expenses").update(persistedUpdates).eq("id", expenseId);
     if (upErr) return json(500, { error: `Falha ao atualizar: ${upErr.message}` });
   }
 
