@@ -23,6 +23,30 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function sapLoginFailure(responseText: string, sapStatus: number) {
+  let sapCode: number | undefined;
+  let rawMessage = "Falha no login SAP";
+  try {
+    const parsed = JSON.parse(responseText);
+    const candidate = parsed?.error?.message?.value || parsed?.error?.message;
+    if (typeof candidate === "string" && candidate.trim()) rawMessage = candidate;
+    sapCode = parsed?.error?.code;
+  } catch { /* mantém mensagem padrão */ }
+
+  const lower = rawMessage.toLowerCase();
+  let message = "Não foi possível abrir uma sessão no SAP.";
+  if (/none-sso/i.test(rawMessage)) {
+    message = "A credencial SAP configurada não permite login sem SSO. Atualize a credencial ou procure o administrador.";
+  } else if (sapCode === -304 || lower.includes("user name or password") || lower.includes("invalid credentials")) {
+    message = "Usuário ou senha SAP inválidos. Atualize a credencial para esta empresa.";
+  } else if (sapCode === -131 || lower.includes("locked") || lower.includes("disabled")) {
+    message = "Usuário bloqueado ou desativado no SAP. Procure o administrador.";
+  } else if (sapStatus >= 500) {
+    message = "Servidor SAP indisponível no momento. Tente novamente em instantes.";
+  }
+  return { sapCode, message, rawMessage };
+}
+
 async function getSapBaseUrl(admin: ReturnType<typeof createClient>, companyDB: string): Promise<string> {
   const fallback = Deno.env.get("SAP_DEFAULT_BASE_URL") || "";
   const { data } = await admin
@@ -94,6 +118,8 @@ Deno.serve(async (req) => {
     // Fluxos de leitura podem usar a credencial de serviço (ApiUser) da empresa.
     // Ações que exigem a identidade do usuário devem enviar allow_service=false.
     const allowService = body.allow_service !== false;
+    // Evita quebrar clientes antigos durante implantação não atômica.
+    const applicationErrors = body.application_errors === true;
 
     const admin = service();
 
@@ -141,6 +167,7 @@ Deno.serve(async (req) => {
       const cachedExp = cached?.expires_at ? Date.parse(cached.expires_at) : 0;
       if (cached?.session_id && cachedExp - SAFETY_MS > Date.now()) {
         return json({
+          ok: true,
           sessionId: cached.session_id,
           routeId: cached.route_id || "",
           companyDB: companyDb,
@@ -184,32 +211,89 @@ Deno.serve(async (req) => {
 
     // Timeout curto + 1 retry: nunca deixar a função pendurada até o
     // idle timeout (150s) da plataforma quando o Service Layer não responde.
+    const runLogin = (username: string, sapPassword: string) => sapFetch(`${baseUrl}/Login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ UserName: username, Password: sapPassword, CompanyDB: effectiveCompanyDb }),
+      timeoutMs: 15_000,
+      maxAttempts: 2,
+      baseDelayMs: 500,
+    });
+
     let loginResp: Response;
     try {
-      loginResp = await sapFetch(`${baseUrl}/Login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ UserName: sapUserName, Password: password, CompanyDB: effectiveCompanyDb }),
-        timeoutMs: 15_000,
-        maxAttempts: 2,
-        baseDelayMs: 500,
-      });
+      loginResp = await runLogin(sapUserName, password);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[sap-auto-login] Service Layer indisponível:", msg);
-      return json({ error: "sap_unavailable", message: `SAP não respondeu ao login: ${msg}`, status: 504 }, 503);
+      const payload = {
+        ok: false,
+        error: "sap_unavailable",
+        message: "SAP não respondeu ao login. Tente novamente em instantes.",
+        retryable: true,
+        sapStatus: 504,
+      };
+      return applicationErrors
+        ? json(payload)
+        : json({ error: payload.message, status: 504 }, 503);
+    }
+
+    // Leituras silenciosas podem usar ApiUser. Se a credencial pessoal estiver
+    // vencida ou for somente SSO, tenta a credencial técnica antes de desistir.
+    if (!loginResp.ok && allowService && !usingService) {
+      const svc = await getServiceCredentials(admin, companyDb);
+      if (svc && (svc.username !== sapUserName || svc.password !== password)) {
+        try {
+          const serviceResp = await runLogin(svc.username, svc.password);
+          sapUserName = svc.username;
+          password = svc.password;
+          usingService = true;
+          if (serviceResp.ok) {
+            loginResp = serviceResp;
+          } else {
+            loginResp = serviceResp;
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error("[sap-auto-login] Service Layer indisponível no fallback:", msg);
+          const payload = {
+            ok: false,
+            error: "sap_unavailable",
+            message: "SAP não respondeu ao login. Tente novamente em instantes.",
+            retryable: true,
+            sapStatus: 504,
+          };
+          return applicationErrors
+            ? json(payload)
+            : json({ error: payload.message, status: 504 }, 503);
+        }
+      }
     }
 
     if (!loginResp.ok) {
       const errText = await loginResp.text().catch(() => "");
-      let errorMsg = "Falha no login SAP";
-      let sapCode: number | undefined;
-      try {
-        const parsed = JSON.parse(errText);
-        errorMsg = parsed?.error?.message?.value || parsed?.error?.message || errorMsg;
-        sapCode = parsed?.error?.code;
-      } catch { /* ignore */ }
-      return json({ error: errorMsg, sapCode, status: loginResp.status }, loginResp.status);
+      const failure = sapLoginFailure(errText, loginResp.status);
+      console.warn("[sap-auto-login] login recusado pelo SAP", {
+        companyDb,
+        sapUserName,
+        usingService,
+        sapCode: failure.sapCode,
+        sapStatus: loginResp.status,
+        message: failure.rawMessage,
+      });
+      // A Edge Function autenticou e executou corretamente. O 401 pertence ao
+      // SAP, portanto volta como falha de aplicação para não virar Runtime Error.
+      const payload = {
+        ok: false,
+        error: "sap_login_failed",
+        message: failure.message,
+        sapCode: failure.sapCode,
+        sapStatus: loginResp.status,
+        retryable: false,
+      };
+      return applicationErrors
+        ? json(payload)
+        : json({ error: failure.message, sapCode: failure.sapCode, status: loginResp.status }, loginResp.status);
     }
 
     const loginData = await loginResp.json();
@@ -245,6 +329,7 @@ Deno.serve(async (req) => {
     } catch { /* ignore audit failure */ }
 
     return json({
+      ok: true,
       sessionId: loginData.SessionId,
       routeId,
       companyDB: companyDb,

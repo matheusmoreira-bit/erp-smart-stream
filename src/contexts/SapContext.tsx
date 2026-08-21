@@ -317,6 +317,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
   // Broker: cria a sessão do Service Layer somente quando uma ação precisa.
   // ------------------------------------------------------------------
   const sessionRef = useRef<ErpSession | null>(session);
+  const silentLoginRetryAtRef = useRef(new Map<string, number>());
   useEffect(() => { sessionRef.current = session; }, [session]);
 
   const [credPrompt, setCredPrompt] = useState<{ companyDB: string; defaultUser: string } | null>(null);
@@ -331,6 +332,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
     const current = sessionRef.current;
     const db = companyDB || current?.companyDB || "";
     if (!db) return null;
+    if (!interactive && (silentLoginRetryAtRef.current.get(db) || 0) > Date.now()) return null;
 
     // 1) Sessão viva reutilizável.
     if (
@@ -356,6 +358,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
     try {
       const { sapAutoLogin } = await import("@/lib/user-sap-credentials");
       const result = await sapAutoLogin(db, false, { allowService: !interactive });
+      silentLoginRetryAtRef.current.delete(db);
       const timeoutMin = Math.min(Math.max(result.sessionTimeout || 30, 1), 30);
       const impAct = getImpersonation();
       // A sessão de serviço não muda a identidade exibida/filtrada do usuário.
@@ -377,6 +380,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
         userName: result.sapUser,
       };
     } catch {
+      if (!interactive) silentLoginRetryAtRef.current.set(db, Date.now() + 60_000);
       /* sem credencial utilizável → pede ao usuário (apenas em ações diretas) */
     }
 

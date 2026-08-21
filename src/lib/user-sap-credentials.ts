@@ -77,12 +77,22 @@ export async function sapAutoLogin(
       company_db: companyDb,
       force,
       allow_service: options?.allowService !== false,
+      application_errors: true,
     }),
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const err = new Error(data.error || `Erro ${res.status}`);
-    (err as Error & { status?: number }).status = res.status;
+  const data = await res.json().catch(() => ({})) as Record<string, unknown>;
+  if (!res.ok || data.ok === false) {
+    const err = new Error(String(data.message || data.error || `Erro ${res.status}`));
+    const details = err as Error & {
+      status?: number;
+      sapCode?: number;
+      code?: string;
+      retryable?: boolean;
+    };
+    details.status = Number(data.sapStatus) || res.status;
+    if (Number.isFinite(Number(data.sapCode))) details.sapCode = Number(data.sapCode);
+    if (typeof data.error === "string") details.code = data.error;
+    details.retryable = data.retryable === true;
     throw err;
   }
   return data as SapAutoLoginResult;
