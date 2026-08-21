@@ -123,36 +123,14 @@ function json(status: number, body: unknown) {
   });
 }
 
-function isMissingUpdateExpenseRpc(error: unknown): boolean {
-  const err = (error || {}) as { code?: string; message?: string; details?: string; hint?: string };
-  const text = [err.code, err.message, err.details, err.hint].filter(Boolean).join(" ").toLowerCase();
-  return (
-    text.includes("pgrst202") ||
-    (text.includes("update_expense_with_items") && text.includes("schema cache")) ||
-    (text.includes("could not find the function") && text.includes("update_expense_with_items"))
-  );
-}
-
 async function updateExpenseWithItems(
   admin: SupabaseClient,
   expenseId: string,
   updates: Record<string, unknown>,
   items: any[],
 ): Promise<string | null> {
-  const { error: atomicErr } = await admin.rpc("update_expense_with_items", {
-    _expense_id: expenseId,
-    _updates: updates,
-    _items: items,
-  } as any);
-  if (!atomicErr) return null;
-  if (!isMissingUpdateExpenseRpc(atomicErr)) return atomicErr.message;
-
-  console.warn("[expense-mutation] update_expense_with_items ausente; usando fallback compatível", {
-    expense_id: expenseId,
-    code: (atomicErr as { code?: string }).code,
-    message: atomicErr.message,
-  });
-
+  // Não depender da RPC `update_expense_with_items`: em produção ela pode ainda
+  // não existir no schema cache, bloqueando edições simples como vencimento.
   if (!Array.isArray(items) || items.length === 0) {
     return "O pedido precisa ter ao menos um item";
   }
