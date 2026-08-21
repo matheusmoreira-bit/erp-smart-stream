@@ -934,9 +934,9 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
     updates.sap_integration_error = null;
     if (alreadyInSap) updates.sap_purchase_order_status = "update_pending";
     updates.revision_number = nextRevision;
-    updates.revision_note = alreadyInSap
-      ? `Atualização do PC ${current.sap_doc_num || current.sap_doc_entry} após a versão ${nextRevision - 1}`
-      : `Atualização de pedido aprovado após a versão ${nextRevision - 1}`;
+    // O contexto da revisão é preservado no log de aprovação e na auditoria.
+    // Não gravamos `revision_note`: há bases ativas que ainda não têm essa
+    // coluna, enquanto `revision_number` já suporta a identificação da versão.
     resubmittedApprover = resolvedApprover;
     resubmittedLevel = resolvedLevel;
     resubmitFallbackUsed = fallbackUsed;
