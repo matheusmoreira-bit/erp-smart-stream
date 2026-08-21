@@ -29,8 +29,11 @@ interface EnrichedItem {
 }
 
 async function enrichItemsWithGroup(
-  items: Array<{ item_code?: string | null }>,
-  session: SapSession,
+  items: Array<{
+    item_code?: string | null;
+    items_group_code?: number | null;
+    items_group_name?: string | null;
+  }>,
 ): Promise<Record<string, EnrichedItem>> {
   const codes = Array.from(
     new Set(
@@ -40,72 +43,19 @@ async function enrichItemsWithGroup(
   const result: Record<string, EnrichedItem> = {};
   if (codes.length === 0) return result;
 
-  // Fetch item -> group code (com 1 retry: falha de sessão SAP deixava o
-  // grupo vazio e derrubava regras do tipo "Grupo de Itens like %impostos%",
-  // fazendo o documento cair no aprovador administrativo padrão).
-  const codeToGroup: Record<string, number | null> = {};
-  const fetchGroupCode = async (code: string): Promise<number | null> => {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const { data } = await sapQuery(
-          session,
-          `Items('${code.replace(/'/g, "''")}')`,
-          { $select: "ItemCode,ItemsGroupCode" },
-          true,
-        );
-        const g = (data as any)?.ItemsGroupCode;
-        if (typeof g === "number") return g;
-        return null;
-      } catch {
-        if (attempt === 1) return null;
-        await new Promise((r) => setTimeout(r, 400));
-      }
-    }
-    return null;
-  };
-  await Promise.all(
-    codes.map(async (code) => {
-      codeToGroup[code] = await fetchGroupCode(code);
-    }),
-  );
-
-  // Fetch unique groups -> name
-  const groupCodes = Array.from(
-    new Set(Object.values(codeToGroup).filter((g): g is number => g != null)),
-  );
-  const groupToName: Record<number, string | null> = {};
-  await Promise.all(
-    groupCodes.map(async (gc) => {
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          const { data } = await sapQuery(
-            session,
-            `ItemGroups(${gc})`,
-            { $select: "Number,GroupName" },
-            true,
-          );
-          groupToName[gc] = (data as any)?.GroupName ?? null;
-          return;
-        } catch {
-          if (attempt === 1) groupToName[gc] = null;
-          else await new Promise((r) => setTimeout(r, 400));
-        }
-      }
-    }),
-  );
-
-  for (const code of codes) {
-    const gc = codeToGroup[code];
+  for (const item of items) {
+    const code = (item.item_code || "").trim();
+    if (!code) continue;
     result[code] = {
       item_code: code,
-      items_group_code: gc,
-      items_group_name: gc != null ? groupToName[gc] ?? null : null,
+      items_group_code: item.items_group_code ?? null,
+      items_group_name: item.items_group_name ?? null,
     };
   }
 
-  // Fallback: para itens cujo grupo o SAP não devolveu, reaproveita o último
-  // grupo já persistido para o mesmo código em documentos anteriores. Assim as
-  // regras por Grupo de Itens continuam batendo mesmo com o ERP instável.
+  // Criação de despesa deve ser uma operação interna e rápida. Não consultamos
+  // o Service Layer aqui; quando o grupo não vem no payload, reaproveitamos o
+  // último grupo persistido para o mesmo item em documentos anteriores.
   const missing = codes.filter((c) => !result[c]?.items_group_name);
   if (missing.length > 0) {
     try {
@@ -209,6 +159,8 @@ export interface ExpenseItem {
   line_total: number;
   cost_center?: string;
   project?: string;
+  items_group_code?: number | null;
+  items_group_name?: string | null;
 }
 
 export interface ExpenseAttachment {
@@ -265,6 +217,8 @@ export type ExpenseDocType = "purchase" | "sales";
 export interface CreateExpenseInput {
   supplier_code?: string;
   supplier_name: string;
+  supplier_tax_id?: string | null;
+  supplier_status?: string | null;
   currency?: string;
   cost_center?: string;
   project?: string;
@@ -732,9 +686,10 @@ export function useExpenses(
       let currentApprover: string | null = null;
       let matchedRuleId: string | null = null;
 
-      // Enrich items with SAP item group (used both for rule context and for persistence)
+      // Enrich items with local/history item group data (used both for rule context and persistence).
+      // Keep create fast: no live SAP calls before the internal document exists.
       const isSapSession = String(session.erpType || "").toLowerCase() === "sap";
-      const enriched = isSapSession ? await enrichItemsWithGroup(input.items, session) : {};
+      const enriched = await enrichItemsWithGroup(input.items);
       const itemCtx = buildItemCtx(input.items, enriched);
 
       // Evaluate approval rules for manual expenses only.
@@ -784,9 +739,13 @@ export function useExpenses(
           const candidateCcs = headerCc ? [headerCc] : itemCostCenters;
 
           // Enriquece atributos do fornecedor (CNPJ / status) para regras baseadas em Fornecedor.
-          const supplierAttrs = isSapSession
-            ? await fetchSupplierAttributes(input.supplier_code, session)
-            : { cnpj: "", status: "ativo" };
+          const supplierTaxId = String(input.supplier_tax_id || "").toLowerCase();
+          const supplierStatus = String(input.supplier_status || "").toLowerCase();
+          const supplierAttrs = supplierTaxId || supplierStatus
+            ? { cnpj: supplierTaxId, status: supplierStatus || "ativo" }
+            : isSapSession
+              ? await fetchSupplierAttributes(input.supplier_code, session)
+              : { cnpj: "", status: "ativo" };
 
           let match: Awaited<ReturnType<typeof findMatchingRule>> = null;
           for (const cc of (candidateCcs.length > 0 ? candidateCcs : [""])) {
@@ -1111,9 +1070,7 @@ export function useExpenses(
 
       let enrichedItems: any[] | undefined;
       if (input.items) {
-        const enrichedUpd = String(session.erpType || "").toLowerCase() === "sap"
-          ? await enrichItemsWithGroup(input.items, session)
-          : {};
+        const enrichedUpd = await enrichItemsWithGroup(input.items);
         enrichedItems = input.items.map((item) => {
           const code = (item.item_code || "").trim();
           const e = code ? enrichedUpd[code] : undefined;

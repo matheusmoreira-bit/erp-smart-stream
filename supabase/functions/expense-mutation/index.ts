@@ -123,6 +123,14 @@ function json(status: number, body: unknown) {
   });
 }
 
+function runAfterResponse(task: Promise<unknown>) {
+  const edgeRuntime = (globalThis as unknown as {
+    EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
+  }).EdgeRuntime;
+  if (edgeRuntime?.waitUntil) edgeRuntime.waitUntil(task);
+  else void task;
+}
+
 function normalize(s: unknown): string {
   return String(s ?? "").toLowerCase().trim();
 }
@@ -202,6 +210,7 @@ async function validateActiveSapItems(
   companyDb: string,
   items: Array<{ item_code?: string | null }>,
   docType: string,
+  options: { liveSap?: boolean } = {},
 ): Promise<string | null> {
   const codes = Array.from(
     new Set(
@@ -221,6 +230,30 @@ async function validateActiveSapItems(
     const invalid = codes.filter((code) => !/^P:\d+$/i.test(code));
     return invalid.length > 0
       ? `Pedido de Compra Omie aceita apenas produtos ativos selecionados no catálogo (códigos P:<id>). Item(ns) inválido(s): ${invalid.join(", ")}.`
+      : null;
+  }
+
+  if (options.liveSap === false) {
+    const { data: cacheRows } = await admin
+      .from("sap_cache")
+      .select("data")
+      .eq("company_db", companyDb)
+      .in("cache_key", ["items_purchase_active_v3", "items_purchase_active_v4"])
+      .order("expires_at", { ascending: false })
+      .limit(1);
+    const cachedItems = Array.isArray(cacheRows) && cacheRows.length > 0
+      ? ((cacheRows[0] as any).data || [])
+      : [];
+    if (!Array.isArray(cachedItems) || cachedItems.length === 0) return null;
+
+    const activeCodes = new Set(
+      cachedItems
+        .map((row: any) => String(row?.ItemCode || "").trim())
+        .filter(Boolean),
+    );
+    const missing = codes.filter((code) => !activeCodes.has(code));
+    return missing.length > 0
+      ? `Item não encontrado no cache de itens ativos da empresa ${companyDb}: ${missing.join(", ")}. Atualize a lista de itens e selecione novamente.`
       : null;
   }
 
@@ -296,7 +329,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   if (Number(input.attachment_count || 0) < 1) {
     return json(400, { error: "Anexo obrigatório: documentos devem ser criados com ao menos 1 anexo." });
   }
-  const itemValidationError = await validateActiveSapItems(admin, companyDb, items, docType);
+  const itemValidationError = await validateActiveSapItems(admin, companyDb, items, docType, { liveSap: false });
   if (itemValidationError) return json(400, { error: itemValidationError });
 
   // Centros de custo desativados são redirecionados para a alçada ativa
@@ -541,46 +574,50 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   }
 
   if (matrixGap) {
-    await notifyMatrixGap({
-      companyDb,
-      docType: String(input.doc_type || "purchase"),
-      expenseId,
-      costCenter: input.cost_center || items[0]?.cost_center || null,
-      project: input.project || items[0]?.project || null,
-      totalAmount,
-      currency: input.currency || "BRL",
-      requester: requesterName,
-      reason: "Nenhuma regra ativa casou com os critérios do documento",
-    });
+    runAfterResponse(
+      notifyMatrixGap({
+        companyDb,
+        docType: String(input.doc_type || "purchase"),
+        expenseId,
+        costCenter: input.cost_center || items[0]?.cost_center || null,
+        project: input.project || items[0]?.project || null,
+        totalAmount,
+        currency: input.currency || "BRL",
+        requester: requesterName,
+        reason: "Nenhuma regra ativa casou com os critérios do documento",
+      }).catch((e) => console.warn("[expense-mutation] notifyMatrixGap failed:", e instanceof Error ? e.message : e)),
+    );
   }
 
 
 
   if (status === "pendente_aprovacao") {
-    await notifyApprovalPending(admin, {
-      expenseId,
-      companyDb,
-      approverEmail: resolvedApproverEmail,
-      approverName: resolvedApprover,
-      levelOrder: resolvedLevel,
-      requesterName,
-      supplierName: input.supplier_name || input.supplier_code,
-      totalAmount,
-      currency: input.currency || "BRL",
-      docType: String(insertPayload.doc_type || "purchase"),
-      resolution: {
-        source: matrixGap ? "default_fallback" : (fallbackUsed ? "self_approval_escalation" : "matrix_rule"),
-        reason: matrixGap
-          ? "Nenhuma regra ativa casou com os critérios do documento — aprovador global de contingência"
-          : fallbackUsed
-            ? "Solicitante era o aprovador designado — redirecionado para o aprovador de contingência"
-            : `Regra da matriz aplicada no nível ${resolvedLevel}${escalatedTo ? ` (escalado para ${escalatedTo})` : ""}`,
-        ruleId: matrixGap ? null : ruleId,
-        costCenter: input.cost_center || items[0]?.cost_center || null,
-        project: input.project || items[0]?.project || null,
-        metadata: { escalated_to: escalatedTo, matrix_gap: matrixGap, fallback_used: fallbackUsed },
-      },
-    });
+    runAfterResponse(
+      notifyApprovalPending(admin, {
+        expenseId,
+        companyDb,
+        approverEmail: resolvedApproverEmail,
+        approverName: resolvedApprover,
+        levelOrder: resolvedLevel,
+        requesterName,
+        supplierName: input.supplier_name || input.supplier_code,
+        totalAmount,
+        currency: input.currency || "BRL",
+        docType: String(insertPayload.doc_type || "purchase"),
+        resolution: {
+          source: matrixGap ? "default_fallback" : (fallbackUsed ? "self_approval_escalation" : "matrix_rule"),
+          reason: matrixGap
+            ? "Nenhuma regra ativa casou com os critérios do documento — aprovador global de contingência"
+            : fallbackUsed
+              ? "Solicitante era o aprovador designado — redirecionado para o aprovador de contingência"
+              : `Regra da matriz aplicada no nível ${resolvedLevel}${escalatedTo ? ` (escalado para ${escalatedTo})` : ""}`,
+          ruleId: matrixGap ? null : ruleId,
+          costCenter: input.cost_center || items[0]?.cost_center || null,
+          project: input.project || items[0]?.project || null,
+          metadata: { escalated_to: escalatedTo, matrix_gap: matrixGap, fallback_used: fallbackUsed },
+        },
+      }).catch((e) => console.warn("[expense-mutation] notifyApprovalPending failed:", e instanceof Error ? e.message : e)),
+    );
 
   }
 

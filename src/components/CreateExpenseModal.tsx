@@ -2346,6 +2346,8 @@ export function CreateExpenseModal({
       await onCreate({
         supplier_name: supplier.name,
         supplier_code: supplier.code || undefined,
+        supplier_tax_id: supplier.details?.taxId || supplier.extra || undefined,
+        supplier_status: (supplier as any).frozen ? "inativo" : "ativo",
         currency: currency || undefined,
         cost_center: headerCostCenter?.code || undefined,
         project: headerProject?.code || undefined,
