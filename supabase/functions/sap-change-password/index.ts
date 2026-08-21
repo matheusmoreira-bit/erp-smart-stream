@@ -638,16 +638,19 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
     }
 
     if (saveManaged && changedAny) {
-      await admin.from("audit_log").insert({
-        actor_id: callerId && !callerId.startsWith("sap:") ? callerId : null,
-        actor_email: (caller as { email?: string }).email || null,
-        action: "sap_managed_password_provisioned",
-        entity_type: "user_sap_credentials",
-        entity_id: managedUserId,
-        company_db: targets[0] || null,
-        details: { target_email: managedTargetEmail, sap_user: userCode, companies: targets },
-      }).catch(() => null);
+      try {
+        await admin.from("audit_log").insert({
+          actor_id: callerId && !callerId.startsWith("sap:") ? callerId : null,
+          actor_email: (caller as { email?: string }).email || null,
+          action: "sap_managed_password_provisioned",
+          entity_type: "user_sap_credentials",
+          entity_id: managedUserId,
+          company_db: targets[0] || null,
+          details: { target_email: managedTargetEmail, sap_user: userCode, companies: targets },
+        });
+      } catch (_) { /* auditoria best-effort */ }
     }
+
 
     return new Response(JSON.stringify({ results, session_revoked: changedAny }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
