@@ -3538,7 +3538,9 @@ export function CreateExpenseModal({
                           updated[i] = { ...updated[i], sapProject: val, project: val?.code || "" };
                           return updated;
                         });
+                        maybeTriggerCcAlert(i, item.sapCostCenter || null, val);
                       }}
+
                       placeholder={
                         origin === "pagcorp" && mappingInfo?.missingFields.includes("Projeto")
                           ? "Sem mapeamento — selecione manualmente"
