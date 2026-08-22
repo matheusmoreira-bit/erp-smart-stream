@@ -13,6 +13,7 @@ import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { normalizeExpenseItems } from "../_shared/expense-items.ts";
 import { callOmieApi, loadOmieCredentials } from "../_shared/omie-api.ts";
 import { buildOmiePurchaseOrderPayload } from "../_shared/omie-purchase-order.ts";
+import { isExpenseIntegrationCancelled } from "../_shared/expense-integration-cancel.ts";
 
 
 const corsHeaders = {
@@ -732,7 +733,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     const integrationPause = await getIntegrationPause(integrationSystem);
     if (integrationPause) return pauseResponse(integrationPause, corsHeaders);
 
-    if ((expense as any).sap_integration_cancelled_at && body.override_cancelled !== true) {
+    if (await isExpenseIntegrationCancelled(supabase, expenseId)) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -815,6 +816,18 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
             alreadyProcessing: true,
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      // O cancelamento também é conferido depois do lock. Isso fecha a corrida
+      // em que o operador cancela entre a leitura inicial e a aquisição do lock.
+      if (await isExpenseIntegrationCancelled(supabase, expenseId)) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            cancelled: true,
+            error: "Integração cancelada manualmente no monitor. Reative com Disparar agora.",
+          }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
     }

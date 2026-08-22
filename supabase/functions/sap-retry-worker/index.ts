@@ -5,6 +5,7 @@
 // or the new error is not retryable, marks the row as exhausted and notifies
 // admins via email + WhatsApp.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { isManualCancellationPayload } from "../_shared/expense-integration-cancel.ts";
 import { backoffMinutes, classifySapError, nextAttemptAt, shouldExhaustRetry, type SapRetryDocType } from "../_shared/sap-retry.ts";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
@@ -178,6 +179,15 @@ Deno.serve(async (req) => {
   const results: Array<{ id: string; ok: boolean; action: string; error?: string }> = [];
 
   for (const row of claimed) {
+    if (row.doc_type === "expense" && isManualCancellationPayload(row.payload)) {
+      await admin.from("sap_retry_queue").update({
+        status: "cancelled",
+        last_error: row.last_error || "Cancelado manualmente no monitor",
+      }).eq("id", row.id);
+      results.push({ id: row.id, ok: false, action: "manual_cancelled" });
+      continue;
+    }
+
     const attempts = (row.attempts || 0) + 1;
     const dispatch = buildDispatch(row.doc_type, row.ref_id, row.payload || {});
     if (!dispatch) {

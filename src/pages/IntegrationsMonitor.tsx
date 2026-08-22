@@ -99,10 +99,14 @@ interface ExpenseIntegrationRow extends Record<string, unknown> {
   sap_purchase_order_status: StageStatus;
   sap_attachment_link_status: StageStatus;
   sap_integration_error: string | null;
-  sap_integration_cancelled_at: string | null;
-  sap_integration_cancelled_by: string | null;
   sap_integration_last_attempt_at: string | null;
   sap_status_last_check_at: string | null;
+}
+
+interface ExpenseCancellation {
+  expenseId: string;
+  cancelledAt: string | null;
+  cancelledBy: string | null;
 }
 
 interface PagCorpIntegrationRow extends Record<string, unknown> {
@@ -294,7 +298,7 @@ export default function IntegrationsMonitor() {
         // Expenses with any sign of integration activity
         let expenseQuery = expenseRead("expenses").viewAll()
           .select(
-            "id, created_at, company_db, supplier_name, total_amount, currency, requester_name, status, sap_doc_entry, sap_doc_num, sap_attachment_entry, sap_attachment_status, sap_purchase_order_status, sap_attachment_link_status, sap_integration_error, sap_integration_cancelled_at, sap_integration_cancelled_by, sap_integration_last_attempt_at, sap_status_last_check_at, origin",
+            "id, created_at, company_db, supplier_name, total_amount, currency, requester_name, status, sap_doc_entry, sap_doc_num, sap_attachment_entry, sap_attachment_status, sap_purchase_order_status, sap_attachment_link_status, sap_integration_error, sap_integration_last_attempt_at, sap_status_last_check_at, origin",
           )
           .order("sap_integration_last_attempt_at", { ascending: false, nullsFirst: false })
           .limit(500);
@@ -323,10 +327,27 @@ export default function IntegrationsMonitor() {
         if (expRes.error) throw expRes.error;
         if (pagRes.error) throw pagRes.error;
 
-        const expenseRows: UnifiedIntegration[] = ((expRes.data || []) as ExpenseIntegrationRow[]).map((e) => {
+        const expenses = (expRes.data || []) as ExpenseIntegrationRow[];
+        const cancellationById = new Map<string, ExpenseCancellation>();
+        if (expenses.length > 0) {
+          const cancellationResponse = await sapFunctionFetch("expense-integration-control", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "list", expense_ids: expenses.map((expense) => expense.id) }),
+          });
+          if (cancellationResponse.ok) {
+            const payload = await cancellationResponse.json().catch(() => ({}));
+            for (const cancellation of (payload?.cancellations || []) as ExpenseCancellation[]) {
+              cancellationById.set(cancellation.expenseId, cancellation);
+            }
+          }
+        }
+
+        const expenseRows: UnifiedIntegration[] = expenses.map((e) => {
           const hasError = !!e.sap_integration_error;
           const hasDoc = !!e.sap_doc_entry;
-          const isCancelled = !!e.sap_integration_cancelled_at;
+          const cancellation = cancellationById.get(e.id);
+          const isCancelled = !!cancellation;
           let status: UnifiedIntegration["status"];
           if (hasDoc) status = "success";
           else if (isCancelled) status = "cancelled";
@@ -337,7 +358,7 @@ export default function IntegrationsMonitor() {
           return {
             id: e.id,
             source: "expense",
-            created_at: e.sap_integration_cancelled_at || e.sap_integration_last_attempt_at || e.created_at,
+            created_at: cancellation?.cancelledAt || e.sap_integration_last_attempt_at || e.created_at,
             last_check_at: e.sap_status_last_check_at || e.sap_integration_last_attempt_at || null,
             company_db: e.company_db,
             external_ref: e.id.slice(0, 8),
@@ -352,7 +373,11 @@ export default function IntegrationsMonitor() {
             purchase_order_status: e.sap_purchase_order_status as StageStatus,
             attachment_link_status: e.sap_attachment_link_status as StageStatus,
             attachment_entry: e.sap_attachment_entry,
-            raw: e,
+            raw: {
+              ...e,
+              sap_integration_cancelled_at: cancellation?.cancelledAt || null,
+              sap_integration_cancelled_by: cancellation?.cancelledBy || null,
+            },
           };
         });
 

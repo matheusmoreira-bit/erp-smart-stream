@@ -3,6 +3,8 @@
 // retryable / non-retryable and enqueues a row in `public.sap_retry_queue`
 // so `sap-retry-worker` can reprocess them with exponential backoff.
 
+import { isManualCancellationPayload } from "./expense-integration-cancel.ts";
+
 export type SapRetryDocType =
   | "expense"
   | "advance"
@@ -128,7 +130,7 @@ export async function enqueueRetry(admin: any, params: EnqueueRetryParams): Prom
     // duplicatas do mesmo pedido.
     const { data: existingRows } = await admin
       .from("sap_retry_queue")
-      .select("id,attempts,status")
+      .select("id,attempts,status,payload")
       .eq("doc_type", params.doc_type)
       .eq("ref_id", params.ref_id)
       .neq("status", "succeeded")
@@ -137,6 +139,9 @@ export async function enqueueRetry(admin: any, params: EnqueueRetryParams): Prom
     const existing = Array.isArray(existingRows) ? existingRows[0] : null;
 
     if (existing?.id) {
+      if (params.doc_type === "expense" && isManualCancellationPayload(existing.payload)) {
+        return { enqueued: false, id: existing.id };
+      }
       const isActive = existing.status === "pending" || existing.status === "in_flight";
       const patch: Record<string, unknown> = {
         last_error: params.error.slice(0, 2000),

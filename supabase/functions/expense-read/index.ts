@@ -38,6 +38,19 @@ const OPS = new Set(["eq", "neq", "gt", "gte", "lt", "lte", "like", "ilike", "in
 const IDENT = /^[a-z0-9_]+$/;
 const SELECT_RE = /^[a-zA-Z0-9_,\s*()]+$/;
 const MAX_ROWS = 2000;
+const RETIRED_OPTIONAL_COLUMNS = new Set([
+  "sap_integration_cancelled_at",
+  "sap_integration_cancelled_by",
+]);
+
+function withoutRetiredOptionalColumns(select: string): string {
+  if (select === "*") return select;
+  const columns = select
+    .split(",")
+    .map((column) => column.trim())
+    .filter((column) => column && !RETIRED_OPTIONAL_COLUMNS.has(column));
+  return columns.join(",") || "id";
+}
 
 function json(status: number, body: unknown, cors: Record<string, string>) {
   return new Response(JSON.stringify(body), {
@@ -356,8 +369,12 @@ Deno.serve(async (req) => {
     const table = String(body?.table ?? "");
     if (!TABLES.has(table)) return json(400, { error: "tabela não permitida" }, cors);
 
-    const select = typeof body?.select === "string" && body.select.trim() ? body.select.trim() : "*";
-    if (!SELECT_RE.test(select)) return json(400, { error: "select inválido" }, cors);
+    const requestedSelect = typeof body?.select === "string" && body.select.trim() ? body.select.trim() : "*";
+    if (!SELECT_RE.test(requestedSelect)) return json(400, { error: "select inválido" }, cors);
+    // Bundles anteriores podem continuar em cache durante a publicação. Essas
+    // colunas deixaram de ser necessárias; removê-las aqui evita tela em branco
+    // quando o frontend e o schema não são atualizados no mesmo instante.
+    const select = withoutRetiredOptionalColumns(requestedSelect);
 
     const filters = Array.isArray(body?.filters) ? body.filters.slice(0, 30) : [];
     const limit = Math.min(Number(body?.limit ?? MAX_ROWS) || MAX_ROWS, MAX_ROWS);

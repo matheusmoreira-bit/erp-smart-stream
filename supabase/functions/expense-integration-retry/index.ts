@@ -12,6 +12,7 @@ import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
 import { isNativeErpExpenseOrigin } from "../_shared/expense-origin.ts";
+import { listManualExpenseCancellations } from "../_shared/expense-integration-cancel.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -105,7 +106,6 @@ Deno.serve(async (req) => {
       .eq("status", "aprovado")
       .eq("doc_type", "purchase")
       .is("sap_doc_entry", null)
-      .is("sap_integration_cancelled_at", null)
       .or("sap_purchase_order_status.is.null,sap_purchase_order_status.neq.success")
       .or(`sap_integration_last_attempt_at.is.null,sap_integration_last_attempt_at.lt.${cutoff}`)
       .order("sap_integration_last_attempt_at", { ascending: true, nullsFirst: true })
@@ -122,6 +122,20 @@ Deno.serve(async (req) => {
   }
 
   const results: Array<{ id: string; ok: boolean; error?: string; notified?: boolean }> = [];
+  let manualCancellationIds = new Set<string>();
+  try {
+    const manualCancellations = await listManualExpenseCancellations(
+      admin,
+      (candidates || []).map((expense) => String(expense.id)),
+    );
+    manualCancellationIds = new Set(manualCancellations.keys());
+  } catch (error) {
+    console.error("[retry] failed to query manual cancellations", error);
+    return new Response(JSON.stringify({ success: false, error: "Falha ao consultar cancelamentos manuais" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   // Buscar telefone do admin uma vez
   let adminPhone = "";
@@ -139,6 +153,10 @@ Deno.serve(async (req) => {
   }
 
   for (const exp of candidates || []) {
+    if (manualCancellationIds.has(String(exp.id))) {
+      results.push({ id: exp.id, ok: false, error: "integração cancelada manualmente" });
+      continue;
+    }
     // Pular docs originados no ERP — a integração criaria duplicata.
     // `erp_flow` significa criado nesta aplicação, portanto deve ser enviado.
     // Apenas origens que representam um documento já existente no ERP são

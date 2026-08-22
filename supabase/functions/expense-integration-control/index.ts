@@ -2,6 +2,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { AuthError, requireAdminOrSapModule } from "../_shared/auth.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { isNativeErpExpenseOrigin } from "../_shared/expense-origin.ts";
+import {
+  listManualExpenseCancellations,
+  markExpenseIntegrationCancelled,
+  reactivateExpenseIntegration,
+} from "../_shared/expense-integration-cancel.ts";
+import { releaseIntegrationLock, tryAcquireIntegrationLock } from "../_shared/sap-fetch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,27 +39,53 @@ Deno.serve(async (req) => {
 
   const body = await req.json().catch(() => ({})) as {
     expense_id?: string;
-    action?: "dispatch" | "cancel";
+    expense_ids?: string[];
+    action?: "dispatch" | "cancel" | "list";
   };
-  const expenseId = String(body.expense_id || "").trim();
   const action = String(body.action || "").trim().toLowerCase();
-  if (!/^[0-9a-f-]{36}$/i.test(expenseId)) return json(400, { error: "expense_id inválido" });
-  if (action !== "dispatch" && action !== "cancel") {
-    return json(400, { error: "action deve ser dispatch ou cancel" });
-  }
-
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const admin = createClient(supabaseUrl, serviceKey);
+  const callerCompany = "companyDB" in caller ? caller.companyDB : null;
+
+  if (action === "list") {
+    const expenseIds = (Array.isArray(body.expense_ids) ? body.expense_ids : [])
+      .map((id) => String(id || "").trim())
+      .filter((id) => /^[0-9a-f-]{36}$/i.test(id))
+      .slice(0, 500);
+    try {
+      const rows = await listManualExpenseCancellations(admin, expenseIds);
+      let cancellations = [...rows.values()];
+      if (callerCompany && cancellations.length > 0) {
+        const { data: allowed, error } = await admin
+          .from("expenses")
+          .select("id")
+          .eq("company_db", callerCompany)
+          .in("id", cancellations.map((row) => row.expenseId));
+        if (error) return json(500, { error: error.message });
+        const allowedIds = new Set((allowed || []).map((row) => String(row.id)));
+        cancellations = cancellations.filter((row) => allowedIds.has(row.expenseId));
+      }
+      return json(200, { success: true, cancellations });
+    } catch (error) {
+      return json(500, { error: error instanceof Error ? error.message : "Falha ao consultar cancelamentos" });
+    }
+  }
+
+  const expenseId = String(body.expense_id || "").trim();
+  if (!/^[0-9a-f-]{36}$/i.test(expenseId)) return json(400, { error: "expense_id inválido" });
+  if (action !== "dispatch" && action !== "cancel") {
+    return json(400, { error: "action deve ser dispatch, cancel ou list" });
+  }
+
   const { data: expense, error: expenseError } = await admin
     .from("expenses")
-    .select("id, company_db, status, doc_type, origin, sap_doc_entry, sap_doc_num, sap_integration_locked_at, sap_integration_cancelled_at")
+    .select("id, company_db, status, doc_type, origin, sap_doc_entry, sap_doc_num, sap_integration_locked_at")
     .eq("id", expenseId)
     .maybeSingle();
 
   if (expenseError) return json(500, { error: expenseError.message });
   if (!expense) return json(404, { error: "Pedido não encontrado" });
-  const callerCompany = "companyDB" in caller ? caller.companyDB : null;
   if (callerCompany && callerCompany !== expense.company_db) {
     return json(403, { error: "O pedido pertence a outra empresa" });
   }
@@ -84,40 +116,48 @@ Deno.serve(async (req) => {
       return json(409, { error: "A integração já está em processamento e não pode ser cancelada agora" });
     }
 
-    const now = new Date().toISOString();
-    const staleLockCutoff = new Date(Date.now() - 15 * 60_000).toISOString();
-    const { data: cancelledRows, error } = await admin.from("expenses").update({
-      sap_integration_cancelled_at: now,
-      sap_integration_cancelled_by: actor,
-      sap_integration_locked_at: null,
-    })
-      .eq("id", expenseId)
-      .eq("status", "aprovado")
-      .is("sap_doc_entry", null)
-      .or(`sap_integration_locked_at.is.null,sap_integration_locked_at.lt.${staleLockCutoff}`)
-      .select("id");
-    if (error) return json(500, { error: error.message });
-    if (!cancelledRows?.length) {
-      return json(409, {
-        error: "O pedido começou a ser integrado ou mudou de status. Atualize o monitor e tente novamente.",
-      });
+    const acquired = await tryAcquireIntegrationLock(admin, "expenses", expenseId, 15);
+    if (!acquired) {
+      return json(409, { error: "A integração começou a ser processada. Atualize o monitor e tente novamente." });
     }
+    try {
+      const now = new Date().toISOString();
+      const { data: current, error: currentError } = await admin
+        .from("expenses")
+        .select("status,sap_doc_entry")
+        .eq("id", expenseId)
+        .single();
+      if (currentError) return json(500, { error: currentError.message });
+      if (current.status !== "aprovado" || current.sap_doc_entry) {
+        return json(409, { error: "O pedido mudou de status. Atualize o monitor e tente novamente." });
+      }
 
-    await admin.from("sap_retry_queue")
-      .update({ status: "cancelled", last_error: `Cancelado manualmente por ${actor}` })
-      .eq("doc_type", "expense")
-      .eq("ref_id", expenseId)
-      .in("status", ["pending", "in_flight"]);
+      await admin.from("sap_retry_queue")
+        .update({ status: "cancelled", last_error: `Cancelado manualmente por ${actor}` })
+        .eq("doc_type", "expense")
+        .eq("ref_id", expenseId)
+        .in("status", ["pending", "in_flight"]);
+      await markExpenseIntegrationCancelled(admin, {
+        expenseId,
+        companyDb: expense.company_db,
+        actor,
+        cancelledAt: now,
+      });
 
-    await admin.rpc("insert_audit_log", {
-      p_action: "expense_integration_cancelled",
-      p_entity_type: "expense",
-      p_entity_id: expenseId,
-      p_actor_email: actor,
-      p_company_db: expense.company_db,
-      p_details: { actor, source: "integration_monitor" },
-    });
-    return json(200, { success: true, action, cancelledAt: now });
+      await admin.rpc("insert_audit_log", {
+        p_action: "expense_integration_cancelled",
+        p_entity_type: "expense",
+        p_entity_id: expenseId,
+        p_actor_email: actor,
+        p_company_db: expense.company_db,
+        p_details: { actor, source: "integration_monitor" },
+      });
+      return json(200, { success: true, action, cancelledAt: now });
+    } catch (error) {
+      return json(500, { error: error instanceof Error ? error.message : "Falha ao cancelar integração" });
+    } finally {
+      await releaseIntegrationLock(admin, "expenses", expenseId);
+    }
   }
 
   // Desativa qualquer tentativa concorrente da fila; a chamada abaixo será a
@@ -132,15 +172,18 @@ Deno.serve(async (req) => {
     });
   }
 
-  await admin.from("sap_retry_queue")
-    .update({ status: "cancelled", last_error: `Substituído por dispatch manual de ${actor}` })
-    .eq("doc_type", "expense")
-    .eq("ref_id", expenseId)
-    .in("status", ["pending", "in_flight"]);
+  try {
+    await reactivateExpenseIntegration(admin, expenseId);
+    await admin.from("sap_retry_queue")
+      .update({ status: "cancelled", last_error: `Substituído por dispatch manual de ${actor}` })
+      .eq("doc_type", "expense")
+      .eq("ref_id", expenseId)
+      .in("status", ["pending", "in_flight"]);
+  } catch (error) {
+    return json(500, { error: error instanceof Error ? error.message : "Falha ao reativar integração" });
+  }
 
   const clearPatch: Record<string, unknown> = {
-    sap_integration_cancelled_at: null,
-    sap_integration_cancelled_by: null,
     sap_integration_error: null,
     sap_purchase_order_status: "pending",
     sap_integration_last_attempt_at: new Date().toISOString(),
