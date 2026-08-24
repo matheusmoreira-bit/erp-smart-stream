@@ -260,7 +260,9 @@ export function SapProvider({ children }: { children: ReactNode }) {
         userName: imp?.companyDB === companyDB ? imp.targetUser : result.sapUser,
         sessionId: result.sessionId,
         routeId: result.routeId,
+        isService: result.service === true,
         expiresAt: Date.now() + timeoutMin * 60 * 1000,
+
       });
       const { logAuditAction } = await import("@/hooks/useAuditLog");
       await logAuditAction({
