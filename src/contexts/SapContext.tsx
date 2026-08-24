@@ -29,6 +29,14 @@ export interface ErpSession {
   routeId?: string;
   sapAuthToken?: string;
   isSuperUser?: boolean;
+  /**
+   * true quando a sessão do Service Layer foi aberta com a credencial de
+   * serviço (ApiUser) da empresa, e não com a do próprio usuário. Sessões de
+   * serviço servem para leitura; qualquer ação que precise da identidade do
+   * usuário (ex.: aprovar/reprovar no SAP) deve abrir sessão própria.
+   */
+  isService?: boolean;
+
   // Expiry timestamp (ms epoch). User session is capped at 30min
   // to mirror SAP Service Layer's SessionTimeout. After that, any
   // user-scoped request must re-authenticate via the login screen.
