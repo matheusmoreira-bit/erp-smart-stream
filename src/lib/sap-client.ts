@@ -459,6 +459,27 @@ export async function sapKeepAlive(session: SapSession): Promise<boolean> {
 
 
 
+/**
+ * Garante uma sessão do Service Layer aberta com a credencial do PRÓPRIO
+ * usuário (nunca a conta de serviço). Necessário em ações onde o SAP valida a
+ * identidade do UserCode logado — ex.: decidir uma ApprovalRequest.
+ */
+export async function ensureUserSapSession(session: SapSession): Promise<SapSession> {
+  const { resolveSapSession } = await import("@/lib/sap-session-broker");
+  const resolved = await resolveSapSession(session.companyDB, true);
+  if (!resolved?.sessionId) {
+    throw new SapSessionExpiredError(
+      "É necessário autenticar no ERP com o seu usuário para registrar a decisão.",
+    );
+  }
+  return {
+    ...session,
+    sessionId: resolved.sessionId,
+    routeId: resolved.routeId,
+    userName: resolved.userName || session.userName,
+  };
+}
+
 export async function sapAction(
   session: SapSession,
   endpoint: string,

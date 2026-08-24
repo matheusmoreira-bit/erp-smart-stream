@@ -51,7 +51,7 @@ import { useSap } from "@/contexts/SapContext";
 import { gateSync } from "@/contexts/PermissionsV2Context";
 import { useAuth } from "@/hooks/useAuth";
 import { useModuleAccess } from "@/hooks/usePermissions";
-import { sapAction, sapQuery, sapDownloadAttachment, clearClientCache, type SapSession } from "@/lib/sap-client";
+import { sapAction, sapQuery, sapDownloadAttachment, clearClientCache, ensureUserSapSession, type SapSession } from "@/lib/sap-client";
 import { toast } from "sonner";
 import { useSapUsers } from "@/hooks/useSapUsers";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -1890,6 +1890,11 @@ async function decideSapApprovalRequest(
   remarks: string,
   doc?: ApprovalDoc | null,
 ): Promise<{ recoveredFromSapError: boolean }> {
+  // A decisão é sempre aplicada ao usuário da sessão do Service Layer. Se a
+  // sessão ativa for técnica (ApiUser), o SAP recusa com "You are not
+  // permitted to perform this action" — por isso exigimos sessão do usuário.
+  session = await ensureUserSapSession(session);
+
   // Idempotência: se já existe decisão finalizada para este usuário com a
   // mesma ação, tratamos como sucesso silencioso. Se a leitura falhar, seguimos
   // para o PATCH — o SAP aplica a decisão ao usuário da sessão atual.

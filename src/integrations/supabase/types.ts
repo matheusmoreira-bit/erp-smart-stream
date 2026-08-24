@@ -3493,8 +3493,6 @@ export type Database = {
           sap_attachment_status: string | null
           sap_doc_entry: number | null
           sap_doc_num: number | null
-          sap_integration_cancelled_at: string | null
-          sap_integration_cancelled_by: string | null
           sap_integration_error: string | null
           sap_integration_last_attempt_at: string | null
           sap_integration_locked_at: string | null
@@ -3541,8 +3539,6 @@ export type Database = {
           sap_attachment_status?: string | null
           sap_doc_entry?: number | null
           sap_doc_num?: number | null
-          sap_integration_cancelled_at?: string | null
-          sap_integration_cancelled_by?: string | null
           sap_integration_error?: string | null
           sap_integration_last_attempt_at?: string | null
           sap_integration_locked_at?: string | null
@@ -3589,8 +3585,6 @@ export type Database = {
           sap_attachment_status?: string | null
           sap_doc_entry?: number | null
           sap_doc_num?: number | null
-          sap_integration_cancelled_at?: string | null
-          sap_integration_cancelled_by?: string | null
           sap_integration_error?: string | null
           sap_integration_last_attempt_at?: string | null
           sap_integration_locked_at?: string | null
