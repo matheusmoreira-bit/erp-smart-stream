@@ -343,11 +343,15 @@ export function SapProvider({ children }: { children: ReactNode }) {
     if (!interactive && (silentLoginRetryAtRef.current.get(db) || 0) > Date.now()) return null;
 
     // 1) Sessão viva reutilizável.
+    //    Sessões de serviço (ApiUser) NÃO servem para ações diretas: o SAP
+    //    recusa a decisão com "You are not permitted to perform this action"
+    //    porque o UserCode logado não é o aprovador pendente.
     if (
       current?.erpType === "sap" &&
       current.sessionId &&
       current.companyDB === db &&
-      (!current.expiresAt || Date.now() < current.expiresAt)
+      (!current.expiresAt || Date.now() < current.expiresAt) &&
+      !(interactive && current.isService)
     ) {
       return {
         sessionId: current.sessionId,
@@ -365,7 +369,12 @@ export function SapProvider({ children }: { children: ReactNode }) {
     //      (senha provisionada) e, na falta, abre o modal de login.
     try {
       const { sapAutoLogin } = await import("@/lib/user-sap-credentials");
-      const result = await sapAutoLogin(db, false, { allowService: !interactive });
+      const result = await sapAutoLogin(db, interactive, { allowService: !interactive });
+      if (interactive && result.service) {
+        // Servidor devolveu sessão de serviço para uma ação de usuário:
+        // não dá para decidir aprovação com ela — segue para o modal.
+        throw new Error("service-session-not-usable");
+      }
       silentLoginRetryAtRef.current.delete(db);
       const timeoutMin = Math.min(Math.max(result.sessionTimeout || 30, 1), 30);
       const impAct = getImpersonation();
@@ -379,6 +388,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
         sessionId: result.sessionId,
         routeId: result.routeId,
         isSuperUser: prev?.companyDB === db ? prev?.isSuperUser : undefined,
+        isService: result.service === true,
         expiresAt: Date.now() + timeoutMin * 60 * 1000,
       }));
       return {
@@ -388,6 +398,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
         userName: result.sapUser,
       };
     } catch {
+
       if (!interactive) silentLoginRetryAtRef.current.set(db, Date.now() + 60_000);
       /* sem credencial utilizável → pede ao usuário (apenas em ações diretas) */
     }
