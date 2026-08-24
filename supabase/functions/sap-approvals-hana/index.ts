@@ -99,8 +99,18 @@ Deno.serve(withEdgeMetrics("sap-approvals-hana", async (req, _mctx) => {
       throw e;
     }
   } catch (e) {
-    console.error("[sap-approvals-hana] error", (e as Error).message);
-    return new Response(JSON.stringify({ error: (e as Error).message }),
+    const msg = (e as Error).message || "";
+    // Login técnico recusado pelo SAP (credencial da empresa inválida/expirada)
+    // não é erro de servidor: devolvemos 401 para o cliente pedir novo login.
+    if (/Login SAP falhou 401|Fail to NONE-SSO login|SAP_SESSION_EXPIRED/.test(msg)) {
+      console.log(`[sap-approvals-hana] credencial SAP recusada: ${msg.slice(0, 160)}`);
+      return new Response(
+        JSON.stringify({ error: "Sessão SAP inválida ou expirada. Faça login novamente.", code: "SAP_SESSION_EXPIRED", detail: msg.slice(0, 240) }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    console.error("[sap-approvals-hana] error", msg);
+    return new Response(JSON.stringify({ error: msg }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
+
 }));

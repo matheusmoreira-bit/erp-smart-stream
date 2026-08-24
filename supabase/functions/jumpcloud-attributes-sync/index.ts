@@ -187,22 +187,34 @@ Deno.serve(async (req) => {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro desconhecido";
+    // Credencial ausente/inválida do JumpCloud é erro de configuração, não falha
+    // do servidor: responde 424 para não gerar ruído de 500 a cada execução.
+    const isCredential =
+      /JumpCloud API 40[13]/.test(message) ||
+      /api key/i.test(message) ||
+      /Credenciais JumpCloud não configuradas/.test(message) ||
+      /API Key do JumpCloud não configurada/.test(message);
     console.error("[jumpcloud-attributes-sync]", message);
     await supabase.from("synapse_execution_log").insert({
       integration_key: "jumpcloud_attributes_sync",
       status: "error",
-      details: { error: message, checkedCount, updatedCount },
+      details: { error: message, checkedCount, updatedCount, credential_error: isCredential },
       affected_count: updatedCount,
     }).then(() => {}, () => {});
     await supabase
       .from("synapse_integrations")
-      .update({ last_run_at: new Date().toISOString(), last_run_status: "error", last_run_message: message })
+      .update({
+        last_run_at: new Date().toISOString(),
+        last_run_status: isCredential ? "credentials_error" : "error",
+        last_run_message: message,
+      })
       .eq("integration_key", "jumpcloud_attributes_sync")
       .then(() => {}, () => {});
     await releaseWatcherLock(supabase, WATCHER_NAME, "error", message);
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
+    return new Response(JSON.stringify({ error: message, code: isCredential ? "JUMPCLOUD_CREDENTIALS_INVALID" : undefined }), {
+      status: isCredential ? 424 : 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
+
 });
