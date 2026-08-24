@@ -67,12 +67,20 @@ Deno.serve(async (req) => {
   // ── Autorização (admin apenas) ────────────────────────────────────────
   let isAdminCaller = false;
   let actorLabel = "desconhecido";
-  // Chamada interna (rotinas administrativas) autentica com a service role key.
+  // Chamada interna (rotinas administrativas) autentica com a service role key
+  // ou com o segredo de scheduler usado pelas demais automações.
   const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
   if (bearer && bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) {
     isAdminCaller = true;
     actorLabel = "sistema";
   }
+  const schedulerSecret = (req.headers.get("x-scheduler-secret") || "").trim();
+  const expectedSecret = (Deno.env.get("SCHEDULER_SECRET") || "").trim();
+  if (schedulerSecret && expectedSecret && schedulerSecret === expectedSecret) {
+    isAdminCaller = true;
+    actorLabel = "sistema";
+  }
+
   try {
     const cloudUser = await requireUser(req);
     actorLabel = cloudUser.email || cloudUser.id;
