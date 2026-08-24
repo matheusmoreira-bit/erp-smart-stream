@@ -175,6 +175,8 @@ export function SapProvider({ children }: { children: ReactNode }) {
           routeId: sapSess.routeId,
           sapAuthToken: sapSess.sapAuthToken,
           isSuperUser: sapSess.isSuperUser,
+          isService: false,
+
           expiresAt: sapSess.expiresAt ?? Date.now() + 30 * 60 * 1000,
         });
         // Guarda a sessão no servidor para reuso das próximas integrações.
