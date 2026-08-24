@@ -160,10 +160,15 @@ export async function buildRateioSegments(
 
   }
 
-  // Todos os segmentos na mesma regra → não é rateio de alçada.
-  if (!allowSingle && new Set(segments.map((s) => s.rule_id)).size < 2) return null;
+  // Documento rateado ⇒ a alçada é SEMPRE por linha (segmento CC+projeto),
+  // nunca pelo total do documento. Mesmo que todos os segmentos caiam na mesma
+  // regra, mantemos os fluxos por segmento: o valor considerado em cada cadeia
+  // é o valor daquele segmento.
   return segments;
 }
+
+
+
 
 /** Rótulo do aprovador atual do documento = aprovadores pendentes de cada segmento. */
 export function pendingApproverLabel(rows: Array<{ status: string; current_approver: string | null }>): string | null {
