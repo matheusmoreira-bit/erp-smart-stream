@@ -165,6 +165,9 @@ export async function buildRateioSegments(
   // regra, mantemos os fluxos por segmento: o valor considerado em cada cadeia
   // é o valor daquele segmento.
   return segments;
+}
+
+
 
 
 /** Rótulo do aprovador atual do documento = aprovadores pendentes de cada segmento. */
