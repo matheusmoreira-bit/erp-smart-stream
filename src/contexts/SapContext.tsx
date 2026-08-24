@@ -369,7 +369,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
     //      (senha provisionada) e, na falta, abre o modal de login.
     try {
       const { sapAutoLogin } = await import("@/lib/user-sap-credentials");
-      const result = await sapAutoLogin(db, interactive, { allowService: !interactive });
+      const result = await sapAutoLogin(db, false, { allowService: !interactive });
       if (interactive && result.service) {
         // Servidor devolveu sessão de serviço para uma ação de usuário:
         // não dá para decidir aprovação com ela — segue para o modal.
@@ -433,6 +433,7 @@ export function SapProvider({ children }: { children: ReactNode }) {
         routeId: sapSess.routeId,
         sapAuthToken: sapSess.sapAuthToken,
         isSuperUser: sapSess.isSuperUser,
+        isService: false,
         expiresAt: sapSess.expiresAt ?? Date.now() + 30 * 60 * 1000,
       });
       void import("@/lib/user-sap-credentials").then((m) => m.cacheSapSession({
