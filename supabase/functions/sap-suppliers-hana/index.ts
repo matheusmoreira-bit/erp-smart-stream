@@ -262,8 +262,18 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ rows: deduped, view, schema, total: deduped.length, cached: false }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
-    return new Response(JSON.stringify({ error: (e as Error).message }),
+    const msg = (e as Error).message || "";
+    // Falha de login/sessão SAP é problema de credencial, não erro do servidor:
+    // devolvemos 401 para o cliente redirecionar ao login sem poluir os logs de erro.
+    const isAuth = /Login SAP falhou 401|Fail to NONE-SSO login|SAP_SESSION_EXPIRED|\b401\b/.test(msg);
+    if (isAuth) {
+      return new Response(
+        JSON.stringify({ error: "Sessão SAP inválida ou expirada. Faça login novamente.", code: "SAP_SESSION_EXPIRED", detail: msg.slice(0, 240) }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    return new Response(JSON.stringify({ error: msg }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
+
 });
 // schema fix: SBO_OPENGAMING 1784592109
