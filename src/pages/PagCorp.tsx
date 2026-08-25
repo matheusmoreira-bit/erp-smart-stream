@@ -1774,11 +1774,17 @@ export default function PagCorp() {
                                 variant="ghost"
                                 size="sm"
                                 className="gap-1 text-xs"
-                                title={t.documentAnalysisError || undefined}
-                                onClick={() => session?.companyDB && classifyDocuments(t, session.companyDB, { force: true })}
+                                disabled={reanalyzingIds.has(t.id)}
+                                title={t.documentAnalysisError || "Reprocessar a leitura dos anexos com a IA"}
+                                onClick={() => handleReanalyze(t)}
                               >
-                                <RefreshCw className="w-3 h-3" /> Reanalisar
+                                {reanalyzingIds.has(t.id) ? (
+                                  <><Loader2 className="w-3 h-3 animate-spin" /> Reprocessando</>
+                                ) : (
+                                  <><RefreshCw className="w-3 h-3" /> Reprocessar IA</>
+                                )}
                               </Button>
+
                               <Button
                                 variant="outline"
                                 size="sm"
