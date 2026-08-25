@@ -619,7 +619,8 @@ Deno.serve(async (req) => {
     // (Pagamento desabilitado: integração agora cria apenas o Pedido de Compra)
 
     const configuredBranch = Number(sapCreds.default_branch_id || "");
-    const branchId = Number.isFinite(configuredBranch) && configuredBranch > 0 ? configuredBranch : 1;
+    const preferredBranch = Number.isFinite(configuredBranch) && configuredBranch > 0 ? configuredBranch : 1;
+    const branchId = await resolveActiveBranchId(sap, preferredBranch);
 
     // Parse custom fields (UDFs) from credentials: header / line scope
     const headerCustom: Record<string, unknown> = {};
