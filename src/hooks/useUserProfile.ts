@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
+import { supabase } from "@/integrations/supabase/client";
+import { canonicalUserKey } from "@/lib/user-identity";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
 
 export interface UserProfile {
   id?: string;
@@ -46,39 +48,54 @@ export function useUserProfile() {
       return;
     }
     setLoading(true);
-    const key = session.userName.toLowerCase();
-    const { data } = await supabase
-      .from("collaborator_profiles")
-      .select("*")
-      .eq("user_code", key)
-      .maybeSingle();
-    setProfile({
-      ...defaults(session.companyDB, session.userName),
-      ...(data as Partial<UserProfile> | null),
-      company_db: session.companyDB,
-      user_code: session.userName,
-    } as UserProfile);
-    setLoading(false);
+    const key = canonicalUserKey(session.userName);
+    if (!key) {
+      setProfile(null);
+      setLoading(false);
+      return;
+    }
+    try {
+      const response = await sapFunctionFetch("user-profile-save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "get", user_code: key }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      const data = response.ok ? payload.profile : null;
+      setProfile({
+        ...defaults(session.companyDB, key),
+        ...(data as Partial<UserProfile> | null),
+        company_db: session.companyDB,
+        user_code: key,
+      } as UserProfile);
+    } catch (error) {
+      console.warn("Falha ao carregar perfil global:", error);
+      setProfile(defaults(session.companyDB, key));
+    } finally {
+      setLoading(false);
+    }
   }, [session?.companyDB, session?.userName]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
   const save = useCallback(async (patch: Partial<UserProfile>) => {
     if (!session?.companyDB || !session?.userName) throw new Error("Sem sessão SAP");
-    const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+    const key = canonicalUserKey(session.userName);
+    if (!key) throw new Error("Identidade do usuário inválida");
     const res = await sapFunctionFetch("user-profile-save", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         company_db: session.companyDB,
-        user_code: session.userName,
+        user_code: key,
+        action: "save",
         ...patch,
       }),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(json?.error || `Falha ao salvar perfil (${res.status})`);
     const data = json.profile as UserProfile;
-    setProfile({ ...data, company_db: session.companyDB, user_code: session.userName });
+    setProfile({ ...data, company_db: session.companyDB, user_code: key });
     return data;
   }, [session?.companyDB, session?.userName]);
 

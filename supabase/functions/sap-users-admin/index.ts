@@ -4,6 +4,47 @@ import { requireAdmin, requireAdminOrSapSession, authErrorResponse } from "../_s
 import { fetchHanaView, loadHanaCreds, resolveHanaSchema } from "../_shared/hana-views.ts";
 import { ensurePasswordNeverExpires } from "../_shared/sap-password-never-expires.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { canonicalUserKey } from "../_shared/text-normalize.ts";
+
+async function syncGlobalUserProfile(
+  admin: ReturnType<typeof createClient>,
+  companyDb: string,
+  userCode: string,
+  userName: string,
+  email: string,
+  preferExisting = true,
+) {
+  const userKey = canonicalUserKey(userCode || email);
+  if (!userKey) return;
+
+  const { data: existing } = await admin
+    .from("collaborator_profiles")
+    .select("*")
+    .eq("user_code", userKey)
+    .maybeSingle();
+  const normalizedEmail = email.trim().toLowerCase() || null;
+  const displayName = preferExisting
+    ? existing?.display_name || userName || userCode
+    : userName || existing?.display_name || userCode;
+  const globalEmail = preferExisting
+    ? existing?.email || normalizedEmail
+    : normalizedEmail || existing?.email || null;
+
+  await admin.from("user_profiles").upsert({
+    company_db: companyDb,
+    user_code: userCode,
+    display_name: displayName,
+    email: globalEmail,
+    phone: existing?.phone || null,
+  }, { onConflict: "company_db,user_code" });
+
+  await admin.from("collaborator_profiles").upsert({
+    ...(existing || {}),
+    user_code: userKey,
+    display_name: displayName,
+    email: globalEmail,
+  }, { onConflict: "user_code" });
+}
 
 function pickStr(...vals: unknown[]): string | undefined {
   for (const v of vals) {
@@ -372,6 +413,13 @@ Deno.serve(withEdgeMetrics("sap-users-admin", async (req, _mctx) => {
 
         for (const [code, u] of sourceUsers.entries()) {
           if (existing.has(code.toUpperCase()) && !overwriteExisting) {
+            await syncGlobalUserProfile(
+              admin,
+              targetDb,
+              code,
+              String(u.UserName || code),
+              String(u.eMail || ""),
+            );
             skipped.push({ code, reason: "já existe no destino" });
             continue;
           }
@@ -399,6 +447,13 @@ Deno.serve(withEdgeMetrics("sap-users-admin", async (req, _mctx) => {
             if (key != null) {
               await ensurePasswordNeverExpires((path, method, b) => sapRequest(tSession, path, method, b), key, { code });
             }
+            await syncGlobalUserProfile(
+              admin,
+              targetDb,
+              code,
+              String(u.UserName || code),
+              String(u.eMail || ""),
+            );
           }
           else failed.push({ code, error: extractSapError(r.data, `HTTP ${r.status}`) });
         }
@@ -513,6 +568,25 @@ Deno.serve(withEdgeMetrics("sap-users-admin", async (req, _mctx) => {
           );
         }
 
+        if (Object.prototype.hasOwnProperty.call(safe, "UserName") || Object.prototype.hasOwnProperty.call(safe, "eMail")) {
+          const refreshed = await sapRequest(
+            session,
+            `Users(${internalKey})?$select=UserCode,UserName,eMail`,
+            "GET",
+          );
+          if (refreshed.ok) {
+            const sapUser = refreshed.data as { UserCode?: string; UserName?: string; eMail?: string };
+            await syncGlobalUserProfile(
+              admin,
+              companyDb,
+              String(sapUser.UserCode || ""),
+              String(sapUser.UserName || ""),
+              String(sapUser.eMail || ""),
+              false,
+            );
+          }
+        }
+
         await admin.rpc("insert_audit_log", {
           p_action: "sap_user_update",
           p_entity_type: "sap_user",
@@ -557,6 +631,7 @@ Deno.serve(withEdgeMetrics("sap-users-admin", async (req, _mctx) => {
             { companyDb, internalKey: created.InternalKey },
           );
         }
+        await syncGlobalUserProfile(admin, companyDb, userCode, userName, email);
         await admin.rpc("insert_audit_log", {
           p_action: "sap_user_create",
           p_entity_type: "sap_user",

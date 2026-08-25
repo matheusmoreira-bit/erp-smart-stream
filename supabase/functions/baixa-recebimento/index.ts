@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { parseSapHeaders, requireUser, validateSapSession } from "../_shared/auth.ts";
 import { notifySalesMilestone } from "../_shared/sales-notify.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { canonicalUserKey } from "../_shared/text-normalize.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -291,14 +292,13 @@ Deno.serve(withEdgeMetrics("baixa-recebimento", async (req, _mctx) => {
         // vínculo com usuário Cloud para RLS/leitura direta pelo cliente.
       }
 
-      // Nome amigável do usuário SAP: pega de user_profiles pelo user_code+company_db.
+      // Nome amigável global, compartilhado por todas as empresas.
       let criadoPorNome: string | null = null;
       try {
         const { data: prof } = await sb
-          .from("user_profiles")
+          .from("collaborator_profiles")
           .select("display_name")
-          .eq("company_db", sap.companyDB)
-          .eq("user_code", sap.userName)
+          .eq("user_code", canonicalUserKey(sap.userName))
           .maybeSingle();
         criadoPorNome = (prof as { display_name?: string | null } | null)?.display_name || null;
       } catch { /* opcional */ }

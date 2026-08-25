@@ -61,6 +61,7 @@ import UserDetailDrawer, { type UserDrawerData } from "@/components/users/UserDe
 import { logAuditAction } from "@/hooks/useAuditLog";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { canonicalUserKey } from "@/lib/user-identity";
 
 type SegmentKey = "all" | "admins" | "sap" | "blocked" | "divergences";
 
@@ -97,7 +98,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
   const { session } = useSap();
   const { isAdmin: isCloudAdmin } = useAuth();
   const { users, isLoading, error, actionLoading, refresh, toggleLock, createUser } = useSapUsers();
-  const { phones, upsertPhone } = useUserPhones();
+  const { phones, refresh: refreshGlobalProfiles, upsertPhone } = useUserPhones();
   const { isPrivileged } = useMyPermissionGroups();
   const { groups: permissionGroups, groupOf, setGroup } = useUserGroupAdmin();
   const { segmentOf, setSegment, refresh: refreshSegments } = useManagementSegments(session?.companyDB);
@@ -135,9 +136,19 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
             LastLoginDate: raw.LastLoginDate ? String(raw.LastLoginDate) : undefined,
             LastLoginTime: raw.LastLoginTime ? String(raw.LastLoginTime) : undefined,
           };
-          const key = (user.UserCode || user.eMail || "").toLowerCase();
+          const key = canonicalUserKey(user.UserCode || user.eMail);
           if (!key) continue;
-          if (!merged.has(key)) merged.set(key, user);
+          const current = merged.get(key);
+          if (!current) merged.set(key, user);
+          else {
+            merged.set(key, {
+              ...current,
+              UserName: current.UserName || user.UserName,
+              eMail: current.eMail || user.eMail,
+              LastLoginDate: current.LastLoginDate || user.LastLoginDate,
+              LastLoginTime: current.LastLoginTime || user.LastLoginTime,
+            });
+          }
           (byCompany[key] ||= new Set()).add(company.company_db);
         }
       }));
@@ -214,7 +225,14 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
   const rows = useMemo(() => {
     const sourceUsers = backofficeMode ? adminUsers : users;
     return sourceUsers.map((user) => {
-      const ids = [user.UserCode, user.eMail];
+      const identityKey = canonicalUserKey(user.UserCode || user.eMail);
+      const globalProfile = identityKey ? phones[identityKey] : undefined;
+      const unifiedUser: SapUser = {
+        ...user,
+        UserName: globalProfile?.display_name || user.UserName,
+        eMail: globalProfile?.email || user.eMail,
+      };
+      const ids = [unifiedUser.UserCode, unifiedUser.eMail];
       const group = groupOf(
         session?.companyDB || (backofficeMode && companyFilter !== "all" ? companyFilter : undefined),
         ...ids,
@@ -234,7 +252,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
         groupName: group?.name ?? null,
       });
       return {
-        user,
+        user: unifiedUser,
         locked,
         group,
         mgmt,
@@ -243,12 +261,12 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
         isAdmin,
         lastLogin: login?.lastLogin ?? null,
         companies: backofficeMode
-          ? (adminUserCompanies[(user.UserCode || user.eMail || "").toLowerCase()] || [])
+          ? (adminUserCompanies[identityKey] || [])
           : directory.companiesOf(...ids),
         alerts,
       };
     });
-  }, [adminUserCompanies, adminUsers, backofficeMode, companyFilter, directory, groupOf, segmentOf, session?.companyDB, users]);
+  }, [adminUserCompanies, adminUsers, backofficeMode, companyFilter, directory, groupOf, phones, segmentOf, session?.companyDB, users]);
 
   const counts = useMemo(
     () => ({
@@ -404,7 +422,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
       isAdmin: row.isAdmin,
       hasLicense: row.license.hasLicense,
       licenseType: row.license.type,
-      phone: phones[row.user.UserCode]?.phone,
+      phone: phones[canonicalUserKey(row.user.UserCode || row.user.eMail)]?.phone || undefined,
       lastLogin: row.lastLogin,
       alerts: row.alerts,
     };
@@ -431,6 +449,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
   const pageError = backofficeMode ? adminError : error;
   const scopedCompanyDb = session?.companyDB || (backofficeMode && companyFilter !== "all" ? companyFilter : undefined);
   const refreshPage = () => {
+    void refreshGlobalProfiles();
     if (backofficeMode) void loadBackofficeUsers();
     else {
       refresh();
@@ -651,7 +670,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
                       </p>
                       <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
                         <Phone className="w-3 h-3" />
-                        {phones[user.UserCode]?.phone || <span className="italic">Sem telefone</span>}
+                        {phones[canonicalUserKey(user.UserCode || user.eMail)]?.phone || <span className="italic">Sem telefone</span>}
                       </p>
                       <div className="mt-1 flex flex-wrap gap-1">
                         <Badge variant="outline" className="text-[10px]">{MANAGEMENT_SEGMENT_LABEL[row.mgmt]}</Badge>
@@ -818,15 +837,15 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
         </DialogContent>
       </Dialog>
 
-      {pwdUser && (scopedCompanyDb || adminUserCompanies[pwdUser.UserCode.toLowerCase()]?.[0]) && (
+      {pwdUser && (scopedCompanyDb || adminUserCompanies[canonicalUserKey(pwdUser.UserCode || pwdUser.eMail)]?.[0]) && (
         <BackofficeChangePasswordDialog
           open={!!pwdUser}
           onOpenChange={(open) => { if (!open) setPwdUser(null); }}
           userCode={pwdUser.UserCode}
           userName={pwdUser.UserName || undefined}
           targetEmail={pwdUser.eMail || directory.emailOf(pwdUser.UserCode)}
-          currentCompanyDb={scopedCompanyDb || adminUserCompanies[pwdUser.UserCode.toLowerCase()][0]}
-          currentCompanyName={scopedCompanyDb || adminUserCompanies[pwdUser.UserCode.toLowerCase()][0]}
+          currentCompanyDb={scopedCompanyDb || adminUserCompanies[canonicalUserKey(pwdUser.UserCode || pwdUser.eMail)][0]}
+          currentCompanyName={scopedCompanyDb || adminUserCompanies[canonicalUserKey(pwdUser.UserCode || pwdUser.eMail)][0]}
           onDone={refreshPage}
         />
       )}
@@ -863,7 +882,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
           onOpenChange={(o) => { if (!o) setPhoneUser(null); }}
           userCode={phoneUser.UserCode}
           userName={phoneUser.UserName || phoneUser.UserCode}
-          currentPhone={phones[phoneUser.UserCode]?.phone}
+          currentPhone={phones[canonicalUserKey(phoneUser.UserCode || phoneUser.eMail)]?.phone || undefined}
           onSave={(phone, source) => upsertPhone(phoneUser.UserCode, phone, source)}
         />
       )}

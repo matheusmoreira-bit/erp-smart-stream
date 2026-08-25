@@ -772,7 +772,7 @@ function RuleFormModal({
     };
   }, [ccOptions, ccLoading, projOptions, projLoading, supOptions, supLoading, itemOptions, itemLoading, groupOptions, groupLoading]);
 
-  // ── Fallback de aprovadores: mescla SAP Users + user_profiles ─────────
+  // ── Fallback de aprovadores: membros da empresa com dados globais espelhados ─────────
   const [profileUsers, setProfileUsers] = useState<SapUser[]>([]);
   const [idpUsers, setIdpUsers] = useState<SapUser[]>([]);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -816,7 +816,7 @@ function RuleFormModal({
         setProfileUsers(rows);
         setIdpUsers(idpRows);
       } catch (e) {
-        console.warn("Falha ao carregar user_profiles para fallback:", e);
+        console.warn("Falha ao carregar perfis da empresa para fallback:", e);
       } finally {
         if (!cancelled) setProfileLoading(false);
       }

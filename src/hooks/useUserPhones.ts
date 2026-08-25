@@ -1,37 +1,53 @@
 import { useState, useEffect, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useSap } from "@/contexts/SapContext";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
+import { canonicalUserKey } from "@/lib/user-identity";
 
 export type PhoneSource = "manual" | "sap";
 
 export interface UserPhoneRecord {
   user_code: string;
-  phone: string;
+  phone: string | null;
   source: PhoneSource;
+  display_name: string | null;
+  email: string | null;
 }
 
 export function useUserPhones() {
-  const { session } = useSap();
   const [phones, setPhones] = useState<Record<string, UserPhoneRecord>>({});
   const [isLoading, setIsLoading] = useState(false);
 
   const refresh = useCallback(async () => {
-    if (!session?.companyDB) {
-      setPhones({});
-      return;
-    }
     setIsLoading(true);
-    const { data } = await supabase
-      .from("user_phones")
-      .select("user_code, phone, source")
-      .eq("company_db", session.companyDB);
-    const map: Record<string, UserPhoneRecord> = {};
-    for (const r of (data || []) as UserPhoneRecord[]) {
-      map[r.user_code] = r;
+    try {
+      const response = await sapFunctionFetch("user-profile-save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "list" }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        console.warn("Falha ao carregar perfis globais:", payload?.error || response.status);
+        return;
+      }
+      const map: Record<string, UserPhoneRecord> = {};
+      for (const row of payload.profiles || []) {
+        const key = canonicalUserKey(row.user_code || row.email);
+        if (!key) continue;
+        map[key] = {
+          user_code: key,
+          phone: row.phone,
+          source: "manual",
+          display_name: row.display_name,
+          email: row.email,
+        };
+      }
+      setPhones(map);
+    } catch (error) {
+      console.warn("Falha ao carregar perfis globais:", error);
+    } finally {
+      setIsLoading(false);
     }
-    setPhones(map);
-    setIsLoading(false);
-  }, [session?.companyDB]);
+  }, []);
 
   useEffect(() => {
     refresh();
@@ -39,34 +55,34 @@ export function useUserPhones() {
 
   const upsertPhone = useCallback(
     async (userCode: string, phone: string, source: PhoneSource = "manual") => {
-      if (!session?.companyDB) throw new Error("Sem sessão SAP ativa");
+      const key = canonicalUserKey(userCode);
+      if (!key) throw new Error("Identidade do usuário inválida");
       const cleaned = phone.trim();
-      if (!cleaned) {
-        await supabase
-          .from("user_phones")
-          .delete()
-          .eq("company_db", session.companyDB)
-          .eq("user_code", userCode);
-        setPhones((prev) => {
-          const next = { ...prev };
-          delete next[userCode];
-          return next;
-        });
-        return;
-      }
-      const { error } = await supabase
-        .from("user_phones")
-        .upsert(
-          { company_db: session.companyDB, user_code: userCode, phone: cleaned, source },
-          { onConflict: "company_db,user_code" },
-        );
-      if (error) throw error;
+      const response = await sapFunctionFetch("user-profile-save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_code: key, phone: cleaned || null }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.error || `Falha ao salvar telefone (${response.status})`);
+      const profile = payload.profile as {
+        user_code: string;
+        phone: string | null;
+        display_name: string | null;
+        email: string | null;
+      };
       setPhones((prev) => ({
         ...prev,
-        [userCode]: { user_code: userCode, phone: cleaned, source },
+        [key]: {
+          user_code: key,
+          phone: profile.phone,
+          source,
+          display_name: profile.display_name,
+          email: profile.email,
+        },
       }));
     },
-    [session?.companyDB],
+    [],
   );
 
   return { phones, isLoading, refresh, upsertPhone };

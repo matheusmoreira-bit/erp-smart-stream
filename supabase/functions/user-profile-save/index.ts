@@ -10,6 +10,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { canonicalUserKey } from "../_shared/text-normalize.ts";
+import { callerOwnsUserCode } from "../_shared/user-aliases.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,6 +21,7 @@ const corsHeaders = {
 };
 
 interface ProfilePatch {
+  action?: "get" | "list" | "save";
   company_db?: string; // informativo — não usado no cadastro unificado
   user_code?: string;
   display_name?: string | null;
@@ -41,6 +44,21 @@ Deno.serve(async (req) => {
     const caller = await requireUserOrSapSession(req);
     const body = (await req.json().catch(() => ({}))) as ProfilePatch;
 
+    const admin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+
+    if (body.action === "list") {
+      const { data, error } = await admin
+        .from("collaborator_profiles")
+        .select("user_code, display_name, email, phone");
+      if (error) throw error;
+      return new Response(JSON.stringify({ ok: true, profiles: data || [] }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const rawCode = (body.user_code || "").trim();
     if (!rawCode) {
       return new Response(JSON.stringify({ error: "user_code obrigatório" }), {
@@ -48,13 +66,34 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const userCode = rawCode.toLowerCase();
+    const userCode = canonicalUserKey(rawCode);
+    if (!userCode) {
+      return new Response(JSON.stringify({ error: "Identidade do usuário inválida" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    // Sessão SAP só pode salvar o próprio user_code.
+    // Usuários comuns só podem editar a própria identidade; admins podem
+    // manter os dados globais de qualquer colaborador.
     const source = (caller as { source?: string }).source;
     if (source === "sap_session") {
-      const sapUser = ((caller as { userName?: string }).userName || "").toLowerCase();
+      const sapUser = canonicalUserKey((caller as { userName?: string }).userName);
       if (sapUser !== userCode) {
+        return new Response(JSON.stringify({ error: "Sem permissão para editar este perfil" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else {
+      const cloudCaller = caller as { id?: string; email?: string };
+      const { data: isAdmin } = cloudCaller.id
+        ? await admin.rpc("has_role", { _user_id: cloudCaller.id, _role: "admin" })
+        : { data: false };
+      const ownsProfile = isAdmin === true
+        ? true
+        : await callerOwnsUserCode(admin, cloudCaller, userCode);
+      if (!ownsProfile) {
         return new Response(JSON.stringify({ error: "Sem permissão para editar este perfil" }), {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -62,10 +101,17 @@ Deno.serve(async (req) => {
       }
     }
 
-    const admin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+    if (body.action === "get") {
+      const { data, error } = await admin
+        .from("collaborator_profiles")
+        .select("*")
+        .eq("user_code", userCode)
+        .maybeSingle();
+      if (error) throw error;
+      return new Response(JSON.stringify({ ok: true, profile: data }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Merge com registro existente para não sobrescrever campos ausentes.
     const { data: existing } = await admin
@@ -84,6 +130,9 @@ Deno.serve(async (req) => {
     for (const k of allowed) {
       if (k in body) patch[k] = body[k] as unknown;
     }
+    if ("display_name" in body) patch.display_name = body.display_name?.trim() || null;
+    if ("email" in body) patch.email = body.email?.trim().toLowerCase() || null;
+    if ("phone" in body) patch.phone = body.phone?.trim() || null;
     patch.user_code = userCode;
     patch.updated_at = new Date().toISOString();
     delete (patch as { id?: string }).id;
@@ -95,6 +144,27 @@ Deno.serve(async (req) => {
       .select()
       .single();
     if (error) throw error;
+
+    const directoryPatch: Record<string, unknown> = {
+      user_key: userCode,
+      updated_at: new Date().toISOString(),
+    };
+    if (data.display_name) directoryPatch.display_name = data.display_name;
+    await admin.from("sap_user_directory").upsert(directoryPatch, { onConflict: "user_key" });
+
+    if (data.email) {
+      await admin
+        .from("sap_user_emails")
+        .update({ is_primary: false })
+        .eq("user_key", userCode)
+        .eq("is_primary", true);
+      await admin.from("sap_user_emails").upsert({
+        user_key: userCode,
+        email: String(data.email).toLowerCase(),
+        is_primary: true,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "email" });
+    }
 
     return new Response(JSON.stringify({ ok: true, profile: data }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

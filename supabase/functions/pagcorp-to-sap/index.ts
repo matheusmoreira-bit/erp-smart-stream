@@ -18,8 +18,12 @@ import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { applyPagCorpJournalDimensions } from "../_shared/pagcorp-journal-entry.ts";
 
+const PAGCORP_JOURNAL_PAYLOAD_VERSION = "2026-08-25-dimensions-all-lines-v2";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
+  "Access-Control-Expose-Headers": "X-PagCorp-Journal-Payload-Version",
+  "X-PagCorp-Journal-Payload-Version": PAGCORP_JOURNAL_PAYLOAD_VERSION,
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db, x-sap-auth-token, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
@@ -786,6 +790,16 @@ Deno.serve(async (req) => {
         costCenter: String(journalEntry.costCenter),
         project: String(journalEntry.project),
       });
+      const invalidDimensionLine = journalEntryLines.findIndex((line) =>
+        line.BPLID !== branchId ||
+        line.CostingCode !== String(journalEntry.costCenter) ||
+        line.ProjectCode !== String(journalEntry.project)
+      );
+      if (invalidDimensionLine >= 0) {
+        throw new Error(
+          `Payload LCM inválido: Centro de Custo, Projeto e Filial ausentes na linha ${invalidDimensionLine + 1}`,
+        );
+      }
       const payload: Record<string, unknown> = {
         ReferenceDate: date,
         DueDate: date,
@@ -799,6 +813,17 @@ Deno.serve(async (req) => {
         ...(attachmentEntry ? { AttachmentEntry: attachmentEntry } : {}),
       };
       sapPayloads.journal_entry = payload;
+      sapPayloads.payload_version = PAGCORP_JOURNAL_PAYLOAD_VERSION;
+      console.info("[pagcorp-to-sap] journal payload ready", {
+        payloadVersion: PAGCORP_JOURNAL_PAYLOAD_VERSION,
+        transactionIds: transactions.map((item) => item.id),
+        lines: journalEntryLines.map((line) => ({
+          accountCode: line.AccountCode,
+          branchId: line.BPLID,
+          costCenter: line.CostingCode,
+          project: line.ProjectCode,
+        })),
+      });
       let result;
       try {
         result = await postSapDocument(sap, payload, "JournalEntries");
@@ -861,6 +886,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({
         success: true,
         stages,
+        payloadVersion: PAGCORP_JOURNAL_PAYLOAD_VERSION,
         journalEntry: sapResponses.journal_entry,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
