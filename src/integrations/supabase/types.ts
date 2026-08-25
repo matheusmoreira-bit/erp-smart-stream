@@ -5616,6 +5616,48 @@ export type Database = {
         }
         Relationships: []
       }
+      pagcorp_document_classification: {
+        Row: {
+          analyzed_at: string | null
+          company_db: string
+          confidence: number | null
+          created_at: string
+          document_kinds: Json
+          error_message: string | null
+          has_fiscal_document: boolean | null
+          id: string
+          pagcorp_expense_id: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          analyzed_at?: string | null
+          company_db: string
+          confidence?: number | null
+          created_at?: string
+          document_kinds?: Json
+          error_message?: string | null
+          has_fiscal_document?: boolean | null
+          id?: string
+          pagcorp_expense_id: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          analyzed_at?: string | null
+          company_db?: string
+          confidence?: number | null
+          created_at?: string
+          document_kinds?: Json
+          error_message?: string | null
+          has_fiscal_document?: boolean | null
+          id?: string
+          pagcorp_expense_id?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pagcorp_document_relations: {
         Row: {
           amount_matches: boolean | null
