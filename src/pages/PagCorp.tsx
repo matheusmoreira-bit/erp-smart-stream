@@ -1557,7 +1557,7 @@ export default function PagCorp() {
                         data-state={isSelected ? "selected" : undefined}
                       >
                         <TableCell className="w-10">
-                          {!t.integrated && !t.isReversed && t.documentAnalysisStatus === "completed" && (
+                          {!t.integrated && !t.isReversed && (
                             <Checkbox
                               checked={isSelected}
                               onCheckedChange={() => toggleSelect(t.id)}
