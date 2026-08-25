@@ -1878,13 +1878,9 @@ export default function PagCorp() {
                             </Badge>
                           ) : integrating === t.id ? (
                             <Loader2 className="w-4 h-4 animate-spin mx-auto text-primary" />
-                          ) : t.integrationStatusResolved !== true ? (
-                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                              <Loader2 className="w-3 h-3 animate-spin" /> Status
-                            </span>
-                          ) : !aiEligible ? null : t.documentAnalysisStatus !== "completed" ? (
+                          ) : t.documentAnalysisStatus !== "completed" ? (
                             <div className="flex items-center justify-end gap-1">
-                              {t.documentAnalysisStatus === "error" ? (
+                              {aiEligible && t.documentAnalysisStatus === "error" ? (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -1899,11 +1895,11 @@ export default function PagCorp() {
                                     <><RefreshCw className="w-3 h-3" /> Reprocessar IA</>
                                   )}
                                 </Button>
-                              ) : (
+                              ) : aiEligible && t.documentAnalysisStatus === "processing" ? (
                                 <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                                   <Loader2 className="w-3 h-3 animate-spin" /> Leitura IA
                                 </span>
-                              )}
+                              ) : null}
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button
