@@ -224,6 +224,9 @@ export default function PagCorp() {
   const programmaticCloseRef = useRef(false);
   const classificationInflightRef = useRef(new Set<string | number>());
   const [reanalyzingIds, setReanalyzingIds] = useState<Set<string | number>>(new Set());
+  // Monitor da fila de leitura por IA
+  const [aiQueueRunning, setAiQueueRunning] = useState(0);
+  const [aiQueuePaused, setAiQueuePaused] = useState(false);
 
 
   const handleStartDateChange = (value: string) => {
