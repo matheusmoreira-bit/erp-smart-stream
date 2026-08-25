@@ -1822,53 +1822,65 @@ export default function PagCorp() {
                             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                               <Loader2 className="w-3 h-3 animate-spin" /> Status
                             </span>
-                          ) : !aiEligible ? null : t.documentAnalysisStatus === "error" ? (
+                          ) : !aiEligible ? null : t.documentAnalysisStatus !== "completed" ? (
                             <div className="flex items-center justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="gap-1 text-xs"
-                                disabled={reanalyzingIds.has(t.id)}
-                                title={t.documentAnalysisError || "Reprocessar a leitura dos anexos com a IA"}
-                                onClick={() => handleReanalyze(t)}
-                              >
-                                {reanalyzingIds.has(t.id) ? (
-                                  <><Loader2 className="w-3 h-3 animate-spin" /> Reprocessando</>
-                                ) : (
-                                  <><RefreshCw className="w-3 h-3" /> Reprocessar IA</>
-                                )}
-                              </Button>
-
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="gap-1 text-xs"
-                                title="Seguir sem a leitura da IA — escolha Pedido de Compra ou LCM no modal"
-                                onClick={() =>
-                                  openIntegrateDialog(t, t.hasAccountability ? "accountability" : "generic", { fallback: true })
-                                }
-                              >
-                                <Upload className="w-3 h-3" /> Integrar mesmo assim
-                              </Button>
-                            </div>
-                          ) : t.documentAnalysisStatus !== "completed" ? (
-                            <div className="flex items-center justify-end gap-2">
-                              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                                <Loader2 className="w-3 h-3 animate-spin" /> Leitura IA
-                              </span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-xs"
-                                title="Não esperar a IA e lançar manualmente"
-                                onClick={() =>
-                                  openIntegrateDialog(t, t.hasAccountability ? "accountability" : "generic", { fallback: true })
-                                }
-                              >
-                                Lançar manual
-                              </Button>
+                              {t.documentAnalysisStatus === "error" ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="gap-1 text-xs"
+                                  disabled={reanalyzingIds.has(t.id)}
+                                  title={t.documentAnalysisError || "Reprocessar a leitura dos anexos com a IA"}
+                                  onClick={() => handleReanalyze(t)}
+                                >
+                                  {reanalyzingIds.has(t.id) ? (
+                                    <><Loader2 className="w-3 h-3 animate-spin" /> Reprocessando</>
+                                  ) : (
+                                    <><RefreshCw className="w-3 h-3" /> Reprocessar IA</>
+                                  )}
+                                </Button>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Loader2 className="w-3 h-3 animate-spin" /> Leitura IA
+                                </span>
+                              )}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-1 text-xs"
+                                    title="Não esperar a IA — escolha o caminho do lançamento"
+                                  >
+                                    <Upload className="w-3 h-3" /> Lançar manual
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      openIntegrateDialog(t, t.hasAccountability ? "accountability" : "generic", {
+                                        fallback: true,
+                                        forcePostingType: "purchase_order",
+                                      })
+                                    }
+                                  >
+                                    Pedido de Compra
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      openIntegrateDialog(t, "generic", {
+                                        fallback: true,
+                                        forcePostingType: "journal_entry",
+                                      })
+                                    }
+                                  >
+                                    Lançamento contábil (LCM)
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           ) : (
+
                             <div className="flex items-center justify-end gap-1">
                               <Button
                                 variant="ghost"
