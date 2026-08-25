@@ -3,6 +3,8 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { savePostLoginPath } from "@/lib/post-login-redirect";
 import { Loader2 } from "lucide-react";
+import { runtime } from "@/config/runtime";
+import { GoogleAuthGate } from "@/components/GoogleAuthGate";
 
 /** Rotas que podem ser abertas sem sessão autenticada. */
 const PUBLIC_PATHS = ["/login"];
@@ -31,6 +33,11 @@ function isAuthCallback(): boolean {
  * guardando o destino original para retomar depois da autenticação.
  */
 export function RequireAuth({ children }: { children: React.ReactNode }) {
+  if (runtime.disableGoogleAuth) return <GoogleAuthGate>{children}</GoogleAuthGate>;
+  return <AuthenticatedRoute>{children}</AuthenticatedRoute>;
+}
+
+function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const location = useLocation();
   const publicRoute = useMemo(() => isPublicPath(location.pathname), [location.pathname]);

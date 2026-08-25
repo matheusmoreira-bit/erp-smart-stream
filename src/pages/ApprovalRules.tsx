@@ -25,6 +25,7 @@ import {
   GitCompareArrows,
   History,
   UserCog,
+  Zap,
 
 } from "lucide-react";
 import SubstituteApproversTab from "@/components/SubstituteApproversTab";
@@ -653,6 +654,7 @@ function RuleFormModal({
   const [name, setName] = useState("");
   const [priority, setPriority] = useState(0);
   const [docType, setDocType] = useState<RuleDocType>("both");
+  const [autoApprove, setAutoApprove] = useState(false);
   const [criteria, setCriteria] = useState<RuleCriterion[]>([]);
   const [levels, setLevels] = useState<Omit<ApprovalRuleLevel, "id">[]>([]);
   const [showPreSimulator, setShowPreSimulator] = useState(false);
@@ -665,6 +667,7 @@ function RuleFormModal({
       id: editing?.id || DRAFT_RULE_ID,
       name: name || "(nova regra)",
       is_active: editing ? editing.is_active : true,
+      auto_approve: autoApprove,
       priority,
       criteria,
       doc_type: docType,
@@ -672,9 +675,9 @@ function RuleFormModal({
       created_at: editing?.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
       company_db: editing?.company_db ?? session?.companyDB ?? null,
-      levels: levels.map((l) => ({ ...l })),
+      levels: autoApprove ? [] : levels.map((l) => ({ ...l })),
     }),
-    [editing, name, priority, criteria, docType, levels, session],
+    [editing, name, priority, criteria, docType, autoApprove, levels, session],
   );
 
   /** Resumo ao vivo de conflitos da regra em edição contra a matriz publicada. */
@@ -857,6 +860,7 @@ function RuleFormModal({
       setName(editing.name);
       setPriority(editing.priority || 0);
       setDocType((editing.doc_type as RuleDocType) || "both");
+      setAutoApprove(editing.auto_approve === true);
       setCriteria(editing.criteria || []);
       setLevels(
         (editing.levels || []).map((l) => ({
@@ -869,6 +873,7 @@ function RuleFormModal({
       setName("");
       setPriority(0);
       setDocType("both");
+      setAutoApprove(false);
       setCriteria([]);
       setLevels([]);
     }
@@ -1026,11 +1031,11 @@ function RuleFormModal({
       toast.error("Todos os critérios devem ter um valor");
       return;
     }
-    if (levels.length === 0) {
+    if (!autoApprove && levels.length === 0) {
       toast.error("Adicione ao menos um nível de aprovação");
       return;
     }
-    if (levels.some((l) => !String(l.approver_name ?? "").trim())) {
+    if (!autoApprove && levels.some((l) => !String(l.approver_name ?? "").trim())) {
       toast.error("Todos os níveis devem ter um aprovador");
       return;
     }
@@ -1043,7 +1048,14 @@ function RuleFormModal({
         value: String(c.value ?? "").trim().replace(/^%\s+/, "%").replace(/\s+%$/, "%"),
         ...(c.value2 !== undefined ? { value2: String(c.value2 ?? "").trim() } : {}),
       }));
-      await onSubmit({ name, priority, doc_type: docType, criteria: cleanedCriteria, levels });
+      await onSubmit({
+        name,
+        auto_approve: autoApprove,
+        priority,
+        doc_type: docType,
+        criteria: cleanedCriteria,
+        levels: autoApprove ? [] : levels,
+      });
       toast.success(editing ? "Regra atualizada com sucesso!" : "Regra criada com sucesso!");
       onClose();
     } catch (e) {
@@ -1089,6 +1101,18 @@ function RuleFormModal({
               <Input type="number" value={priority} onChange={(e) => setPriority(parseInt(e.target.value) || 0)} placeholder="0" />
               <p className="text-[10px] text-muted-foreground mt-1">Maior = mais prioritário</p>
             </div>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/10 px-3 py-2.5">
+            <label htmlFor="auto-approve-rule" className="flex items-center gap-2 text-sm font-medium text-foreground cursor-pointer">
+              <Zap className="w-4 h-4 text-primary" />
+              Aprovação automática
+            </label>
+            <Switch
+              id="auto-approve-rule"
+              checked={autoApprove}
+              onCheckedChange={setAutoApprove}
+            />
           </div>
 
           {/* Dynamic Criteria (com suporte a grupos) */}
@@ -1192,7 +1216,7 @@ function RuleFormModal({
 
 
           {/* Dynamic Levels — grouped by level_order (parallel approvers) */}
-          <div>
+          {!autoApprove && <div>
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                 <Users className="w-3 h-3" /> Níveis de Aprovação
@@ -1273,7 +1297,7 @@ function RuleFormModal({
                 ))}
               </div>
             )}
-          </div>
+          </div>}
 
 
           {draftConflicts.total > 0 && (
@@ -1388,6 +1412,11 @@ function RuleCard({
             <Badge className={rule.is_active ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}>
               {rule.is_active ? "Ativa" : "Inativa"}
             </Badge>
+            {rule.auto_approve && (
+              <Badge className="bg-primary/15 text-primary gap-1">
+                <Zap className="w-3 h-3" /> Automática
+              </Badge>
+            )}
             <Badge className={`${docTypeBadge.cls} gap-1`}>
               <DocIcon className="w-3 h-3" />
               {DOC_TYPE_LABELS[dt]}
@@ -1444,7 +1473,7 @@ function RuleCard({
             );
           })()}
 
-          {(() => {
+          {!rule.auto_approve && (() => {
             const distinctCount = new Set(rule.levels.map((l) => l.level_order)).size;
             return (
               <button
@@ -1458,7 +1487,7 @@ function RuleCard({
             );
           })()}
 
-          {expanded && (() => {
+          {!rule.auto_approve && expanded && (() => {
             // Agrupa por level_order para renderizar aprovadores paralelos
             const grouped = new Map<number, typeof rule.levels>();
             for (const l of rule.levels) {

@@ -206,6 +206,16 @@ describe("findMatchingRule — regra vencedora", () => {
 
   const ctx = { total_amount: 5000, cost_center: "CC1" };
 
+  it("aplica uma regra automática sem critérios a qualquer documento", () => {
+    const automatic = makeRule("auto", [], 100, { auto_approve: true });
+    expect(findMatchingRule([automatic], ctx, "purchase")?.id).toBe("auto");
+  });
+
+  it("continua ignorando uma regra manual sem critérios", () => {
+    const incomplete = makeRule("incomplete", [], 100);
+    expect(findMatchingRule([incomplete], ctx, "purchase")).toBeNull();
+  });
+
   it("escolhe a de maior prioridade quando ambas batem", () => {
     const low = makeRule("low", [c("total_amount", "greater_than", "1000")], 1);
     const high = makeRule("high", [c("total_amount", "greater_than", "1000")], 10);

@@ -703,7 +703,9 @@ function ApprovalDetailModal({
   onAction,
   onRetryRefresh,
   onDelegate,
+  onReprocessApproval,
   onRevokeDelegation,
+  isReprocessingApproval,
   isRevokingDelegation,
   isActioning,
   actionPhase,
@@ -723,7 +725,9 @@ function ApprovalDetailModal({
   onAction: (code: number, action: "approve" | "reject", remarks: string, opts?: { idempotencyKey?: string }) => Promise<void>;
   onRetryRefresh: () => Promise<void>;
   onDelegate: (doc: ApprovalDoc) => void;
+  onReprocessApproval: (doc: ApprovalDoc) => void;
   onRevokeDelegation: (doc: ApprovalDoc) => void;
+  isReprocessingApproval: boolean;
   isRevokingDelegation: boolean;
   isActioning: boolean;
   actionPhase: "idle" | "sending" | "refreshing";
@@ -1524,6 +1528,19 @@ function ApprovalDetailModal({
                     Transferir
                   </Button>
                 )}
+                {isAdmin && doc.approvalRequestId <= 0 && (
+                  <Button
+                    variant="outline"
+                    onClick={() => onReprocessApproval(doc)}
+                    disabled={isActioning || isReprocessingApproval}
+                    className="gap-1.5 border-amber-500/40 text-amber-600 dark:text-amber-300 hover:bg-amber-500/10 w-full sm:w-auto"
+                  >
+                    {isReprocessingApproval
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <RefreshCw className="w-4 h-4" />}
+                    Reprocessar Aprovação
+                  </Button>
+                )}
                 {canApprove && doc.approvalRequestId <= 0 && doc.delegatedFrom && (
                   <Button
                     variant="outline"
@@ -2262,9 +2279,11 @@ export default function ApprovalsPage() {
     }
   }, [canToggleShowAll, hasCapability]);
   const [delegationDoc, setDelegationDoc] = useState<ApprovalDoc | null>(null);
+  const [reprocessApprovalDoc, setReprocessApprovalDoc] = useState<ApprovalDoc | null>(null);
   const [showSubstitutes, setShowSubstitutes] = useState(false);
 
   const [isDelegating, setIsDelegating] = useState(false);
+  const [isReprocessingApproval, setIsReprocessingApproval] = useState(false);
   const [isRevokingDelegation, setIsRevokingDelegation] = useState(false);
   const [typeFilter, setTypeFilter] = useState<"all" | "purchase" | "sales">("all");
   const [originFilter, setOriginFilter] = useState<"all" | "erp" | "internal">("all");
@@ -3389,6 +3408,58 @@ export default function ApprovalsPage() {
     }
   };
 
+  const handleReprocessApproval = async () => {
+    if (!session || !reprocessApprovalDoc || isReprocessingApproval) return;
+    const expenseId = (reprocessApprovalDoc as unknown as { __internalId?: string }).__internalId;
+    if (!expenseId) {
+      toast.error("Documento interno sem identificador — recarregue a lista e tente novamente.");
+      return;
+    }
+
+    setIsReprocessingApproval(true);
+    try {
+      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+      const response = await sapFunctionFetch("expense-reassign-approver", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company_db: session.companyDB,
+          expense_ids: [expenseId],
+          only_unmatched: false,
+          dry_run: false,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || `Falha ao reprocessar aprovação (HTTP ${response.status})`);
+      }
+      const result = Array.isArray(payload?.results) ? payload.results[0] : null;
+      if (result?.error) throw new Error(result.error);
+      if (result?.skipped) {
+        toast.warning(`A aprovação não foi alterada: ${result.skipped}.`);
+      } else if (result?.finalized) {
+        toast.success("Regra reavaliada. As aprovações existentes concluíram o fluxo.");
+      } else {
+        const preserved = Array.isArray(result?.preserved_levels)
+          ? result.preserved_levels.length
+          : Number(result?.preserved_levels || 0);
+        toast.success(
+          preserved > 0
+            ? `Regra reavaliada com ${preserved} nível(is) já aprovado(s) preservado(s).`
+            : "Regra reavaliada e próximo aprovador atualizado.",
+        );
+      }
+      setReprocessApprovalDoc(null);
+      setSelectedDoc(null);
+      await refreshFeed();
+    } catch (error) {
+      console.error("Approval reprocess error:", error);
+      toast.error(error instanceof Error ? error.message : "Falha ao reprocessar aprovação.");
+    } finally {
+      setIsReprocessingApproval(false);
+    }
+  };
+
   const handleRevokeDelegation = async (doc: ApprovalDoc) => {
     if (!session) return;
     // Qualquer aprovador do documento pode revogar a própria delegação.
@@ -4164,7 +4235,9 @@ export default function ApprovalsPage() {
         onAction={handleApprovalAction}
         onRetryRefresh={handleRetryRefresh}
         onDelegate={(d) => setDelegationDoc(d)}
+        onReprocessApproval={(d) => setReprocessApprovalDoc(d)}
         onRevokeDelegation={handleRevokeDelegation}
+        isReprocessingApproval={isReprocessingApproval}
         isRevokingDelegation={isRevokingDelegation}
         isActioning={isActioning}
         actionPhase={actionPhase}
@@ -4207,6 +4280,38 @@ export default function ApprovalsPage() {
         onConfirm={handleBulkTransferApprovals}
         isSubmitting={isTransferringApprovals}
       />
+
+      <AlertDialog
+        open={!!reprocessApprovalDoc}
+        onOpenChange={(open) => {
+          if (!open && !isReprocessingApproval) setReprocessApprovalDoc(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reprocessar aprovação?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A matriz atual será reavaliada para este documento. Aprovações já realizadas por pessoas que continuam na nova regra serão mantidas, sem solicitar uma nova decisão.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isReprocessingApproval}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isReprocessingApproval}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleReprocessApproval();
+              }}
+              className="gap-1.5"
+            >
+              {isReprocessingApproval
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <RefreshCw className="w-4 h-4" />}
+              Reprocessar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={showSubstitutes} onOpenChange={(o) => {
         setShowSubstitutes(o);

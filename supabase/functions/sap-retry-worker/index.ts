@@ -136,6 +136,10 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const admin = createClient(supabaseUrl, serviceKey);
+  const requestBody = await req.json().catch(() => ({})) as { queue_id?: string };
+  const requestedQueueId = /^[0-9a-f-]{36}$/i.test(String(requestBody.queue_id || ""))
+    ? String(requestBody.queue_id)
+    : null;
 
   // Recupera linhas presas em `in_flight` (worker morto/timeout) devolvendo-as
   // à fila — sem isso um documento ficava travado para sempre sem alerta.
@@ -150,13 +154,15 @@ Deno.serve(async (req) => {
   // Atomically claim up to N due rows.
   const nowIso = new Date().toISOString();
 
-  const { data: due, error: selErr } = await admin
+  let dueQuery = admin
     .from("sap_retry_queue")
     .select("*")
     .eq("status", "pending")
     .lte("next_attempt_at", nowIso)
     .order("next_attempt_at", { ascending: true })
     .limit(MAX_ROWS_PER_RUN);
+  if (requestedQueueId) dueQuery = dueQuery.eq("id", requestedQueueId);
+  const { data: due, error: selErr } = await dueQuery;
 
   if (selErr) {
     return new Response(JSON.stringify({ ok: false, error: selErr.message }), {

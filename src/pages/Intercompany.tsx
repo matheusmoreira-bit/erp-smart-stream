@@ -60,18 +60,19 @@ import {
 } from "@/hooks/useIntercompany";
 import { PageTitle } from "@/components/PageTitle";
 import { useSap } from "@/contexts/SapContext";
+import { consolidatePaymentTerms } from "@/lib/intercompany-payment-terms";
 
 
 interface UnifiedAccountRow {
   code: string;
   names: Set<string>;
-  presence: Map<string, { name: string; active: boolean }>; // company_db -> info
+  presence: Map<string, { name: string; active: boolean; sourceCode?: string }>; // company_db -> info
 }
 
 interface UnifiedCenterRow {
   code: string;
   names: Set<string>;
-  presence: Map<string, { name: string; active: boolean }>;
+  presence: Map<string, { name: string; active: boolean; sourceCode?: string }>;
 }
 
 function consolidateBPs(
@@ -247,10 +248,6 @@ function consolidateProjects(
   const rows = Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code));
   return { rows, companies };
 }
-
-
-
-
 
 function ResultReportDialog({
   open,
@@ -746,14 +743,30 @@ function ConsolidatedTable({
   onToggleActive,
   onReplicate,
   readOnly = false,
+  presenceOnly = false,
+  primaryLabel = "Código",
+  hideNameColumn = false,
 }: {
-  rows: { code: string; names: Set<string>; presence: Map<string, { name: string; active: boolean }> }[];
+  rows: {
+    code: string;
+    names: Set<string>;
+    presence: Map<string, { name: string; active: boolean; sourceCode?: string }>;
+  }[];
   companies: { db: string; name: string }[];
   search: string;
   onResolveConflict?: (code: string, names: string[]) => void;
   onToggleActive?: (code: string, companyDb: string, nextActive: boolean) => Promise<void> | void;
-  onReplicate?: (code: string, name: string, companyDb: string, sourceCompanyDb: string) => Promise<void> | void;
+  onReplicate?: (
+    code: string,
+    name: string,
+    companyDb: string,
+    sourceCompanyDb: string,
+    sourceCode?: string,
+  ) => Promise<void> | void;
   readOnly?: boolean;
+  presenceOnly?: boolean;
+  primaryLabel?: string;
+  hideNameColumn?: boolean;
 }) {
   const [pending, setPending] = useState<string | null>(null);
   const filtered = useMemo(() => {
@@ -769,7 +782,7 @@ function ConsolidatedTable({
   if (companies.length === 0) {
     return (
       <div className="text-center text-muted-foreground py-12 text-sm">
-      <PageTitle title="Plano de Contas & CC" />
+      <PageTitle title="Cadastros Intercompany" />
         Nenhuma empresa carregada. Clique em Atualizar.
       </div>
     );
@@ -779,35 +792,48 @@ function ConsolidatedTable({
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground px-1">
         <span className="font-medium text-foreground">Legenda:</span>
-        <span className="inline-flex items-center gap-1.5">
-          <CheckCircle2 className="w-4 h-4 text-success" />
-          Ativo (clique para inativar)
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <XCircle className="w-4 h-4 text-muted-foreground" />
-          Inativo (clique para ativar)
-        </span>
+        {presenceOnly ? (
+          <span className="inline-flex items-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4 text-success" />
+            Cadastrada nesta empresa
+          </span>
+        ) : (
+          <>
+            <span className="inline-flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-success" />
+              Ativo (clique para inativar)
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <XCircle className="w-4 h-4 text-muted-foreground" />
+              Inativo (clique para ativar)
+            </span>
+          </>
+        )}
         <span className="inline-flex items-center gap-1.5">
           <Ban className="w-4 h-4 text-destructive" />
           Não existe — clique para replicar nesta empresa
         </span>
-        <span className="inline-flex items-center gap-1.5">
-          <Badge variant="outline" className="text-warning border-warning/40 text-[10px]">
-            nomes divergentes
-          </Badge>
-          Mesmo código com nomes diferentes
-        </span>
+        {!hideNameColumn && (
+          <span className="inline-flex items-center gap-1.5">
+            <Badge variant="outline" className="text-warning border-warning/40 text-[10px]">
+              nomes divergentes
+            </Badge>
+            Mesmo código com nomes diferentes
+          </span>
+        )}
       </div>
       <div className="border rounded-md overflow-auto max-h-[65vh]">
         <table className="w-full caption-bottom text-sm">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
             <TableHead className="w-32 sticky top-0 z-20 bg-card border-b shadow-[0_1px_0_0_hsl(var(--border))]">
-              Código
+              {primaryLabel}
             </TableHead>
-            <TableHead className="sticky top-0 z-20 bg-card border-b shadow-[0_1px_0_0_hsl(var(--border))]">
-              Nome
-            </TableHead>
+            {!hideNameColumn && (
+              <TableHead className="sticky top-0 z-20 bg-card border-b shadow-[0_1px_0_0_hsl(var(--border))]">
+                Nome
+              </TableHead>
+            )}
             {companies.map((c) => (
               <TableHead
                 key={c.db}
@@ -826,8 +852,17 @@ function ConsolidatedTable({
             const missing = presentCount < companies.length;
             return (
               <TableRow key={row.code}>
-                <TableCell className="font-mono text-xs">{row.code}</TableCell>
-                <TableCell className="text-sm">
+                <TableCell className={hideNameColumn ? "text-sm font-medium" : "font-mono text-xs"}>
+                  <div className="flex items-center gap-2">
+                    <span>{row.code}</span>
+                    {hideNameColumn && missing && (
+                      <Badge variant="outline" className="text-muted-foreground text-[10px]">
+                        {presentCount}/{companies.length}
+                      </Badge>
+                    )}
+                  </div>
+                </TableCell>
+                {!hideNameColumn && <TableCell className="text-sm">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span>{names[0] || "—"}</span>
                     {conflict && (
@@ -847,7 +882,7 @@ function ConsolidatedTable({
                       </Badge>
                     )}
                   </div>
-                </TableCell>
+                </TableCell>}
                 {companies.map((c) => {
                   const info = row.presence.get(c.db);
                   if (!info) {
@@ -866,7 +901,13 @@ function ConsolidatedTable({
                               if (!onReplicate) return;
                               setPending(replicateKey);
                               try {
-                                await onReplicate(row.code, sourceName, c.db, sourceCompanyDb);
+                                await onReplicate(
+                                  row.code,
+                                  sourceName,
+                                  c.db,
+                                  sourceCompanyDb,
+                                  row.presence.get(sourceCompanyDb)?.sourceCode,
+                                );
                               } finally {
                                 setPending(null);
                               }
@@ -943,7 +984,7 @@ function ConsolidatedTable({
           })}
           {filtered.length === 0 && (
             <TableRow>
-              <TableCell colSpan={companies.length + 2} className="text-center text-muted-foreground py-8 text-sm">
+              <TableCell colSpan={companies.length + (hideNameColumn ? 1 : 2)} className="text-center text-muted-foreground py-8 text-sm">
                 Nenhum registro encontrado
               </TableCell>
             </TableRow>
@@ -963,18 +1004,21 @@ export default function Intercompany() {
     loadingItems,
     loadingUsers,
     loadingProjects,
+    loadingPaymentTerms,
     accountResults,
     centerResults,
     bpResults,
     itemResults,
     userResults,
     projectResults,
+    paymentTermResults,
     loadAccounts,
     loadCostCenters,
     loadBusinessPartners,
     loadItems,
     loadUsers,
     loadProjects,
+    loadPaymentTerms,
     toggleAccount,
     toggleCostCenter,
     createAccount,
@@ -985,6 +1029,7 @@ export default function Intercompany() {
     replicateAccount,
     replicateCostCenter,
     replicateProject,
+    replicatePaymentTerm,
     toggleProject,
 
   } = useIntercompany();
@@ -996,7 +1041,8 @@ export default function Intercompany() {
     [allCompanies],
   );
 
-  const [tab, setTab] = useState<"accounts" | "centers" | "projects" | "bps" | "items" | "users">("accounts");
+  type IntercompanyTab = "accounts" | "centers" | "projects" | "payment-terms" | "bps" | "items" | "users";
+  const [tab, setTab] = useState<IntercompanyTab>("accounts");
   const [search, setSearch] = useState("");
   const [selectedDbs, setSelectedDbs] = useState<string[]>([]);
   const [conflict, setConflict] = useState<{
@@ -1059,6 +1105,10 @@ export default function Intercompany() {
     () => () => loadProjects(selectedDbs),
     [loadProjects, selectedDbs],
   );
+  const reloadPaymentTerms = useMemo(
+    () => () => loadPaymentTerms(selectedDbs),
+    [loadPaymentTerms, selectedDbs],
+  );
 
   // Load accounts/centers eagerly; BPs/items/users only on tab access (datasets podem ser grandes)
   useEffect(() => {
@@ -1073,6 +1123,9 @@ export default function Intercompany() {
     if (tab === "items" && itemResults.length === 0 && !loadingItems) reloadItems();
     if (tab === "users" && userResults.length === 0 && !loadingUsers) reloadUsers();
     if (tab === "projects" && projectResults.length === 0 && !loadingProjects) reloadProjects();
+    if (tab === "payment-terms" && !loadingPaymentTerms) {
+      reloadPaymentTerms();
+    }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, selectedDbs]);
@@ -1101,13 +1154,17 @@ export default function Intercompany() {
     () => consolidateProjects(projectResults),
     [projectResults],
   );
+  const { rows: paymentTermRows, companies: paymentTermCompanies } = useMemo(
+    () => consolidatePaymentTerms(paymentTermResults),
+    [paymentTermResults],
+  );
 
 
 
   // Floating notification (15s) for companies that failed
   const lastErrorKeyRef = useRef<string>("");
   useEffect(() => {
-    const failed = [...accountResults, ...centerResults].filter((r) => !r.ok);
+    const failed = [...accountResults, ...centerResults, ...paymentTermResults].filter((r) => !r.ok);
     if (failed.length === 0) return;
     // Deduplicate per company_db (a company can fail in both lists)
     const byDb = new Map<string, { display_name: string; error?: string }>();
@@ -1132,7 +1189,7 @@ export default function Intercompany() {
       duration: 15000,
       icon: <AlertTriangle className="w-4 h-4" />,
     });
-  }, [accountResults, centerResults]);
+  }, [accountResults, centerResults, paymentTermResults]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -1146,9 +1203,9 @@ export default function Intercompany() {
               <Building2 className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">Plano de Contas & Centros de Custo</h1>
+              <h1 className="text-xl font-bold text-foreground">Cadastros Intercompany</h1>
               <p className="text-xs text-muted-foreground">
-                Plano de contas, centros de custo, parceiros de negócios e itens consolidados entre empresas
+                Cadastros SAP consolidados e replicáveis entre empresas
               </p>
             </div>
           </div>
@@ -1157,25 +1214,26 @@ export default function Intercompany() {
 
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-4">
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-          <Tabs value={tab} onValueChange={(v) => setTab(v as "accounts" | "centers" | "projects" | "bps" | "items" | "users")}>
+          <Tabs value={tab} onValueChange={(v) => setTab(v as IntercompanyTab)}>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <TabsList>
+              <TabsList className="h-auto flex-wrap justify-start">
                 <TabsTrigger value="accounts">Plano de Contas</TabsTrigger>
                 <TabsTrigger value="centers">Centros de Custo</TabsTrigger>
                 <TabsTrigger value="projects">Projetos</TabsTrigger>
+                <TabsTrigger value="payment-terms">Formas de Pagamento</TabsTrigger>
 
                 <TabsTrigger value="bps">Parceiros de Negócios</TabsTrigger>
                 <TabsTrigger value="items">Itens</TabsTrigger>
                 <TabsTrigger value="users">Usuários</TabsTrigger>
               </TabsList>
-              <div className="flex items-center gap-2">
-                <div className="relative">
+              <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto">
+                <div className="relative min-w-56 flex-1 sm:flex-none">
                   <Search className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Buscar código ou nome"
-                    className="pl-8 w-64"
+                    className="w-full pl-8 sm:w-64"
                   />
                 </div>
                 <Popover>
@@ -1284,6 +1342,18 @@ export default function Intercompany() {
                     </Button>
                     <CreateProjectDialog onCreated={reloadProjects} companyDbs={selectedDbs} />
                   </>
+                )}
+                {tab === "payment-terms" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={reloadPaymentTerms}
+                    disabled={loadingPaymentTerms || selectedDbs.length === 0}
+                    className="gap-2"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loadingPaymentTerms ? "animate-spin" : ""}`} />
+                    Atualizar
+                  </Button>
                 )}
                 {tab === "bps" && (
 
@@ -1463,6 +1533,43 @@ export default function Intercompany() {
                       await reloadProjects();
                     } catch (e) {
                       toast.error(e instanceof Error ? e.message : "Erro ao replicar");
+                    }
+                  }}
+                />
+              )}
+            </TabsContent>
+
+            <TabsContent value="payment-terms" className="space-y-3 mt-4">
+              {loadingPaymentTerms && paymentTermResults.length === 0 ? (
+                <div className="text-center text-muted-foreground py-12 text-sm">
+                  Carregando formas de pagamento de todas as empresas…
+                </div>
+              ) : (
+                <ConsolidatedTable
+                  rows={paymentTermRows}
+                  companies={paymentTermCompanies}
+                  search={search}
+                  readOnly
+                  presenceOnly
+                  hideNameColumn
+                  primaryLabel="Forma de Pagamento"
+                  onReplicate={async (_code, name, targetDb, sourceDb, sourceCode) => {
+                    if (!sourceCode) {
+                      toast.error("Não foi possível identificar a forma de pagamento na empresa de origem");
+                      return;
+                    }
+                    try {
+                      const { results } = await replicatePaymentTerm({
+                        code: sourceCode,
+                        source_company_db: sourceDb,
+                        target_company_db: targetDb,
+                      });
+                      const result = results[0];
+                      if (!result?.ok) throw new Error(result?.error || "Falha ao replicar");
+                      toast.success(`Forma de pagamento "${name}" replicada nesta empresa`);
+                      await reloadPaymentTerms();
+                    } catch (error) {
+                      toast.error(error instanceof Error ? error.message : "Erro ao replicar forma de pagamento");
                     }
                   }}
                 />

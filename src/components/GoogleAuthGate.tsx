@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
+import { runtime } from "@/config/runtime";
 import { toast } from "sonner";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 
@@ -25,19 +26,73 @@ function isAllowedEmail(email: string | null | undefined): boolean {
   return !!domain && ALLOWED_DOMAINS.includes(domain);
 }
 
-// A sessão Google sobrevive ao "Sair" da empresa, mas com validade máxima de 24h.
-const GOOGLE_SESSION_MAX_MS = 24 * 60 * 60 * 1000;
-
-function sessionAgeMs(user: { last_sign_in_at?: string | null; created_at?: string | null } | undefined): number | null {
-  const iso = user?.last_sign_in_at || user?.created_at;
-  if (!iso) return null;
-  const ts = Date.parse(iso);
-  if (!Number.isFinite(ts)) return null;
-  return Date.now() - ts;
+export function GoogleAuthGate({ children }: { children: React.ReactNode }) {
+  if (runtime.disableGoogleAuth) return <LocalAuthGate>{children}</LocalAuthGate>;
+  return <GoogleAuthProviderGate>{children}</GoogleAuthProviderGate>;
 }
 
+function LocalAuthGate({ children }: { children: React.ReactNode }) {
+  const [checking, setChecking] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-export function GoogleAuthGate({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const email = runtime.localAuthEmail?.trim();
+      const password = runtime.localAuthPassword;
+      if (!email || !password) {
+        if (!cancelled) {
+          setError("Credenciais da sessão local não configuradas.");
+          setChecking(false);
+        }
+        return;
+      }
+
+      const current = (await supabase.auth.getSession()).data.session;
+      if (current?.user.email?.toLowerCase() === email.toLowerCase()) {
+        if (!cancelled) setChecking(false);
+        return;
+      }
+
+      if (current) await supabase.auth.signOut();
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (!cancelled) {
+        setError(signInError ? "Falha ao iniciar a sessão técnica local." : null);
+        setChecking(false);
+      }
+    })().catch(() => {
+      if (!cancelled) {
+        setError("Falha ao conectar ao serviço de autenticação local.");
+        setChecking(false);
+      }
+    });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  if (checking) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
+
+function GoogleAuthProviderGate({ children }: { children: React.ReactNode }) {
   const [checking, setChecking] = useState(true);
   const [allowed, setAllowed] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
@@ -67,9 +122,8 @@ export function GoogleAuthGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    let expiryTimer: number | undefined;
 
-    const evaluate = async (user: { email?: string | null; last_sign_in_at?: string | null; created_at?: string | null } | undefined) => {
+    const evaluate = async (user: { email?: string | null } | undefined) => {
       const email = user?.email;
       if (!email) {
         if (!cancelled) { setAllowed(false); setChecking(false); }
@@ -82,24 +136,6 @@ export function GoogleAuthGate({ children }: { children: React.ReactNode }) {
         try { await supabase.auth.signOut(); } catch { /* ignore */ }
         if (!cancelled) { setAllowed(false); setChecking(false); }
         return;
-      }
-
-      // Validade máxima de 24h para a sessão Google.
-      const age = sessionAgeMs(user);
-      if (age !== null && age >= GOOGLE_SESSION_MAX_MS) {
-        toast.message("Sessão expirada", {
-          description: "Sua autenticação Google passou de 24h. Entre novamente.",
-        });
-        try { await supabase.auth.signOut(); } catch { /* ignore */ }
-        if (!cancelled) { setAllowed(false); setChecking(false); }
-        return;
-      }
-
-      if (window.clearTimeout && expiryTimer) window.clearTimeout(expiryTimer);
-      if (age !== null) {
-        expiryTimer = window.setTimeout(() => {
-          void supabase.auth.signOut().catch(() => {});
-        }, Math.max(GOOGLE_SESSION_MAX_MS - age, 1000));
       }
 
       if (!cancelled) { setAllowed(true); setChecking(false); }
@@ -119,7 +155,6 @@ export function GoogleAuthGate({ children }: { children: React.ReactNode }) {
 
     return () => {
       cancelled = true;
-      if (expiryTimer) window.clearTimeout(expiryTimer);
       subscription.unsubscribe();
     };
   }, []);

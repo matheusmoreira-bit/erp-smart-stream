@@ -26,8 +26,88 @@ import {
   persistSegmentSubset,
   pendingApproverLabel,
 } from "../_shared/rateio-segments.ts";
+import {
+  priorApprovalsForSegment,
+  resolveReprocessedApprovalState,
+  type PriorApproval,
+} from "../_shared/approval-reprocess.ts";
 
 const norm = (v: unknown) => String(v ?? "").toLowerCase().trim();
+type ReprocessRuleRow = RuleRow & { auto_approve?: boolean | null };
+
+async function loadPriorApprovals(admin: any, expenseId: string): Promise<{
+  document: PriorApproval[];
+  bySegment: Map<string, PriorApproval[]>;
+}> {
+  const { data: logsRaw } = await admin
+    .from("expense_approval_log")
+    .select(
+      "decision, approver_name, approver_email, substituted_for_name, substituted_for_email, created_at",
+    )
+    .eq("expense_id", expenseId)
+    .order("created_at", { ascending: true });
+  const logs = (logsRaw || []) as Array<Record<string, any>>;
+  const resetDecisions = new Set(["created", "submitted", "reactivated"]);
+  const lastReset = [...logs].reverse().find((row) => resetDecisions.has(String(row.decision)));
+  const resetAt = lastReset?.created_at ? String(lastReset.created_at) : null;
+  const document = logs
+    .filter((row) => row.decision === "approved" && (!resetAt || String(row.created_at) >= resetAt))
+    .map((row) => ({
+      approver_name: row.approver_name,
+      approver_email: row.approver_email,
+      substituted_for_name: row.substituted_for_name,
+      substituted_for_email: row.substituted_for_email,
+    }));
+
+  let auditQuery = admin
+    .from("expense_audit_log")
+    .select(
+      "segment_key, actor_identity, actor_email, substituted_for_name, substituted_for_email, created_at",
+    )
+    .eq("expense_id", expenseId)
+    .eq("decision", "approved")
+    .not("segment_key", "is", null);
+  if (resetAt) auditQuery = auditQuery.gte("created_at", resetAt);
+  const { data: auditRaw } = await auditQuery;
+  const bySegment = new Map<string, PriorApproval[]>();
+  for (const row of (auditRaw || []) as Array<Record<string, any>>) {
+    const key = String(row.segment_key || "");
+    if (!key) continue;
+    const list = bySegment.get(key) || [];
+    list.push({
+      approver_name: row.actor_identity,
+      approver_email: row.actor_email,
+      substituted_for_name: row.substituted_for_name,
+      substituted_for_email: row.substituted_for_email,
+    });
+    bySegment.set(key, list);
+  }
+  return { document, bySegment };
+}
+
+async function dispatchApprovedExpense(expenseId: string, alreadyIntegrated: boolean): Promise<void> {
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const serviceUrl = Deno.env.get("SUPABASE_URL") || "";
+  if (!serviceKey || !serviceUrl) return;
+  const response = await fetch(`${serviceUrl}/functions/v1/expense-to-sap`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${serviceKey}`,
+      apikey: serviceKey,
+      "x-internal-retry": "1",
+    },
+    body: JSON.stringify({
+      expense_id: expenseId,
+      patch_document: alreadyIntegrated,
+      use_service_account: true,
+    }),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    console.warn("[expense-reassign-approver] integração após reprocesso falhou:", payload);
+  }
+}
 
 Deno.serve(async (req) => {
   const foreign = rejectForeignOrigin(req);
@@ -116,7 +196,7 @@ Deno.serve(async (req) => {
     let q = admin
       .from("expenses")
       .select(
-        "id, company_db, doc_type, cost_center, project, supplier_name, supplier_code, currency, total_amount, requester_name, requester_email, current_approver, original_approver, current_level_order, approval_rule_id, rateio_type, status",
+        "id, company_db, doc_type, cost_center, project, supplier_name, supplier_code, currency, total_amount, requester_name, requester_email, current_approver, original_approver, current_level_order, approval_rule_id, rateio_type, status, sap_doc_entry",
       )
       .eq("status", "pendente_aprovacao")
       .limit(500);
@@ -291,26 +371,29 @@ Deno.serve(async (req) => {
     }
 
     // ── Matriz por empresa (cache) ─────────────────────────────────────
-    const rulesCache = new Map<string, RuleRow[]>();
-    const loadRules = async (db: string): Promise<RuleRow[]> => {
+    const rulesCache = new Map<string, ReprocessRuleRow[]>();
+    const loadRules = async (db: string): Promise<ReprocessRuleRow[]> => {
       if (rulesCache.has(db)) return rulesCache.get(db)!;
       const { data } = await admin
         .from("approval_rules")
-        .select("id, name, is_active, priority, doc_type, criteria, company_db")
+        .select("id, name, is_active, priority, doc_type, criteria, company_db, auto_approve")
         .eq("company_db", db)
         .eq("is_active", true);
-      const rows = (data || []) as RuleRow[];
+      const rows = (data || []) as ReprocessRuleRow[];
       rulesCache.set(db, rows);
       return rows;
     };
-    const firstLevel = async (ruleId: string) => {
+    const levelsOf = async (ruleId: string) => {
       const { data } = await admin
         .from("approval_rule_levels")
         .select("level_order, approver_name, approver_email")
         .eq("rule_id", ruleId)
-        .order("level_order", { ascending: true })
-        .limit(1);
-      return (data && data[0]) || null;
+        .order("level_order", { ascending: true });
+      return (data || []) as Array<{
+        level_order: number;
+        approver_name: string | null;
+        approver_email: string | null;
+      }>;
     };
 
     const results: Record<string, unknown>[] = [];
@@ -331,20 +414,15 @@ Deno.serve(async (req) => {
       const candidateCcs = Array.from(new Set(ccs));
       const docType = String(doc.doc_type || "purchase");
 
+      const priorApprovals = await loadPriorApprovals(admin, doc.id);
+
       // ── Rateio: reconstrói trilhas independentes por (CC + projeto) ────
-      // Documentos criados antes do motor de segmentos ficaram com cadeia
-      // única (regra do primeiro item). Aqui geramos um fluxo por segmento.
-      // Folha/imposto/viagens forçam regra única → sem trilhas por CC.
-      // Reembolso roda EM PARALELO com a alçada padrão.
+      // A matriz e as cadeias são recalculadas, mas cada trilha avança por
+      // todos os aprovadores que já decidiram nesta submissão.
       const rateioTypeNorm = String(doc.rateio_type || "").toLowerCase();
       const isReembolso = rateioTypeNorm === "reembolso";
       const rateioOverride = ["folha", "imposto", "viagens"].includes(rateioTypeNorm);
-      const { data: segExisting } = await admin
-        .from("expense_approval_segments")
-        .select("id")
-        .eq("expense_id", doc.id)
-        .limit(1);
-      if (!rateioOverride && (!segExisting || segExisting.length === 0)) {
+      if (!rateioOverride) {
         const segCtx = {
           companyDb: doc.company_db,
           docType,
@@ -359,7 +437,26 @@ Deno.serve(async (req) => {
         const segments = isReembolso
           ? await buildReembolsoSegments(admin, items as any, segCtx as any)
           : await buildRateioSegments(admin, items as any, segCtx as any);
-        if (segments && segments.length > 1) {
+        if (segments && segments.length > 0) {
+          const approvedBySegment = new Map<string, PriorApproval[]>();
+          const preservedBySegment = new Map<string, number[]>();
+          for (const segment of segments) {
+            const approvals = priorApprovalsForSegment(
+              priorApprovals.bySegment,
+              segment.segment_key,
+              priorApprovals.document,
+            );
+            approvedBySegment.set(segment.segment_key, approvals);
+            preservedBySegment.set(
+              segment.segment_key,
+              resolveReprocessedApprovalState(
+                segment.chain,
+                approvals,
+                doc.requester_name || null,
+                doc.requester_email || null,
+              ).preserved_levels,
+            );
+          }
           if (dryRun) {
             results.push({
               expense_id: doc.id,
@@ -370,7 +467,12 @@ Deno.serve(async (req) => {
                 project: s.project,
                 amount: s.amount,
                 rule_id: s.rule_id,
-                first_approver: s.chain[0]?.approver_name || null,
+                ...resolveReprocessedApprovalState(
+                  s.chain,
+                  approvedBySegment.get(s.segment_key) || [],
+                  doc.requester_name || null,
+                  doc.requester_email || null,
+                ),
               })),
             });
             reassigned += 1;
@@ -382,13 +484,19 @@ Deno.serve(async (req) => {
             segments,
             doc.requester_name || null,
             doc.requester_email || null,
+            { approvedBySegment },
           );
-          const label = pendingApproverLabel(rows as any);
+          const pendingRows = rows.filter((row) => row.status === "pendente");
+          const finalized = pendingRows.length === 0;
+          const label = pendingApproverLabel(rows);
           await admin
             .from("expenses")
             .update({
+              status: finalized ? "aprovado" : "pendente_aprovacao",
               current_approver: label,
-              current_level_order: Math.min(...rows.map((r) => r.current_level || 1)),
+              current_level_order: finalized
+                ? 0
+                : Math.min(...pendingRows.map((r) => r.current_level || 1)),
               original_approver: doc.original_approver || doc.current_approver,
               updated_at: new Date().toISOString(),
             })
@@ -404,11 +512,14 @@ Deno.serve(async (req) => {
             details: {
               from_approver: doc.current_approver,
               to_approvers: label,
+              finalized,
+              preserved_levels: Array.from(preservedBySegment.values()).flat().length,
               segments: rows.map((r) => ({
                 cost_center: r.cost_center,
                 project: r.project,
                 amount: r.amount,
                 approver: r.current_approver,
+                status: r.status,
               })),
             },
           });
@@ -439,6 +550,7 @@ Deno.serve(async (req) => {
                 metadata: {
                   amount: Number(r.amount || 0),
                   approver: r.current_approver,
+                  preserved_levels: preservedBySegment.get(r.segment_key) || [],
                   from_approver: doc.current_approver,
                   rateio_type: rateioTypeNorm || "padrao",
                   parallel_reembolso: isReembolso,
@@ -447,7 +559,7 @@ Deno.serve(async (req) => {
             } catch (e) {
               console.warn("[expense-reassign-approver] audit log falhou:", e);
             }
-            await notifyApprovalPending(admin, {
+            if (r.status === "pendente") await notifyApprovalPending(admin, {
               expenseId: doc.id,
               companyDb: doc.company_db,
               approverEmail: r.current_approver_email || null,
@@ -470,17 +582,24 @@ Deno.serve(async (req) => {
             } as any);
           }
 
+          if (finalized) {
+            await dispatchApprovedExpense(doc.id, !!doc.sap_doc_entry);
+          }
+
           reassigned += 1;
           results.push({
             expense_id: doc.id,
             action: "rateio_segments",
             from_approver: doc.current_approver,
             to_approvers: label,
+            finalized,
+            preserved_levels: Array.from(preservedBySegment.values()).flat().length,
             segments: rows.map((r) => ({
               cost_center: r.cost_center,
               project: r.project,
               amount: r.amount,
               approver: r.current_approver,
+              status: r.status,
             })),
           });
           continue;
@@ -488,7 +607,7 @@ Deno.serve(async (req) => {
       }
 
 
-      let matched: RuleRow | null = null;
+      let matched: ReprocessRuleRow | null = null;
       let fallbackInfo: { branch: string; sibling: string } | null = null;
       let usedCc: string | null = null;
 
@@ -546,16 +665,28 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const level = await firstLevel(matched.id);
-      const newApprover = level?.approver_name || level?.approver_email || null;
-      if (!newApprover) {
+      const levels = await levelsOf(matched.id);
+      const automaticApproval = matched.auto_approve === true;
+      if (levels.length === 0 && !automaticApproval) {
         results.push({ expense_id: doc.id, skipped: "regra_sem_nivel", rule_id: matched.id });
         continue;
       }
-      if (norm(newApprover) === norm(doc.current_approver) && doc.approval_rule_id === matched.id) {
-        results.push({ expense_id: doc.id, skipped: "ja_correto", approver: newApprover });
-        continue;
-      }
+      const state = automaticApproval
+        ? {
+            status: "aprovado" as const,
+            current_level: 0,
+            current_approver: null,
+            current_approver_email: null,
+            preserved_levels: [] as number[],
+          }
+        : resolveReprocessedApprovalState(
+            levels,
+            priorApprovals.document,
+            doc.requester_name || null,
+            doc.requester_email || null,
+          );
+      const finalized = state.status === "aprovado";
+      const newApprover = state.current_approver;
 
       const entry = {
         expense_id: doc.id,
@@ -565,7 +696,10 @@ Deno.serve(async (req) => {
         to_approver: newApprover,
         rule_id: matched.id,
         rule_name: matched.name,
-        level_order: level?.level_order ?? 1,
+        level_order: finalized ? 0 : state.current_level,
+        preserved_levels: state.preserved_levels,
+        automatic_approval: automaticApproval,
+        finalized,
         hierarchical_fallback: fallbackInfo,
       };
 
@@ -575,12 +709,14 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      await admin.from("expense_approval_segments").delete().eq("expense_id", doc.id);
       const { error: updErr } = await admin
         .from("expenses")
         .update({
+          status: finalized ? "aprovado" : "pendente_aprovacao",
           current_approver: newApprover,
           approval_rule_id: matched.id,
-          current_level_order: level?.level_order ?? 1,
+          current_level_order: finalized ? 0 : state.current_level,
           original_approver: doc.original_approver || doc.current_approver,
           updated_at: new Date().toISOString(),
         })
@@ -600,12 +736,12 @@ Deno.serve(async (req) => {
         details: entry,
       });
 
-      await notifyApprovalPending(admin, {
+      if (!finalized) await notifyApprovalPending(admin, {
         expenseId: doc.id,
         companyDb: doc.company_db,
-        approverEmail: level?.approver_email || null,
-        approverName: level?.approver_name || null,
-        levelOrder: level?.level_order ?? 1,
+        approverEmail: state.current_approver_email,
+        approverName: state.current_approver,
+        levelOrder: state.current_level,
         requesterName: doc.requester_name,
         supplierName: doc.supplier_name,
         totalAmount: doc.total_amount,
@@ -622,6 +758,9 @@ Deno.serve(async (req) => {
         },
       });
 
+      if (finalized) {
+        await dispatchApprovedExpense(doc.id, !!doc.sap_doc_entry);
+      }
 
       reassigned += 1;
       results.push(entry);

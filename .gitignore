@@ -10,7 +10,18 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+*.tsbuildinfo
+test-results/
+playwright-report/
+supabase/.temp/
 *.local
+
+# Local-only configuration and generated work
+.env
+docker/.env
+docker/docker-compose.local.yml
+docker/local/
+.lovable/plan/
 
 # Editor directories and files
 .vscode/*

@@ -549,7 +549,9 @@ export function RuleSimulator({
                     </p>
                     {winner.rule.levels.length === 0 ? (
                       <p className="text-xs text-muted-foreground italic">
-                        Regra sem níveis de aprovação configurados.
+                        {winner.rule.auto_approve
+                          ? "Aprovação automática."
+                          : "Regra sem níveis de aprovação configurados."}
                       </p>
                     ) : (
                       <ol className="space-y-1.5">

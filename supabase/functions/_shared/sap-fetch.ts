@@ -74,15 +74,14 @@ export async function tryAcquireIntegrationLock(
 ): Promise<boolean> {
   const cutoffIso = new Date(Date.now() - ttlMinutes * 60_000).toISOString();
   const nowIso = new Date().toISOString();
-  const { data, error } = await supabase
+  const { count, error } = await supabase
     .from(table)
-    .update({ sap_integration_locked_at: nowIso })
+    .update({ sap_integration_locked_at: nowIso }, { count: "exact" })
     .eq("id", id)
     .is("sap_doc_entry", null)
-    .or(`sap_integration_locked_at.is.null,sap_integration_locked_at.lt.${cutoffIso}`)
-    .select("id");
+    .or(`sap_integration_locked_at.is.null,sap_integration_locked_at.lt.${cutoffIso}`);
   if (error) throw new Error(`Falha ao adquirir lock em ${table}: ${error.message}`);
-  return Array.isArray(data) && data.length > 0;
+  return Number(count || 0) > 0;
 }
 
 export async function releaseIntegrationLock(

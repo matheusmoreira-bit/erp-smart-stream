@@ -1,6 +1,8 @@
 export interface OmieCredentials {
   app_key: string;
   app_secret: string;
+  sales_current_account_code?: string;
+  sales_stage_code?: string;
 }
 
 export async function loadOmieCredentials(
@@ -21,7 +23,12 @@ export async function loadOmieCredentials(
   if (!credentials.app_key || !credentials.app_secret) {
     throw new Error(`Credenciais Omie não configuradas para a empresa ${companyDb}.`);
   }
-  return { app_key: credentials.app_key, app_secret: credentials.app_secret };
+  return {
+    app_key: credentials.app_key,
+    app_secret: credentials.app_secret,
+    sales_current_account_code: credentials.sales_current_account_code || undefined,
+    sales_stage_code: credentials.sales_stage_code || undefined,
+  };
 }
 
 export async function callOmieApi<T = Record<string, unknown>>(

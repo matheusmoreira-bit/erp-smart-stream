@@ -14,6 +14,7 @@ import {
   Link2,
   CreditCard,
   ShoppingCart,
+  ShoppingBag,
   AlertCircle,
   Ban,
   PlayCircle,
@@ -56,7 +57,7 @@ import { useModuleAccess } from "@/hooks/usePermissions";
 
 /* ───────────────── Types ───────────────── */
 
-type Source = "expense" | "pagcorp";
+type Source = "purchase" | "sales" | "pagcorp";
 type StageStatus = "success" | "failed" | "pending" | "not_applicable" | null;
 
 interface UnifiedIntegration {
@@ -92,6 +93,7 @@ interface ExpenseIntegrationRow extends Record<string, unknown> {
   total_amount: number | string | null;
   currency: string | null;
   requester_name: string | null;
+  doc_type: "purchase" | "sales" | null;
   sap_doc_entry: number | null;
   sap_doc_num: number | null;
   sap_attachment_entry: number | null;
@@ -221,6 +223,10 @@ function resolvePagCorpSapFacts(p: Record<string, unknown>) {
   };
 }
 
+function isExpenseSource(source: Source): source is "purchase" | "sales" {
+  return source === "purchase" || source === "sales";
+}
+
 function StageBadge({
   status,
   icon: Icon,
@@ -298,7 +304,7 @@ export default function IntegrationsMonitor() {
         // Expenses with any sign of integration activity
         let expenseQuery = expenseRead("expenses").viewAll()
           .select(
-            "id, created_at, company_db, supplier_name, total_amount, currency, requester_name, status, sap_doc_entry, sap_doc_num, sap_attachment_entry, sap_attachment_status, sap_purchase_order_status, sap_attachment_link_status, sap_integration_error, sap_integration_last_attempt_at, sap_status_last_check_at, origin",
+            "id, created_at, company_db, supplier_name, total_amount, currency, requester_name, status, doc_type, sap_doc_entry, sap_doc_num, sap_attachment_entry, sap_attachment_status, sap_purchase_order_status, sap_attachment_link_status, sap_integration_error, sap_integration_last_attempt_at, sap_status_last_check_at, origin",
           )
           .order("sap_integration_last_attempt_at", { ascending: false, nullsFirst: false })
           .limit(500);
@@ -357,7 +363,7 @@ export default function IntegrationsMonitor() {
 
           return {
             id: e.id,
-            source: "expense",
+            source: e.doc_type === "sales" ? "sales" : "purchase",
             created_at: cancellation?.cancelledAt || e.sap_integration_last_attempt_at || e.created_at,
             last_check_at: e.sap_status_last_check_at || e.sap_integration_last_attempt_at || null,
             company_db: e.company_db,
@@ -451,25 +457,27 @@ export default function IntegrationsMonitor() {
     });
   }, [items, sourceFilter, statusFilter, search]);
 
-  const controlExpenseIntegration = useCallback(async (item: UnifiedIntegration, action: "dispatch" | "cancel") => {
-    if (item.source !== "expense") return;
+  const controlIntegration = useCallback(async (item: UnifiedIntegration, action: "dispatch" | "retry" | "cancel") => {
+    if (item.source === "pagcorp" && action !== "retry") return;
     const key = `${action}:${item.id}`;
     setActionBusy(key);
     try {
       const response = await sapFunctionFetch("expense-integration-control", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ expense_id: item.id, action }),
+        body: JSON.stringify(item.source === "pagcorp"
+          ? { integration_log_id: item.id, source: "pagcorp", action }
+          : { expense_id: item.id, source: item.source, action }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || payload?.success === false) {
-        throw new Error(payload?.error || `Falha ao ${action === "dispatch" ? "disparar" : "cancelar"} integração`);
+        const actionLabel = action === "cancel" ? "cancelar" : action === "retry" ? "reprocessar" : "disparar";
+        throw new Error(payload?.error || `Falha ao ${actionLabel} integração`);
       }
-      toast.success(
-        action === "dispatch"
-          ? (payload?.alreadyProcessing ? "Integração já está em processamento" : "Integração disparada")
-          : "Integração cancelada",
-      );
+      if (payload?.alreadyIntegrated) toast.success("Documento já estava integrado; nenhum envio duplicado foi feito");
+      else if (payload?.alreadyProcessing) toast.info("Integração já está em processamento");
+      else if (action === "retry") toast.success(payload?.queued ? "Retry enviado para processamento" : "Retry iniciado");
+      else toast.success(action === "dispatch" ? "Integração disparada" : "Integração cancelada");
       setSelected(null);
       await fetchData(false);
     } catch (error) {
@@ -481,7 +489,7 @@ export default function IntegrationsMonitor() {
   }, [fetchData]);
 
   const counts = useMemo(() => {
-    const totals = { all: items.length, expense: 0, pagcorp: 0, success: 0, failed: 0, pending: 0, cancelled: 0 };
+    const totals = { all: items.length, purchase: 0, sales: 0, pagcorp: 0, success: 0, failed: 0, pending: 0, cancelled: 0 };
     for (const it of items) {
       totals[it.source]++;
       if (it.status === "success") totals.success++;
@@ -533,8 +541,11 @@ export default function IntegrationsMonitor() {
           <Tabs value={sourceFilter} onValueChange={(v) => setSourceFilter(v as "all" | Source)}>
             <TabsList>
               <TabsTrigger value="all">Todas ({counts.all})</TabsTrigger>
-              <TabsTrigger value="expense" className="gap-1.5">
-                <ShoppingCart className="w-3.5 h-3.5" /> Despesas ({counts.expense})
+              <TabsTrigger value="purchase" className="gap-1.5">
+                <ShoppingCart className="w-3.5 h-3.5" /> Compras ({counts.purchase})
+              </TabsTrigger>
+              <TabsTrigger value="sales" className="gap-1.5">
+                <ShoppingBag className="w-3.5 h-3.5" /> Vendas ({counts.sales})
               </TabsTrigger>
               <TabsTrigger value="pagcorp" className="gap-1.5">
                 <CreditCard className="w-3.5 h-3.5" /> PagCorp ({counts.pagcorp})
@@ -568,7 +579,7 @@ export default function IntegrationsMonitor() {
         </div>
 
         {/* Table */}
-        <div className="border border-border rounded-xl bg-card overflow-hidden">
+        <div className="border border-border rounded-xl bg-card overflow-x-auto">
           {loading ? (
             <div className="py-20 flex items-center justify-center text-muted-foreground">
               <Loader2 className="w-5 h-5 animate-spin mr-2" />
@@ -580,7 +591,7 @@ export default function IntegrationsMonitor() {
               <p>Nenhuma integração encontrada para os filtros atuais.</p>
             </div>
           ) : (
-            <Table>
+            <Table className="min-w-[1380px]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[110px]">Origem</TableHead>
@@ -592,7 +603,7 @@ export default function IntegrationsMonitor() {
                   <TableHead>SAP Doc</TableHead>
                   <TableHead className="w-[150px]">Integrado em</TableHead>
                   <TableHead className="w-[150px]">Último polling</TableHead>
-                  {can.view && <TableHead className="w-[104px] text-right">Ações</TableHead>}
+                  {can.view && <TableHead className="sticky right-0 z-10 w-[104px] bg-card text-right">Ações</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -604,9 +615,13 @@ export default function IntegrationsMonitor() {
                   >
                     <TableCell>
                       <Badge variant="outline" className="gap-1">
-                        {it.source === "expense" ? (
+                        {it.source === "purchase" ? (
                           <>
-                            <ShoppingCart className="w-3 h-3" /> Despesa
+                            <ShoppingCart className="w-3 h-3" /> Compra
+                          </>
+                        ) : it.source === "sales" ? (
+                          <>
+                            <ShoppingBag className="w-3 h-3" /> Venda
                           </>
                         ) : (
                           <>
@@ -629,10 +644,14 @@ export default function IntegrationsMonitor() {
                       <StatusBadge status={it.status} />
                     </TableCell>
                     <TableCell>
-                      {it.source === "expense" || it.attachment_status || it.purchase_order_status || it.attachment_link_status ? (
+                      {isExpenseSource(it.source) || it.attachment_status || it.purchase_order_status || it.attachment_link_status ? (
                         <div className="flex items-center gap-1.5">
                           <StageBadge status={it.attachment_status ?? null} icon={Paperclip} label="Envio do anexo" />
-                          <StageBadge status={it.purchase_order_status ?? null} icon={FileText} label="Pedido de Compra" />
+                          <StageBadge
+                            status={it.purchase_order_status ?? null}
+                            icon={FileText}
+                            label={it.source === "sales" ? "Pedido de Venda" : "Pedido de Compra"}
+                          />
                           <StageBadge status={it.attachment_link_status ?? null} icon={Link2} label="Vínculo do anexo" />
                           {it.source === "pagcorp" && (
                             <span className="text-[11px] text-muted-foreground ml-1">{it.integration_type || "—"}</span>
@@ -656,28 +675,44 @@ export default function IntegrationsMonitor() {
                       {formatDate(it.created_at)}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {it.source === "expense"
+                      {isExpenseSource(it.source)
                         ? (it.last_check_at ? formatDate(it.last_check_at) : "—")
                         : "—"}
                     </TableCell>
                     {can.view && (
-                      <TableCell className="text-right whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
-                        {it.source === "expense" && !it.sap_doc_entry && String(it.raw.status) === "aprovado" && (
+                      <TableCell className="sticky right-0 z-10 bg-card text-right whitespace-nowrap" onClick={(event) => event.stopPropagation()}>
+                        {!it.sap_doc_entry && (
                           <div className="inline-flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              aria-label="Disparar integração agora"
-                              title="Disparar integração agora"
-                              disabled={actionBusy !== null}
-                              onClick={() => controlExpenseIntegration(it, "dispatch")}
-                            >
-                              {actionBusy === `dispatch:${it.id}`
-                                ? <Loader2 className="h-4 w-4 animate-spin" />
-                                : <PlayCircle className="h-4 w-4" />}
-                            </Button>
-                            {!it.raw.sap_integration_cancelled_at && (
+                            {(it.status === "failed" || it.status === "pending") ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                aria-label="Tentar integração novamente"
+                                title="Retry idempotente"
+                                disabled={actionBusy !== null}
+                                onClick={() => controlIntegration(it, "retry")}
+                              >
+                                {actionBusy === `retry:${it.id}`
+                                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                                  : <RefreshCw className="h-4 w-4" />}
+                              </Button>
+                            ) : isExpenseSource(it.source) && String(it.raw.status) === "aprovado" ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                aria-label="Disparar integração agora"
+                                title="Disparar integração agora"
+                                disabled={actionBusy !== null}
+                                onClick={() => controlIntegration(it, "dispatch")}
+                              >
+                                {actionBusy === `dispatch:${it.id}`
+                                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                                  : <PlayCircle className="h-4 w-4" />}
+                              </Button>
+                            ) : null}
+                            {isExpenseSource(it.source) && String(it.raw.status) === "aprovado" && !it.raw.sap_integration_cancelled_at && (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -707,12 +742,14 @@ export default function IntegrationsMonitor() {
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              {selected?.source === "expense" ? (
+              {selected?.source === "purchase" ? (
                 <ShoppingCart className="w-4 h-4" />
+              ) : selected?.source === "sales" ? (
+                <ShoppingBag className="w-4 h-4" />
               ) : (
                 <CreditCard className="w-4 h-4" />
               )}
-              {selected?.source === "expense" ? "Despesa interna" : "PagCorp"} — {selected?.external_ref}
+              {selected?.source === "purchase" ? "Pedido de compra" : selected?.source === "sales" ? "Pedido de venda" : "PagCorp"} — {selected?.external_ref}
             </DialogTitle>
             <DialogDescription>
               Dados completos da integração com o SAP.
@@ -728,7 +765,7 @@ export default function IntegrationsMonitor() {
                 <Field label="Valor">{formatCurrency(selected.amount, selected.currency || "BRL")}</Field>
                 <Field label="Iniciado por">{selected.initiated_by || "—"}</Field>
                 <Field label="Integrado em">{formatDate(selected.created_at)}</Field>
-                {selected.source === "expense" && (
+                {isExpenseSource(selected.source) && (
                   <Field label="Último polling">
                     {selected.last_check_at ? formatDate(selected.last_check_at) : "—"}
                   </Field>
@@ -737,7 +774,7 @@ export default function IntegrationsMonitor() {
                 <Field label="SAP DocNum">{selected.sap_doc_num ?? "—"}</Field>
               </div>
 
-              {(selected.source === "expense" || selected.attachment_status || selected.purchase_order_status || selected.attachment_link_status) && (
+              {(isExpenseSource(selected.source) || selected.attachment_status || selected.purchase_order_status || selected.attachment_link_status) && (
                 <div>
                   <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                     Estágios da integração SAP
@@ -755,7 +792,7 @@ export default function IntegrationsMonitor() {
                     />
                     <StageCard
                       icon={FileText}
-                      title="Pedido de Compra"
+                      title={selected.source === "sales" ? "Pedido de Venda" : "Pedido de Compra"}
                       status={selected.purchase_order_status ?? null}
                       hint={
                         selected.sap_doc_num
@@ -810,7 +847,7 @@ export default function IntegrationsMonitor() {
                 </>
               )}
 
-              {selected.source === "expense" && (
+              {isExpenseSource(selected.source) && (
                 <RawBlock title="Registro completo da despesa" data={selected.raw} />
               )}
             </div>
@@ -825,7 +862,7 @@ export default function IntegrationsMonitor() {
         description="O pedido continuará aprovado, mas não será enviado automaticamente ao ERP até que alguém use Disparar integração agora."
         confirmLabel="Cancelar integração"
         destructive
-        onConfirm={() => pendingCancel && controlExpenseIntegration(pendingCancel, "cancel")}
+        onConfirm={() => pendingCancel && controlIntegration(pendingCancel, "cancel")}
       />
     </div>
   );

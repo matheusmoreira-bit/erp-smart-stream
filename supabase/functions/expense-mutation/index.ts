@@ -33,6 +33,7 @@ import { sapFetch } from "../_shared/sap-fetch.ts";
 // (buildRateioChain foi substituído por fluxos independentes por segmento)
 import { buildRateioSegments, buildReembolsoSegments, persistRateioSegments } from "../_shared/rateio-segments.ts";
 import { classifyExpenseEdit, normalizeExpenseItems } from "../_shared/expense-items.ts";
+import { isNativeErpExpenseOrigin } from "../_shared/expense-origin.ts";
 
 
 
@@ -44,7 +45,7 @@ const corsHeaders = {
   "Access-Control-Expose-Headers": "X-Function-Version",
 };
 
-const FUNCTION_VERSION = "2026-08-21.4";
+const FUNCTION_VERSION = "2026-08-25.1";
 
 /**
  * Reavalia a matriz de aprovação para um documento que está sem `approval_rule_id`.
@@ -84,7 +85,8 @@ async function rematchRuleFromMatrix(
       .filter(Boolean);
   }
   const candidateCcs = Array.from(new Set(ctx.costCenter ? [ctx.costCenter] : itemCcs));
-  if (candidateCcs.length === 0) return null;
+  // Regras globais (inclusive aprovação automática) não dependem de CC.
+  if (candidateCcs.length === 0) candidateCcs.push("");
 
   const { data: rulesRaw } = await admin
     .from("approval_rules")
@@ -118,6 +120,21 @@ async function rematchRuleFromMatrix(
   return null;
 }
 
+async function isAutomaticApprovalRule(
+  admin: SupabaseClient,
+  ruleId: string | null | undefined,
+): Promise<boolean> {
+  if (!ruleId) return false;
+  const { data, error } = await admin
+    .from("approval_rules")
+    .select("auto_approve")
+    .eq("id", ruleId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error) throw new Error(`Falha ao verificar aprovação automática: ${error.message}`);
+  return data?.auto_approve === true;
+}
+
 
 function json(status: number, body: unknown) {
   const payload = body && typeof body === "object" && !Array.isArray(body)
@@ -135,7 +152,9 @@ function json(status: number, body: unknown) {
 
 function withoutUnsupportedExpenseColumns(updates: Record<string, unknown>) {
   const safeUpdates = { ...updates };
-  // Compatibilidade com bases cujo schema ainda não possui essa coluna.
+  // Compatibilidade com bases cujo schema ainda não possui os campos de revisão.
+  // A revisão continua registrada no log/auditoria, sem bloquear a edição.
+  delete safeUpdates.revision_number;
   delete safeUpdates.revision_note;
   return safeUpdates;
 }
@@ -180,6 +199,48 @@ function runAfterResponse(task: Promise<unknown>) {
   }).EdgeRuntime;
   if (edgeRuntime?.waitUntil) edgeRuntime.waitUntil(task);
   else void task;
+}
+
+async function dispatchApprovedExpense(
+  expenseId: string,
+  docType: string,
+  origin: string | null | undefined,
+  patchDocument = false,
+) {
+  if (docType === "sales" || isNativeErpExpenseOrigin(origin)) return;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+  if (!serviceKey || !supabaseUrl) return;
+
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/expense-to-sap`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+        "x-internal-retry": "1",
+      },
+      body: JSON.stringify({
+        expense_id: expenseId,
+        patch_document: patchDocument,
+        use_service_account: true,
+      }),
+    });
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}));
+      console.warn("[expense-mutation] dispatch após aprovação automática falhou", {
+        expenseId,
+        status: response.status,
+        error: result?.error || `HTTP ${response.status}`,
+      });
+    }
+  } catch (error) {
+    console.warn("[expense-mutation] dispatch após aprovação automática falhou", {
+      expenseId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 function normalize(s: unknown): string {
@@ -270,7 +331,7 @@ async function validateActiveSapItems(
         .filter(Boolean),
     ),
   );
-  if (codes.length === 0 || docType === "sales") return null;
+  if (codes.length === 0) return null;
 
   const { data: company } = await admin
     .from("companies")
@@ -280,9 +341,11 @@ async function validateActiveSapItems(
   if (String(company?.erp_type || "sap").toLowerCase() === "omie") {
     const invalid = codes.filter((code) => !/^P:\d+$/i.test(code));
     return invalid.length > 0
-      ? `Pedido de Compra Omie aceita apenas produtos ativos selecionados no catálogo (códigos P:<id>). Item(ns) inválido(s): ${invalid.join(", ")}.`
+      ? `Pedido de ${docType === "sales" ? "Venda" : "Compra"} Omie aceita apenas produtos ativos selecionados no catálogo (códigos P:<id>). Item(ns) inválido(s): ${invalid.join(", ")}.`
       : null;
   }
+
+  if (docType === "sales") return null;
 
   if (options.liveSap === false) {
     const { data: cacheRows } = await admin
@@ -358,7 +421,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   const input = body?.input ?? {};
 
   const origin = String(input.origin || "manual");
-  const status = String(input.status || "rascunho");
+  let status = String(input.status || "rascunho");
   const isAutoApproved = status === "aprovado" && AUTO_APPROVED_ORIGINS.has(origin);
   if (!ALLOWED_CREATE_STATUS.has(status) && !isAutoApproved) {
     return json(400, { error: `status inicial inválido: ${status}` });
@@ -442,6 +505,10 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     });
     if (rematched) ruleId = rematched;
   }
+
+  const autoApprovedByRule =
+    status === "pendente_aprovacao" && await isAutomaticApprovalRule(admin, ruleId);
+  if (autoApprovedByRule) status = "aprovado";
 
 
 
@@ -553,7 +620,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
       const s = u == null ? "" : String(u).trim();
       return s.length > 0 && s.length <= 20 ? s : null;
     })(),
-    current_level_order: resolvedLevel || 1,
+    current_level_order: autoApprovedByRule ? 0 : (resolvedLevel || 1),
   };
 
   const { data: expense, error: expErr } = await admin
@@ -605,6 +672,17 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
       : (input.remarks || null),
 
   } as any);
+  if (autoApprovedByRule) {
+    await admin.from("expense_approval_log").insert({
+      expense_id: expenseId,
+      decision: "approved",
+      approver_name: "Sistema",
+      approver_email: null,
+      level_order: 0,
+      remarks: "Aprovado automaticamente pela regra de aprovação aplicada.",
+    } as any);
+    runAfterResponse(dispatchApprovedExpense(expenseId, docType, origin));
+  }
   if (status === "pendente_aprovacao") {
     await admin.from("expense_approval_log").insert({
       expense_id: expenseId,
@@ -673,7 +751,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   }
 
 
-  return json(200, { ok: true, expense });
+  return json(200, { ok: true, expense, auto_approved: autoApprovedByRule });
 }
 
 async function loadExpenseForOwner(admin: SupabaseClient, expenseId: string) {
@@ -864,6 +942,7 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   let resubmittedApprover: string | null = null;
   let resubmittedLevel = 1;
   let resubmitFallbackUsed = false;
+  let resubmittedAutoApproved = false;
 
   // Se o rateio mudou, o cliente já resolveu a nova regra e o 1º aprovador.
   // - Em rascunho: atualiza apenas os campos de roteamento; status continua rascunho.
@@ -913,8 +992,12 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
     let resolvedLevel = 1;
     let resolvedApprover: string | null = nextApproverFromClient;
     let fallbackUsed = false;
+    resubmittedAutoApproved = await isAutomaticApprovalRule(admin, nextRuleId);
 
-    if (nextRuleId) {
+    if (resubmittedAutoApproved) {
+      resolvedLevel = 0;
+      resolvedApprover = null;
+    } else if (nextRuleId) {
       const picked = await resolveApproverWithEscalation(admin, nextRuleId, {
         companyDb: String(current.company_db || ""),
         docType: String(current.doc_type || "purchase"),
@@ -945,15 +1028,14 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
         reason: "Reenvio sem regra de aprovação aplicável",
       });
     }
-    updates.status = "pendente_aprovacao";
+    updates.status = resubmittedAutoApproved ? "aprovado" : "pendente_aprovacao";
     updates.current_level_order = resolvedLevel;
     updates.current_approver = resolvedApprover;
     updates.sap_integration_error = null;
     if (alreadyInSap) updates.sap_purchase_order_status = "update_pending";
     updates.revision_number = nextRevision;
     // O contexto da revisão é preservado no log de aprovação e na auditoria.
-    // Não gravamos `revision_note`: há bases ativas que ainda não têm essa
-    // coluna, enquanto `revision_number` já suporta a identificação da versão.
+    // A persistência remove campos de revisão em bases que ainda não os possuem.
     resubmittedApprover = resolvedApprover;
     resubmittedLevel = resolvedLevel;
     resubmitFallbackUsed = fallbackUsed;
@@ -1066,15 +1148,19 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
       ? ` Detalhes de anexos: ${attachmentDetails.join("; ")}.`
       : "";
     const reasonNote = `Motivo: ${reasons.join(" + ")}.`;
-    const routingNote = resubmitFallbackUsed
+    const routingNote = resubmittedAutoApproved
+      ? "Documento aprovado automaticamente pela regra aplicada."
+      : resubmitFallbackUsed
       ? `Solicitante coincide com aprovador(es); direcionado para ${SELF_APPROVAL_FALLBACK.name}.`
       : `Fluxo de aprovação reiniciado a partir do nível ${resubmittedLevel}.`;
 
     await admin.from("expense_approval_log").insert({
       expense_id: expenseId,
-      decision: "submitted",
-      approver_name: caller.identity,
-      approver_email: caller.email || (caller.identity && caller.identity.includes("@") ? caller.identity : null),
+      decision: resubmittedAutoApproved ? "approved" : "submitted",
+      approver_name: resubmittedAutoApproved ? "Sistema" : caller.identity,
+      approver_email: resubmittedAutoApproved
+        ? null
+        : caller.email || (caller.identity && caller.identity.includes("@") ? caller.identity : null),
       level_order: resubmittedLevel,
       remarks: `Atualização da versão anterior (status: ${status}). ${reasonNote} ${routingNote}${attachmentNote}`.trim(),
     } as any);
@@ -1093,12 +1179,27 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
       updated_fields: Object.keys(updates),
       items_count: items?.length,
       revision_number: updates.revision_number ?? current.revision_number ?? 1,
-      resubmitted_to_approval: shouldResubmit,
+      resubmitted_to_approval: shouldResubmit && !resubmittedAutoApproved,
+      auto_approved: resubmittedAutoApproved,
       new_approver: resubmittedApprover,
     } as any,
   });
 
-  return json(200, { ok: true, resubmitted: shouldResubmit, new_approver: resubmittedApprover });
+  if (resubmittedAutoApproved) {
+    runAfterResponse(dispatchApprovedExpense(
+      expenseId,
+      String(current.doc_type || "purchase"),
+      current.origin,
+      alreadyInSap,
+    ));
+  }
+
+  return json(200, {
+    ok: true,
+    resubmitted: shouldResubmit && !resubmittedAutoApproved,
+    auto_approved: resubmittedAutoApproved,
+    new_approver: resubmittedApprover,
+  });
 }
 
 async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
@@ -1116,6 +1217,37 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
   }
   if (current.status !== "rascunho") {
     return json(409, { error: `Despesa não está em rascunho (status: ${current.status})` });
+  }
+
+  const autoApprovedByRule = await isAutomaticApprovalRule(admin, current.approval_rule_id);
+  if (autoApprovedByRule) {
+    const { error } = await admin
+      .from("expenses")
+      .update({ status: "aprovado", current_level_order: 0, current_approver: null })
+      .eq("id", expenseId);
+    if (error) return json(500, { error: `Falha ao aprovar automaticamente: ${error.message}` });
+
+    await admin.from("expense_approval_log").insert({
+      expense_id: expenseId,
+      decision: "approved",
+      approver_name: "Sistema",
+      approver_email: null,
+      level_order: 0,
+      remarks: "Aprovado automaticamente pela regra de aprovação aplicada.",
+    } as any);
+
+    runAfterResponse(dispatchApprovedExpense(
+      expenseId,
+      String(current.doc_type || "purchase"),
+      current.origin,
+      !!current.sap_doc_entry,
+    ));
+
+    return json(200, {
+      ok: true,
+      auto_approved: true,
+      expense: { ...current, status: "aprovado", current_level_order: 0, current_approver: null },
+    });
   }
 
   // Recompute approver with self-approval guard on submit.

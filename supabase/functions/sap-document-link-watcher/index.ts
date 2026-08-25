@@ -44,9 +44,11 @@ interface SapDoc {
   DocEntry?: number;
   DocNum?: number;
   DocDate?: string;
+  DocDueDate?: string;
   DocTotal?: number;
   PaidToDate?: number;
   DocCurrency?: string;
+  DocumentStatus?: string;
   CardCode?: string;
   CardName?: string;
   Cancelled?: string;
@@ -361,7 +363,14 @@ async function runCompany(sb: Sb, companyDb: string, daysBack: number, limit: nu
           amount: num(inv.DocTotal),
           currency: inv.DocCurrency || null,
           relation_date: inv.DocDate || null,
-          metadata: { card_code: inv.CardCode, card_name: inv.CardName },
+          metadata: {
+            card_code: inv.CardCode,
+            card_name: inv.CardName,
+            doc_date: inv.DocDate,
+            doc_due_date: inv.DocDueDate,
+            paid_to_date: num(inv.PaidToDate),
+            document_status: inv.DocumentStatus || null,
+          },
         });
         await updateNfEntradaLinks(sb, companyDb, poEntry, inv);
         counts.purchase_invoice_po++;

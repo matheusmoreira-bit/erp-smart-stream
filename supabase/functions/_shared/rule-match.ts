@@ -18,6 +18,7 @@ export interface RuleRow {
   id: string;
   name?: string | null;
   is_active: boolean;
+  auto_approve?: boolean | null;
   priority?: number | null;
   doc_type?: string | null;
   criteria: RuleCriterion[] | unknown;
@@ -121,7 +122,10 @@ export function findMatchingRule(rules: RuleRow[], ctx: Record<string, unknown>,
     .sort((a, b) => (b.priority || 0) - (a.priority || 0));
   for (const r of scoped) {
     const criteria = criteriaOf(r);
-    if (criteria.length === 0) continue;
+    if (criteria.length === 0) {
+      if (r.auto_approve) return r;
+      continue;
+    }
     if (evaluateCriteria(criteria, ctx)) return r;
   }
   return null;

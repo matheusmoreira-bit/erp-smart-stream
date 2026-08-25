@@ -135,7 +135,10 @@ export function findMatchingRule(
 
   for (const r of scoped) {
     const criteria = Array.isArray(r.criteria) ? r.criteria : [];
-    if (criteria.length === 0) continue;
+    if (criteria.length === 0) {
+      if (r.auto_approve) return r;
+      continue;
+    }
     if (evaluateCriteria(criteria, ctx)) return r;
   }
   return null;

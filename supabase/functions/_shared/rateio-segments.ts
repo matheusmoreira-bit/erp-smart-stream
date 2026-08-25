@@ -15,6 +15,10 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { findMatchingRule, pickHierarchicalFallbackRule, type RuleRow } from "./rule-match.ts";
 import { pickApproverSkippingRequester, type ApprovalLevel } from "./approval-skip.ts";
+import {
+  resolveReprocessedApprovalState,
+  type PriorApproval,
+} from "./approval-reprocess.ts";
 import type { RateioItem, RateioChainContext } from "./rateio-chain.ts";
 
 export type SegmentResolution = "direct" | "branch_fallback" | "rule_without_levels";
@@ -188,10 +192,39 @@ export async function persistRateioSegments(
   segments: RateioSegment[],
   requesterName: string | null,
   requesterEmail: string | null,
+  options?: { approvedBySegment?: Map<string, PriorApproval[]> },
 ): Promise<SegmentRow[]> {
   await admin.from("expense_approval_segments").delete().eq("expense_id", expenseId);
 
   const payload = segments.map((s) => {
+    const priorApprovals = options?.approvedBySegment?.get(s.segment_key);
+    if (priorApprovals) {
+      const state = resolveReprocessedApprovalState(
+        s.chain,
+        priorApprovals,
+        requesterName,
+        requesterEmail,
+      );
+      return {
+        expense_id: expenseId,
+        segment_key: s.segment_key,
+        cost_center: s.cost_center || null,
+        project: s.project || null,
+        amount: s.amount,
+        rule_id: s.rule_id,
+        chain: s.chain,
+        current_level: state.current_level,
+        status: state.status,
+        current_approver: state.current_approver,
+        current_approver_email: state.current_approver_email,
+        resolution: s.resolution || "direct",
+        rule_name: s.rule_name || null,
+        fallback_branch: s.fallback_branch || null,
+        fallback_from_rule_id: s.fallback_from_rule_id || null,
+        fallback_from_rule_name: s.fallback_from_rule_name || null,
+        resolution_note: s.resolution_note || null,
+      };
+    }
     const picked = pickApproverSkippingRequester(s.chain, requesterName, requesterEmail, 1);
     return {
       expense_id: expenseId,

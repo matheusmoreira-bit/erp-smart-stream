@@ -665,6 +665,7 @@ export type Database = {
       }
       approval_rules: {
         Row: {
+          auto_approve: boolean
           company_db: string
           cost_center: string | null
           created_at: string
@@ -682,6 +683,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auto_approve?: boolean
           company_db: string
           cost_center?: string | null
           created_at?: string
@@ -699,6 +701,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          auto_approve?: boolean
           company_db?: string
           cost_center?: string | null
           created_at?: string
@@ -6841,6 +6844,7 @@ export type Database = {
           doc_total: number | null
           document_status: string | null
           id: string
+          paid_to_date: number | null
           raw_json: Json
           sap_update_date: string | null
           series: number | null
@@ -6863,6 +6867,7 @@ export type Database = {
           doc_total?: number | null
           document_status?: string | null
           id?: string
+          paid_to_date?: number | null
           raw_json?: Json
           sap_update_date?: string | null
           series?: number | null
@@ -6885,6 +6890,7 @@ export type Database = {
           doc_total?: number | null
           document_status?: string | null
           id?: string
+          paid_to_date?: number | null
           raw_json?: Json
           sap_update_date?: string | null
           series?: number | null
@@ -8574,6 +8580,7 @@ export type Database = {
           doc_num: number
           doc_total: number
           document_status: string
+          paid_to_date: number
           sap_update_date: string
           series: number
         }[]

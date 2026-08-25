@@ -25,6 +25,7 @@ interface SapPurchaseInvoice extends OdataDoc {
   DocDueDate?: string;
   TaxDate?: string;
   DocTotal?: number;
+  PaidToDate?: number;
   DocCurrency?: string;
   DocumentStatus?: string;
   Cancelled?: string;
@@ -38,7 +39,7 @@ function extractBasePo(inv: SapPurchaseInvoice): number | null {
   return null;
 }
 
-const SELECT = "DocEntry,DocNum,Series,CardCode,CardName,DocDate,DocDueDate,TaxDate,DocTotal,DocCurrency,DocumentStatus,Cancelled,UpdateDate,UpdateTime,DocumentLines";
+const SELECT = "DocEntry,DocNum,Series,CardCode,CardName,DocDate,DocDueDate,TaxDate,DocTotal,PaidToDate,DocCurrency,DocumentStatus,Cancelled,UpdateDate,UpdateTime,DocumentLines";
 
 async function syncCompany(sb: Sb, companyDb: string, _opts: RunnerOpts): Promise<WatcherResult> {
   // NF de Entrada mantém comportamento original: aceita qualquer usuário SAP configurado.
@@ -75,6 +76,7 @@ async function syncCompany(sb: Sb, companyDb: string, _opts: RunnerOpts): Promis
         doc_due_date: inv.DocDueDate ?? null,
         tax_date: inv.TaxDate ?? null,
         doc_total: inv.DocTotal ?? null,
+        paid_to_date: inv.PaidToDate ?? null,
         doc_currency: inv.DocCurrency ?? null,
         document_status: inv.DocumentStatus ?? null,
         cancelled: inv.Cancelled ?? null,

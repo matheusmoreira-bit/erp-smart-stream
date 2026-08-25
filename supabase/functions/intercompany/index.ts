@@ -311,6 +311,15 @@ Deno.serve(async (req) => {
       return json({ results });
     }
 
+    if (action === "list-payment-terms") {
+      const results = await forEachCompany(sb, body.company_dbs, async (_c, cookies) => {
+        return await sapGetAll(_c.baseUrl, cookies, "PaymentTermsTypes", {
+          $select: "GroupNumber,PaymentTermsGroupName",
+        });
+      });
+      return json({ results });
+    }
+
     if (action === "create-project") {
       const { code, name, valid_from, valid_to } = body;
       if (!code || !name) return json({ error: "code e name são obrigatórios" }, 400);
@@ -539,6 +548,88 @@ Deno.serve(async (req) => {
         const r = await sapPost(creds.baseUrl, cookies, endpoint, payload);
         if (!r.ok) throw new Error(r.error);
         return { code };
+      });
+      return json({ results });
+    }
+
+    if (action === "replicate-payment-term") {
+      const { code, source_company_db, target_company_db } = body;
+      const groupNumber = Number(code);
+      if (!Number.isInteger(groupNumber) || !source_company_db || !target_company_db) {
+        return json(
+          { error: "code, source_company_db e target_company_db são obrigatórios" },
+          400,
+        );
+      }
+      if (source_company_db === target_company_db) {
+        return json({ error: "Origem e destino não podem ser iguais" }, 400);
+      }
+
+      const srcCreds = await loadSapCreds(sb, String(source_company_db));
+      if (!srcCreds) {
+        return json({ error: "Credenciais SAP da empresa de origem não configuradas" }, 400);
+      }
+      const srcCookies = await sapLogin(srcCreds);
+      let sourceData: Record<string, unknown> | null = null;
+      try {
+        const resp = await fetch(`${srcCreds.baseUrl}/PaymentTermsTypes(${groupNumber})`, {
+          method: "GET",
+          headers: { "Content-Type": "application/json", Cookie: srcCookies },
+        });
+        if (!resp.ok) {
+          const t = await resp.text().catch(() => "");
+          throw new Error(
+            `Falha ao ler forma de pagamento ${groupNumber} na origem: HTTP ${resp.status} ${t.slice(0, 200)}`,
+          );
+        }
+        sourceData = await resp.json();
+      } finally {
+        fetch(`${srcCreds.baseUrl}/Logout`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Cookie: srcCookies },
+        }).catch(() => {});
+      }
+      if (!sourceData) return json({ error: "Forma de pagamento de origem não encontrada" }, 404);
+
+      // GroupNumber é uma chave interna gerada pelo SAP em cada empresa.
+      const allowedFields = [
+        "PaymentTermsGroupName",
+        "StartFrom",
+        "NumberOfAdditionalMonths",
+        "NumberOfAdditionalDays",
+        "CreditLimit",
+        "GeneralDiscount",
+        "InterestOnArrears",
+        "LoadLimit",
+        "PriceListNo",
+        "OpenReceipt",
+        "DiscountCode",
+        "BaselineDate",
+        "NumberOfToleranceDays",
+        "NumberOfInstallments",
+      ];
+      const payload: Record<string, unknown> = {};
+      for (const field of allowedFields) {
+        const value = sourceData[field];
+        if (value !== undefined && value !== null && value !== "") payload[field] = value;
+      }
+      const paymentTermName = String(payload.PaymentTermsGroupName || "").trim();
+      if (!paymentTermName) {
+        return json({ error: "Forma de pagamento de origem sem nome" }, 422);
+      }
+
+      const results = await forEachCompany(sb, [String(target_company_db)], async (creds, cookies) => {
+        const escapedName = paymentTermName.replaceAll("'", "''");
+        const existing = await sapGetAll(creds.baseUrl, cookies, "PaymentTermsTypes", {
+          $select: "GroupNumber",
+          $filter: `PaymentTermsGroupName eq '${escapedName}'`,
+        });
+        if (existing.length > 0) {
+          throw new Error(`Forma de pagamento "${paymentTermName}" já existe na empresa de destino`);
+        }
+        const r = await sapPost(creds.baseUrl, cookies, "PaymentTermsTypes", payload);
+        if (!r.ok) throw new Error(r.error);
+        return { source_group_number: groupNumber, name: paymentTermName };
       });
       return json({ results });
     }

@@ -4,6 +4,7 @@ import { useSap } from "@/contexts/SapContext";
 import { useExternalCache } from "@/lib/external-cache";
 import { sapQueryAll } from "@/lib/sap-client";
 import { omieListarContasPagar, type OmieContaPagar } from "@/lib/omie-client";
+import { resolveDocumentPaymentStatus } from "@/lib/relations-payment-status";
 
 /** TTL curto — evita bater no ERP toda vez que o usuário reabre o mapa. */
 const TTL_MS = 5 * 60 * 1000;
@@ -20,6 +21,8 @@ export interface NfApLink {
   payment_doc_entry?: number | null;
   payment_doc_num?: number | null;
   payment_date?: string | null;
+  due_date?: string | null;
+  status?: string | null;
 }
 
 export interface NfEntradaLink {
@@ -34,6 +37,9 @@ export interface NfEntradaLink {
   created_at: string;
   updated_at: string;
   ap_links: NfApLink[];
+  due_date?: string | null;
+  payment_date?: string | null;
+  paid_amount?: number | null;
 }
 
 export interface PurchaseInvoiceLink {
@@ -112,7 +118,9 @@ interface NfEntradaCacheRow {
   card_code: string | null;
   card_name: string | null;
   doc_date: string | null;
+  doc_due_date: string | null;
   doc_total: number | null;
+  paid_to_date: number | null;
   document_status: string | null;
   cancelled: string | null;
   sap_update_date: string | null;
@@ -285,6 +293,8 @@ export function useNfEntradaLinks({
         sap_invoice_draft_id: String(r.target_doc_entry),
         created_at: r.relation_date || r.last_seen_at,
         updated_at: r.last_seen_at,
+        due_date: asString(r.metadata?.doc_due_date),
+        paid_amount: Number(r.metadata?.paid_to_date || 0),
       }));
     for (const r of relationOnly) matchedDocEntries.add(Number(r.sap_invoice_draft_id));
     const cacheOnly: Omit<NfEntradaLink, "ap_links">[] = cacheRows
@@ -300,6 +310,8 @@ export function useNfEntradaLinks({
         sap_invoice_draft_id: String(r.doc_entry),
         created_at: r.sap_update_date || r.doc_date || new Date().toISOString(),
         updated_at: r.sap_update_date || r.doc_date || new Date().toISOString(),
+        due_date: r.doc_due_date,
+        paid_amount: r.paid_to_date,
       }));
 
     const nfs: Omit<NfEntradaLink, "ap_links">[] = [...importRows, ...relationOnly, ...cacheOnly];
@@ -376,7 +388,7 @@ export function useNfEntradaLinks({
   }, [sapDocEntry, companyDb]);
 
   return useExternalCache<NfEntradaLink[]>({
-    cacheKey: sapDocEntry && companyDb ? `relmap:nf:v2:${sapDocEntry}` : null,
+    cacheKey: sapDocEntry && companyDb ? `relmap:nf:v3:${sapDocEntry}` : null,
     companyDb: companyDb ?? null,
     fetcher,
     ttlMs: TTL_MS,
@@ -415,17 +427,18 @@ export function useContasPagarLinks({
       )
       .map((r) => {
         const total = Number(r.amount || 0);
+        const paid = Number(r.metadata?.paid_to_date || 0);
         return {
           DocEntry: Number(r.target_doc_entry),
           DocNum: Number(r.target_doc_num || r.target_doc_entry),
           DocDate: r.relation_date || r.last_seen_at,
-          DocDueDate: null,
+          DocDueDate: asString(r.metadata?.doc_due_date),
           DocTotal: total,
-          PaidToDate: 0,
-          DocumentStatus: "sap_linked",
+          PaidToDate: paid,
+          DocumentStatus: asString(r.metadata?.document_status) || "sap_linked",
           CardCode: asString(r.metadata?.card_code) || String(supplierCode || ""),
           CardName: asString(r.metadata?.card_name) || "",
-          isFullyPaid: false,
+          isFullyPaid: resolveDocumentPaymentStatus(total, paid).state === "paid",
         } as PurchaseInvoiceLink;
       });
 
@@ -462,8 +475,11 @@ export function useContasPagarLinks({
               isFullyPaid: total > 0 && Math.abs(total - paid) < 0.01,
             } as PurchaseInvoiceLink;
           });
-          const existing = new Set(invoices.map((i) => i.DocEntry));
-          invoices = [...invoices, ...liveInvoices.filter((i) => !existing.has(i.DocEntry))];
+          const byEntry = new Map(invoices.map((invoice) => [invoice.DocEntry, invoice]));
+          for (const invoice of liveInvoices) {
+            byEntry.set(invoice.DocEntry, { ...byEntry.get(invoice.DocEntry), ...invoice });
+          }
+          invoices = Array.from(byEntry.values());
         } catch (e) {
           console.warn("[relations-map] falha ao buscar PurchaseInvoices:", e);
         }
@@ -489,13 +505,13 @@ export function useContasPagarLinks({
                 DocEntry: Number(r?.doc_entry),
                 DocNum: Number(r?.doc_num),
                 DocDate: String(r?.doc_date || ""),
-                DocDueDate: null,
+                DocDueDate: r?.doc_due_date ?? null,
                 DocTotal: total,
-                PaidToDate: 0,
+                PaidToDate: Number(r?.paid_to_date) || 0,
                 DocumentStatus: String(r?.document_status || ""),
                 CardCode: String(r?.card_code || supplierCode || ""),
                 CardName: String(r?.card_name || ""),
-                isFullyPaid: false,
+                isFullyPaid: resolveDocumentPaymentStatus(total, r?.paid_to_date, r?.document_status).state === "paid",
               } as PurchaseInvoiceLink;
             });
           invoices = [...invoices, ...cachedInvoices];
@@ -510,19 +526,40 @@ export function useContasPagarLinks({
       const paymentsByInvoice: Record<number, VendorPaymentLink[]> = {};
       const invoiceEntrySet = new Set(invoices.map((i) => i.DocEntry));
       const cardCodes = Array.from(new Set(invoices.map((i) => i.CardCode).filter(Boolean)));
-      const seenPaymentEntries = new Set<number>();
+      const paymentByEntry = new Map<number, VendorPaymentLink>();
       const registerPayment = (payment: VendorPaymentLink) => {
-        if (seenPaymentEntries.has(payment.DocEntry)) return;
-        seenPaymentEntries.add(payment.DocEntry);
-        payments.push(payment);
-        for (const de of payment.invoiceDocEntries) {
-          (paymentsByInvoice[de] ||= []).push(payment);
+        const current = paymentByEntry.get(payment.DocEntry);
+        if (!current) {
+          paymentByEntry.set(payment.DocEntry, payment);
+          payments.push(payment);
+          for (const de of payment.invoiceDocEntries) {
+            (paymentsByInvoice[de] ||= []).push(payment);
+          }
+          return;
         }
+
+        current.PaymentDocTotal = Math.max(current.PaymentDocTotal, payment.PaymentDocTotal);
+        current.DocDate = current.DocDate || payment.DocDate;
+        current.DocNum = current.DocNum || payment.DocNum;
+        current.CardCode = current.CardCode || payment.CardCode;
+        current.CardName = current.CardName || payment.CardName;
+        current.Remarks = current.Remarks || payment.Remarks;
+        for (const [docEntryText, appliedValue] of Object.entries(payment.appliedByInvoice)) {
+          const docEntry = Number(docEntryText);
+          current.appliedByInvoice[docEntry] = Math.max(
+            current.appliedByInvoice[docEntry] || 0,
+            Number(appliedValue) || 0,
+          );
+          if (!current.invoiceDocEntries.includes(docEntry)) current.invoiceDocEntries.push(docEntry);
+          const list = (paymentsByInvoice[docEntry] ||= []);
+          if (!list.some((item) => item.DocEntry === current.DocEntry)) list.push(current);
+        }
+        current.DocTotal = Object.values(current.appliedByInvoice).reduce((sum, value) => sum + value, 0);
       };
       const registerPaymentRows = (vpRows: SapVendorPaymentRow[]) => {
         for (const r of vpRows) {
           const paymentDocEntry = Number(r?.DocEntry);
-          if (!Number.isFinite(paymentDocEntry) || seenPaymentEntries.has(paymentDocEntry)) continue;
+          if (!Number.isFinite(paymentDocEntry)) continue;
           const invLines = Array.isArray(r?.PaymentInvoices) ? r.PaymentInvoices : [];
           const applied: Record<number, number> = {};
           const invEntries: number[] = [];
@@ -538,7 +575,6 @@ export function useContasPagarLinks({
             }
           }
           if (invEntries.length === 0) continue;
-          seenPaymentEntries.add(paymentDocEntry);
           // Total do lote no SAP (pode cobrir dezenas de NFs de vários pedidos).
           const paymentDocTotal =
             Number(r?.BillOfExchangeAmount) ||
@@ -614,24 +650,40 @@ export function useContasPagarLinks({
         }
       }
 
+      invoices = invoices.map((invoice) => {
+        const paidByPayments = (paymentsByInvoice[invoice.DocEntry] || []).reduce(
+          (sum, payment) => sum + (payment.appliedByInvoice[invoice.DocEntry] || 0),
+          0,
+        );
+        const paid = Math.max(invoice.PaidToDate, paidByPayments);
+        return {
+          ...invoice,
+          PaidToDate: paid,
+          isFullyPaid: resolveDocumentPaymentStatus(invoice.DocTotal, paid, invoice.DocumentStatus).state === "paid",
+        };
+      });
+
       // Payables = faturas em aberto + pagamentos (com data de pagamento)
-      const invoicePayables: ContaPagarLink[] = invoices.map((inv) => ({
-        id: `sap:${inv.DocEntry}`,
-        fornecedor: inv.CardName || inv.CardCode,
-        numero_documento: String(inv.DocNum),
-        valor_documento: inv.DocTotal,
-        valor_pago: inv.PaidToDate,
-        data_registro: inv.DocDate || null,
-        data_vencimento: inv.DocDueDate,
-        data_pagamento: null,
-        status: inv.isFullyPaid
-          ? "Pago"
-          : inv.DocumentStatus === "bost_Close"
-            ? "Fechado"
-            : "Em aberto",
-        numero_pedido: sapDocNum ? String(sapDocNum) : null,
-        source: "sap",
-      }));
+      const invoicePayables: ContaPagarLink[] = invoices.map((inv) => {
+        const paymentStatus = resolveDocumentPaymentStatus(inv.DocTotal, inv.PaidToDate, inv.DocumentStatus);
+        const paymentDates = (paymentsByInvoice[inv.DocEntry] || [])
+          .map((payment) => payment.DocDate)
+          .filter(Boolean)
+          .sort();
+        return {
+          id: `sap:${inv.DocEntry}`,
+          fornecedor: inv.CardName || inv.CardCode,
+          numero_documento: String(inv.DocNum),
+          valor_documento: inv.DocTotal,
+          valor_pago: inv.PaidToDate,
+          data_registro: inv.DocDate || null,
+          data_vencimento: inv.DocDueDate,
+          data_pagamento: paymentDates[paymentDates.length - 1] || null,
+          status: paymentStatus.label,
+          numero_pedido: sapDocNum ? String(sapDocNum) : null,
+          source: "sap",
+        };
+      });
 
       // Baixas: exibimos SEMPRE o valor aplicado às NFs deste pedido. O total do
       // lote (p.PaymentDocTotal) pode somar milhões e não pertence a este PC.
@@ -644,7 +696,7 @@ export function useContasPagarLinks({
         data_registro: p.DocDate || null,
         data_vencimento: null,
         data_pagamento: p.DocDate || null,
-        status: "Pago",
+        status: "Baixado/Pago",
         numero_pedido: sapDocNum ? String(sapDocNum) : null,
 
         source: "sap",
@@ -679,6 +731,11 @@ export function useContasPagarLinks({
 
         const payables: ContaPagarLink[] = filtered.map((row) => {
           const dataPag = (row as Record<string, unknown>)["data_pagamento"];
+          const paymentStatus = resolveDocumentPaymentStatus(
+            row.valor_documento,
+            row.valor_pago,
+            row.status_titulo,
+          );
           return {
             id: `omie:${row.codigo_lancamento_omie}`,
             fornecedor: row.nome_cliente_fornecedor ?? null,
@@ -688,7 +745,7 @@ export function useContasPagarLinks({
             data_registro: row.data_registro ?? row.data_emissao ?? null,
             data_vencimento: row.data_vencimento ?? null,
             data_pagamento: typeof dataPag === "string" ? dataPag : null,
-            status: row.status_titulo ?? null,
+            status: paymentStatus.label,
             numero_pedido: row.numero_pedido ?? null,
             source: "omie" as const,
           };
@@ -704,10 +761,10 @@ export function useContasPagarLinks({
     return empty;
   }, [effectiveErpType, session, sapDocEntry, sapDocNum, companyDb, supplierCode]);
 
-  // v4: consulta VendorPayments diretamente por PaymentInvoices/DocEntry da NF.
+  // v7: consolida PaidToDate e baixas vinculadas para status total/parcial.
   const cacheKey =
     effectiveErpType === "sap" && sapDocEntry
-      ? `relmap:ap:sap:v6:${sapDocEntry}`
+      ? `relmap:ap:sap:v7:${sapDocEntry}`
       : effectiveErpType === "omie" && (sapDocNum || supplierCode)
         ? `relmap:ap:omie:v2:${sapDocNum || ""}:${supplierCode || ""}`
         : null;

@@ -152,6 +152,7 @@ export interface ApprovalRule {
   id: string;
   name: string;
   is_active: boolean;
+  auto_approve?: boolean;
   priority: number;
   criteria: RuleCriterion[];
   doc_type: RuleDocType;
@@ -164,6 +165,7 @@ export interface ApprovalRule {
 
 export interface CreateRuleInput {
   name: string;
+  auto_approve?: boolean;
   priority?: number;
   doc_type?: RuleDocType;
   criteria: RuleCriterion[];
@@ -358,6 +360,7 @@ export function useApprovalRules(options?: { backfill?: boolean; enabled?: boole
         }
         return {
           ...r,
+          auto_approve: r.auto_approve === true,
           criteria: normalizedCriteria,
           doc_type: (r.doc_type as RuleDocType) || "both",
           levels: levelsMap[r.id] || [],
@@ -404,6 +407,7 @@ export function useApprovalRules(options?: { backfill?: boolean; enabled?: boole
         company_db: activeCompanyDb,
         actor: createdBy,
         name: input.name,
+        auto_approve: input.auto_approve === true,
         priority: input.priority || 0,
         criteria: normalizeCriteria(input.criteria),
         doc_type: input.doc_type || "both",
@@ -423,6 +427,7 @@ export function useApprovalRules(options?: { backfill?: boolean; enabled?: boole
         company_db: activeCompanyDb,
         actor,
         name: input.name,
+        auto_approve: input.auto_approve === true,
         priority: input.priority || 0,
         criteria: normalizeCriteria(input.criteria),
         doc_type: input.doc_type || "both",

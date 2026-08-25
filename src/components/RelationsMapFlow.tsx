@@ -28,6 +28,7 @@ import {
 import type { NfEntradaLink, ContaPagarLink } from "@/hooks/useRelationsMapDerived";
 import type { RelationsMapExpense, SapFluxoEnrichment } from "./RelationsMap";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { resolveDocumentPaymentStatus } from "@/lib/relations-payment-status";
 
 type ChainRow = {
   level_order: number;
@@ -62,6 +63,8 @@ function formatCurrency(value?: number | null, currency?: string | null) {
 
 function formatDateShort(iso?: string | null) {
   if (!iso) return null;
+  const dateOnly = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
   try {
     return new Date(iso).toLocaleDateString("pt-BR");
   } catch {
@@ -132,6 +135,8 @@ interface DocCardData extends Record<string, unknown> {
   statusTone?: NodeTone;
   who?: string | null;      // launched by / requester / approver
   when?: string | null;     // ISO date
+  dueDate?: string | null;
+  paymentDate?: string | null;
   attachmentsCount?: number;
   extra?: string | null;    // optional secondary line (e.g. supplier)
   state?: "current" | "done" | "rejected" | "pending" | "neutral";
@@ -222,6 +227,13 @@ const DocCardNode = memo(function DocCardNode({ data }: NodeProps) {
                 </div>
               </div>
 
+              {(d.dueDate || d.paymentDate) && (
+                <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
+                  {d.dueDate && <span>Venc. <span className="font-mono">{formatDateShort(d.dueDate)}</span></span>}
+                  {d.paymentDate && <span>Pago em <span className="font-mono">{formatDateShort(d.paymentDate)}</span></span>}
+                </div>
+              )}
+
               {d.status && (
                 <div className="mt-1.5">
                   <span
@@ -259,6 +271,8 @@ const DocCardNode = memo(function DocCardNode({ data }: NodeProps) {
                 <span className="font-medium">{d.status.replace(/_/g, " ")}</span>
               </div>
             )}
+            {d.dueDate && <div>Vencimento: {formatDateShort(d.dueDate)}</div>}
+            {d.paymentDate && <div>Pagamento: {formatDateShort(d.paymentDate)}</div>}
           </div>
         </TooltipContent>
       </Tooltip>
@@ -381,6 +395,8 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
         expense.requester_email ||
         undefined,
       when: (enrichmentActive && startAt) || expense.created_at,
+      dueDate: expense.due_date || fluxo?.data_vencimento || null,
+      paymentDate: fluxo?.data_pagamento || null,
       extra: enrichmentActive
         ? [
             expense.supplier_name,
@@ -494,6 +510,8 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
             .join(" · ") || null
         : expense.company_db || null,
       when: (enrichmentActive && fluxo?.data_lancamento) || expense.updated_at,
+      dueDate: expense.due_date || fluxo?.data_vencimento || null,
+      paymentDate: fluxo?.data_pagamento || null,
       status: integrated ? "integrado" : isFailed ? statusRaw : "pendente",
       statusTone: integrated ? "success" : isFailed ? "warn" : "muted",
       state: pcSapState,
@@ -541,7 +559,10 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
   nfLinks.forEach((nf) => {
     const id = `nf-${nf.id}`;
     nfById[nf.id] = { id, apChildren: [] };
-    const statusOk = /close|paga|completed|linked|lan[çc]ad/i.test(nf.status);
+    const paymentStatus = resolveDocumentPaymentStatus(nf.valor_total, nf.paid_amount, nf.status);
+    const paidFully = paymentStatus.state === "paid";
+    const paidPartially = paymentStatus.state === "partial";
+    const statusOk = paidFully || /close|paga|completed|linked|lan[çc]ad/i.test(nf.status);
     const nfDocEntryStr = nf.sap_invoice_draft_id ? String(nf.sap_invoice_draft_id) : null;
     const matchesFluxoNf =
       !!fluxoNfId &&
@@ -557,8 +578,10 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
         amount: nf.valor_total,
         currency: expense.currency,
         when: nf.created_at,
-        status: nf.status,
-        statusTone: statusOk ? "success" : "muted",
+        dueDate: nf.due_date || null,
+        paymentDate: nf.payment_date || null,
+        status: paidFully || paidPartially ? paymentStatus.label : nf.status,
+        statusTone: statusOk ? "success" : paidPartially ? "amber" : "muted",
         state: statusOk ? "done" : "current",
         extra: matchesFluxoNf ? `Vínculo fluxo · NF #${fluxoNfId}` : undefined,
       },
@@ -587,7 +610,9 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
     (nf.ap_links || []).forEach((ap) => {
       const apId = `ap-${nf.id}-${ap.source}-${ap.ap_doc_entry}`;
       linkedApKey.add(`${ap.source}:${ap.ap_doc_entry}`);
-      const paidFully = ap.ap_paid !== null && ap.ap_total !== null && Math.abs((ap.ap_paid || 0) - (ap.ap_total || 0)) < 0.01;
+      const paymentStatus = resolveDocumentPaymentStatus(ap.ap_total, ap.ap_paid, ap.status);
+      const paidFully = paymentStatus.state === "paid";
+      const paidPartially = paymentStatus.state === "partial";
       const isFluxoCp = matchesFluxoCp(ap.ap_doc_entry, ap.ap_doc_num);
       if (isFluxoCp) cpFluxoMatched = true;
       const paidExtra = ap.ap_paid !== null && ap.ap_paid !== undefined ? `Pago: ${formatCurrency(ap.ap_paid, expense.currency)}` : null;
@@ -601,9 +626,11 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
           amount: ap.ap_total,
           currency: expense.currency,
           when: ap.payment_date || ap.linked_at,
-          status: paidFully ? "pago" : "em aberto",
-          statusTone: paidFully ? "success" : "muted",
-          state: paidFully ? "done" : "pending",
+          dueDate: ap.due_date || null,
+          paymentDate: ap.payment_date || null,
+          status: paymentStatus.label,
+          statusTone: paidFully ? "success" : paidPartially ? "amber" : "muted",
+          state: paidFully ? "done" : paidPartially ? "current" : "pending",
           extra: [paidExtra, isFluxoCp ? `Vínculo fluxo · CP #${fluxoCpId}` : null].filter(Boolean).join(" · ") || null,
         },
       });
@@ -629,7 +656,9 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
     if (linkedApKey.has(key1) || linkedApKey.has(key2)) return;
 
     const apId = `orphan-ap-${ap.id}`;
-    const paidFully = ap.status?.toLowerCase() === "pago";
+    const paymentStatus = resolveDocumentPaymentStatus(ap.valor_documento, ap.valor_pago, ap.status);
+    const paidFully = paymentStatus.state === "paid";
+    const paidPartially = paymentStatus.state === "partial";
     const isFluxoCp = matchesFluxoCp(entry, ap.numero_documento);
     if (isFluxoCp) cpFluxoMatched = true;
     const vencExtra = ap.data_vencimento ? `Venc: ${formatDateShort(ap.data_vencimento)}` : null;
@@ -643,9 +672,11 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
         amount: ap.valor_documento,
         currency: expense.currency,
         when: ap.data_pagamento || ap.data_vencimento || ap.data_registro,
-        status: ap.status || (paidFully ? "pago" : "em aberto"),
-        statusTone: paidFully ? "success" : "muted",
-        state: paidFully ? "done" : "pending",
+        dueDate: ap.data_vencimento || null,
+        paymentDate: ap.data_pagamento || null,
+        status: paymentStatus.label,
+        statusTone: paidFully ? "success" : paidPartially ? "amber" : "muted",
+        state: paidFully ? "done" : paidPartially ? "current" : "pending",
         extra: [vencExtra, isFluxoCp ? `Vínculo fluxo · CP #${fluxoCpId}` : null].filter(Boolean).join(" · ") || null,
       },
     });
@@ -712,7 +743,9 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
         amount: fluxo?.valor ?? null,
         currency: expense.currency,
         when: fluxo?.data_pagamento || fluxo?.data_vencimento || null,
-        status: fluxo?.data_pagamento ? "pago" : "vínculo fluxo",
+        dueDate: fluxo?.data_vencimento || null,
+        paymentDate: fluxo?.data_pagamento || null,
+        status: fluxo?.data_pagamento ? "Baixado/Pago" : "vínculo fluxo",
         statusTone: fluxo?.data_pagamento ? "success" : "muted",
         state: fluxo?.data_pagamento ? "done" : "pending",
         extra: [

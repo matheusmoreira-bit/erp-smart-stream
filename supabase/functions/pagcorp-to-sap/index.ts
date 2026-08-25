@@ -16,6 +16,7 @@ import { ensureCopyToTargetDocument } from "../_shared/sap-attach-copy.ts";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { applyPagCorpJournalDimensions } from "../_shared/pagcorp-journal-entry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -399,6 +400,7 @@ Deno.serve(async (req) => {
 
   let logId: string | null = null;
   let supabase: ReturnType<typeof createClient> | null = null;
+  let retryRequest: Record<string, unknown> | null = null;
 
   // Stage tracking for the response payload + log
   const stages: Record<string, "pending" | "success" | "failed" | "skipped"> = {
@@ -425,6 +427,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
+    retryRequest = body && typeof body === "object" ? body as Record<string, unknown> : null;
     const companyDb: string = body.companyDb;
     const integrationType: "generic" | "accountability" = body.integrationType || "generic";
     const supplierCode: string = body.supplierCode;
@@ -470,6 +473,9 @@ Deno.serve(async (req) => {
     if (postingType === "purchase_order" && !supplierCode) throw new Error("supplierCode (CardCode) obrigatório");
     if (postingType === "journal_entry" && (!journalEntry?.debitAccount || !journalEntry?.creditAccount)) {
       throw new Error("Contas de débito e crédito são obrigatórias para o Lançamento Contábil");
+    }
+    if (postingType === "journal_entry" && (!journalEntry?.costCenter || !journalEntry?.project)) {
+      throw new Error("Centro de custo e projeto são obrigatórios para o Lançamento Contábil");
     }
     for (const t of rawList) {
       if (!t?.id) throw new Error("toda transação precisa de id");
@@ -567,6 +573,7 @@ Deno.serve(async (req) => {
           status: "pending",
           company_db: companyDb,
           integrated_by: integratedBy,
+          sap_response: retryRequest ? { retry_request: retryRequest } : null,
         } as any)
         .select("id")
         .single();
@@ -757,22 +764,28 @@ Deno.serve(async (req) => {
       const journalMemo = customRemarks
         ? formatPagCorpComments(customRemarks, 190)
         : description;
-      const commonDimensions = {
-        BPLID: branchId,
-        ...(journalEntry.costCenter ? { CostingCode: String(journalEntry.costCenter) } : {}),
-        ...(journalEntry.project ? { ProjectCode: String(journalEntry.project) } : {}),
-      };
       const debitLines = transactions.map((item) => ({
         AccountCode: String(journalEntry.debitAccount),
         LineMemo: truncateSapText(
           `PagCorp - ${transactions.length > 1 ? `[#${item.id}] ` : ""}${item.description || journalMemo}`,
           50,
         ),
-        ...commonDimensions,
         ...(isForeignCurrency
           ? { FCDebit: Number(item.amount) || 0, FCCurrency: currency }
           : { Debit: Number(item.amount) || 0 }),
       }));
+      const journalEntryLines = applyPagCorpJournalDimensions([
+        ...debitLines,
+        {
+          AccountCode: String(journalEntry.creditAccount),
+          LineMemo: truncateSapText(journalMemo, 50),
+          ...(isForeignCurrency ? { FCCredit: amount, FCCurrency: currency } : { Credit: amount }),
+        },
+      ], {
+        branchId,
+        costCenter: String(journalEntry.costCenter),
+        project: String(journalEntry.project),
+      });
       const payload: Record<string, unknown> = {
         ReferenceDate: date,
         DueDate: date,
@@ -782,15 +795,7 @@ Deno.serve(async (req) => {
           transactions.length > 1 ? `PagCorp lote ${transactions.length}` : `PagCorp ${transaction.id}`,
           27,
         ),
-        JournalEntryLines: [
-          ...debitLines,
-          {
-            AccountCode: String(journalEntry.creditAccount),
-            LineMemo: truncateSapText(journalMemo, 50),
-            BPLID: branchId,
-            ...(isForeignCurrency ? { FCCredit: amount, FCCurrency: currency } : { Credit: amount }),
-          },
-        ],
+        JournalEntryLines: journalEntryLines,
         ...(attachmentEntry ? { AttachmentEntry: attachmentEntry } : {}),
       };
       sapPayloads.journal_entry = payload;
@@ -1034,6 +1039,7 @@ Deno.serve(async (req) => {
             : {}),
           sap_payload: sapPayloads as any,
           sap_response: {
+            ...(retryRequest ? { retry_request: retryRequest } : {}),
             stages,
             ...sapResponses,
             ...(materialSuccess ? { recovered_after_non_sap_error: msg } : {}),

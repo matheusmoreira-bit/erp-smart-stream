@@ -29,7 +29,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { useSap } from "@/contexts/SapContext";
-import { useExpenses, getStatusLabel, type Expense } from "@/hooks/useExpenses";
+import { useExpenses, useStatusLabel, type Expense } from "@/hooks/useExpenses";
 import { isDesignatedApprover, isPendingApproval } from "@/lib/approval-authz";
 import { isSameAsRequester } from "@/lib/self-approval";
 
@@ -55,6 +55,7 @@ type ViewTab = "pending" | "status";
 
 export default function MobileApprovals() {
   const { session } = useSap();
+  const statusLabel = useStatusLabel();
   const navigate = useNavigate();
   const {
     expenses,
@@ -237,7 +238,7 @@ export default function MobileApprovals() {
                   </p>
                 </div>
                 <Badge variant={isPendingApproval(exp.status) ? "default" : "secondary"}>
-                  {getStatusLabel(exp.status)}
+                  {statusLabel(exp.status)}
                 </Badge>
               </div>
 

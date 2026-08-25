@@ -26,8 +26,60 @@ const FALLBACK_COMPANY_NAMES: Record<string, string[]> = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-const AI_MODEL = "google/gemini-2.5-flash";
+const LOVABLE_AI_MODEL = "google/gemini-2.5-flash";
+const OPENAI_AI_MODEL = Deno.env.get("OPENAI_MODEL") || "gpt-4.1-mini";
 const PAGCORP_CACHE_PROMPT_VERSION = "pagcorp-expense-v1";
+
+type AiProvider = "lovable" | "openai";
+
+function getAiProvider(): AiProvider {
+  const configured = String(Deno.env.get("AI_PROVIDER") || "").trim().toLowerCase();
+  if (configured === "openai" || configured === "lovable") return configured;
+  return Deno.env.get("OPENAI_API_KEY") && !Deno.env.get("LOVABLE_API_KEY")
+    ? "openai"
+    : "lovable";
+}
+
+function getAiModel(provider: AiProvider): string {
+  return provider === "openai" ? OPENAI_AI_MODEL : LOVABLE_AI_MODEL;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binaryString = "";
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    binaryString += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  return btoa(binaryString);
+}
+
+function readOpenAiOutputText(payload: Record<string, unknown>): string {
+  if (typeof payload.output_text === "string") return payload.output_text;
+  const output = Array.isArray(payload.output) ? payload.output : [];
+  for (const item of output) {
+    if (!item || typeof item !== "object") continue;
+    const content = Array.isArray((item as { content?: unknown }).content)
+      ? (item as { content: unknown[] }).content
+      : [];
+    for (const part of content) {
+      if (!part || typeof part !== "object") continue;
+      const value = part as { type?: unknown; text?: unknown };
+      if (value.type === "output_text" && typeof value.text === "string") return value.text;
+    }
+  }
+  return "";
+}
+
+function readLovableOutputText(payload: Record<string, unknown>): string {
+  const choices = Array.isArray(payload.choices) ? payload.choices : [];
+  const first = choices[0];
+  if (!first || typeof first !== "object") return "";
+  const message = (first as { message?: unknown }).message;
+  if (!message || typeof message !== "object") return "";
+  const content = (message as { content?: unknown }).content;
+  return typeof content === "string" ? content : "";
+}
 
 interface PreparedFile {
   file: File;
@@ -110,7 +162,7 @@ async function writePagCorpCache(params: {
         sha256: hash,
       })),
       ai_result: params.result,
-      model: AI_MODEL,
+      model: getAiModel(getAiProvider()),
       updated_at: now,
       last_accessed_at: now,
     }),
@@ -265,42 +317,60 @@ serve(async (req) => {
       }
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const aiProvider = getAiProvider();
+    const apiKey = aiProvider === "openai"
+      ? Deno.env.get("OPENAI_API_KEY")
+      : Deno.env.get("LOVABLE_API_KEY");
+    if (!apiKey) {
+      throw new Error(
+        aiProvider === "openai"
+          ? "OPENAI_API_KEY não configurada no ambiente local"
+          : "LOVABLE_API_KEY not configured",
+      );
+    }
 
     // Build content parts
-    const contentParts: any[] = [];
+    const lovableContentParts: Array<Record<string, unknown>> = [];
+    const openAiContentParts: Array<Record<string, unknown>> = [];
     for (const { file, bytes } of preparedFiles) {
       const isPdf = file.name.toLowerCase().endsWith(".pdf");
       const isImage = /\.(jpg|jpeg|png|webp|gif)$/i.test(file.name);
 
       if (isPdf || isImage) {
-        // Encode in chunks to avoid stack overflow on large files
-        let binaryString = "";
-        const CHUNK = 8192;
-        for (let i = 0; i < bytes.length; i += CHUNK) {
-          const chunk = bytes.subarray(i, Math.min(i + CHUNK, bytes.length));
-          binaryString += String.fromCharCode.apply(null, Array.from(chunk));
-        }
-        const base64 = btoa(binaryString);
+        const base64 = bytesToBase64(bytes);
         const mimeType = isPdf ? "application/pdf" : file.type || "image/jpeg";
-        contentParts.push({
+        lovableContentParts.push({
           type: "image_url",
           image_url: { url: `data:${mimeType};base64,${base64}` },
         });
+        openAiContentParts.push(isPdf
+          ? {
+              type: "input_file",
+              filename: file.name,
+              file_data: `data:${mimeType};base64,${base64}`,
+            }
+          : {
+              type: "input_image",
+              image_url: `data:${mimeType};base64,${base64}`,
+              detail: "auto",
+            });
       } else {
         const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-        contentParts.push({
+        const fileText = `[Arquivo: ${file.name}]\n${text.substring(0, 15000)}`;
+        lovableContentParts.push({
           type: "text",
-          text: `[Arquivo: ${file.name}]\n${text.substring(0, 15000)}`,
+          text: fileText,
         });
+        openAiContentParts.push({ type: "input_text", text: fileText });
       }
     }
 
-    contentParts.push({
+    const requestText = "Analise os documentos acima e extraia as informações conforme solicitado. Responda APENAS com o JSON, sem markdown ou explicações.";
+    lovableContentParts.push({
       type: "text",
-      text: "Analise os documentos acima e extraia as informações conforme solicitado. Responda APENAS com o JSON, sem markdown ou explicações.",
+      text: requestText,
     });
+    openAiContentParts.push({ type: "input_text", text: requestText });
 
     const systemPrompt = `Você é um assistente especializado em processar documentos fiscais — tanto brasileiros (notas fiscais, recibos, boletos) quanto internacionais (commercial invoices, receipts em inglês/espanhol/etc.).
 Analise os documentos enviados e extraia as seguintes informações em formato JSON:
@@ -377,20 +447,33 @@ Regras IMPORTANTES:
 - Quando vários arquivos forem enviados juntos, is_invoice_equivalent deve ser TRUE se AO MENOS UM deles for Nota Fiscal, invoice ou equivalente, mesmo que os demais sejam apenas comprovantes ou documentos de apoio.
 - document_kind: use "invoice" para invoices internacionais, "nota_fiscal" para NFs BR, "receipt" para recibos, "comprovante_pagamento" para comprovantes bancários/PIX, "boleto" para boletos, "contrato" para contratos, "outro" para o resto.`;
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
+    const aiResponse = await fetch(
+      aiProvider === "openai"
+        ? "https://api.openai.com/v1/responses"
+        : "https://ai.gateway.lovable.dev/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(aiProvider === "openai"
+          ? {
+              model: OPENAI_AI_MODEL,
+              instructions: systemPrompt,
+              input: [{ role: "user", content: openAiContentParts }],
+              max_output_tokens: 10000,
+              store: false,
+            }
+          : {
+              model: LOVABLE_AI_MODEL,
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: lovableContentParts },
+              ],
+            }),
       },
-      body: JSON.stringify({
-        model: AI_MODEL,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: contentParts },
-        ],
-      }),
-    });
+    );
 
     if (!aiResponse.ok) {
       if (aiResponse.status === 429) {
@@ -410,8 +493,10 @@ Regras IMPORTANTES:
       throw new Error("Erro ao processar documento com IA");
     }
 
-    const aiData = await aiResponse.json();
-    const rawContent = aiData.choices?.[0]?.message?.content || "";
+    const aiData = await aiResponse.json() as Record<string, unknown>;
+    const rawContent = aiProvider === "openai"
+      ? readOpenAiOutputText(aiData)
+      : readLovableOutputText(aiData);
 
     let parsed;
     try {

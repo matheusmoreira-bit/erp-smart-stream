@@ -19,7 +19,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { STATUS_LABELS } from "@/hooks/useExpenses";
+import { useStatusLabel } from "@/hooks/useExpenses";
 import {
   useNfEntradaLinks,
   useContasPagarLinks,
@@ -32,6 +32,7 @@ import { Loader2 } from "lucide-react";
 import { RelationsMapFlow } from "./RelationsMapFlow";
 import { isPendingApproval } from "@/lib/approval-authz";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
+import { resolveDocumentPaymentStatus } from "@/lib/relations-payment-status";
 
 type LogDecision =
   | "created"
@@ -112,6 +113,7 @@ export interface RelationsMapExpense {
   company_db?: string | null;
   created_at?: string;
   updated_at?: string;
+  due_date?: string | null;
   sap_integration_error?: string | null;
   sap_integration_last_attempt_at?: string | null;
 }
@@ -156,6 +158,13 @@ function formatDateTime(iso?: string | null): string {
   }
 }
 
+function formatDate(iso?: string | null): string {
+  if (!iso) return "—";
+  const dateOnly = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
+  return formatDateTime(iso).split(" ")[0];
+}
+
 function formatCurrency(value?: number, currency?: string | null) {
   if (value === undefined || value === null) return "—";
   const code = currency && /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
@@ -163,6 +172,7 @@ function formatCurrency(value?: number, currency?: string | null) {
 }
 
 export function RelationsMap({ open, onClose, expense, title }: Props) {
+  const statusLabel = useStatusLabel();
   const [log, setLog] = useState<ApprovalLogRow[]>([]);
   const [levels, setLevels] = useState<RuleLevelRow[]>([]);
   const [sapHistory, setSapHistory] = useState<SapHistoryRow[]>([]);
@@ -225,11 +235,23 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
   const nfLinksWithPayments = useMemo(() => {
     const raw = nfLinks.data || [];
     const byInv = apLinks.data?.paymentsByInvoice || {};
-    if (!raw.length || Object.keys(byInv).length === 0) return raw;
+    const invoices = new Map((apLinks.data?.invoices || []).map((invoice) => [invoice.DocEntry, invoice]));
+    if (!raw.length) return raw;
     return raw.map((nf) => {
       const de = nf.sap_invoice_draft_id ? Number(nf.sap_invoice_draft_id) : null;
-      if (!de || !byInv[de]?.length) return nf;
-      const extra = byInv[de].map((p) => ({
+      if (!de) return nf;
+      const invoice = invoices.get(de);
+      const payments = byInv[de] || [];
+      const paidByPayments = payments.reduce(
+        (sum, payment) => sum + (payment.appliedByInvoice[de] || 0),
+        0,
+      );
+      const paid = Math.max(invoice?.PaidToDate || 0, paidByPayments);
+      const total = invoice?.DocTotal ?? nf.valor_total;
+      const paymentStatus = resolveDocumentPaymentStatus(total, paid, invoice?.DocumentStatus || nf.status);
+      const paymentDates = payments.map((payment) => payment.DocDate).filter(Boolean).sort();
+      const paymentDate = paymentDates[paymentDates.length - 1] || null;
+      const extra = payments.map((p) => ({
         ap_doc_entry: String(p.DocEntry),
         ap_doc_num: String(p.DocNum),
         ap_total: p.appliedByInvoice[de] ?? p.DocTotal,
@@ -240,11 +262,34 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
         payment_doc_entry: p.DocEntry,
         payment_doc_num: p.DocNum,
         payment_date: p.DocDate,
+        due_date: null,
+        status: "Baixado/Pago",
       }));
+      const updatedLinks = nf.ap_links.map((link) => {
+        if (link.payment_doc_entry || Number(link.ap_doc_entry) !== de) return link;
+        return {
+          ...link,
+          ap_total: total,
+          ap_paid: paid,
+          due_date: invoice?.DocDueDate || null,
+          payment_date: paymentDate,
+          status: paymentStatus.label,
+        };
+      });
       // dedup por ap_doc_entry (evita duplicar se já veio de nf_entrada_contas_pagar)
-      const seen = new Set(nf.ap_links.map((l) => l.ap_doc_entry));
-      const merged = [...nf.ap_links, ...extra.filter((l) => !seen.has(l.ap_doc_entry))];
-      return { ...nf, ap_links: merged };
+      const seen = new Set(updatedLinks.map((l) => l.ap_doc_entry));
+      const merged = [...updatedLinks, ...extra.filter((l) => !seen.has(l.ap_doc_entry))];
+      return {
+        ...nf,
+        status: paymentStatus.state === "paid" || paymentStatus.state === "partial"
+          ? paymentStatus.label
+          : nf.status,
+        valor_total: total,
+        paid_amount: paid,
+        due_date: invoice?.DocDueDate || null,
+        payment_date: paymentDate,
+        ap_links: merged,
+      };
     });
   }, [nfLinks.data, apLinks.data]);
 
@@ -423,22 +468,20 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
   const mapStatusLabel = useMemo(() => {
     if (!expense) return null;
     const payables = apLinks.data?.payables || [];
-    const hasPayment =
-      (apLinks.data?.payments.length || 0) > 0 ||
-      payables.some((ap) => {
-        const paidByStatus = ap.status?.toLowerCase() === "pago";
-        const paidByAmount =
-          ap.valor_documento != null &&
-          ap.valor_pago != null &&
-          ap.valor_documento > 0 &&
-          Math.abs(ap.valor_documento - ap.valor_pago) < 0.01;
-        return paidByStatus || paidByAmount || !!ap.data_pagamento;
-      });
-    if (hasPayment) return "Pago no ERP";
+    const invoices = apLinks.data?.invoices || [];
+    const titleRows = invoices.length > 0
+      ? invoices.map((invoice) => ({ total: invoice.DocTotal, paid: invoice.PaidToDate }))
+      : payables
+          .filter((payable) => !String(payable.id).startsWith("sap-vp:"))
+          .map((payable) => ({ total: payable.valor_documento, paid: payable.valor_pago }));
+    const total = titleRows.reduce((sum, row) => sum + (Number(row.total) || 0), 0);
+    const paid = titleRows.reduce((sum, row) => sum + (Number(row.paid) || 0), 0);
+    const aggregateStatus = resolveDocumentPaymentStatus(total, paid);
+    if (aggregateStatus.state === "paid" || aggregateStatus.state === "partial") return aggregateStatus.label;
     if (nfLinksWithPayments.length > 0) return "NF vinculada";
-    if (expense.sap_doc_entry || expense.sap_doc_num) return "PC no SAP";
-    return STATUS_LABELS[expense.status as keyof typeof STATUS_LABELS] || expense.status;
-  }, [expense, apLinks.data, nfLinksWithPayments]);
+    if (expense.sap_doc_entry || expense.sap_doc_num) return statusLabel("pc_lancado");
+    return statusLabel(expense.status);
+  }, [expense, apLinks.data, nfLinksWithPayments, statusLabel]);
 
 
 
@@ -548,6 +591,7 @@ interface StageDetailProps {
 }
 
 function StageDetailDialog({ stage, expense, log, approverRows, nfLinks, nfLoading, apPayables, apPayments, apLoading, onClose }: StageDetailProps) {
+  const statusLabel = useStatusLabel();
   if (!stage) return null;
   const def = STAGE_DEFS.find((s) => s.key === stage);
   if (!def) return null;
@@ -616,7 +660,7 @@ function StageDetailDialog({ stage, expense, log, approverRows, nfLinks, nfLoadi
           <div className="space-y-3">
             <DetailGrid
               rows={[
-                ["Status do PC", STATUS_LABELS[expense.status as keyof typeof STATUS_LABELS] || expense.status],
+                ["Status do PC", statusLabel(expense.status)],
                 ["NFs vinculadas", nfLoading ? "Carregando…" : String(nfLinks.length)],
               ]}
             />
@@ -643,6 +687,12 @@ function StageDetailDialog({ stage, expense, log, approverRows, nfLinks, nfLoadi
                       <Badge variant="outline" className="text-[10px]">{nf.status}</Badge>
                       <span className="font-mono text-[10px] text-muted-foreground">{formatDateTime(nf.created_at)}</span>
                     </div>
+                    {(nf.due_date || nf.payment_date) && (
+                      <div className="mt-1 text-[10px] text-muted-foreground flex flex-wrap gap-x-3">
+                        {nf.due_date && <span>Vencimento: <span className="font-mono">{formatDate(nf.due_date)}</span></span>}
+                        {nf.payment_date && <span>Pagamento: <span className="font-mono">{formatDate(nf.payment_date)}</span></span>}
+                      </div>
+                    )}
                     {nf.chave_acesso && (
                       <div className="font-mono text-[10px] text-muted-foreground mt-1 break-all">
                         {nf.chave_acesso}
@@ -707,9 +757,14 @@ function StageDetailDialog({ stage, expense, log, approverRows, nfLinks, nfLoadi
                       <Badge variant="outline" className="text-[10px] uppercase">{ap.source}</Badge>
                       {ap.status && <span className="text-[10px]">{ap.status}</span>}
                       <span className="font-mono text-[10px] text-muted-foreground">
-                        Venc: {ap.data_vencimento ? formatDateTime(ap.data_vencimento).split(" ")[0] : "—"}
+                        Venc: {formatDate(ap.data_vencimento)}
                       </span>
                     </div>
+                    {ap.data_pagamento && (
+                      <div className="text-[10px] text-muted-foreground mt-1">
+                        Pagamento: <span className="font-mono">{formatDate(ap.data_pagamento)}</span>
+                      </div>
+                    )}
                     {ap.valor_pago !== null && ap.valor_pago !== undefined && (
                       <div className="text-[10px] text-muted-foreground mt-1">
                         Pago: <span className="font-mono">{formatCurrency(ap.valor_pago, expense.currency)}</span>
@@ -734,7 +789,7 @@ function StageDetailDialog({ stage, expense, log, approverRows, nfLinks, nfLoadi
         return (
           <DetailGrid
             rows={[
-              ["Status", STATUS_LABELS[expense.status as keyof typeof STATUS_LABELS] || expense.status],
+              ["Status", statusLabel(expense.status)],
               ["Concluído em", formatDateTime(expense.updated_at)],
             ]}
           />

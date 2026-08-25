@@ -52,6 +52,11 @@ export interface SapProjectRow {
   ValidTo?: string;
 }
 
+export interface SapPaymentTermRow {
+  GroupNumber: number;
+  PaymentTermsGroupName: string;
+}
+
 export interface SapUserRow {
   UserCode: string;
   UserName: string;
@@ -87,6 +92,8 @@ export function useIntercompany() {
   const [userResults, setUserResults] = useState<PerCompanyResult<SapUserRow[]>[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [projectResults, setProjectResults] = useState<PerCompanyResult<SapProjectRow[]>[]>([]);
+  const [loadingPaymentTerms, setLoadingPaymentTerms] = useState(false);
+  const [paymentTermResults, setPaymentTermResults] = useState<PerCompanyResult<SapPaymentTermRow[]>[]>([]);
 
 
   const loadAccounts = useCallback(async (company_dbs?: string[]) => {
@@ -297,6 +304,29 @@ export function useIntercompany() {
     [],
   );
 
+  const loadPaymentTerms = useCallback(async (company_dbs?: string[]) => {
+    setLoadingPaymentTerms(true);
+    try {
+      const r = await callIntercompany<{ results: PerCompanyResult<SapPaymentTermRow[]>[] }>({
+        action: "list-payment-terms",
+        company_dbs,
+      });
+      setPaymentTermResults(r.results || []);
+    } finally {
+      setLoadingPaymentTerms(false);
+    }
+  }, []);
+
+  const replicatePaymentTerm = useCallback(
+    async (input: { code: string; source_company_db: string; target_company_db: string }) => {
+      return await callIntercompany<{ results: PerCompanyResult[] }>({
+        action: "replicate-payment-term",
+        ...input,
+      });
+    },
+    [],
+  );
+
   const toggleProject = useCallback(
     async (input: { code: string; active: boolean; company_db: string }) => {
       return await callIntercompany<{ results: PerCompanyResult[] }>({
@@ -316,18 +346,21 @@ export function useIntercompany() {
     loadingItems,
     loadingUsers,
     loadingProjects,
+    loadingPaymentTerms,
     accountResults,
     centerResults,
     bpResults,
     itemResults,
     userResults,
     projectResults,
+    paymentTermResults,
     loadAccounts,
     loadCostCenters,
     loadBusinessPartners,
     loadItems,
     loadUsers,
     loadProjects,
+    loadPaymentTerms,
     createAccount,
     createCostCenter,
     createProject,
@@ -342,6 +375,7 @@ export function useIntercompany() {
     replicateAccount,
     replicateCostCenter,
     replicateProject,
+    replicatePaymentTerm,
     toggleProject,
 
   };

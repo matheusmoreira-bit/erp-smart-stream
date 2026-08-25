@@ -7,6 +7,7 @@ import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { uploadExpenseAttachment } from "@/lib/attachment-upload";
 import { sapQuery, type SapSession } from "@/lib/sap-client";
 import { useSap } from "@/contexts/SapContext";
+import { getErpShortLabel } from "@/lib/erp-labels";
 import { createNotification } from "@/lib/notifications";
 import { expenseRead } from "@/lib/expense-read";
 import { pickHierarchicalFallbackRule } from "@/lib/approval-fallback";
@@ -289,7 +290,16 @@ export { STATUS_LABELS, STATUS_COLORS };
  * Rótulo de status sensível ao tipo de documento.
  * Compras usam "PC" (Pedido de Compra); vendas usam "PV" (Pedido de Venda).
  */
-export function getStatusLabel(status: string, isSales = false): string {
+export function getStatusLabel(
+  status: string,
+  isSales = false,
+  erpType?: string | null,
+): string {
+  if (status === "pc_lancado") {
+    const documentLabel = isSales ? "PV" : "PC";
+    const erpLabel = !erpType || erpType === "sap" ? "SAP" : getErpShortLabel(erpType);
+    return `${documentLabel} Lançado no ${erpLabel}`;
+  }
   const label = STATUS_LABELS[status as ExpenseStatus] ?? status;
   return isSales ? label.replace(/\bPC\b/g, "PV") : label;
 }
@@ -297,8 +307,12 @@ export function getStatusLabel(status: string, isSales = false): string {
 /** Retorna um formatador de status já ciente da rota (vendas x compras). */
 export function useStatusLabel() {
   const { pathname } = useLocation();
+  const { session } = useSap();
   const isSales = pathname.startsWith("/vendas");
-  return useCallback((status: string) => getStatusLabel(status, isSales), [isSales]);
+  return useCallback(
+    (status: string) => getStatusLabel(status, isSales, session?.erpType),
+    [isSales, session?.erpType],
+  );
 }
 
 

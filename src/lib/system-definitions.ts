@@ -126,6 +126,18 @@ export const SYSTEMS: SystemConfig[] = [
     fields: [
       { key: "app_key", label: "App Key", placeholder: "Chave do aplicativo OMIE" },
       { key: "app_secret", label: "App Secret", type: "password", placeholder: "Segredo do aplicativo OMIE" },
+      {
+        key: "sales_current_account_code",
+        label: "Conta corrente para vendas",
+        placeholder: "Código interno da conta no Omie",
+        description: "Opcional quando existe somente uma conta corrente ativa. Usada nos Pedidos de Venda.",
+      },
+      {
+        key: "sales_stage_code",
+        label: "Etapa inicial das vendas",
+        placeholder: "10",
+        description: "Código da etapa de faturamento do Pedido de Venda. O padrão é 10.",
+      },
     ],
   },
   {

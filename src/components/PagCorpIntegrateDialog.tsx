@@ -392,7 +392,7 @@ export function PagCorpIntegrateDialog({
 
   const handleSubmit = async () => {
     if (postingType === "purchase_order" && !supplier) return;
-    if (postingType === "journal_entry" && (!debitAccount || !creditAccount)) return;
+    if (postingType === "journal_entry" && (!debitAccount || !creditAccount || !costCenter || !project)) return;
     setSubmitting(true);
     try {
       await onConfirm(
@@ -725,7 +725,7 @@ export function PagCorpIntegrateDialog({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                    Centro de Custo
+                    Centro de Custo {postingType === "journal_entry" && <span className="text-destructive">*</span>}
                   </label>
                   <CachedSearchCombobox
                     options={ccOptions}
@@ -733,11 +733,12 @@ export function PagCorpIntegrateDialog({
                     value={costCenter}
                     onChange={setCostCenter}
                     placeholder={cardDefaultCC ? `Auto: ${cardDefaultCC.name}` : "Padrão da conta…"}
+                    required={postingType === "journal_entry"}
                   />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                    Projeto
+                    Projeto {postingType === "journal_entry" && <span className="text-destructive">*</span>}
                   </label>
                   <CachedSearchCombobox
                     options={prOptions}
@@ -745,6 +746,7 @@ export function PagCorpIntegrateDialog({
                     value={project}
                     onChange={setProject}
                     placeholder={cardDefaultPR ? `Auto: ${cardDefaultPR.name}` : "Padrão da conta…"}
+                    required={postingType === "journal_entry"}
                   />
                 </div>
               </div>
@@ -818,7 +820,7 @@ export function PagCorpIntegrateDialog({
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={submitting || (postingType === "purchase_order" ? !supplier : !debitAccount || !creditAccount)}
+              disabled={submitting || (postingType === "purchase_order" ? !supplier : !debitAccount || !creditAccount || !costCenter || !project)}
             >
               {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               {postingType === "purchase_order" ? "Criar Pedido de Compra" : "Criar Lançamento Contábil"}

@@ -528,9 +528,8 @@ export function SapProvider({ children }: { children: ReactNode }) {
     try { queryClient.clear(); } catch { /* ignore */ }
     clearErpLocalState();
     // A sessão do Google (Lovable Cloud) NÃO é encerrada aqui: o "Sair" apenas
-    // desconecta da empresa/ERP. A identidade Google segue válida por até 24h
-    // (limite aplicado no GoogleAuthGate). Ao logar em outra empresa com outro
-    // usuário SAP, `login()` já derruba a sessão Supabase anterior.
+    // desconecta da empresa/ERP. Validade e renovação ficam a cargo do Supabase;
+    // somente o logout explícito da conta Google encerra essa sessão.
     toast.success("Empresa desconectada", {
       description: "Você saiu da empresa. Sua conta Google continua conectada.",
     });

@@ -14,6 +14,14 @@ export const runtime = {
   publicKey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
   projectId: import.meta.env.VITE_SUPABASE_PROJECT_ID as string | undefined,
   functionsBase: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`,
+  disableGoogleAuth:
+    import.meta.env.DEV && import.meta.env.VITE_DISABLE_GOOGLE_AUTH === "true",
+  localAuthEmail: import.meta.env.DEV
+    ? import.meta.env.VITE_LOCAL_AUTH_EMAIL as string | undefined
+    : undefined,
+  localAuthPassword: import.meta.env.DEV
+    ? import.meta.env.VITE_LOCAL_AUTH_PASSWORD as string | undefined
+    : undefined,
   // Flag para futura troca — quando true, backend/impl carrega AWS impl.
   target: (import.meta.env.VITE_BACKEND_TARGET ?? "supabase") as "supabase" | "aws",
 } as const;

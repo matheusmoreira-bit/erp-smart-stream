@@ -26,10 +26,11 @@ interface Body {
   criteria?: unknown;
   levels?: LevelInput[];
   is_active?: boolean;
+  auto_approve?: boolean;
   actor?: string;
 }
 
-const DOC_TYPES = new Set(["both", "purchase", "sales"]);
+const DOC_TYPES = new Set(["both", "purchase", "sales", "advance"]);
 
 function cleanLevels(levels: LevelInput[] | undefined) {
   return (levels || [])
@@ -87,6 +88,7 @@ Deno.serve(async (req) => {
   const docType = DOC_TYPES.has(String(body.doc_type)) ? String(body.doc_type) : "both";
   const name = String(body.name || "").trim().slice(0, 300);
   const priority = Number.isFinite(Number(body.priority)) ? Number(body.priority) : 0;
+  const autoApprove = body.auto_approve === true;
 
   const logAudit = async (act: string, entityId: string, details: Record<string, unknown>) => {
     try {
@@ -105,12 +107,13 @@ Deno.serve(async (req) => {
     if (!name) return json(400, { error: "Informe o nome da regra." });
     if (!companyDb) return json(400, { error: "Empresa não informada." });
     const levels = cleanLevels(body.levels);
-    if (levels.length === 0) return json(400, { error: "Adicione ao menos um nível de aprovação." });
+    if (!autoApprove && levels.length === 0) return json(400, { error: "Adicione ao menos um nível de aprovação." });
 
     const { data: rule, error } = await admin
       .from("approval_rules")
       .insert({
         name,
+        auto_approve: autoApprove,
         priority,
         criteria: body.criteria ?? [],
         doc_type: docType,
@@ -121,12 +124,14 @@ Deno.serve(async (req) => {
       .single();
     if (error) return json(500, { error: `Falha ao criar regra: ${error.message}` });
 
-    const { error: lvlErr } = await admin
-      .from("approval_rule_levels")
-      .insert(levels.map((l) => ({ ...l, rule_id: rule.id })));
-    if (lvlErr) return json(500, { error: `Falha ao gravar níveis: ${lvlErr.message}` });
+    if (levels.length > 0) {
+      const { error: lvlErr } = await admin
+        .from("approval_rule_levels")
+        .insert(levels.map((l) => ({ ...l, rule_id: rule.id })));
+      if (lvlErr) return json(500, { error: `Falha ao gravar níveis: ${lvlErr.message}` });
+    }
 
-    await logAudit("create_approval_rule", rule.id, { name, doc_type: docType });
+    await logAudit("create_approval_rule", rule.id, { name, doc_type: docType, auto_approve: autoApprove });
     return json(200, { rule });
   }
 
@@ -136,11 +141,11 @@ Deno.serve(async (req) => {
   if (action === "update") {
     if (!name) return json(400, { error: "Informe o nome da regra." });
     const levels = cleanLevels(body.levels);
-    if (levels.length === 0) return json(400, { error: "Adicione ao menos um nível de aprovação." });
+    if (!autoApprove && levels.length === 0) return json(400, { error: "Adicione ao menos um nível de aprovação." });
 
     const { data: updated, error } = await admin
       .from("approval_rules")
-      .update({ name, priority, criteria: body.criteria ?? [], doc_type: docType })
+      .update({ name, auto_approve: autoApprove, priority, criteria: body.criteria ?? [], doc_type: docType })
       .eq("id", id)
       .select("id");
     if (error) return json(500, { error: `Falha ao salvar regra: ${error.message}` });
@@ -152,12 +157,14 @@ Deno.serve(async (req) => {
       .eq("rule_id", id);
     if (delErr) return json(500, { error: `Falha ao atualizar níveis: ${delErr.message}` });
 
-    const { error: insErr } = await admin
-      .from("approval_rule_levels")
-      .insert(levels.map((l) => ({ ...l, rule_id: id })));
-    if (insErr) return json(500, { error: `Falha ao gravar níveis: ${insErr.message}` });
+    if (levels.length > 0) {
+      const { error: insErr } = await admin
+        .from("approval_rule_levels")
+        .insert(levels.map((l) => ({ ...l, rule_id: id })));
+      if (insErr) return json(500, { error: `Falha ao gravar níveis: ${insErr.message}` });
+    }
 
-    await logAudit("update_approval_rule", id, { name, doc_type: docType });
+    await logAudit("update_approval_rule", id, { name, doc_type: docType, auto_approve: autoApprove });
     return json(200, { ok: true });
   }
 

@@ -19,6 +19,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
 import { useAuth } from "@/hooks/useAuth";
 import { assertIdpBinding, assertSapLoginIdpBinding, upsertGoogleIdpMapping, upsertLocalAdminMapping } from "@/lib/idp-binding";
+import { runtime } from "@/config/runtime";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 
 
@@ -112,11 +113,12 @@ export function SapLoginForm() {
   const selectedCompany = databases.find((d) => d.value === companyDB);
   const erpType = selectedCompany?.erp_type || "sap";
   const isOmie = erpType === "omie";
-  const isManagedSap = erpType === "sap" && !!cloudEmail && managedCompanyDbs.has(companyDB);
+  const googleAuthDisabled = runtime.disableGoogleAuth;
+  const isManagedSap = erpType === "sap" && !googleAuthDisabled && !!cloudEmail && managedCompanyDbs.has(companyDB);
   // Com a identidade do Google validada, o SAP B1 nunca pede usuário/senha na
   // tela de login: a autenticação no Service Layer é adiada para o momento da
   // ação (login invisível com senha provisionada ou modal sob demanda).
-  const needsCredentials = erpType === "sap" && !cloudEmail;
+  const needsCredentials = erpType === "sap" && (googleAuthDisabled || !cloudEmail);
 
   const isStateless = (erpType === "omie" || erpType.startsWith("s4hana") || erpType.startsWith("totvs") || erpType === "netsuite");
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -182,6 +184,11 @@ export function SapLoginForm() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (googleAuthDisabled) {
+        setCloudEmail(null);
+        setManagedCompanyDbs(new Set());
+        return;
+      }
       try {
         const { data: { session: authSession } } = await supabase.auth.getSession();
         const email = authSession?.user?.email || null;
@@ -200,7 +207,7 @@ export function SapLoginForm() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [googleAuthDisabled]);
 
   // Post Google redirect: if there's a pending OMIE company + a Supabase session,
   // verify access via user_group_assignments and complete the ERP login.
@@ -231,7 +238,6 @@ export function SapLoginForm() {
           toast.error("Acesso não liberado", {
             description: `Sua conta ${email} não está autorizada para esta empresa OMIE. Contate o administrador.`,
           });
-          try { await supabase.auth.signOut(); } catch { /* ignore */ }
           sessionStorage.removeItem(OMIE_PENDING_KEY);
           return;
         }
@@ -247,7 +253,6 @@ export function SapLoginForm() {
         const gate = await assertIdpBinding(email);
         if (!gate.ok) {
           toast.error("Vínculo de identidade obrigatório", { description: gate.reason });
-          try { await supabase.auth.signOut(); } catch { /* ignore */ }
           sessionStorage.removeItem(OMIE_PENDING_KEY);
           return;
         }
@@ -604,7 +609,7 @@ export function SapLoginForm() {
 
 
           {/* SAP por identidade — sessão do Service Layer criada sob demanda */}
-          {erpType === "sap" && !!cloudEmail && companyDB && (
+          {erpType === "sap" && !googleAuthDisabled && !!cloudEmail && companyDB && (
             <div className="text-xs text-muted-foreground p-3 rounded-lg bg-primary/5 border border-primary/30 space-y-1">
               <div className="text-sm font-medium text-foreground flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-primary" /> Entrada pela sua identidade Google
@@ -626,13 +631,13 @@ export function SapLoginForm() {
             </div>
           )}
 
-          {isOmie && companyDB && (
+          {isOmie && !googleAuthDisabled && companyDB && (
             <div className="text-xs text-muted-foreground p-3 rounded-lg bg-muted/20 border border-border">
               Empresas OMIE utilizam login via Google. Seu acesso é validado pelo mapeamento configurado no Backoffice.
             </div>
           )}
 
-          {isOmie ? (
+          {isOmie && !googleAuthDisabled ? (
             <Button
               type="button"
               className="w-full"

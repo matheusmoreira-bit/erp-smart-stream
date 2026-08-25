@@ -264,7 +264,9 @@ export function CreateExpenseModal({
 
   const itemMapRow = useCallback((row: any) => ({ code: row.ItemCode, name: row.ItemName }), []);
   const { options: itemOptions, isLoading: itemsLoading } = useSapCachedList({
-    cacheKey: isSales ? "items_sales_only_v1" : "items_purchase_active_v3",
+    cacheKey: isOmie
+      ? (isSales ? "omie_sales_products_v1" : "omie_purchase_products_v1")
+      : (isSales ? "items_sales_only_v1" : "items_purchase_active_v3"),
     endpoint: "Items",
     params: {
       // Apenas itens ativos no SAP (Valid='tYES' e Frozen='tNO').

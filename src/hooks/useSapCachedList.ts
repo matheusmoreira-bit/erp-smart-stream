@@ -18,6 +18,8 @@ const CACHE_TTL_OVERRIDES: Record<string, number> = {
   items_active_v2: FIVE_MIN_MS,
   omie_categories_expense_v1: FIVE_MIN_MS,
   omie_categories_revenue_v1: FIVE_MIN_MS,
+  omie_purchase_products_v1: FIVE_MIN_MS,
+  omie_sales_products_v1: FIVE_MIN_MS,
   suppliers_active_v2: FIVE_MIN_MS,
   suppliers_active_v3: FIVE_MIN_MS,
   customers_active_v2: FIVE_MIN_MS,
@@ -326,7 +328,9 @@ export function useSapCachedList({
       // produtos e serviços. Normalizamos a resposta para o formato SAP-like
       // consumido pelos comboboxes existentes.
       if (session?.erpType?.toLowerCase() === "omie" && endpoint === "Items" && companyDB) {
-        const catalog = await omieListarProdutosServicos(companyDB, { forceRefresh });
+        const usage = itemUsageFromCacheKey(cacheKey);
+        const catalog = (await omieListarProdutosServicos(companyDB, { forceRefresh }))
+          .filter((item) => usage === "purchase" || usage === "sales" ? item.kind === "product" : true);
         const rows = catalog.map((item) => ({
           ItemCode: item.code,
           ItemName: `${item.kind === "product" ? "[Produto]" : "[Serviço]"} ${item.name}`,
