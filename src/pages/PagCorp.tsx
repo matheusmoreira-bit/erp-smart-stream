@@ -613,15 +613,23 @@ export default function PagCorp() {
     return map;
   }, [filteredTransactions]);
 
-  const openIntegrateDialog = async (t: PagCorpTransaction, type: "generic" | "accountability") => {
+  const openIntegrateDialog = async (
+    t: PagCorpTransaction,
+    type: "generic" | "accountability",
+    opts: { fallback?: boolean } = {},
+  ) => {
     if (!(await checkSapCredentials())) return;
-    const postingType = t.postingType || (t.hasFiscalDocument ? "purchase_order" : "journal_entry");
+    // Fallback (IA indisponível/falhou): assume Pedido de Compra e deixa o
+    // usuário trocar para LCM dentro do próprio modal de despesa.
+    const postingType = t.postingType
+      || (t.hasFiscalDocument ? "purchase_order" : opts.fallback ? "purchase_order" : "journal_entry");
     if (type === "accountability" && postingType === "purchase_order") {
       setAccountabilityModal({ open: true, tx: t });
     } else {
       setIntegrateDialog({ open: true, tx: t, transactions: [t], type, postingType });
     }
   };
+
 
   const toggleSelect = (id: string | number) => {
     setSelectedIds((prev) => {
