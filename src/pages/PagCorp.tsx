@@ -705,12 +705,12 @@ export default function PagCorp() {
   const openIntegrateDialog = async (
     t: PagCorpTransaction,
     type: "generic" | "accountability",
-    opts: { fallback?: boolean } = {},
+    opts: { fallback?: boolean; forcePostingType?: "purchase_order" | "journal_entry" } = {},
   ) => {
     if (!(await checkSapCredentials())) return;
-    // Fallback (IA indisponível/falhou): assume Pedido de Compra e deixa o
-    // usuário trocar para LCM dentro do próprio modal de despesa.
-    const postingType = t.postingType
+    // O usuário sempre pode escolher o caminho, mesmo sem retorno da IA.
+    const postingType = opts.forcePostingType
+      || t.postingType
       || (t.hasFiscalDocument ? "purchase_order" : opts.fallback ? "purchase_order" : "journal_entry");
     if (type === "accountability" && postingType === "purchase_order") {
       setAccountabilityModal({ open: true, tx: t });
@@ -729,10 +729,13 @@ export default function PagCorp() {
     });
   };
 
+  // A seleção não depende mais da IA: o usuário decide o caminho no modal.
   const selectableTransactions = useMemo(
-    () => filteredTransactions.filter((t) => !t.integrated && !t.isReversed && t.documentAnalysisStatus === "completed"),
+    () => filteredTransactions.filter((t) => !t.integrated && !t.isReversed),
     [filteredTransactions],
   );
+
+
 
   const allSelected =
     selectableTransactions.length > 0 &&
