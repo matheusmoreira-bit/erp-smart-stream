@@ -1731,20 +1731,47 @@ export default function PagCorp() {
                               <Loader2 className="w-3 h-3 animate-spin" /> Status
                             </span>
                           ) : !aiEligible ? null : t.documentAnalysisStatus === "error" ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-1 text-xs"
-                              title={t.documentAnalysisError || undefined}
-                              onClick={() => session?.companyDB && classifyDocuments(t, session.companyDB, { force: true })}
-                            >
-                              <RefreshCw className="w-3 h-3" /> Reanalisar
-                            </Button>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="gap-1 text-xs"
+                                title={t.documentAnalysisError || undefined}
+                                onClick={() => session?.companyDB && classifyDocuments(t, session.companyDB, { force: true })}
+                              >
+                                <RefreshCw className="w-3 h-3" /> Reanalisar
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-1 text-xs"
+                                title="Seguir sem a leitura da IA — escolha Pedido de Compra ou LCM no modal"
+                                onClick={() =>
+                                  openIntegrateDialog(t, t.hasAccountability ? "accountability" : "generic", { fallback: true })
+                                }
+                              >
+                                <Upload className="w-3 h-3" /> Integrar mesmo assim
+                              </Button>
+                            </div>
                           ) : t.documentAnalysisStatus !== "completed" ? (
-                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                              <Loader2 className="w-3 h-3 animate-spin" /> Leitura IA
-                            </span>
+                            <div className="flex items-center justify-end gap-2">
+                              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                <Loader2 className="w-3 h-3 animate-spin" /> Leitura IA
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-xs"
+                                title="Não esperar a IA e lançar manualmente"
+                                onClick={() =>
+                                  openIntegrateDialog(t, t.hasAccountability ? "accountability" : "generic", { fallback: true })
+                                }
+                              >
+                                Lançar manual
+                              </Button>
+                            </div>
                           ) : t.hasAccountability ? (
+
                             <Button
                               variant="outline"
                               size="sm"
