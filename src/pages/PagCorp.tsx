@@ -1501,7 +1501,66 @@ export default function PagCorp() {
             </div>
           </motion.div>
         </div>
+
+        {/* Monitor da fila de leitura por IA */}
+        {aiQueueStats.total > 0 && (
+          <div className="max-w-7xl mx-auto mt-3">
+            <div className="glass-card p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium text-foreground">Fila de leitura por IA</span>
+                  <span className="text-xs text-muted-foreground">
+                    {aiQueueStats.completed}/{aiQueueStats.total} concluídas
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary" className="text-[10px] gap-1">
+                    {aiQueueStats.running > 0 && <Loader2 className="w-3 h-3 animate-spin" />}
+                    Processando: {aiQueueStats.running}
+                  </Badge>
+                  <Badge variant="outline" className="text-[10px]">Na fila: {aiQueueStats.pending}</Badge>
+                  <Badge variant="outline" className="text-[10px] border-success/40 text-success">
+                    Concluídas: {aiQueueStats.completed}
+                  </Badge>
+                  {aiQueueStats.errors > 0 && (
+                    <Badge variant="destructive" className="text-[10px]">Falhas: {aiQueueStats.errors}</Badge>
+                  )}
+                  {aiQueueStats.noFiles > 0 && (
+                    <Badge variant="outline" className="text-[10px]">Sem anexo: {aiQueueStats.noFiles}</Badge>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => setAiQueuePaused((p) => !p)}
+                    title="Pausar ou retomar o processamento automático da fila"
+                  >
+                    {aiQueuePaused ? "Retomar fila" : "Pausar fila"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1 text-xs"
+                    disabled={aiQueueStats.errors === 0 || reanalyzingIds.size > 0}
+                    onClick={handleReprocessQueueErrors}
+                  >
+                    <RefreshCw className={`w-3 h-3 ${reanalyzingIds.size > 0 ? "animate-spin" : ""}`} />
+                    Reprocessar falhas
+                  </Button>
+                </div>
+              </div>
+              <Progress value={aiQueueStats.progress} className="h-1.5 mt-3" />
+              <p className="text-[11px] text-muted-foreground mt-2">
+                {aiQueuePaused
+                  ? "Fila pausada — você pode lançar manualmente escolhendo Pedido de Compra ou LCM."
+                  : "Você não precisa esperar a IA: use “Lançar manual” em qualquer linha para escolher o caminho do lançamento."}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
+
 
       {/* Table */}
       <main className="flex-1 px-6 pb-8">
