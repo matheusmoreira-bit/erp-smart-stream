@@ -219,6 +219,21 @@ export async function classifyPagCorpDocuments(
     return result;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    if (previousCompleted) {
+      // Reprocessamento falhou: mantém (e regrava) o resultado anterior válido.
+      const restored: PagCorpDocumentClassification = {
+        ...previousCompleted,
+        errorMessage: `Reprocessamento falhou (${errorMessage}). Mantida a leitura anterior.`,
+      };
+      await persist(companyDb, transaction.id, {
+        status: "completed",
+        hasFiscalDocument: previousCompleted.hasFiscalDocument,
+        documentKinds: previousCompleted.documentKinds,
+        confidence: previousCompleted.confidence,
+        errorMessage: restored.errorMessage,
+      }).catch(() => undefined);
+      return restored;
+    }
     const result: PagCorpDocumentClassification = {
       status: "error",
       hasFiscalDocument: null,
@@ -230,3 +245,4 @@ export async function classifyPagCorpDocuments(
     return result;
   }
 }
+
