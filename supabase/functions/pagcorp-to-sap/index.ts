@@ -758,6 +758,7 @@ Deno.serve(async (req) => {
         ? formatPagCorpComments(customRemarks, 190)
         : description;
       const commonDimensions = {
+        BPLID: branchId,
         ...(journalEntry.costCenter ? { CostingCode: String(journalEntry.costCenter) } : {}),
         ...(journalEntry.project ? { ProjectCode: String(journalEntry.project) } : {}),
       };
