@@ -223,6 +223,8 @@ export default function PagCorp() {
   // True when modal close is programmatic (after success), so we don't cancel the batch
   const programmaticCloseRef = useRef(false);
   const classificationInflightRef = useRef(new Set<string | number>());
+  const [reanalyzingIds, setReanalyzingIds] = useState<Set<string | number>>(new Set());
+
 
   const handleStartDateChange = (value: string) => {
     setStartDate(value);
