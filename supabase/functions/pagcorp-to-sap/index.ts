@@ -168,6 +168,32 @@ async function assertItemsActive(sap: SapSession, itemCodes: string[]): Promise<
   }
 }
 
+/**
+ * Resolve a filial (BPLID) a ser usada nos documentos: preferimos a filial 1
+ * quando ela estiver ativa; caso contrário, a primeira filial ativa da empresa.
+ * Se a consulta falhar, mantemos o valor configurado (fallback 1).
+ */
+async function resolveActiveBranchId(sap: SapSession, preferred: number): Promise<number> {
+  try {
+    const url = `${sap.baseUrl}/BusinessPlaces?$select=BPLID,Disabled&$orderby=BPLID`;
+    const res = await fetch(url, { headers: { Cookie: sap.cookies } });
+    if (!res.ok) return preferred;
+    const body = await res.json().catch(() => null);
+    const rows: any[] = Array.isArray(body?.value) ? body.value : [];
+    const active = rows
+      .filter((r) => String(r?.Disabled ?? "tNO") !== "tYES")
+      .map((r) => Number(r?.BPLID))
+      .filter((n) => Number.isFinite(n) && n > 0)
+      .sort((a, b) => a - b);
+    if (active.length === 0) return preferred;
+    return active.includes(preferred) ? preferred : active[0];
+  } catch {
+    return preferred;
+  }
+}
+
+
+
 
 async function uploadAttachmentsToSap(
   sap: SapSession,
@@ -593,7 +619,8 @@ Deno.serve(async (req) => {
     // (Pagamento desabilitado: integração agora cria apenas o Pedido de Compra)
 
     const configuredBranch = Number(sapCreds.default_branch_id || "");
-    const branchId = Number.isFinite(configuredBranch) && configuredBranch > 0 ? configuredBranch : 1;
+    const preferredBranch = Number.isFinite(configuredBranch) && configuredBranch > 0 ? configuredBranch : 1;
+    const branchId = await resolveActiveBranchId(sap, preferredBranch);
 
     // Parse custom fields (UDFs) from credentials: header / line scope
     const headerCustom: Record<string, unknown> = {};
@@ -731,6 +758,7 @@ Deno.serve(async (req) => {
         ? formatPagCorpComments(customRemarks, 190)
         : description;
       const commonDimensions = {
+        BPLID: branchId,
         ...(journalEntry.costCenter ? { CostingCode: String(journalEntry.costCenter) } : {}),
         ...(journalEntry.project ? { ProjectCode: String(journalEntry.project) } : {}),
       };
@@ -759,6 +787,7 @@ Deno.serve(async (req) => {
           {
             AccountCode: String(journalEntry.creditAccount),
             LineMemo: truncateSapText(journalMemo, 50),
+            BPLID: branchId,
             ...(isForeignCurrency ? { FCCredit: amount, FCCurrency: currency } : { Credit: amount }),
           },
         ],
