@@ -274,49 +274,6 @@ export default function PagCorp() {
     }
   }, [classifyDocuments, session?.companyDB, transactions, aiQueuePaused]);
 
-  /** Estatísticas da fila de leitura por IA (monitor). */
-  const aiQueueStats = useMemo(() => {
-    const eligible = filteredTransactions.filter(
-      (t) => isPagCorpAiEligible(t) && !t.integrated && !t.isReversed,
-    );
-    const withFiles = eligible.filter(
-      (t) => (t.receipts?.length || 0) > 0 || (t.attachments?.length || 0) > 0,
-    );
-    const completed = eligible.filter((t) => t.documentAnalysisStatus === "completed").length;
-    const errors = eligible.filter((t) => t.documentAnalysisStatus === "error");
-    const pending = withFiles.filter(
-      (t) => !t.documentAnalysisStatus || t.documentAnalysisStatus === "pending",
-    );
-    const noFiles = eligible.filter(
-      (t) =>
-        (t.receipts?.length || 0) === 0 &&
-        (t.attachments?.length || 0) === 0 &&
-        t.documentAnalysisStatus !== "completed" &&
-        t.documentAnalysisStatus !== "error",
-    ).length;
-    const total = eligible.length;
-    return {
-      total,
-      completed,
-      errors: errors.length,
-      errorList: errors,
-      pending: pending.length,
-      noFiles,
-      running: aiQueueRunning,
-      progress: total > 0 ? Math.round(((completed + errors.length) / total) * 100) : 100,
-    };
-  }, [filteredTransactions, aiQueueRunning]);
-
-  /** Reprocessa em série todas as leituras que falharam. */
-  const handleReprocessQueueErrors = async () => {
-    const list = aiQueueStats.errorList;
-    if (!list.length) return;
-    toast.info(`Reprocessando ${list.length} leitura(s) com falha...`);
-    for (const t of list) {
-      // eslint-disable-next-line no-await-in-loop
-      await handleReanalyze(t);
-    }
-  };
 
 
   const handleRefresh = () => fetchTransactions(startDate, endDate, session?.companyDB);
@@ -587,6 +544,50 @@ export default function PagCorp() {
    * consolidado no SAP. Renderizamos um cabeçalho colapsável para tornar isso
    * óbvio no leitor.
    */
+  /** Estatísticas da fila de leitura por IA (monitor). */
+  const aiQueueStats = useMemo(() => {
+    const eligible = filteredTransactions.filter(
+      (t) => isPagCorpAiEligible(t) && !t.integrated && !t.isReversed,
+    );
+    const withFiles = eligible.filter(
+      (t) => (t.receipts?.length || 0) > 0 || (t.attachments?.length || 0) > 0,
+    );
+    const completed = eligible.filter((t) => t.documentAnalysisStatus === "completed").length;
+    const errors = eligible.filter((t) => t.documentAnalysisStatus === "error");
+    const pending = withFiles.filter(
+      (t) => !t.documentAnalysisStatus || t.documentAnalysisStatus === "pending",
+    );
+    const noFiles = eligible.filter(
+      (t) =>
+        (t.receipts?.length || 0) === 0 &&
+        (t.attachments?.length || 0) === 0 &&
+        t.documentAnalysisStatus !== "completed" &&
+        t.documentAnalysisStatus !== "error",
+    ).length;
+    const total = eligible.length;
+    return {
+      total,
+      completed,
+      errors: errors.length,
+      errorList: errors,
+      pending: pending.length,
+      noFiles,
+      running: aiQueueRunning,
+      progress: total > 0 ? Math.round(((completed + errors.length) / total) * 100) : 100,
+    };
+  }, [filteredTransactions, aiQueueRunning]);
+
+  /** Reprocessa em série todas as leituras que falharam. */
+  const handleReprocessQueueErrors = async () => {
+    const list = aiQueueStats.errorList;
+    if (!list.length) return;
+    toast.info(`Reprocessando ${list.length} leitura(s) com falha...`);
+    for (const t of list) {
+      // eslint-disable-next-line no-await-in-loop
+      await handleReanalyze(t);
+    }
+  };
+
   const rowItems = useMemo(() => {
     const groupKeyOf = (t: PagCorpTransaction): string | null => {
       if (!t.integrated) return null;
