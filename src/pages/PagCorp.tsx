@@ -223,6 +223,8 @@ export default function PagCorp() {
   // True when modal close is programmatic (after success), so we don't cancel the batch
   const programmaticCloseRef = useRef(false);
   const classificationInflightRef = useRef(new Set<string | number>());
+  const [reanalyzingIds, setReanalyzingIds] = useState<Set<string | number>>(new Set());
+
 
   const handleStartDateChange = (value: string) => {
     setStartDate(value);
@@ -268,6 +270,42 @@ export default function PagCorp() {
   }, [classifyDocuments, session?.companyDB, transactions]);
 
   const handleRefresh = () => fetchTransactions(startDate, endDate, session?.companyDB);
+
+  /**
+   * Reprocessa a leitura de anexos por IA de UMA transação.
+   * Não descarta o que já foi classificado: se o reprocessamento falhar, a
+   * classificação anterior (se houver) é mantida em tela e no banco.
+   */
+  const handleReanalyze = async (t: PagCorpTransaction) => {
+    const companyDb = session?.companyDB;
+    if (!companyDb || reanalyzingIds.has(t.id)) return;
+    setReanalyzingIds((prev) => new Set(prev).add(t.id));
+    try {
+      const result = await classifyDocuments(t, companyDb, { force: true });
+      if (result.status === "completed" && !result.errorMessage) {
+        toast.success("Leitura da IA concluída", {
+          description: result.hasFiscalDocument
+            ? "Documento fiscal identificado — sugerido Pedido de Compra."
+            : "Sem documento fiscal — sugerido Lançamento Contábil (LCM).",
+        });
+      } else if (result.errorMessage && result.status === "completed") {
+        toast.warning("Reprocessamento falhou — leitura anterior mantida", {
+          description: result.errorMessage,
+        });
+      } else {
+        toast.error("Não foi possível ler os anexos com a IA", {
+          description: result.errorMessage || "Tente novamente ou siga com o lançamento manual.",
+        });
+      }
+    } finally {
+      setReanalyzingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(t.id);
+        return next;
+      });
+    }
+  };
+
 
   // Dispara a baixa automática (Pagamento de Fornecedor no SAP) para uma
   // transação já integrada. O watcher só emite baixa se o PC já estiver
@@ -1736,11 +1774,17 @@ export default function PagCorp() {
                                 variant="ghost"
                                 size="sm"
                                 className="gap-1 text-xs"
-                                title={t.documentAnalysisError || undefined}
-                                onClick={() => session?.companyDB && classifyDocuments(t, session.companyDB, { force: true })}
+                                disabled={reanalyzingIds.has(t.id)}
+                                title={t.documentAnalysisError || "Reprocessar a leitura dos anexos com a IA"}
+                                onClick={() => handleReanalyze(t)}
                               >
-                                <RefreshCw className="w-3 h-3" /> Reanalisar
+                                {reanalyzingIds.has(t.id) ? (
+                                  <><Loader2 className="w-3 h-3 animate-spin" /> Reprocessando</>
+                                ) : (
+                                  <><RefreshCw className="w-3 h-3" /> Reprocessar IA</>
+                                )}
                               </Button>
+
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -1770,28 +1814,42 @@ export default function PagCorp() {
                                 Lançar manual
                               </Button>
                             </div>
-                          ) : t.hasAccountability ? (
-
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-1 text-xs"
-                              onClick={() => openIntegrateDialog(t, "accountability")}
-                            >
-                              <Sparkles className="w-3 h-3" />
-                              Integrar ao ERP
-                            </Button>
                           ) : (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-1 text-xs"
-                              onClick={() => openIntegrateDialog(t, "generic")}
-                            >
-                              <Upload className="w-3 h-3" />
-                              Integrar ao ERP
-                            </Button>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                disabled={reanalyzingIds.has(t.id)}
+                                title={t.documentAnalysisError || "Reprocessar a leitura dos anexos com a IA"}
+                                onClick={() => handleReanalyze(t)}
+                              >
+                                <RefreshCw className={`w-3 h-3 ${reanalyzingIds.has(t.id) ? "animate-spin" : ""}`} />
+                              </Button>
+                              {t.hasAccountability ? (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-1 text-xs"
+                                  onClick={() => openIntegrateDialog(t, "accountability")}
+                                >
+                                  <Sparkles className="w-3 h-3" />
+                                  Integrar ao ERP
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-1 text-xs"
+                                  onClick={() => openIntegrateDialog(t, "generic")}
+                                >
+                                  <Upload className="w-3 h-3" />
+                                  Integrar ao ERP
+                                </Button>
+                              )}
+                            </div>
                           )}
+
                         </TableCell>
                       </TableRow>
                       );

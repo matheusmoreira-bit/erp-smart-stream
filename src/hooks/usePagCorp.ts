@@ -716,9 +716,12 @@ export function usePagCorp() {
         confidence: null,
       };
     }
+    // Mantém a classificação anterior visível enquanto reprocessa — só o
+    // status muda para "processing".
     setTransactions((current) => current.map((item) =>
       item.id === transaction.id ? { ...item, documentAnalysisStatus: "processing", documentAnalysisError: null } : item
     ));
+    const previous = { hasFiscalDocument: transaction.hasFiscalDocument, documentKinds: transaction.documentKinds, postingType: transaction.postingType };
     const result = await classifyPagCorpDocuments(transaction, companyDb, options).catch((error) => ({
       status: "error" as const,
       hasFiscalDocument: null,
@@ -731,14 +734,20 @@ export function usePagCorp() {
       ? {
           ...item,
           documentAnalysisStatus: result.status,
-          hasFiscalDocument: result.hasFiscalDocument,
-          documentKinds: result.documentKinds,
+          // Falha no reprocessamento não apaga o que já havia sido classificado.
+          hasFiscalDocument: result.status === "error" ? previous.hasFiscalDocument ?? null : result.hasFiscalDocument,
+          documentKinds: result.status === "error" ? previous.documentKinds ?? [] : result.documentKinds,
           documentAnalysisError: result.errorMessage ?? null,
-          postingType: result.hasFiscalDocument ? "purchase_order" : result.status === "completed" ? "journal_entry" : undefined,
+          postingType: result.hasFiscalDocument
+            ? "purchase_order"
+            : result.status === "completed"
+              ? "journal_entry"
+              : previous.postingType,
         }
       : item));
     return result;
   }, []);
+
 
 
   /**
