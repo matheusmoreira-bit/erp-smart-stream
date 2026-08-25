@@ -787,6 +787,7 @@ Deno.serve(async (req) => {
           {
             AccountCode: String(journalEntry.creditAccount),
             LineMemo: truncateSapText(journalMemo, 50),
+            BPLID: branchId,
             ...(isForeignCurrency ? { FCCredit: amount, FCCurrency: currency } : { Credit: amount }),
           },
         ],
