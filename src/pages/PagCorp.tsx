@@ -1814,28 +1814,42 @@ export default function PagCorp() {
                                 Lançar manual
                               </Button>
                             </div>
-                          ) : t.hasAccountability ? (
-
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-1 text-xs"
-                              onClick={() => openIntegrateDialog(t, "accountability")}
-                            >
-                              <Sparkles className="w-3 h-3" />
-                              Integrar ao ERP
-                            </Button>
                           ) : (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-1 text-xs"
-                              onClick={() => openIntegrateDialog(t, "generic")}
-                            >
-                              <Upload className="w-3 h-3" />
-                              Integrar ao ERP
-                            </Button>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                disabled={reanalyzingIds.has(t.id)}
+                                title={t.documentAnalysisError || "Reprocessar a leitura dos anexos com a IA"}
+                                onClick={() => handleReanalyze(t)}
+                              >
+                                <RefreshCw className={`w-3 h-3 ${reanalyzingIds.has(t.id) ? "animate-spin" : ""}`} />
+                              </Button>
+                              {t.hasAccountability ? (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-1 text-xs"
+                                  onClick={() => openIntegrateDialog(t, "accountability")}
+                                >
+                                  <Sparkles className="w-3 h-3" />
+                                  Integrar ao ERP
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-1 text-xs"
+                                  onClick={() => openIntegrateDialog(t, "generic")}
+                                >
+                                  <Upload className="w-3 h-3" />
+                                  Integrar ao ERP
+                                </Button>
+                              )}
+                            </div>
                           )}
+
                         </TableCell>
                       </TableRow>
                       );
