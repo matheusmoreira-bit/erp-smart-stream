@@ -137,10 +137,13 @@ export async function classifyPagCorpDocuments(
     };
   }
 
-  if (!options.force) {
-    const persisted = await readPersisted(companyDb, transaction.id);
-    if (persisted) return persisted;
-  }
+  // Sempre lemos o que já existe: sem `force` serve de cache; com `force`
+  // serve de rede de proteção — se o reprocessamento falhar, restauramos a
+  // classificação anterior em vez de perdê-la.
+  const persisted = await readPersisted(companyDb, transaction.id);
+  if (!options.force && persisted) return persisted;
+  const previousCompleted = persisted?.status === "completed" ? persisted : null;
+
 
   const attachments = collectPagCorpAttachments(transaction);
   try {
