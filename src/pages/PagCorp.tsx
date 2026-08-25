@@ -271,6 +271,42 @@ export default function PagCorp() {
 
   const handleRefresh = () => fetchTransactions(startDate, endDate, session?.companyDB);
 
+  /**
+   * Reprocessa a leitura de anexos por IA de UMA transação.
+   * Não descarta o que já foi classificado: se o reprocessamento falhar, a
+   * classificação anterior (se houver) é mantida em tela e no banco.
+   */
+  const handleReanalyze = async (t: PagCorpTransaction) => {
+    const companyDb = session?.companyDB;
+    if (!companyDb || reanalyzingIds.has(t.id)) return;
+    setReanalyzingIds((prev) => new Set(prev).add(t.id));
+    try {
+      const result = await classifyDocuments(t, companyDb, { force: true });
+      if (result.status === "completed" && !result.errorMessage) {
+        toast.success("Leitura da IA concluída", {
+          description: result.hasFiscalDocument
+            ? "Documento fiscal identificado — sugerido Pedido de Compra."
+            : "Sem documento fiscal — sugerido Lançamento Contábil (LCM).",
+        });
+      } else if (result.errorMessage && result.status === "completed") {
+        toast.warning("Reprocessamento falhou — leitura anterior mantida", {
+          description: result.errorMessage,
+        });
+      } else {
+        toast.error("Não foi possível ler os anexos com a IA", {
+          description: result.errorMessage || "Tente novamente ou siga com o lançamento manual.",
+        });
+      }
+    } finally {
+      setReanalyzingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(t.id);
+        return next;
+      });
+    }
+  };
+
+
   // Dispara a baixa automática (Pagamento de Fornecedor no SAP) para uma
   // transação já integrada. O watcher só emite baixa se o PC já estiver
   // fechado (indicando NF de entrada lançada); do contrário retorna
