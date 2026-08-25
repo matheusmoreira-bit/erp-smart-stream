@@ -39,6 +39,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -224,6 +225,9 @@ export default function PagCorp() {
   const programmaticCloseRef = useRef(false);
   const classificationInflightRef = useRef(new Set<string | number>());
   const [reanalyzingIds, setReanalyzingIds] = useState<Set<string | number>>(new Set());
+  // Monitor da fila de leitura por IA
+  const [aiQueueRunning, setAiQueueRunning] = useState(0);
+  const [aiQueuePaused, setAiQueuePaused] = useState(false);
 
 
   const handleStartDateChange = (value: string) => {
@@ -253,7 +257,7 @@ export default function PagCorp() {
 
   useEffect(() => {
     const companyDb = session?.companyDB;
-    if (!companyDb) return;
+    if (!companyDb || aiQueuePaused) return;
     const pending = transactions.filter((transaction) =>
       isPagCorpAiEligible(transaction) &&
       (!transaction.documentAnalysisStatus || transaction.documentAnalysisStatus === "pending") &&
@@ -263,11 +267,15 @@ export default function PagCorp() {
     const availableSlots = Math.max(0, 3 - classificationInflightRef.current.size);
     for (const transaction of pending.slice(0, availableSlots)) {
       classificationInflightRef.current.add(transaction.id);
+      setAiQueueRunning(classificationInflightRef.current.size);
       void classifyDocuments(transaction, companyDb).finally(() => {
         classificationInflightRef.current.delete(transaction.id);
+        setAiQueueRunning(classificationInflightRef.current.size);
       });
     }
-  }, [classifyDocuments, session?.companyDB, transactions]);
+  }, [classifyDocuments, session?.companyDB, transactions, aiQueuePaused]);
+
+
 
   const handleRefresh = () => fetchTransactions(startDate, endDate, session?.companyDB);
 
@@ -537,6 +545,50 @@ export default function PagCorp() {
    * consolidado no SAP. Renderizamos um cabeçalho colapsável para tornar isso
    * óbvio no leitor.
    */
+  /** Estatísticas da fila de leitura por IA (monitor). */
+  const aiQueueStats = useMemo(() => {
+    const eligible = filteredTransactions.filter(
+      (t) => isPagCorpAiEligible(t) && !t.integrated && !t.isReversed,
+    );
+    const withFiles = eligible.filter(
+      (t) => (t.receipts?.length || 0) > 0 || (t.attachments?.length || 0) > 0,
+    );
+    const completed = eligible.filter((t) => t.documentAnalysisStatus === "completed").length;
+    const errors = eligible.filter((t) => t.documentAnalysisStatus === "error");
+    const pending = withFiles.filter(
+      (t) => !t.documentAnalysisStatus || t.documentAnalysisStatus === "pending",
+    );
+    const noFiles = eligible.filter(
+      (t) =>
+        (t.receipts?.length || 0) === 0 &&
+        (t.attachments?.length || 0) === 0 &&
+        t.documentAnalysisStatus !== "completed" &&
+        t.documentAnalysisStatus !== "error",
+    ).length;
+    const total = eligible.length;
+    return {
+      total,
+      completed,
+      errors: errors.length,
+      errorList: errors,
+      pending: pending.length,
+      noFiles,
+      running: aiQueueRunning,
+      progress: total > 0 ? Math.round(((completed + errors.length) / total) * 100) : 100,
+    };
+  }, [filteredTransactions, aiQueueRunning]);
+
+  /** Reprocessa em série todas as leituras que falharam. */
+  const handleReprocessQueueErrors = async () => {
+    const list = aiQueueStats.errorList;
+    if (!list.length) return;
+    toast.info(`Reprocessando ${list.length} leitura(s) com falha...`);
+    for (const t of list) {
+      // eslint-disable-next-line no-await-in-loop
+      await handleReanalyze(t);
+    }
+  };
+
   const rowItems = useMemo(() => {
     const groupKeyOf = (t: PagCorpTransaction): string | null => {
       if (!t.integrated) return null;
@@ -654,12 +706,12 @@ export default function PagCorp() {
   const openIntegrateDialog = async (
     t: PagCorpTransaction,
     type: "generic" | "accountability",
-    opts: { fallback?: boolean } = {},
+    opts: { fallback?: boolean; forcePostingType?: "purchase_order" | "journal_entry" } = {},
   ) => {
     if (!(await checkSapCredentials())) return;
-    // Fallback (IA indisponível/falhou): assume Pedido de Compra e deixa o
-    // usuário trocar para LCM dentro do próprio modal de despesa.
-    const postingType = t.postingType
+    // O usuário sempre pode escolher o caminho, mesmo sem retorno da IA.
+    const postingType = opts.forcePostingType
+      || t.postingType
       || (t.hasFiscalDocument ? "purchase_order" : opts.fallback ? "purchase_order" : "journal_entry");
     if (type === "accountability" && postingType === "purchase_order") {
       setAccountabilityModal({ open: true, tx: t });
@@ -678,10 +730,13 @@ export default function PagCorp() {
     });
   };
 
+  // A seleção não depende mais da IA: o usuário decide o caminho no modal.
   const selectableTransactions = useMemo(
-    () => filteredTransactions.filter((t) => !t.integrated && !t.isReversed && t.documentAnalysisStatus === "completed"),
+    () => filteredTransactions.filter((t) => !t.integrated && !t.isReversed),
     [filteredTransactions],
   );
+
+
 
   const allSelected =
     selectableTransactions.length > 0 &&
@@ -1447,7 +1502,66 @@ export default function PagCorp() {
             </div>
           </motion.div>
         </div>
+
+        {/* Monitor da fila de leitura por IA */}
+        {aiQueueStats.total > 0 && (
+          <div className="max-w-7xl mx-auto mt-3">
+            <div className="glass-card p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium text-foreground">Fila de leitura por IA</span>
+                  <span className="text-xs text-muted-foreground">
+                    {aiQueueStats.completed}/{aiQueueStats.total} concluídas
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary" className="text-[10px] gap-1">
+                    {aiQueueStats.running > 0 && <Loader2 className="w-3 h-3 animate-spin" />}
+                    Processando: {aiQueueStats.running}
+                  </Badge>
+                  <Badge variant="outline" className="text-[10px]">Na fila: {aiQueueStats.pending}</Badge>
+                  <Badge variant="outline" className="text-[10px] border-success/40 text-success">
+                    Concluídas: {aiQueueStats.completed}
+                  </Badge>
+                  {aiQueueStats.errors > 0 && (
+                    <Badge variant="destructive" className="text-[10px]">Falhas: {aiQueueStats.errors}</Badge>
+                  )}
+                  {aiQueueStats.noFiles > 0 && (
+                    <Badge variant="outline" className="text-[10px]">Sem anexo: {aiQueueStats.noFiles}</Badge>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => setAiQueuePaused((p) => !p)}
+                    title="Pausar ou retomar o processamento automático da fila"
+                  >
+                    {aiQueuePaused ? "Retomar fila" : "Pausar fila"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1 text-xs"
+                    disabled={aiQueueStats.errors === 0 || reanalyzingIds.size > 0}
+                    onClick={handleReprocessQueueErrors}
+                  >
+                    <RefreshCw className={`w-3 h-3 ${reanalyzingIds.size > 0 ? "animate-spin" : ""}`} />
+                    Reprocessar falhas
+                  </Button>
+                </div>
+              </div>
+              <Progress value={aiQueueStats.progress} className="h-1.5 mt-3" />
+              <p className="text-[11px] text-muted-foreground mt-2">
+                {aiQueuePaused
+                  ? "Fila pausada — você pode lançar manualmente escolhendo Pedido de Compra ou LCM."
+                  : "Você não precisa esperar a IA: use “Lançar manual” em qualquer linha para escolher o caminho do lançamento."}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
+
 
       {/* Table */}
       <main className="flex-1 px-6 pb-8">
@@ -1503,7 +1617,7 @@ export default function PagCorp() {
                         data-state={isSelected ? "selected" : undefined}
                       >
                         <TableCell className="w-10">
-                          {!t.integrated && !t.isReversed && t.documentAnalysisStatus === "completed" && (
+                          {!t.integrated && !t.isReversed && (
                             <Checkbox
                               checked={isSelected}
                               onCheckedChange={() => toggleSelect(t.id)}
@@ -1768,53 +1882,65 @@ export default function PagCorp() {
                             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                               <Loader2 className="w-3 h-3 animate-spin" /> Status
                             </span>
-                          ) : !aiEligible ? null : t.documentAnalysisStatus === "error" ? (
+                          ) : !aiEligible ? null : t.documentAnalysisStatus !== "completed" ? (
                             <div className="flex items-center justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="gap-1 text-xs"
-                                disabled={reanalyzingIds.has(t.id)}
-                                title={t.documentAnalysisError || "Reprocessar a leitura dos anexos com a IA"}
-                                onClick={() => handleReanalyze(t)}
-                              >
-                                {reanalyzingIds.has(t.id) ? (
-                                  <><Loader2 className="w-3 h-3 animate-spin" /> Reprocessando</>
-                                ) : (
-                                  <><RefreshCw className="w-3 h-3" /> Reprocessar IA</>
-                                )}
-                              </Button>
-
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="gap-1 text-xs"
-                                title="Seguir sem a leitura da IA — escolha Pedido de Compra ou LCM no modal"
-                                onClick={() =>
-                                  openIntegrateDialog(t, t.hasAccountability ? "accountability" : "generic", { fallback: true })
-                                }
-                              >
-                                <Upload className="w-3 h-3" /> Integrar mesmo assim
-                              </Button>
-                            </div>
-                          ) : t.documentAnalysisStatus !== "completed" ? (
-                            <div className="flex items-center justify-end gap-2">
-                              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                                <Loader2 className="w-3 h-3 animate-spin" /> Leitura IA
-                              </span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-xs"
-                                title="Não esperar a IA e lançar manualmente"
-                                onClick={() =>
-                                  openIntegrateDialog(t, t.hasAccountability ? "accountability" : "generic", { fallback: true })
-                                }
-                              >
-                                Lançar manual
-                              </Button>
+                              {t.documentAnalysisStatus === "error" ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="gap-1 text-xs"
+                                  disabled={reanalyzingIds.has(t.id)}
+                                  title={t.documentAnalysisError || "Reprocessar a leitura dos anexos com a IA"}
+                                  onClick={() => handleReanalyze(t)}
+                                >
+                                  {reanalyzingIds.has(t.id) ? (
+                                    <><Loader2 className="w-3 h-3 animate-spin" /> Reprocessando</>
+                                  ) : (
+                                    <><RefreshCw className="w-3 h-3" /> Reprocessar IA</>
+                                  )}
+                                </Button>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Loader2 className="w-3 h-3 animate-spin" /> Leitura IA
+                                </span>
+                              )}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-1 text-xs"
+                                    title="Não esperar a IA — escolha o caminho do lançamento"
+                                  >
+                                    <Upload className="w-3 h-3" /> Lançar manual
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      openIntegrateDialog(t, t.hasAccountability ? "accountability" : "generic", {
+                                        fallback: true,
+                                        forcePostingType: "purchase_order",
+                                      })
+                                    }
+                                  >
+                                    Pedido de Compra
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      openIntegrateDialog(t, "generic", {
+                                        fallback: true,
+                                        forcePostingType: "journal_entry",
+                                      })
+                                    }
+                                  >
+                                    Lançamento contábil (LCM)
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           ) : (
+
                             <div className="flex items-center justify-end gap-1">
                               <Button
                                 variant="ghost"
