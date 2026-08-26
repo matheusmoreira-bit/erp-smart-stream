@@ -30,6 +30,9 @@ const CACHE_TTL_OVERRIDES: Record<string, number> = {
   cost_centers_all: THIRTY_MIN_MS,
   projects: THIRTY_MIN_MS,
   projects_all: THIRTY_MIN_MS,
+  // Formas de pagamento: sincronizadas por empresa a cada 12h (cron
+  // `sap-payment-terms-sync`); o cliente respeita a mesma janela.
+  payment_terms_v1: TWELVE_HOURS_MS,
 };
 
 const getCacheTtlMs = (key: string) => CACHE_TTL_OVERRIDES[key] ?? DEFAULT_CACHE_TTL_MS;
