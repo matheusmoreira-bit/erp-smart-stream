@@ -199,7 +199,7 @@ export function useIdpSync(provider: IdpProvider = "jumpcloud") {
         const user = usersById.get(mapping.idp_user_id as string);
         return user ? { ...mapping, idp_provider: provider, ...idpAttributes(user), attributes_synced_at: now } : null;
       })
-      .filter((row): row is IdpMapping & Record<string, unknown> => row !== null);
+      .filter((row): row is NonNullable<typeof row> => row !== null);
     await persistRows(rows);
     return rows.length;
   }, [idpUsers, mappings, persistRows, provider]);

@@ -76,7 +76,7 @@ export async function createOktaClientAssertion(credentials: OktaCredentials, no
   try {
     privateKey = await crypto.subtle.importKey(
       "pkcs8",
-      pemToBytes(credentials.private_key),
+      pemToBytes(credentials.private_key).buffer as ArrayBuffer,
       { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
       false,
       ["sign"],

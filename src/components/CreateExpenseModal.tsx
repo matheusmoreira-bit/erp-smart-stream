@@ -2127,19 +2127,16 @@ export function CreateExpenseModal({
     setLoadingCurrencies(true);
     try {
       if (!sapSession) throw new Error("no session");
+      // A navegação `/BPCurrencies` não existe em todas as versões do Service
+      // Layer (erro 201 "invalid property"). Lemos a moeda direto do BP.
       const { data } = await sapQuery(
         sapSession,
-        `BusinessPartners('${encodeURIComponent(cardCode)}')/BPCurrencies`,
+        `BusinessPartners('${encodeURIComponent(cardCode)}')`,
         { $select: "Currency" },
       );
-      const rows = (data as any)?.value || (data as any) || [];
-      const list = Array.from(
-        new Set(
-          (Array.isArray(rows) ? rows : [])
-            .map((r: any) => String(r.Currency || "").trim().toUpperCase())
-            .filter((c: string) => /^[A-Z]{3}$/.test(c)),
-        ),
-      );
+      const raw = String((data as any)?.Currency || "").trim().toUpperCase();
+      const list = /^[A-Z]{3}$/.test(raw) ? [raw] : [];
+
       setCurrencyOptions(list.length > 0 ? list : DEFAULT_MULTI_CURRENCIES);
     } catch {
       setCurrencyOptions(DEFAULT_MULTI_CURRENCIES);

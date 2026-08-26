@@ -97,7 +97,6 @@ import { savePostLoginPath } from "@/lib/post-login-redirect";
 import { useNavigate } from "react-router-dom";
 import { ExpenseEventHistory } from "@/components/ExpenseEventHistory";
 import { SegmentFallbackAlert } from "@/components/SegmentFallbackAlert";
-import { ParallelTracksPanel } from "@/components/ParallelTracksPanel";
 
 import { SapPoDetails } from "@/components/SapPoDetails";
 import { SapPullbackDialog } from "@/components/SapPullbackDialog";
@@ -772,7 +771,6 @@ function ExpenseDetailModal({
 
             <SegmentFallbackAlert expenseId={expense.id} />
 
-            <ParallelTracksPanel expenseId={expense.id} />
 
 
             <ExpenseEventHistory expense={expense} refreshKey={expense.updated_at} />
