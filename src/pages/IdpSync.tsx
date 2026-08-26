@@ -45,7 +45,8 @@ export default function IdpSyncPage() {
   const { users: sapUsers, isLoading: sapLoading, toggleLock } = useSapUsers();
   const [urlParams] = useSearchParams();
   const focusUser = urlParams.get("user");
-  const [provider, setProvider] = useState<IdpProvider>("jumpcloud");
+  // Okta é o IdP ativo do grupo; o JumpCloud fica disponível apenas para consulta histórica.
+  const [provider, setProvider] = useState<IdpProvider>("okta");
   const providerLabel = IDP_PROVIDERS[provider].label;
   const {
     idpUsers,
