@@ -772,7 +772,6 @@ function ExpenseDetailModal({
 
             <SegmentFallbackAlert expenseId={expense.id} />
 
-            <ParallelTracksPanel expenseId={expense.id} />
 
 
             <ExpenseEventHistory expense={expense} refreshKey={expense.updated_at} />
