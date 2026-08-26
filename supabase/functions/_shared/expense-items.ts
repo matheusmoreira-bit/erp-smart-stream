@@ -38,12 +38,19 @@ export function normalizeExpenseItems(
   return input.map((raw, index) => {
     const item = (raw || {}) as Record<string, unknown>;
     const line = index + 1;
-    const description = String(item.description || "").trim();
+    const itemCode = String(item.item_code || "").trim();
+    // Descrição em branco não bloqueia mais a integração quando existe item
+    // cadastrado: o ERP usa o próprio nome do item na linha do documento.
+    const description =
+      String(item.description || "").trim() ||
+      String((item as Record<string, unknown>).item_name || "").trim() ||
+      itemCode;
     const quantity = Number(item.quantity);
     const unitPrice = Number(item.unit_price);
     const costCenter = String(item.cost_center || "").trim();
 
     if (!description) throw new Error(`Item ${line}: descrição é obrigatória.`);
+
     if (!Number.isFinite(quantity) || quantity <= 0) {
       throw new Error(`Item ${line}: quantidade deve ser maior que zero.`);
     }

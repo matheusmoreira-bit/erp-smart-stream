@@ -1469,7 +1469,10 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
           // Mantém a descrição do item vinda do SAP (não sobrescreve com a da NF).
           // A descrição vinda da NF vai para o campo "Texto Livre" (FreeText).
           line.ItemCode = it.item_code;
-          if (invoiceDesc) line.FreeText = invoiceDesc;
+          // Quando a linha não tinha descrição, o fallback é o próprio código do
+          // item — nesse caso não enviamos FreeText e o SAP usa o nome do item.
+          if (invoiceDesc && invoiceDesc !== it.item_code) line.FreeText = invoiceDesc;
+
         } else {
           // Linha de serviço: sem ItemCode, a descrição é o próprio texto do item.
           line.LineType = "dDocument_Service";
