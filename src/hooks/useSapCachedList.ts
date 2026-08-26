@@ -11,6 +11,7 @@ const DEFAULT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
 // Chaves com atualização mais frequente (dados que mudam com frequência no ERP)
 const FIVE_MIN_MS = 5 * 60 * 1000;
 const THIRTY_MIN_MS = 30 * 60 * 1000;
+const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
 const CACHE_TTL_OVERRIDES: Record<string, number> = {
   items_purchase_active_v3: FIVE_MIN_MS,
   items_purchase_active_v4: FIVE_MIN_MS,
@@ -29,6 +30,9 @@ const CACHE_TTL_OVERRIDES: Record<string, number> = {
   cost_centers_all: THIRTY_MIN_MS,
   projects: THIRTY_MIN_MS,
   projects_all: THIRTY_MIN_MS,
+  // Formas de pagamento: sincronizadas por empresa a cada 12h (cron
+  // `sap-payment-terms-sync`); o cliente respeita a mesma janela.
+  payment_terms_v1: TWELVE_HOURS_MS,
 };
 
 const getCacheTtlMs = (key: string) => CACHE_TTL_OVERRIDES[key] ?? DEFAULT_CACHE_TTL_MS;
