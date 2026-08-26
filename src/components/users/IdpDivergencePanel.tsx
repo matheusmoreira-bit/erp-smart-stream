@@ -1,18 +1,18 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, Loader2, ShieldOff, Link2Off, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import type { SapUser } from "@/lib/cache-repository";
-import type { IdpMapping, JumpCloudUser } from "@/hooks/useIdpSync";
+import type { IdpMapping, IdpProvider, IdpUser } from "@/hooks/useIdpSync";
 import { logAuditAction } from "@/hooks/useAuditLog";
 
-const IGNORE_KEY = "idp:divergences:ignored";
+const IGNORE_KEY_PREFIX = "idp:divergences:ignored";
 
-function loadIgnored(): Set<string> {
+function loadIgnored(provider: IdpProvider): Set<string> {
   try {
-    return new Set(JSON.parse(localStorage.getItem(IGNORE_KEY) || "[]") as string[]);
+    return new Set(JSON.parse(localStorage.getItem(`${IGNORE_KEY_PREFIX}:${provider}`) || "[]") as string[]);
   } catch {
     return new Set();
   }
@@ -49,8 +49,9 @@ const BUCKET_META: Record<Bucket, { title: string; hint: string; tone: string; i
 
 interface Props {
   sapUsers: SapUser[];
-  jcUsers: JumpCloudUser[];
+  idpUsers: IdpUser[];
   mappings: IdpMapping[];
+  provider: IdpProvider;
   companyDb?: string | null;
   onBlock: (user: SapUser) => Promise<void>;
   focusUser?: string | null;
@@ -60,14 +61,18 @@ interface Props {
  * Painel operacional de divergências IdP ↔ ERP: agrupa por estado,
  * permite resolver caso a caso ou em lote (bloqueio imediato no ERP).
  */
-export default function IdpDivergencePanel({ sapUsers, jcUsers, mappings, companyDb, onBlock, focusUser }: Props) {
+export default function IdpDivergencePanel({ sapUsers, idpUsers, mappings, provider, companyDb, onBlock, focusUser }: Props) {
   const navigate = useNavigate();
-  const [ignored, setIgnored] = useState<Set<string>>(loadIgnored);
+  const [ignored, setIgnored] = useState<Set<string>>(() => loadIgnored(provider));
   const [busy, setBusy] = useState<string | null>(null);
   const [bulkRunning, setBulkRunning] = useState(false);
 
+  useEffect(() => {
+    setIgnored(loadIgnored(provider));
+  }, [provider]);
+
   const rows = useMemo<Row[]>(() => {
-    const jcByEmail = new Map(jcUsers.map((j) => [(j.email || "").toLowerCase(), j]));
+    const idpByEmail = new Map(idpUsers.map((user) => [(user.email || "").toLowerCase(), user]));
     const mapByCode = new Map(mappings.map((m) => [m.sap_user_code, m]));
 
     const out: Row[] = [];
@@ -76,18 +81,18 @@ export default function IdpDivergencePanel({ sapUsers, jcUsers, mappings, compan
       if (ignored.has(user.UserCode)) continue;
 
       const mapping = mapByCode.get(user.UserCode);
-      const jc = user.eMail ? jcByEmail.get(user.eMail.toLowerCase()) : undefined;
+      const idpUser = user.eMail ? idpByEmail.get(user.eMail.toLowerCase()) : undefined;
 
-      if (mapping?.status === "disabled_by_idp" || (mapping?.status === "linked" && !jc && jcUsers.length > 0)) {
+      if (mapping?.status === "disabled_by_idp" || (mapping?.status === "linked" && !idpUser && idpUsers.length > 0)) {
         out.push({ user, bucket: "removed", idpEmail: mapping?.idp_email ?? null });
-      } else if (jc?.suspended) {
-        out.push({ user, bucket: "suspended", idpEmail: jc.email ?? null });
+      } else if (idpUser?.suspended) {
+        out.push({ user, bucket: "suspended", idpEmail: idpUser.email ?? null });
       } else if (!mapping || mapping.status !== "linked") {
         out.push({ user, bucket: "unlinked", idpEmail: null });
       }
     }
     return out;
-  }, [sapUsers, jcUsers, mappings, ignored]);
+  }, [sapUsers, idpUsers, mappings, ignored]);
 
   const grouped = useMemo(
     () => ({
@@ -102,7 +107,7 @@ export default function IdpDivergencePanel({ sapUsers, jcUsers, mappings, compan
     const next = new Set(ignored);
     next.add(code);
     setIgnored(next);
-    localStorage.setItem(IGNORE_KEY, JSON.stringify(Array.from(next)));
+    localStorage.setItem(`${IGNORE_KEY_PREFIX}:${provider}`, JSON.stringify(Array.from(next)));
     toast.success("Divergência marcada como esperada");
   };
 

@@ -3,7 +3,7 @@ import { CreditCard, Server, Users, Box, Cloud, Building2, Layers, FileInput, Sh
 export interface SystemField {
   key: string;
   label: string;
-  type?: "text" | "password" | "custom_fields" | "toggle";
+  type?: "text" | "password" | "textarea" | "custom_fields" | "toggle";
   placeholder?: string;
   description?: string;
 }
@@ -198,9 +198,44 @@ export const SYSTEMS: SystemConfig[] = [
     label: "JumpCloud",
     description: "Gestão de identidades e diretório de usuários",
     icon: Users,
+    category: "idp",
     fields: [
       { key: "api_key", label: "API Key", type: "password", placeholder: "Chave de API do JumpCloud", description: "Use uma API Key do JumpCloud com permissão para listar usuários. Se for uma conta MTP (multi-tenant), ative a opção abaixo e o sistema descobrirá automaticamente todas as organizations do tenant." },
       { key: "is_mtp", label: "Conta MTP (multi-tenant)", type: "toggle", description: "Ative se a API Key pertencer a um tenant MTP. O sistema chamará /api/organizations e listará usuários de todas as organizations. Deixe desligado para contas stand-alone." },
+    ],
+  },
+  {
+    name: "okta",
+    label: "Okta",
+    description: "Gestao de identidades via OAuth 2.0 Service App",
+    icon: ShieldCheck,
+    category: "idp",
+    fields: [
+      {
+        key: "org_url",
+        label: "URL da organizacao",
+        placeholder: "https://empresa.okta.com",
+        description: "Origem do tenant Okta, sem caminhos adicionais.",
+      },
+      {
+        key: "client_id",
+        label: "Client ID",
+        placeholder: "0oa...",
+        description: "Client ID do API Services App.",
+      },
+      {
+        key: "private_key",
+        label: "Chave privada PEM",
+        type: "textarea",
+        placeholder: "-----BEGIN PRIVATE KEY-----",
+        description: "Chave PKCS#8 correspondente a chave publica cadastrada no Service App.",
+      },
+      {
+        key: "key_id",
+        label: "Key ID (KID)",
+        placeholder: "Identificador da chave publica",
+        description: "Opcional quando o Service App possui uma unica chave publica; recomendado para rotacao de chaves.",
+      },
     ],
   },
   {
@@ -252,4 +287,5 @@ export const SYSTEMS: SystemConfig[] = [
 
 export const CATEGORY_LABELS: Record<string, string> = {
   erp: "ERP",
+  idp: "Provedores de identidade",
 };

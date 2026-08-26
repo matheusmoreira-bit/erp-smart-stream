@@ -8,6 +8,12 @@ export type PriorApproval = {
   substituted_for_email?: string | null;
 };
 
+export type ApprovalLogRow = PriorApproval & {
+  decision?: string | null;
+  created_at?: string | null;
+  remarks?: string | null;
+};
+
 export type ReprocessedApprovalState = {
   status: "pendente" | "aprovado";
   current_level: number;
@@ -21,11 +27,38 @@ export function priorApprovalsForSegment(
   segmentKey: string,
   documentApprovals: PriorApproval[],
 ): PriorApproval[] {
-  if (approvalsBySegment.size === 0) return documentApprovals;
-  return approvalsBySegment.get(segmentKey) || [];
+  const segmentApprovals = approvalsBySegment.get(segmentKey) || [];
+  return [...documentApprovals, ...segmentApprovals];
 }
 
-function approvalMatchesLevel(approval: PriorApproval, level: ApprovalLevel): boolean {
+/**
+ * Retorna as decisões válidas da revisão atual. Reprocessar regras não cria
+ * uma nova submissão e preserva as aprovações; editar, submeter novamente ou
+ * reativar o documento cria uma revisão e invalida decisões anteriores.
+ */
+export function activeRevisionApprovalsFromLogs(logs: ApprovalLogRow[]): PriorApproval[] {
+  const revisionDecisions = new Set(["created", "submitted", "reactivated"]);
+  let revisionStart = -1;
+  logs.forEach((row, index) => {
+    const editedRevision = String(row.remarks || "").toLowerCase()
+      .includes("atualização da versão anterior");
+    if (revisionDecisions.has(String(row.decision || "")) || editedRevision) {
+      revisionStart = index;
+    }
+  });
+
+  return logs
+    .slice(revisionStart + 1)
+    .filter((row) => row.decision === "approved")
+    .map((row) => ({
+      approver_name: row.approver_name,
+      approver_email: row.approver_email,
+      substituted_for_name: row.substituted_for_name,
+      substituted_for_email: row.substituted_for_email,
+    }));
+}
+
+export function approvalMatchesLevel(approval: PriorApproval, level: ApprovalLevel): boolean {
   const approvedIdentities = [
     approval.approver_email,
     approval.approver_name,
@@ -36,6 +69,15 @@ function approvalMatchesLevel(approval: PriorApproval, level: ApprovalLevel): bo
 
   return approvedIdentities.some((approved) =>
     levelIdentities.some((candidate) => identityMatches(approved, candidate))
+  );
+}
+
+export function approvalsSatisfyLevel(
+  approvals: PriorApproval[],
+  levels: ApprovalLevel[],
+): boolean {
+  return approvals.some((approval) =>
+    levels.some((level) => approvalMatchesLevel(approval, level))
   );
 }
 
@@ -69,9 +111,7 @@ export function resolveReprocessedApprovalState(
     );
     if (eligible.length === 0) continue;
 
-    const alreadyApproved = priorApprovals.some((approval) =>
-      eligible.some((level) => approvalMatchesLevel(approval, level))
-    );
+    const alreadyApproved = approvalsSatisfyLevel(priorApprovals, eligible);
     if (alreadyApproved) {
       preservedLevels.push(levelOrder);
       continue;

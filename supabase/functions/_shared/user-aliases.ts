@@ -121,6 +121,78 @@ export async function resolveCallerAliases(
   return aliases;
 }
 
+/** Expande identidades históricas em paralelo para reconciliar aprovações. */
+export async function resolveIdentityAliases(
+  admin: SupabaseClient,
+  identities: Array<string | null | undefined>,
+): Promise<Set<string>> {
+  const unique = Array.from(new Map(
+    identities
+      .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      .map((value) => [normalizeIdentity(value), value] as const)
+      .filter(([key]) => key.length > 0),
+  ).values()).slice(0, 100);
+  const aliases = new Set(unique.map(normalizeIdentity).filter(Boolean));
+  if (unique.length === 0) return aliases;
+
+  const emails = unique.filter((identity) => identity.includes("@")).map((email) => email.toLowerCase());
+  const userCodes = unique.filter((identity) => !identity.includes("@"));
+  const orParts = [
+    ...emails.flatMap((email) => {
+      const safeEmail = email.replace(/[,()]/g, "");
+      return [`idp_email.eq.${safeEmail}`, `sap_email.eq.${safeEmail}`];
+    }),
+    ...userCodes.map((code) => `sap_user_code.eq.${code.replace(/[,()]/g, "")}`),
+  ];
+  const safe = async <T>(promise: Promise<T>): Promise<T | null> => {
+    try { return await promise; } catch { return null; }
+  };
+  const add = (value?: string | null) => {
+    const normalized = normalizeIdentity(value);
+    if (normalized) aliases.add(normalized);
+  };
+
+  const [idpRes, directoryByEmail, profiles] = await Promise.all([
+    orParts.length
+      ? safe(admin.from("idp_user_mapping")
+          .select("sap_user_code, sap_email, idp_email")
+          .or(orParts.join(",")) as unknown as Promise<{ data: any[] | null }>)
+      : Promise.resolve(null),
+    emails.length
+      ? safe(admin.from("sap_user_emails")
+          .select("user_key, email")
+          .in("email", emails) as unknown as Promise<{ data: any[] | null }>)
+      : Promise.resolve(null),
+    emails.length
+      ? safe(admin.from("collaborator_profiles")
+          .select("user_code, email")
+          .in("email", emails) as unknown as Promise<{ data: any[] | null }>)
+      : Promise.resolve(null),
+  ]);
+  (idpRes?.data || []).forEach((row: Record<string, string | null>) => {
+    add(row.sap_user_code);
+    add(row.sap_email);
+    add(row.idp_email);
+  });
+  (directoryByEmail?.data || []).forEach((row: Record<string, string | null>) => {
+    add(row.user_key);
+    add(row.email);
+  });
+  (profiles?.data || []).forEach((row: Record<string, string | null>) => {
+    add(row.user_code);
+    add(row.email);
+  });
+
+  const directoryByKey = await safe(admin.from("sap_user_emails")
+    .select("user_key, email")
+    .in("user_key", Array.from(aliases)) as unknown as Promise<{ data: any[] | null }>);
+  (directoryByKey?.data || []).forEach((row: Record<string, string | null>) => {
+    add(row.user_key);
+    add(row.email);
+  });
+  return aliases;
+}
+
 export async function callerOwnsUserCode(
   admin: SupabaseClient,
   caller: { id?: string; email?: string; userName?: string },

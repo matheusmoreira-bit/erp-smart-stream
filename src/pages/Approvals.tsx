@@ -36,7 +36,7 @@ import { Badge } from "@/components/ui/badge";
 import { useApprovals, type ApprovalDoc, type DocumentLine } from "@/hooks/useApprovals";
 import { FilterMultiSelect } from "@/components/FilterMultiSelect";
 import { useExpenses, type Expense } from "@/hooks/useExpenses";
-import { useApprovalsFeed } from "@/hooks/useApprovalsFeed";
+import { useApprovalsFeed, type ApprovalFeedDoc } from "@/hooks/useApprovalsFeed";
 import { expenseRead } from "@/lib/expense-read";
 import { useMyRequests, type MyRequestDoc, type ApprovalHistoryEntry } from "@/hooks/useMyRequests";
 import { useLazyList } from "@/hooks/useLazyList";
@@ -324,6 +324,11 @@ function ApprovalCard({
           )}
           <div>
             <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(doc.docTotal, doc.currency)}</p>
+            {doc.viewerSegmented && (
+              <span className="text-[10px] font-medium uppercase text-emerald-600 dark:text-emerald-400">
+                Valor da sua alçada
+              </span>
+            )}
             {overdue && (
               <span className="text-[10px] font-medium text-destructive bg-destructive/10 px-2 py-0.5 rounded-full uppercase">
                 Vencido
@@ -773,7 +778,7 @@ function ApprovalDetailModal({
   // Máscara visual (blur) das partes de outros aprovadores — vale também para
   // admins/super, que podem alternar para o documento completo quando precisarem.
   const maskOtherSegments =
-    segmented && !specialRateio && mySegments.length > 0 && !showAllLines;
+    !doc?.viewerSegmented && segmented && !specialRateio && mySegments.length > 0 && !showAllLines;
 
   const visibleLines = doc?.documentLines || [];
 
@@ -826,6 +831,7 @@ function ApprovalDetailModal({
   const visibleTotal = maskOtherSegments
     ? mySegments.reduce((s, seg) => s + (doc?.currency !== "BRL" ? seg.amountFC : seg.amount), 0)
     : (doc?.docTotal || 0);
+  const persistedSegments = doc?.approvalSegments || [];
 
 
   // Sempre que troca de documento, pré-seleciona CCs mapeados (ou nenhum se não houver mapping)
@@ -982,7 +988,12 @@ function ApprovalDetailModal({
                   {doc.docTypeName}
                 </span>
                 <span className="font-mono text-sm sm:text-base">{docNumberLabel(doc)}</span>
-                <span className="text-lg sm:text-2xl font-bold font-mono ml-auto">{formatCurrency(doc.docTotal, doc.currency)}</span>
+                <span className="ml-auto text-right">
+                  {doc.viewerSegmented && (
+                    <span className="block text-[10px] font-medium uppercase text-muted-foreground">Valor da sua alçada</span>
+                  )}
+                  <span className="text-lg sm:text-2xl font-bold font-mono">{formatCurrency(visibleTotal, doc.currency)}</span>
+                </span>
               </DialogTitle>
             </DialogHeader>
 
@@ -1122,7 +1133,7 @@ function ApprovalDetailModal({
             </div>
 
             {/* Histórico detalhado — apenas para aprovações internas */}
-            {(doc as unknown as { __internalId?: string }).__internalId && (
+            {(doc as unknown as { __internalId?: string }).__internalId && !doc.viewerSegmented && (
               <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
                 <InternalApprovalHistory
                   expenseId={(doc as unknown as { __internalId: string }).__internalId}
@@ -1206,19 +1217,22 @@ function ApprovalDetailModal({
             {/* Alerta de alçada resolvida por fallback (segmentos sem regra própria) */}
             <SegmentFallbackAlert
               expenseId={(doc as unknown as { __internalId?: string }).__internalId}
+              segments={persistedSegments}
               formatCostCenter={formatCostCenter}
+              onReprocessed={() => { void onRetryRefresh(); }}
             />
 
             {/* Status das trilhas paralelas (regra padrão + reembolso) */}
             <ParallelTracksPanel
-              expenseId={(doc as unknown as { __internalId?: string }).__internalId}
+              segments={persistedSegments}
+              restrictedSegmentCount={doc.restrictedSegmentCount || 0}
               formatCostCenter={formatCostCenter}
             />
 
 
             {/* Painel de segmentação por regra */}
 
-            {segmented && (
+            {segmented && persistedSegments.length === 0 && (
               <div className="border border-primary/30 bg-primary/5 rounded-xl p-4 space-y-3">
                 <div className="flex items-center gap-2 flex-wrap">
                   <Split className="w-4 h-4 text-primary" />
@@ -1247,7 +1261,7 @@ function ApprovalDetailModal({
                 </p>
                 <div className="space-y-1.5">
                   {segments.map((seg) => {
-                    const isMine = mySegments.some((m) => m.costCenter === seg.costCenter);
+                    const isMine = mySegments.some((m) => m.segmentKey === seg.segmentKey);
                     const masked = maskOtherSegments && !isMine;
                     return (
                       <div
@@ -1398,6 +1412,19 @@ function ApprovalDetailModal({
                           </tr>
                         );
                       })}
+                      {(doc.restrictedItemCount || 0) > 0 && (
+                        <tr className="border-b border-border/50 bg-muted/10">
+                          <td colSpan={7} className="px-3 py-3">
+                            <div className="flex items-center gap-3" aria-label="Itens de outras ramificações com detalhes restritos">
+                              <div className="h-3 flex-1 rounded bg-muted-foreground/10" />
+                              <span className="shrink-0 text-[10px] font-semibold uppercase text-muted-foreground">
+                                {doc.restrictedItemCount} linha{doc.restrictedItemCount === 1 ? "" : "s"} de outras ramificações ofuscada{doc.restrictedItemCount === 1 ? "" : "s"}
+                              </span>
+                              <div className="h-3 flex-1 rounded bg-muted-foreground/10" />
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1765,7 +1792,7 @@ function ApprovalDetailModal({
   );
 }
 
-function mapInternalExpense(e: Expense, ruleName?: string | null): ApprovalDoc & { __internalId?: string } {
+function mapInternalExpense(e: ApprovalFeedDoc, ruleName?: string | null): ApprovalDoc & { __internalId?: string } {
   const isPagcorp = e.origin === "pagcorp";
   const isRevision = Number(e.revision_number || 1) > 1;
   const internalType = isRevision
@@ -1813,6 +1840,10 @@ function mapInternalExpense(e: Expense, ruleName?: string | null): ApprovalDoc &
       Project: it.project || "",
     })),
     rateioType: (e.rateio_type as string | null) || "padrao",
+    approvalSegments: e.approval_segments || [],
+    viewerSegmented: e.viewer_segmented === true,
+    restrictedSegmentCount: Number(e.restricted_segment_count || 0),
+    restrictedItemCount: Number(e.restricted_item_count || 0),
     __internalId: e.id,
     __explain: {
       ruleId: e.approval_rule_id || null,

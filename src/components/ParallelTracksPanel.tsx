@@ -1,23 +1,7 @@
-import { useEffect, useState } from "react";
 import { CheckCircle2, Clock, GitBranch, Ban, XCircle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import type { ApprovalTrackSegment } from "@/hooks/useApprovals";
 
-export interface TrackSegmentRow {
-  id: string;
-  segment_key: string;
-  cost_center: string | null;
-  project: string | null;
-  amount: number;
-  status: string;
-  current_level: number | null;
-  current_approver: string | null;
-  current_approver_email: string | null;
-  rule_name: string | null;
-  chain: unknown;
-  decided_by: string | null;
-  decided_at: string | null;
-  resolution_note: string | null;
-}
+export type TrackSegmentRow = ApprovalTrackSegment;
 
 type ChainLevel = { level_order?: number; approver_name?: string | null; approver_email?: string | null };
 
@@ -53,37 +37,19 @@ const STATUS_META: Record<string, { label: string; className: string; Icon: type
  * reembolso — com o que ainda falta para liberar a aprovação final.
  */
 export function ParallelTracksPanel({
-  expenseId,
+  segments = [],
+  restrictedSegmentCount = 0,
   formatCostCenter = (c?: string | null) => c || "",
 }: {
-  expenseId?: string | null;
+  segments?: TrackSegmentRow[];
+  restrictedSegmentCount?: number;
   formatCostCenter?: (code?: string | null) => string;
 }) {
-  const [rows, setRows] = useState<TrackSegmentRow[]>([]);
-
-  useEffect(() => {
-    if (!expenseId) {
-      setRows([]);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase
-        .from("expense_approval_segments")
-        .select(
-          "id,segment_key,cost_center,project,amount,status,current_level,current_approver,current_approver_email,rule_name,chain,decided_by,decided_at,resolution_note",
-        )
-        .eq("expense_id", expenseId);
-      if (!cancelled) setRows((data || []) as unknown as TrackSegmentRow[]);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [expenseId]);
+  const rows = segments;
 
   const hasReembolso = rows.some((r) => r.segment_key === REEMBOLSO_KEY);
   // Só faz sentido exibir quando há mais de uma trilha correndo em paralelo.
-  if (rows.length < 2) return null;
+  if (rows.length + restrictedSegmentCount < 2) return null;
 
   const pending = rows.filter((r) => r.status === "pendente");
   const approved = rows.filter((r) => r.status === "aprovado");
@@ -154,11 +120,15 @@ export function ParallelTracksPanel({
           Avaliação em paralelo {hasReembolso ? "— regra padrão + reembolso" : "— trilhas por rateio"}
         </h4>
         <span className="text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 border border-primary/30 rounded px-1.5 py-0.5">
-          {approved.length}/{rows.length} concluídas
+          {restrictedSegmentCount > 0
+            ? `${rows.length} visível${rows.length === 1 ? "" : "is"} · ${restrictedSegmentCount} restrita${restrictedSegmentCount === 1 ? "" : "s"}`
+            : `${approved.length}/${rows.length} concluídas`}
         </span>
       </div>
       <p className="text-xs text-muted-foreground">
-        {pending.length > 0
+        {restrictedSegmentCount > 0
+          ? `Você visualiza somente as ${rows.length} ramificações da sua alçada. ${restrictedSegmentCount} ramificação${restrictedSegmentCount > 1 ? "ões" : ""} de outros aprovadores permanece${restrictedSegmentCount > 1 ? "m" : ""} restrita${restrictedSegmentCount > 1 ? "s" : ""}.`
+          : pending.length > 0
           ? `A aprovação final só é liberada quando TODAS as trilhas concluírem. Faltam ${pending.length} trilha${pending.length > 1 ? "s" : ""}.`
           : rows.some((r) => r.status === "rejeitado")
             ? "Uma das trilhas reprovou — o documento fica bloqueado, mesmo com as demais aprovadas."
@@ -179,6 +149,23 @@ export function ParallelTracksPanel({
             Regra de reembolso
           </div>
           {reembolso.map(renderTrack)}
+        </div>
+      )}
+      {restrictedSegmentCount > 0 && (
+        <div className="space-y-1.5">
+          {Array.from({ length: restrictedSegmentCount }, (_, index) => (
+            <div
+              key={`restricted-${index}`}
+              className="rounded-lg border border-border bg-muted/20 p-3"
+              aria-label="Ramificação de outro aprovador, detalhes restritos"
+            >
+              <div className="h-4 w-2/5 rounded bg-muted-foreground/15" />
+              <div className="mt-2 h-3 w-3/5 rounded bg-muted-foreground/10" />
+              <p className="mt-2 text-[10px] font-semibold uppercase text-muted-foreground">
+                Detalhes de outra ramificação ofuscados
+              </p>
+            </div>
+          ))}
         </div>
       )}
     </div>

@@ -32,17 +32,27 @@ import {
   buildRateioSegments,
   loadRateioSegments,
   persistRateioSegments,
-  advanceSegment,
   pendingApproverLabel,
   type SegmentRow,
 } from "../_shared/rateio-segments.ts";
+import {
+  approvalsSatisfyLevel,
+  activeRevisionApprovalsFromLogs,
+  resolveReprocessedApprovalState,
+  type ApprovalLogRow,
+  type PriorApproval,
+} from "../_shared/approval-reprocess.ts";
 
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
 import { notifySalesMilestone } from "../_shared/sales-notify.ts";
 import { notifyApprovalPending } from "../_shared/approval-notify.ts";
 import { notifyActionCompleted } from "../_shared/action-notify.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
-import { resolveCallerAliases, normalizeIdentity } from "../_shared/user-aliases.ts";
+import {
+  resolveCallerAliases,
+  resolveIdentityAliases,
+  normalizeIdentity,
+} from "../_shared/user-aliases.ts";
 import { emailLocalPart, identityMatches, normalizeText, stripDiacritics as baseStripDiacritics, tokenizePerson } from "../_shared/text-normalize.ts";
 import { isNativeErpExpenseOrigin } from "../_shared/expense-origin.ts";
 
@@ -1106,63 +1116,118 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
   } as any);
   await writeAuditLog("approved", currentLevel, { step: "approve_document" });
 
+  const loadCurrentDocumentApprovals = async (): Promise<PriorApproval[]> => {
+    const { data, error } = await admin
+      .from("expense_approval_log")
+      .select("decision, approver_name, approver_email, substituted_for_name, substituted_for_email, created_at, remarks")
+      .eq("expense_id", expenseId)
+      .order("created_at", { ascending: true });
+    if (error) {
+      stageLog("load_levels", "warn", {
+        requestId, expenseId, phase: "load_document_approvals", error: error.message,
+      });
+    }
+    const approvals = activeRevisionApprovalsFromLogs((data || []) as ApprovalLogRow[]);
+    try {
+      const historicalAliases = await resolveIdentityAliases(
+        admin,
+        approvals.flatMap((approval) => [
+          approval.approver_email,
+          approval.approver_name,
+          approval.substituted_for_email,
+          approval.substituted_for_name,
+        ]),
+      );
+      approvals.push(...Array.from(historicalAliases).map((alias) => ({ approver_name: alias })));
+    } catch (aliasError) {
+      stageLog("load_levels", "warn", {
+        requestId,
+        expenseId,
+        phase: "expand_historical_approval_aliases",
+        error: String((aliasError as Error)?.message || aliasError),
+      });
+    }
+    approvals.push(
+      { approver_name: actor, approver_email: actorEmail },
+      ...Array.from(callerAliases).map((alias) => ({ approver_name: alias })),
+    );
+    return approvals;
+  };
+
   // ── RATEIO: aprovação por SEGMENTO (fluxos independentes) ──────────────
   if (segmentMode) {
     const reqName = (exp as any).requester_name || null;
     const reqEmail = (exp as any).requester_email || null;
-    // Todos os fluxos pendentes em que o caller é o aprovador atual — mesmo
-    // que a identidade só case por alias. Uma única ação aprova TODOS eles.
-    const mine = pendingSegments.filter((s) => callerIsApprover(s.current_approver, s.current_approver_email));
-    // Admin/superusuário/substituto sem casar textualmente → aprova todos os
-    // segmentos pendentes (override explícito).
-    const targets = mine.length > 0 ? mine : pendingSegments;
+    const substitutionIsApprover = (seg: SegmentRow): boolean => !!substitution && [
+      substitution.official_email,
+      substitution.official_name,
+    ].filter(Boolean).some((official) =>
+      [seg.current_approver_email, seg.current_approver].filter(Boolean).some((candidate) =>
+        identityMatches(official, candidate)
+      )
+    );
+    // Uma decisão atinge todas as trilhas em que a pessoa é o aprovador atual.
+    // Override administrativo continua explícito e pode decidir todas as
+    // trilhas pendentes; substituição só atinge a identidade substituída.
+    const mine = pendingSegments.filter((seg) =>
+      callerIsApprover(seg.current_approver, seg.current_approver_email) || substitutionIsApprover(seg)
+    );
+    const targets = mine.length > 0 ? mine : (isOverride ? pendingSegments : []);
+    const targetIds = new Set(targets.map((seg) => seg.id));
+
+    const documentApprovals = await loadCurrentDocumentApprovals();
+    // Quando a identidade foi reconhecida por alias ou substituição, registra
+    // também a representação usada pela matriz. Assim níveis futuros e outras
+    // trilhas reconhecem a mesma pessoa sem exigir um segundo clique.
+    if (!isOverride) {
+      for (const seg of targets) {
+        documentApprovals.push({
+          approver_name: seg.current_approver,
+          approver_email: seg.current_approver_email,
+        });
+      }
+    }
 
     const advancedNotifications: Array<{ name: string | null; email: string | null; level: number; seg: SegmentRow }> = [];
     const autoApproved: string[] = [];
-    for (const seg of targets) {
-      let cursor: SegmentRow = seg;
-      let next = advanceSegment(cursor, reqName, reqEmail);
-      // CASCATA: se o próximo nível do MESMO fluxo também é o caller, já
-      // registramos a aprovação dele — ninguém aprova o mesmo documento duas
-      // vezes. Limite defensivo para cadeias mal formadas.
-      for (let hop = 0; hop < 20 && !next.finished && callerIsApprover(next.current_approver, next.current_approver_email); hop++) {
-        await admin.from("expense_approval_log").insert({
-          expense_id: expenseId,
-          decision: "approved",
-          approver_name: actor,
-          approver_email: actorEmail,
-          level_order: next.current_level,
-          remarks: `${mergedRemarks ? `${mergedRemarks} — ` : ""}Aprovação replicada automaticamente (mesmo aprovador no nível ${next.current_level} do fluxo ${cursor.cost_center || "—"} / ${cursor.project || "—"})`,
-          substitution_id: substitution?.id ?? null,
-          substituted_for_email: substitution?.official_email ?? null,
-          substituted_for_name: substitution?.official_name ?? null,
-          action_role: actionRole,
-        } as any);
-        await writeAuditLog("approved", next.current_level, {
-          step: "approve_track_cascade",
-          segment: {
-            segment_key: cursor.segment_key,
-            cost_center: cursor.cost_center,
-            project: cursor.project,
-            rule_id: cursor.rule_id,
-            rule_name: (cursor as any).rule_name ?? null,
-          },
-          metadata: { replicated_same_approver: true },
+    for (const seg of pendingSegments) {
+      const isTarget = targetIds.has(seg.id);
+      const approvals = [...documentApprovals];
+      // Um override decide o nível atual mesmo que a identidade do admin não
+      // exista na matriz. A decisão não é propagada como se fosse do titular.
+      if (isTarget && isOverride && !callerIsApprover(seg.current_approver, seg.current_approver_email)) {
+        approvals.push({
+          approver_name: seg.current_approver,
+          approver_email: seg.current_approver_email,
         });
-        autoApproved.push(`${cursor.segment_key}@${next.current_level}`);
-        cursor = { ...cursor, current_level: next.current_level } as SegmentRow;
-        next = advanceSegment(cursor, reqName, reqEmail);
       }
+      const remainingChain = (seg.chain || []).filter((level) =>
+        Number(level.level_order) >= Number(seg.current_level)
+      );
+      const state = resolveReprocessedApprovalState(
+        remainingChain,
+        approvals,
+        reqName,
+        reqEmail,
+      );
+      const changed = state.status !== seg.status ||
+        state.current_level !== Number(seg.current_level) ||
+        state.current_approver !== seg.current_approver ||
+        state.current_approver_email !== seg.current_approver_email;
+      if (!changed) continue;
+
+      const skippedLevels = state.preserved_levels.filter((level) => level > Number(seg.current_level));
+      autoApproved.push(...skippedLevels.map((level) => `${seg.segment_key}@${level}`));
       await admin.from("expense_approval_segments").update({
-        status: next.status,
-        current_level: next.current_level,
-        current_approver: next.current_approver,
-        current_approver_email: next.current_approver_email,
+        status: state.status,
+        current_level: state.current_level,
+        current_approver: state.current_approver,
+        current_approver_email: state.current_approver_email,
         decided_by: actor,
         decided_at: new Date().toISOString(),
       }).eq("id", seg.id);
       await writeAuditLog("approved", seg.current_level, {
-        step: next.finished ? "approve_track_final" : "approve_track_level",
+        step: state.status === "aprovado" ? "approve_track_final" : "approve_track_level",
         segment: {
           segment_key: seg.segment_key,
           cost_center: seg.cost_center,
@@ -1171,15 +1236,20 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
           rule_name: (seg as any).rule_name ?? null,
         },
         metadata: {
-          track_finished: next.finished,
-          next_level: next.finished ? null : next.current_level,
-          next_approver: next.finished ? null : next.current_approver,
+          track_finished: state.status === "aprovado",
+          next_level: state.status === "aprovado" ? null : state.current_level,
+          next_approver: state.status === "aprovado" ? null : state.current_approver,
           amount: Number(seg.amount || 0),
+          document_wide_approval: true,
+          preserved_levels: state.preserved_levels,
         },
       });
-      if (!next.finished) {
+      if (state.status !== "aprovado") {
         advancedNotifications.push({
-          name: next.current_approver, email: next.current_approver_email, level: next.current_level, seg,
+          name: state.current_approver,
+          email: state.current_approver_email,
+          level: state.current_level,
+          seg,
         });
       }
     }
@@ -1271,35 +1341,41 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     // Todos os segmentos aprovados → segue para a finalização normal abaixo.
   }
 
-  // ── CASCATA: mesmo aprovador em níveis seguintes da mesma cadeia ───────
-  // Se o próximo nível (ou os seguintes) tem o MESMO aprovador que acabou de
-  // decidir, registramos a aprovação dele automaticamente — ninguém precisa
-  // aprovar o mesmo documento duas vezes.
+  // ── CASCATA: aprovações anteriores em níveis seguintes ─────────────────
+  // A decisão vale para o documento. Níveis seguintes atribuídos a qualquer
+  // pessoa que já o aprovou são satisfeitos sem novo evento nem novo clique.
   let effectiveLevel = currentLevel;
   let cascadeFinal = isFinalLevel;
   if (!segmentMode && !isFinalLevel) {
+    const documentApprovals = await loadCurrentDocumentApprovals();
+    if (!isOverride) {
+      documentApprovals.push({
+        approver_name: designatedName,
+        approver_email: designatedEmail,
+      });
+    }
     for (let hop = 0; hop < 20; hop++) {
       const nd = distinctLevels.find((lo) => lo > effectiveLevel);
       if (nd === undefined) { cascadeFinal = true; break; }
       const p = pickApproverSkippingRequester(
         levels as any, (exp as any).requester_name, (exp as any).requester_email, nd,
       );
-      if (!callerIsApprover(p.approver_name, p.approver_email)) break;
-      await admin.from("expense_approval_log").insert({
-        expense_id: expenseId,
-        decision: "approved",
-        approver_name: actor,
-        approver_email: actorEmail,
-        level_order: p.level_order,
-        remarks: `${mergedRemarks ? `${mergedRemarks} — ` : ""}Aprovação replicada automaticamente (mesmo aprovador no nível ${p.level_order})`,
-        substitution_id: substitution?.id ?? null,
-        substituted_for_email: substitution?.official_email ?? null,
-        substituted_for_name: substitution?.official_name ?? null,
-        action_role: actionRole,
-      } as any);
+      const eligibleAtLevel = excludeRequesterLevels(
+        levels.filter((level) => level.level_order === p.level_order) as any,
+        (exp as any).requester_name,
+        (exp as any).requester_email,
+      );
+      const sameCaller = eligibleAtLevel.some((level) =>
+        callerIsApprover(level.approver_name, level.approver_email)
+      );
+      const previouslyApproved = approvalsSatisfyLevel(documentApprovals, eligibleAtLevel as any);
+      if (!sameCaller && !previouslyApproved) break;
       await writeAuditLog("approved", p.level_order, {
         step: "approve_cascade",
-        metadata: { replicated_same_approver: true },
+        metadata: {
+          document_wide_approval: true,
+          reused_prior_approval: previouslyApproved,
+        },
       });
       effectiveLevel = p.level_order;
       stageLog("cascade_same_approver", "info", { requestId, expenseId, level: p.level_order });

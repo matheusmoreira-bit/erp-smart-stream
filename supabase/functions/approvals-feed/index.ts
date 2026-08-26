@@ -23,6 +23,11 @@ import {
 } from "../_shared/permission-groups.ts";
 import { resolveCallerAliases } from "../_shared/user-aliases.ts";
 import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import {
+  approvalSegmentBelongsToAliases,
+  scopeApprovalDocumentToSegments,
+  type ApprovalSegmentVisibilityRow,
+} from "../_shared/approval-segment-visibility.ts";
 
 
 function json(status: number, body: unknown, cors: Record<string, string>) {
@@ -326,13 +331,52 @@ Deno.serve(async (req) => {
     let docs = (Array.isArray(bundle) ? bundle : []) as Array<Record<string, any>>;
 
     // Recorte de visibilidade (mesma semântica de `expense-read`), em memória.
+    let substituteAliases = new Set<string>();
     if (!caller.privileged) {
-      const subAliases = await substituteOfficialAliases(admin, caller.aliases);
+      substituteAliases = await substituteOfficialAliases(admin, caller.aliases);
       docs = docs.filter((d) => {
-        if (ownsExpense(d, caller.aliases, caller.directorateBranch, subAliases)) return true;
+        if (ownsExpense(d, caller.aliases, caller.directorateBranch, substituteAliases)) return true;
         if (!caller.directorateBranch) return false;
         return (d.items || []).some((it: Record<string, unknown>) =>
           costCenterInBranch(it.cost_center, caller.directorateBranch),
+        );
+      });
+    }
+
+    // As trilhas persistidas sao a fonte de verdade do rateio. Para callers
+    // comuns, cada documento e recortado antes de sair da funcao: valores,
+    // itens, CCs, projetos e cadeias de outras ramificacoes nao chegam ao
+    // navegador. Um administrador que nao participa de nenhuma trilha ainda
+    // preserva a visao operacional integral.
+    const expenseIds = docs.map((doc) => String(doc.id || "")).filter(Boolean);
+    if (expenseIds.length > 0) {
+      const { data: segmentData, error: segmentError } = await admin
+        .from("expense_approval_segments")
+        .select("*")
+        .in("expense_id", expenseIds);
+      if (segmentError) return json(500, { error: segmentError.message }, cors);
+
+      const segmentsByExpense = new Map<string, ApprovalSegmentVisibilityRow[]>();
+      for (const row of (segmentData || []) as ApprovalSegmentVisibilityRow[]) {
+        const expenseId = String(row.expense_id || "");
+        if (!segmentsByExpense.has(expenseId)) segmentsByExpense.set(expenseId, []);
+        segmentsByExpense.get(expenseId)!.push(row);
+      }
+
+      const effectiveAliases = new Set([...caller.aliases, ...substituteAliases]);
+      docs = docs.map((doc) => {
+        const segments = segmentsByExpense.get(String(doc.id || "")) || [];
+        return scopeApprovalDocumentToSegments(
+          doc,
+          segments,
+          (segment) => approvalSegmentBelongsToAliases(
+            segment,
+            effectiveAliases,
+            (candidate, alias) =>
+              identityMatches(candidate, alias) ||
+              personMatches(candidate, alias) ||
+              personListMatches(candidate, alias),
+          ),
         );
       });
     }

@@ -96,6 +96,28 @@ export function useSynapseIntegrations(companyDB?: string) {
       } as any);
     }
 
+    // Ensure Okta offboarding integration. It remains inactive until explicitly enabled.
+    const { data: oktaData } = await supabase
+      .from("synapse_integrations")
+      .select("id")
+      .eq("integration_key", "okta_sap_sync")
+      .eq("company_db", companyDb)
+      .maybeSingle();
+
+    if (!oktaData) {
+      const integration: SynapseIntegrationInsert = {
+        integration_key: "okta_sap_sync",
+        display_name: "Okta -> SAP B1",
+        description:
+          "Sincroniza o status de usuarios do Okta com o SAP B1 e o ERP Flow. O offboarding somente executa quando o kill switch global esta ativo.",
+        is_active: false,
+        interval_minutes: 360,
+        parameters: { auto_disable: true },
+        company_db: companyDb,
+      };
+      await supabase.from("synapse_integrations").insert(integration);
+    }
+
     // Ensure PagCorp integration
     const { data: pcData } = await supabase
       .from("synapse_integrations")
@@ -214,6 +236,28 @@ export function useSynapseIntegrations(companyDB?: string) {
       } as any);
     }
 
+    // Ensure Okta Attributes Sync (IdP -> mapping)
+    const { data: oktaAttributesData } = await supabase
+      .from("synapse_integrations")
+      .select("id")
+      .eq("integration_key", "okta_attributes_sync")
+      .eq("company_db", companyDb)
+      .maybeSingle();
+
+    if (!oktaAttributesData) {
+      const integration: SynapseIntegrationInsert = {
+        integration_key: "okta_attributes_sync",
+        display_name: "Sincronizacao de atributos - Okta (IdP)",
+        description:
+          "Atualiza periodicamente departamento, centro de custo, cargo, gestor e demais atributos dos usuarios vinculados ao Okta.",
+        is_active: false,
+        interval_minutes: 30,
+        parameters: {},
+        company_db: companyDb,
+      };
+      await supabase.from("synapse_integrations").insert(integration);
+    }
+
     await fetchIntegrations();
   }, [fetchIntegrations]);
 
@@ -222,11 +266,13 @@ export function useSynapseIntegrations(companyDB?: string) {
     try {
       const edgeFunctionMap: Record<string, string> = {
         jumpcloud_sap_sync: "synapse-jc-sync",
+        okta_sap_sync: "synapse-okta-sync",
         pagcorp_erp_sync: "synapse-pagcorp-sync",
         purchase_order_notifications: "synapse-po-notify",
         pagcorp_settlement_watcher: "pagcorp-settlement-watcher",
         sap_document_link_watcher: "sap-document-link-watcher",
         jumpcloud_attributes_sync: "jumpcloud-attributes-sync",
+        okta_attributes_sync: "okta-attributes-sync",
       };
       const functionName = edgeFunctionMap[integrationKey] || "synapse-jc-sync";
 

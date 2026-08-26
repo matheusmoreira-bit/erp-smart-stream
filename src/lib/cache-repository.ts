@@ -48,10 +48,10 @@ export const sapUsersCache = new CacheRepository<SapUser[]>(30);
 export const sapSuppliersCache = new CacheRepository<unknown[]>(30);
 export const sapItemsCache = new CacheRepository<unknown[]>(30);
 
-// JumpCloud users cache (6-hour TTL, refreshed on demand)
-export const jumpCloudUsersCache = new CacheRepository<JumpCloudCacheEntry[]>(360);
+// IdP users cache (6-hour TTL, partitioned by provider and refreshed on demand)
+export const idpUsersCache = new CacheRepository<IdpUserCacheEntry[]>(360);
 
-export interface JumpCloudCacheEntry {
+export interface IdpUserCacheEntry {
   _id: string;
   email: string;
   username: string;
@@ -67,7 +67,10 @@ export interface JumpCloudCacheEntry {
   employeeIdentifier?: string;
   employeeType?: string;
   manager?: string;
+  status?: string;
 }
+
+export type JumpCloudCacheEntry = IdpUserCacheEntry;
 
 export interface SapUser {
   InternalKey: number;

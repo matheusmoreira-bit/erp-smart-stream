@@ -12,11 +12,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSap } from "@/contexts/SapContext";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import type { Expense } from "@/hooks/useExpenses";
+import type { ApprovalTrackSegment } from "@/hooks/useApprovals";
 
 export interface ApprovalFeedDoc extends Expense {
   doc_type?: "purchase" | "sales";
   /** Aprovadores do nível atual da regra (resolvidos no servidor). */
   level_approvers?: Array<{ name: string; email: string }>;
+  approval_segments?: ApprovalTrackSegment[];
+  viewer_segment_keys?: string[];
+  viewer_segmented?: boolean;
+  restricted_segment_count?: number;
+  restricted_item_count?: number;
 }
 
 interface FeedState {
@@ -28,7 +34,8 @@ interface FeedState {
 const EMPTY: FeedState = { docs: [], privileged: false, generatedAt: null };
 
 function cacheKey(companyDb: string, user: string) {
-  return `approvals-feed:${companyDb}:${user}`;
+  // v2 invalida snapshots anteriores ao recorte server-side por ramificação.
+  return `approvals-feed:v2:${companyDb}:${user}`;
 }
 
 function readCache(key: string): FeedState | null {

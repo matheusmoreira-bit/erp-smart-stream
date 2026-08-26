@@ -14,6 +14,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireUser, validateSapSession, AuthError } from "../_shared/auth.ts";
 import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { notifyApprovalPending } from "../_shared/approval-notify.ts";
+import { resolveIdentityAliases } from "../_shared/user-aliases.ts";
 import {
   findMatchingRule,
   pickHierarchicalFallbackRule,
@@ -27,6 +28,7 @@ import {
   pendingApproverLabel,
 } from "../_shared/rateio-segments.ts";
 import {
+  activeRevisionApprovalsFromLogs,
   priorApprovalsForSegment,
   resolveReprocessedApprovalState,
   type PriorApproval,
@@ -42,22 +44,26 @@ async function loadPriorApprovals(admin: any, expenseId: string): Promise<{
   const { data: logsRaw } = await admin
     .from("expense_approval_log")
     .select(
-      "decision, approver_name, approver_email, substituted_for_name, substituted_for_email, created_at",
+      "decision, approver_name, approver_email, substituted_for_name, substituted_for_email, created_at, remarks",
     )
     .eq("expense_id", expenseId)
     .order("created_at", { ascending: true });
   const logs = (logsRaw || []) as Array<Record<string, any>>;
-  const resetDecisions = new Set(["created", "submitted", "reactivated"]);
-  const lastReset = [...logs].reverse().find((row) => resetDecisions.has(String(row.decision)));
+  const lastReset = [...logs].reverse().find((row) =>
+    ["created", "submitted", "reactivated"].includes(String(row.decision))
+  );
   const resetAt = lastReset?.created_at ? String(lastReset.created_at) : null;
-  const document = logs
-    .filter((row) => row.decision === "approved" && (!resetAt || String(row.created_at) >= resetAt))
-    .map((row) => ({
-      approver_name: row.approver_name,
-      approver_email: row.approver_email,
-      substituted_for_name: row.substituted_for_name,
-      substituted_for_email: row.substituted_for_email,
-    }));
+  const document = activeRevisionApprovalsFromLogs(logs);
+  const historicalAliases = await resolveIdentityAliases(
+    admin,
+    document.flatMap((approval) => [
+      approval.approver_email,
+      approval.approver_name,
+      approval.substituted_for_email,
+      approval.substituted_for_name,
+    ]),
+  );
+  document.push(...Array.from(historicalAliases).map((alias) => ({ approver_name: alias })));
 
   let auditQuery = admin
     .from("expense_audit_log")
@@ -268,12 +274,25 @@ Deno.serve(async (req) => {
           .from("expense_approval_segments")
           .select("segment_key, cost_center, project, current_approver, status")
           .eq("expense_id", doc.id);
+        const priorApprovals = await loadPriorApprovals(admin, doc.id);
+        const approvedBySegment = new Map<string, PriorApproval[]>();
+        for (const segment of target) {
+          approvedBySegment.set(
+            segment.segment_key,
+            priorApprovalsForSegment(
+              priorApprovals.bySegment,
+              segment.segment_key,
+              priorApprovals.document,
+            ),
+          );
+        }
         const rows = await persistSegmentSubset(
           admin,
           doc.id,
           target,
           doc.requester_name || null,
           doc.requester_email || null,
+          { approvedBySegment },
         );
 
         // Recalcula o rótulo do documento com TODAS as trilhas (as preservadas + as novas).
@@ -284,11 +303,13 @@ Deno.serve(async (req) => {
         const segsAll = (allSegs || []) as Record<string, any>[];
         const label = pendingApproverLabel(segsAll as any);
         const pendingLevels = segsAll.filter((r) => r.status === "pendente").map((r) => Number(r.current_level || 1));
+        const finalized = pendingLevels.length === 0;
         await admin
           .from("expenses")
           .update({
+            status: finalized ? "aprovado" : "pendente_aprovacao",
             current_approver: label,
-            current_level_order: pendingLevels.length ? Math.min(...pendingLevels) : doc.current_level_order,
+            current_level_order: finalized ? 0 : Math.min(...pendingLevels),
             updated_at: new Date().toISOString(),
           })
           .eq("id", doc.id)
@@ -315,7 +336,7 @@ Deno.serve(async (req) => {
         });
 
         for (const r of rows) {
-          await notifyApprovalPending(admin, {
+          if (r.status === "pendente") await notifyApprovalPending(admin, {
             expenseId: doc.id,
             companyDb: doc.company_db,
             approverEmail: r.current_approver_email || null,
@@ -338,12 +359,17 @@ Deno.serve(async (req) => {
           } as any);
         }
 
+        if (finalized) {
+          await dispatchApprovedExpense(doc.id, !!doc.sap_doc_entry);
+        }
+
         changed += 1;
         segResults.push({
           expense_id: doc.id,
           action: "segment_rebuild",
           cost_center: segmentCc,
           document_approver: label,
+          finalized,
           segments: rows.map((r) => ({
             cost_center: r.cost_center,
             project: r.project,
@@ -418,7 +444,7 @@ Deno.serve(async (req) => {
 
       // ── Rateio: reconstrói trilhas independentes por (CC + projeto) ────
       // A matriz e as cadeias são recalculadas, mas cada trilha avança por
-      // todos os aprovadores que já decidiram nesta submissão.
+      // todos os aprovadores que já decidiram neste documento.
       const rateioTypeNorm = String(doc.rateio_type || "").toLowerCase();
       const isReembolso = rateioTypeNorm === "reembolso";
       const rateioOverride = ["folha", "imposto", "viagens"].includes(rateioTypeNorm);

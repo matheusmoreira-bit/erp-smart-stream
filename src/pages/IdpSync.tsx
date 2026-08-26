@@ -15,7 +15,12 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
 import { useSapUsers } from "@/hooks/useSapUsers";
-import { useIdpSync, type JumpCloudUser } from "@/hooks/useIdpSync";
+import {
+  IDP_PROVIDERS,
+  useIdpSync,
+  type IdpProvider,
+  type IdpUser,
+} from "@/hooks/useIdpSync";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { toast } from "sonner";
@@ -25,12 +30,12 @@ import { IdpDeprovisionLogCard } from "@/components/IdpDeprovisionLogCard";
 import IdpDivergencePanel from "@/components/users/IdpDivergencePanel";
 
 
-function jcToOption(jc: JumpCloudUser): SapSearchOption {
-  const name = jc.displayname || `${jc.firstname || ""} ${jc.lastname || ""}`.trim() || jc.username;
+function idpToOption(user: IdpUser): SapSearchOption {
+  const name = user.displayname || `${user.firstname || ""} ${user.lastname || ""}`.trim() || user.username;
   return {
-    code: jc._id,
+    code: user._id,
     name,
-    extra: jc.email,
+    extra: user.email,
   };
 }
 
@@ -40,20 +45,22 @@ export default function IdpSyncPage() {
   const { users: sapUsers, isLoading: sapLoading, toggleLock } = useSapUsers();
   const [urlParams] = useSearchParams();
   const focusUser = urlParams.get("user");
+  const [provider, setProvider] = useState<IdpProvider>("jumpcloud");
+  const providerLabel = IDP_PROVIDERS[provider].label;
   const {
-    jcUsers,
+    idpUsers,
     mappings,
-    isLoadingJc,
+    isLoadingIdp,
     isLoadingMappings,
     error,
-    fetchJumpCloudUsers,
+    fetchIdpUsers,
     fetchMappings,
     autoSync,
     linkManually,
     syncAttributes,
     reprocessUserAttributes,
     unlinkUser,
-  } = useIdpSync();
+  } = useIdpSync(provider);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "linked" | "pending">("all");
@@ -64,16 +71,20 @@ export default function IdpSyncPage() {
 
   useEffect(() => {
     fetchMappings();
-    fetchJumpCloudUsers();
-  }, [fetchMappings, fetchJumpCloudUsers]);
+    fetchIdpUsers();
+  }, [fetchMappings, fetchIdpUsers]);
 
   // Auto-link only ONCE per mount, only for users WITHOUT an existing mapping entry.
   // To re-link an already-mapped user, the admin must remove the entry first.
   const autoLinkDoneRef = useRef(false);
   useEffect(() => {
+    autoLinkDoneRef.current = false;
+  }, [provider]);
+
+  useEffect(() => {
     if (autoLinkDoneRef.current) return;
-    if (sapLoading || isLoadingJc || isLoadingMappings) return;
-    if (sapUsers.length === 0 || jcUsers.length === 0) return;
+    if (sapLoading || isLoadingIdp || isLoadingMappings) return;
+    if (sapUsers.length === 0 || idpUsers.length === 0) return;
 
     autoLinkDoneRef.current = true;
 
@@ -83,24 +94,24 @@ export default function IdpSyncPage() {
     const unmappedWithMatch = activeUsers.filter((sap) => {
       if (mappedCodes.has(sap.UserCode)) return false;
       if (!sap.eMail) return false;
-      return jcUsers.some((jc) => jc.email?.toLowerCase() === sap.eMail!.toLowerCase());
+      return idpUsers.some((user) => user.email?.toLowerCase() === sap.eMail!.toLowerCase());
     });
 
     if (unmappedWithMatch.length > 0) {
-      autoSync(unmappedWithMatch, jcUsers).catch((e) =>
+      autoSync(unmappedWithMatch, idpUsers).catch((e) =>
         console.error("Auto-link error:", e)
       );
     }
-  }, [sapUsers, jcUsers, mappings, sapLoading, isLoadingJc, isLoadingMappings, autoSync]);
+  }, [sapUsers, idpUsers, mappings, sapLoading, isLoadingIdp, isLoadingMappings, autoSync]);
 
-  const jcOptions = useMemo(() => jcUsers.map(jcToOption), [jcUsers]);
+  const idpOptions = useMemo(() => idpUsers.map(idpToOption), [idpUsers]);
 
   const handleAutoSync = async () => {
     setSyncing(true);
     try {
-      const jcList = await fetchJumpCloudUsers(true); // force refresh
-      if (jcList.length === 0) {
-        toast.error("Nenhum usuário JumpCloud encontrado. Verifique as credenciais.");
+      const providerUsers = await fetchIdpUsers(true);
+      if (providerUsers.length === 0) {
+        toast.error(`Nenhum usuario ${providerLabel} encontrado. Verifique as credenciais.`);
         return;
       }
       const activeUsers = sapUsers.filter((u) => u.Locked !== "tYES");
@@ -110,7 +121,7 @@ export default function IdpSyncPage() {
         toast.info("Nenhum usuário pendente. Remova o vínculo atual para re-sincronizar.");
         return;
       }
-      await autoSync(toSync, jcList);
+      await autoSync(toSync, providerUsers);
       toast.success(`Sincronização concluída! ${toSync.length} usuário(s) processado(s).`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro na sincronização");
@@ -119,16 +130,16 @@ export default function IdpSyncPage() {
     }
   };
 
-  const handleRefreshJc = async () => {
-    await fetchJumpCloudUsers(true);
-    toast.success("Lista JumpCloud atualizada");
+  const handleRefreshIdp = async () => {
+    await fetchIdpUsers(true);
+    toast.success(`Lista ${providerLabel} atualizada`);
   };
 
   const handleSyncAttrs = async () => {
     setSyncingAttrs(true);
     try {
-      const jcList = await fetchJumpCloudUsers(true);
-      const n = await syncAttributes(jcList);
+      const providerUsers = await fetchIdpUsers(true);
+      const n = await syncAttributes(providerUsers);
       if (n > 0) toast.success(`Atributos atualizados para ${n} usuário(s).`);
       else toast.info("Nenhum vínculo para atualizar.");
     } catch (e) {
@@ -141,13 +152,12 @@ export default function IdpSyncPage() {
   const handleReprocessUser = async (sapUserCode: string) => {
     setReprocessingUser(sapUserCode);
     try {
-      // Garante lista JC fresca para recalcular o centro de custo a partir do valor atual
-      const jcList = jcUsers.length > 0 ? jcUsers : await fetchJumpCloudUsers(true);
-      const attrs = await reprocessUserAttributes(sapUserCode, jcList);
+      const providerUsers = idpUsers.length > 0 ? idpUsers : await fetchIdpUsers(true);
+      const attrs = await reprocessUserAttributes(sapUserCode, providerUsers);
       toast.success(
         attrs.cost_center_code
           ? `Atributos reprocessados • CC ${attrs.cost_center_code}`
-          : "Atributos reprocessados (sem centro de custo no JumpCloud)"
+          : `Atributos reprocessados (sem centro de custo no ${providerLabel})`
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao reprocessar atributos");
@@ -160,19 +170,19 @@ export default function IdpSyncPage() {
   const handleComboSelect = useCallback(
     async (sapUserCode: string, option: SapSearchOption | null) => {
       if (!option) return;
-      const jcUser = jcUsers.find((j) => j._id === option.code);
-      if (!jcUser) return;
+      const idpUser = idpUsers.find((user) => user._id === option.code);
+      if (!idpUser) return;
       setLinkingUser(sapUserCode);
       try {
-        await linkManually(sapUserCode, jcUser);
-        toast.success(`Vinculado a ${jcUser.email}`);
+        await linkManually(sapUserCode, idpUser);
+        toast.success(`Vinculado a ${idpUser.email}`);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Erro ao vincular");
       } finally {
         setLinkingUser(null);
       }
     },
-    [jcUsers, linkManually]
+    [idpUsers, linkManually]
   );
 
   const handleUnlink = async (sapUserCode: string) => {
@@ -233,19 +243,18 @@ export default function IdpSyncPage() {
     return { total: mergedList.length, linked, pending };
   }, [mergedList]);
 
-  // JumpCloud users that have NO matching SAP user (inverse view — for provisioning).
-  const unmappedJcUsers = useMemo(() => {
+  const unmappedIdpUsers = useMemo(() => {
     const sapEmails = new Set(
       activeUsers.map((u) => (u.eMail || "").toLowerCase()).filter(Boolean)
     );
-    const mappedJcIds = new Set(mappings.map((m) => (m.idp_user_id || "").toLowerCase()));
-    return jcUsers.filter((jc) => {
-      const email = (jc.email || "").toLowerCase();
+    const mappedIds = new Set(mappings.map((m) => (m.idp_user_id || "").toLowerCase()));
+    return idpUsers.filter((user) => {
+      const email = (user.email || "").toLowerCase();
       if (email && sapEmails.has(email)) return false;
-      if (jc._id && mappedJcIds.has(jc._id.toLowerCase())) return false;
+      if (user._id && mappedIds.has(user._id.toLowerCase())) return false;
       return true;
     });
-  }, [jcUsers, activeUsers, mappings]);
+  }, [idpUsers, activeUsers, mappings]);
 
 
   const isLoading = sapLoading || isLoadingMappings;
@@ -262,7 +271,7 @@ export default function IdpSyncPage() {
             <div className="min-w-0">
               <h1 className="text-2xl font-bold text-foreground">Sincronização IdP</h1>
               <p className="text-sm text-muted-foreground">
-                Vinculação de usuários SAP (ativos) ↔ JumpCloud
+                Vinculacao de usuarios SAP (ativos) com {providerLabel}
               </p>
             </div>
           </div>
@@ -271,23 +280,23 @@ export default function IdpSyncPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={handleRefreshJc}
-              disabled={isLoadingJc}
+              onClick={handleRefreshIdp}
+              disabled={isLoadingIdp}
               className="gap-2"
-              title="Atualizar cache JumpCloud"
+              title={`Atualizar cache ${providerLabel}`}
             >
-              {isLoadingJc ? (
+              {isLoadingIdp ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <RefreshCw className="w-4 h-4" />
               )}
-              JumpCloud
+              {providerLabel}
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={handleSyncAttrs}
-              disabled={syncingAttrs || isLoadingJc || isLoadingMappings}
+              disabled={syncingAttrs || isLoadingIdp || isLoadingMappings}
               className="gap-2"
               title="Atualizar departamento, centro de custo e demais atributos de todos os vínculos"
             >
@@ -317,6 +326,24 @@ export default function IdpSyncPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-6 space-y-4">
+        <div className="flex w-fit gap-1 rounded-lg border border-border bg-muted/50 p-1" role="tablist" aria-label="Provedor de identidade">
+          {(Object.keys(IDP_PROVIDERS) as IdpProvider[]).map((idpProvider) => (
+            <button
+              key={idpProvider}
+              type="button"
+              role="tab"
+              aria-selected={provider === idpProvider}
+              onClick={() => setProvider(idpProvider)}
+              className={`rounded-md px-4 py-2 text-sm transition-colors ${
+                provider === idpProvider
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {IDP_PROVIDERS[idpProvider].label}
+            </button>
+          ))}
+        </div>
         {!session && (
           <div className="p-6 rounded-xl border border-border bg-card text-center space-y-2">
             <AlertCircle className="w-8 h-8 text-yellow-500 mx-auto" />
@@ -340,8 +367,9 @@ export default function IdpSyncPage() {
 
         <IdpDivergencePanel
           sapUsers={sapUsers}
-          jcUsers={jcUsers}
+          idpUsers={idpUsers}
           mappings={mappings}
+          provider={provider}
           companyDb={session?.companyDB}
           focusUser={focusUser}
           onBlock={(u) => toggleLock(u)}
@@ -407,7 +435,7 @@ export default function IdpSyncPage() {
                 Usuário SAP
               </span>
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                JumpCloud
+                {providerLabel}
               </span>
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Depto / Centro de Custo
@@ -442,7 +470,7 @@ export default function IdpSyncPage() {
                     </p>
                   </div>
 
-                  {/* JumpCloud - combobox or linked info */}
+                  {/* IdP user - combobox or linked info */}
                   <div className="min-w-0 pr-2">
                     {isLinked && m ? (
                       <div className="flex items-center gap-2">
@@ -458,11 +486,11 @@ export default function IdpSyncPage() {
                       </div>
                     ) : (
                       <CachedSearchCombobox
-                        options={jcOptions}
-                        isLoading={isLoadingJc}
+                        options={idpOptions}
+                        isLoading={isLoadingIdp}
                         value={null}
                         onChange={(opt) => handleComboSelect(row.sapUser.UserCode, opt)}
-                        placeholder="Buscar usuário JumpCloud..."
+                        placeholder={`Buscar usuario ${providerLabel}...`}
                         suggestedQuery={row.sapUser.eMail || undefined}
                       />
                     )}
@@ -532,45 +560,45 @@ export default function IdpSyncPage() {
           </div>
         )}
 
-        {/* JumpCloud users without a SAP counterpart */}
+        {/* IdP users without a SAP counterpart */}
         <div className="rounded-xl border border-border bg-card overflow-hidden">
           <div className="flex items-center justify-between px-6 py-3 border-b border-border bg-muted/30">
             <div>
               <h2 className="text-sm font-semibold text-foreground">
-                JumpCloud sem correspondência no SAP
+                {providerLabel} sem correspondencia no SAP
               </h2>
               <p className="text-xs text-muted-foreground">
-                Usuários do JumpCloud sem SAP ativo equivalente — provisione manualmente no ERP.
+                Usuarios do {providerLabel} sem SAP ativo equivalente; provisione manualmente no ERP.
               </p>
             </div>
             <span className="text-xs text-muted-foreground">
-              {unmappedJcUsers.length} usuário(s)
+              {unmappedIdpUsers.length} usuario(s)
             </span>
           </div>
-          {isLoadingJc ? (
+          {isLoadingIdp ? (
             <div className="flex items-center justify-center py-8 text-muted-foreground">
               <Loader2 className="w-4 h-4 animate-spin mr-2" /> Carregando…
             </div>
-          ) : unmappedJcUsers.length === 0 ? (
+          ) : unmappedIdpUsers.length === 0 ? (
             <div className="text-center text-muted-foreground py-8 text-sm">
-              Todos os usuários do JumpCloud já possuem correspondência.
+              Todos os usuarios do {providerLabel} ja possuem correspondencia.
             </div>
           ) : (
             <div className="divide-y divide-border max-h-96 overflow-y-auto">
-              {unmappedJcUsers.map((jc) => (
+              {unmappedIdpUsers.map((user) => (
                 <div
-                  key={jc._id}
+                  key={user._id}
                   className="grid grid-cols-[1.2fr_1.4fr_1fr] items-center px-6 py-2.5"
                 >
                   <div className="min-w-0">
                     <p className="text-sm text-foreground truncate">
-                      {jc.displayname || `${jc.firstname || ""} ${jc.lastname || ""}`.trim() || jc.username}
+                      {user.displayname || `${user.firstname || ""} ${user.lastname || ""}`.trim() || user.username}
                     </p>
-                    <p className="text-xs text-muted-foreground truncate">{jc.username}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user.username}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground truncate">{jc.email || "—"}</p>
+                  <p className="text-xs text-muted-foreground truncate">{user.email || "—"}</p>
                   <p className="text-xs text-muted-foreground truncate text-right">
-                    {(jc as any).department || (jc as any).jobTitle || "—"}
+                    {user.department || user.jobTitle || "—"}
                   </p>
                 </div>
               ))}

@@ -7,6 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -52,8 +53,9 @@ function CredentialModal({
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string; detail?: string } | null>(null);
   const testEndpoint = TEST_ENDPOINTS[system.name];
   const isJumpCloud = system.name === "jumpcloud";
-  const canTest = isJumpCloud
-    ? !!(values.api_key?.trim() || hasExisting)
+  const isOkta = system.name === "okta";
+  const canTest = isJumpCloud || isOkta
+    ? !!(Object.values(values).some((value) => value?.trim()) || hasExisting)
     : (!!testEndpoint && hasExisting);
 
   // Load existing non-secret values (custom_fields, toggle) when dialog opens
@@ -125,7 +127,9 @@ function CredentialModal({
         const data = await res.json().catch(() => ({}));
         if (data?.ok) {
           const orgs = Array.isArray(data.organizations)
-            ? data.organizations.map((o: any) => `${o.name} (${o.id})`).join(", ")
+            ? data.organizations
+                .map((organization: { name?: unknown; id?: unknown }) => `${String(organization.name || "")} (${String(organization.id || "")})`)
+                .join(", ")
             : undefined;
           setTestResult({
             ok: true,
@@ -139,6 +143,30 @@ function CredentialModal({
             message: data?.error || `Falha no teste (HTTP ${res.status})`,
           });
           toast.error("Falha ao validar API Key");
+        }
+        return;
+      }
+
+      if (isOkta) {
+        const payload: Record<string, unknown> = { action: "testConnection" };
+        for (const key of ["org_url", "client_id", "private_key", "key_id"]) {
+          if (values[key]?.trim()) payload[key] = values[key].trim();
+        }
+        const res = await sapFunctionFetch("okta-proxy", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data?.ok) {
+          setTestResult({
+            ok: true,
+            message: `${data.message ?? "Conexao valida"} - ${data.elapsedMs ?? 0}ms`,
+            detail: data.org_url,
+          });
+          toast.success("Service App do Okta validado");
+        } else {
+          setTestResult({ ok: false, message: data?.error || `Falha no teste (HTTP ${res.status})` });
+          toast.error("Falha ao validar Service App do Okta");
         }
         return;
       }
@@ -192,6 +220,7 @@ function CredentialModal({
           {system.fields.map((field) => {
             const isConfigured = existingKeys.includes(field.key);
             const isPassword = field.type === "password";
+            const isTextarea = field.type === "textarea";
             const isCustom = field.type === "custom_fields";
             const isToggle = field.type === "toggle";
             const showPw = showPasswords[field.key];
@@ -229,6 +258,25 @@ function CredentialModal({
                       setValues((prev) => ({ ...prev, [field.key]: v ? "true" : "false" }))
                     }
                   />
+                </div>
+              );
+            }
+
+            if (isTextarea) {
+              return (
+                <div key={field.key} className="space-y-1.5 md:col-span-2">
+                  <Label className="text-sm text-muted-foreground flex items-center gap-2">
+                    {field.label}
+                    {isConfigured && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+                  </Label>
+                  <Textarea
+                    placeholder={isConfigured ? "Chave privada ja configurada; informe outra apenas para substituir" : field.placeholder}
+                    value={values[field.key] || ""}
+                    onChange={(event) => setValues((prev) => ({ ...prev, [field.key]: event.target.value }))}
+                    className="min-h-36 bg-card font-mono text-xs"
+                    spellCheck={false}
+                  />
+                  {field.description && <p className="text-xs text-muted-foreground">{field.description}</p>}
                 </div>
               );
             }
@@ -376,6 +424,7 @@ export default function Credentials() {
 
   // Group systems by category, filtering ERPs by admin-enabled list
   const erpSystems = SYSTEMS.filter((s) => s.category === "erp" && enabledErpNames.includes(s.name));
+  const idpSystems = SYSTEMS.filter((s) => s.category === "idp");
   // Non-ERP integrations: shown by default; if there's a toggle row in enabled_erp_types and it's off, hide.
   const otherSystems = SYSTEMS.filter((s) => {
     if (s.category) return false;
@@ -435,6 +484,7 @@ export default function Credentials() {
             <div className="space-y-8">
               {[
                 { label: "ERP", systems: erpSystems },
+                { label: CATEGORY_LABELS.idp, systems: idpSystems },
                 { label: "Integrações", systems: otherSystems },
               ].map((group) => (
                 <div key={group.label}>

@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import type { ApprovalTrackSegment } from "@/hooks/useApprovals";
 
 
 export interface FallbackSegmentRow {
@@ -36,38 +37,18 @@ function formatCurrency(value: number) {
  */
 export function SegmentFallbackAlert({
   expenseId,
+  segments = [],
   formatCostCenter = (c?: string | null) => c || "",
   onReprocessed,
 }: {
   expenseId?: string | null;
+  segments?: ApprovalTrackSegment[];
   formatCostCenter?: (code?: string | null) => string;
   onReprocessed?: () => void;
 }) {
-  const [rows, setRows] = useState<FallbackSegmentRow[]>([]);
-  const [reloadKey, setReloadKey] = useState(0);
+  const rows = segments.filter((row) => row.resolution && row.resolution !== "direct") as FallbackSegmentRow[];
   const [busyCc, setBusyCc] = useState<string | null>(null);
   const { isAdmin } = useAuth();
-
-  useEffect(() => {
-    if (!expenseId) {
-      setRows([]);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase
-        .from("expense_approval_segments")
-        .select(
-          "id,cost_center,project,amount,resolution,rule_name,fallback_branch,fallback_from_rule_name,resolution_note,current_approver,current_approver_email",
-        )
-        .eq("expense_id", expenseId)
-        .neq("resolution", "direct");
-      if (!cancelled) setRows((data || []) as FallbackSegmentRow[]);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [expenseId, reloadKey]);
 
   /** Regenera as trilhas apenas do centro de custo indicado. */
   const reprocessSegment = useCallback(async (row: FallbackSegmentRow) => {
@@ -82,14 +63,18 @@ export function SegmentFallbackAlert({
         },
       });
       if (error) throw error;
-      const result = (data as any)?.results?.[0];
+      const result = (data as {
+        results?: Array<{
+          skipped?: string;
+          segments?: Array<{ approver?: string }>;
+        }>;
+      } | null)?.results?.[0];
       if (result?.skipped) {
         toast.warning(`Nada a reprocessar no CC ${row.cost_center} (${result.skipped}).`);
       } else {
         const approver = result?.segments?.[0]?.approver || "—";
         toast.success(`Trilha do CC ${row.cost_center} reprocessada. Aprovador: ${approver}`);
       }
-      setReloadKey((k) => k + 1);
       onReprocessed?.();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao reprocessar o segmento.");

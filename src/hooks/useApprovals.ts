@@ -38,6 +38,33 @@ export interface ApprovalDoc {
   delegatedFrom?: string;
   /** Tipo de rateio (aplicável a despesas internas). "padrao" = Não. */
   rateioType?: string;
+  /** Trilhas persistidas, já recortadas no servidor para o usuário atual. */
+  approvalSegments?: ApprovalTrackSegment[];
+  /** O servidor restringiu o documento às ramificações deste aprovador. */
+  viewerSegmented?: boolean;
+  restrictedSegmentCount?: number;
+  restrictedItemCount?: number;
+}
+
+export interface ApprovalTrackSegment {
+  id: string;
+  segment_key: string;
+  cost_center: string | null;
+  project: string | null;
+  amount: number;
+  status: string;
+  current_level: number | null;
+  current_approver: string | null;
+  current_approver_email: string | null;
+  rule_name: string | null;
+  rule_id?: string | null;
+  chain: unknown;
+  decided_by: string | null;
+  decided_at: string | null;
+  resolution?: string | null;
+  resolution_note: string | null;
+  fallback_branch?: string | null;
+  fallback_from_rule_name?: string | null;
 }
 
 export interface DocumentLine {

@@ -4,8 +4,8 @@
 // combinações distintas de (centro de custo, projeto), CADA segmento segue a
 // sua própria cadeia de alçada, de forma INDEPENDENTE e em paralelo.
 // O documento só é aprovado quando TODOS os segmentos concluírem as suas
-// cadeias. Não existe mescla de cadeias — se a mesma pessoa aparece em dois
-// segmentos, ela aprova cada segmento no seu momento.
+// cadeias. Não existe mescla de alçadas, mas a decisão é do documento: se a
+// mesma pessoa aparece em mais de uma trilha ou nível, ela aprova uma única vez.
 //
 // Ex.: PC com 2 linhas no CC 1.10.2.2
 //   • projeto DONALD  → Leonardo Rossini → Santiago Macedo → Marco Tulio
@@ -325,6 +325,7 @@ export async function persistSegmentSubset(
   segments: RateioSegment[],
   requesterName: string | null,
   requesterEmail: string | null,
+  options?: { approvedBySegment?: Map<string, PriorApproval[]> },
 ): Promise<SegmentRow[]> {
   if (segments.length === 0) return [];
   const keys = segments.map((s) => s.segment_key);
@@ -335,6 +336,34 @@ export async function persistSegmentSubset(
     .in("segment_key", keys);
 
   const payload = segments.map((s) => {
+    const priorApprovals = options?.approvedBySegment?.get(s.segment_key);
+    if (priorApprovals) {
+      const state = resolveReprocessedApprovalState(
+        s.chain,
+        priorApprovals,
+        requesterName,
+        requesterEmail,
+      );
+      return {
+        expense_id: expenseId,
+        segment_key: s.segment_key,
+        cost_center: s.cost_center || null,
+        project: s.project || null,
+        amount: s.amount,
+        rule_id: s.rule_id,
+        chain: s.chain,
+        current_level: state.current_level,
+        status: state.status,
+        current_approver: state.current_approver,
+        current_approver_email: state.current_approver_email,
+        resolution: s.resolution || "direct",
+        rule_name: s.rule_name || null,
+        fallback_branch: s.fallback_branch || null,
+        fallback_from_rule_id: s.fallback_from_rule_id || null,
+        fallback_from_rule_name: s.fallback_from_rule_name || null,
+        resolution_note: s.resolution_note || null,
+      };
+    }
     const picked = pickApproverSkippingRequester(s.chain, requesterName, requesterEmail, 1);
     return {
       expense_id: expenseId,

@@ -31,7 +31,12 @@ import { applyCcRedirect, loadCcRedirects } from "../_shared/cc-redirect.ts";
 import { buildSapBaseUrl, loadSapCreds, sapCookieLogin, sapLogout } from "../_shared/sap-cache.ts";
 import { sapFetch } from "../_shared/sap-fetch.ts";
 // (buildRateioChain foi substituído por fluxos independentes por segmento)
-import { buildRateioSegments, buildReembolsoSegments, persistRateioSegments } from "../_shared/rateio-segments.ts";
+import {
+  buildRateioSegments,
+  buildReembolsoSegments,
+  persistRateioSegments,
+  type RateioSegment,
+} from "../_shared/rateio-segments.ts";
 import { classifyExpenseEdit, normalizeExpenseItems } from "../_shared/expense-items.ts";
 import { isNativeErpExpenseOrigin } from "../_shared/expense-origin.ts";
 
@@ -45,7 +50,7 @@ const corsHeaders = {
   "Access-Control-Expose-Headers": "X-Function-Version",
 };
 
-const FUNCTION_VERSION = "2026-08-25.1";
+const FUNCTION_VERSION = "2026-08-25.2";
 
 /**
  * Reavalia a matriz de aprovação para um documento que está sem `approval_rule_id`.
@@ -943,6 +948,7 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   let resubmittedLevel = 1;
   let resubmitFallbackUsed = false;
   let resubmittedAutoApproved = false;
+  let resubmittedSegments: RateioSegment[] | null = null;
 
   // Se o rateio mudou, o cliente já resolveu a nova regra e o 1º aprovador.
   // - Em rascunho: atualiza apenas os campos de roteamento; status continua rascunho.
@@ -1039,6 +1045,59 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
     resubmittedApprover = resolvedApprover;
     resubmittedLevel = resolvedLevel;
     resubmitFallbackUsed = fallbackUsed;
+
+    // Edição cria uma nova revisão: todas as trilhas são recalculadas do zero,
+    // sem carregar status ou aprovações da versão anterior do documento.
+    if (!resubmittedAutoApproved) {
+      let segmentItems = items;
+      if (!segmentItems) {
+        const { data: storedItems, error: storedItemsError } = await admin
+          .from("expense_items")
+          .select("cost_center, project, line_total")
+          .eq("expense_id", expenseId);
+        if (storedItemsError) {
+          return json(500, { error: `Falha ao recalcular trilhas após edição: ${storedItemsError.message}` });
+        }
+        segmentItems = (storedItems || []) as any[];
+      }
+      const effectiveRateioType = String(
+        updates.rateio_type ?? current.rateio_type ?? "padrao",
+      ).toLowerCase();
+      const rateioOverride = ["folha", "imposto", "viagens"].includes(effectiveRateioType);
+      if (!rateioOverride) {
+        const segmentContext = {
+          companyDb: String(current.company_db || ""),
+          docType: String(current.doc_type || "purchase"),
+          currency: current.currency || "BRL",
+          requesterName: current.requester_name || null,
+          supplierName: String(updates.supplier_name ?? current.supplier_name ?? "") || null,
+          supplierCode: String(updates.supplier_code ?? current.supplier_code ?? "") || null,
+          headerCostCenter: String(updates.cost_center ?? current.cost_center ?? "") || null,
+          headerProject: String(updates.project ?? current.project ?? "") || null,
+          rateioType: effectiveRateioType,
+        };
+        resubmittedSegments = effectiveRateioType === "reembolso"
+          ? await buildReembolsoSegments(admin, segmentItems as any, segmentContext)
+          : await buildRateioSegments(admin, segmentItems as any, segmentContext);
+        if (resubmittedSegments && resubmittedSegments.length > 0) {
+          const picks = resubmittedSegments.map((segment) =>
+            pickApproverSkippingRequester(
+              segment.chain,
+              current.requester_name || null,
+              current.requester_email || null,
+              1,
+            )
+          );
+          const approvers = Array.from(new Set(
+            picks.map((pick) => pick.approver_name).filter(Boolean),
+          ));
+          resubmittedApprover = approvers.join(" / ") || resolvedApprover;
+          resubmittedLevel = Math.min(...picks.map((pick) => pick.level_order));
+          updates.current_approver = resubmittedApprover;
+          updates.current_level_order = resubmittedLevel;
+        }
+      }
+    }
   }
 
   const persistedUpdates = withoutUnsupportedExpenseColumns(updates);
@@ -1048,6 +1107,20 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   } else if (Object.keys(persistedUpdates).length > 0) {
     const { error: upErr } = await admin.from("expenses").update(persistedUpdates).eq("id", expenseId);
     if (upErr) return json(500, { error: `Falha ao atualizar: ${upErr.message}` });
+  }
+
+  if (shouldResubmit) {
+    if (resubmittedSegments && resubmittedSegments.length > 0 && !resubmittedAutoApproved) {
+      await persistRateioSegments(
+        admin,
+        expenseId,
+        resubmittedSegments,
+        current.requester_name || null,
+        current.requester_email || null,
+      );
+    } else {
+      await admin.from("expense_approval_segments").delete().eq("expense_id", expenseId);
+    }
   }
 
   // ── Aplica mudanças de anexos ───────────────────────────────────────────
