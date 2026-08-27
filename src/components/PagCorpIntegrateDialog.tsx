@@ -11,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { SapSearchCombobox, type SapSearchOption } from "@/components/SapSearchCombobox";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
@@ -59,10 +60,19 @@ interface Props {
     options: {
       markNondeductible: boolean;
       postingType: "purchase_order" | "journal_entry";
-      journalEntry?: { debitAccount: string; creditAccount: string; costCenter?: string | null; project?: string | null; remarks?: string };
+      journalEntry?: {
+        debitAccount: string;
+        creditAccount: string;
+        costCenter?: string | null;
+        project?: string | null;
+        remarks?: string;
+        exchangeRate?: number | null;
+      };
+      lineOverrides?: Record<string, PagCorpLineOverride>;
     },
   ) => Promise<void>;
 }
+
 
 
 export function PagCorpIntegrateDialog({
@@ -87,6 +97,11 @@ export function PagCorpIntegrateDialog({
   const [debitAccount, setDebitAccount] = useState<SapSearchOption | null>(null);
   const [creditAccount, setCreditAccount] = useState<SapSearchOption | null>(null);
   const [remarks, setRemarks] = useState("");
+  const [exchangeRate, setExchangeRate] = useState("");
+  const [jeOverrides, setJeOverrides] = useState<
+    Record<string, { costCenter: SapSearchOption | null; project: SapSearchOption | null }>
+  >({});
+
   const [aiBusy, setAiBusy] = useState(false);
   const [aiTried, setAiTried] = useState(false);
   const [aiResult, setAiResult] = useState<SupplierFormPrefill | null>(null);
@@ -155,6 +170,19 @@ export function PagCorpIntegrateDialog({
     const c = String(transaction?.currency || "BRL").toUpperCase();
     return /^[A-Z]{3}$/.test(c) ? c : "BRL";
   }, [transaction?.currency]);
+
+  /** Moedas estrangeiras presentes nas transações selecionadas. */
+  const foreignCurrencies = useMemo(() => {
+    const set = new Set<string>();
+    for (const tx of activeTransactions) {
+      const c = String(tx.currency || "BRL").toUpperCase();
+      if (/^[A-Z]{3}$/.test(c) && c !== "BRL") set.add(c);
+    }
+    return Array.from(set);
+  }, [activeTransactions]);
+  const hasForeignCurrency = foreignCurrencies.length > 0;
+
+
 
   const runAi = useCallback(async (tx: PagCorpTransaction, opts: { forceOcr?: boolean } = {}) => {
     if (!companyDb) return;
@@ -272,6 +300,9 @@ export function PagCorpIntegrateDialog({
     setDebitAccount(null);
     setCreditAccount(null);
     setRemarks("");
+    setExchangeRate("");
+    setJeOverrides({});
+
     setSubmitting(false);
     setAiTried(false);
     setAiResult(null);
@@ -390,7 +421,30 @@ export function PagCorpIntegrateDialog({
 
   if (!transaction) return null;
 
+  /** Cotação informada manualmente (aceita vírgula). Vazio = PTAX automática. */
+  const parsedExchangeRate = (() => {
+    const raw = exchangeRate.replace(/\./g, "").replace(",", ".").trim();
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  })();
+
+  /** Overrides de CC/Projeto por transação (modo LCM). */
+  const journalLineOverrides = Object.fromEntries(
+    activeTransactions
+      .map((tx) => {
+        const ov = jeOverrides[String(tx.id)];
+        if (!ov?.costCenter && !ov?.project) return null;
+        return [
+          String(tx.id),
+          { costCenter: ov.costCenter?.code || null, project: ov.project?.code || null },
+        ] as const;
+      })
+      .filter(Boolean) as Array<readonly [string, PagCorpLineOverride]>,
+  ) as Record<string, PagCorpLineOverride>;
+
   const handleSubmit = async () => {
+
     if (postingType === "purchase_order" && !supplier) return;
     if (postingType === "journal_entry" && (!debitAccount || !creditAccount || !costCenter || !project)) return;
     setSubmitting(true);
@@ -413,10 +467,13 @@ export function PagCorpIntegrateDialog({
                   costCenter: costCenter?.code || null,
                   project: project?.code || null,
                   remarks: remarks.trim() || undefined,
+                  exchangeRate: parsedExchangeRate,
                 },
+                lineOverrides: journalLineOverrides,
               }
             : {}),
         },
+
       );
       if (storageKey) {
         try { sessionStorage.removeItem(storageKey); } catch {/* ignore */}
@@ -781,6 +838,75 @@ export function PagCorpIntegrateDialog({
                       />
                     </div>
                   </div>
+
+                  {hasForeignCurrency && (
+                    <div>
+                      <label htmlFor="pagcorp-journal-rate" className="text-xs font-medium text-muted-foreground mb-1 block">
+                        Cotação / PTAX ({foreignCurrencies.join(", ")} → BRL)
+                      </label>
+                      <Input
+                        id="pagcorp-journal-rate"
+                        inputMode="decimal"
+                        value={exchangeRate}
+                        onChange={(event) => setExchangeRate(event.target.value)}
+                        placeholder="Automático (PTAX de venda do BCB)"
+                      />
+                      <p className="mt-1 text-[10px] text-muted-foreground">
+                        Deixe em branco para usar a PTAX de venda do Banco Central na data do lançamento.
+                        O SAP recusa o lançamento em moeda estrangeira sem taxa de câmbio.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Centro de custo e projeto por transação
+                    </p>
+                    {activeTransactions.map((tx) => {
+                      const key = String(tx.id);
+                      const ov = jeOverrides[key] || { costCenter: null, project: null };
+                      return (
+                        <div key={key} className="rounded-md border border-border p-2 space-y-2">
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="truncate">{tx.description || `#${tx.id}`}</span>
+                            <span className="tabular-nums font-medium shrink-0">
+                              {formatCurrency(Number(tx.amount) || 0, tx.currency)}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <CachedSearchCombobox
+                              options={ccOptions}
+                              isLoading={ccLoading}
+                              value={ov.costCenter}
+                              onChange={(value) =>
+                                setJeOverrides((prev) => ({
+                                  ...prev,
+                                  [key]: { ...(prev[key] || { costCenter: null, project: null }), costCenter: value },
+                                }))
+                              }
+                              placeholder={costCenter ? `Padrão: ${costCenter.name}` : "Centro de custo…"}
+                            />
+                            <CachedSearchCombobox
+                              options={prOptions}
+                              isLoading={prLoading}
+                              value={ov.project}
+                              onChange={(value) =>
+                                setJeOverrides((prev) => ({
+                                  ...prev,
+                                  [key]: { ...(prev[key] || { costCenter: null, project: null }), project: value },
+                                }))
+                              }
+                              placeholder={project ? `Padrão: ${project.name}` : "Projeto…"}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <p className="text-[10px] text-muted-foreground">
+                      Em branco = usa o centro de custo e projeto definidos acima.
+                    </p>
+                  </div>
+
                   <div>
                     <label htmlFor="pagcorp-journal-remarks" className="text-xs font-medium text-muted-foreground mb-1 block">
                       Observação
