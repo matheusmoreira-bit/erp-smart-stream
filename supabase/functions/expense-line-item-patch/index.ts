@@ -167,6 +167,15 @@ Deno.serve(async (req) => {
         details: { expense_id: expenseId, from_item_code: fromItemCode, to_item_code: toItemCode, lines: changed },
       }).then(() => {}, () => {});
 
+      await supabase.from("expense_approval_log").insert({
+        expense_id: expenseId,
+        decision: "edited",
+        approver_name: "Sistema",
+        remarks:
+          `Troca de item aplicada no Flow e no ERP: ${fromItemCode} → ${toItemCode} (${changed} linha(s)). Sem reenvio para aprovação.`,
+      }).then(() => {}, () => {});
+
+
       return json({
         success: true,
         doc_entry: expense.sap_doc_entry,
