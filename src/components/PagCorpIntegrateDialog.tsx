@@ -170,6 +170,19 @@ export function PagCorpIntegrateDialog({
     return /^[A-Z]{3}$/.test(c) ? c : "BRL";
   }, [transaction?.currency]);
 
+  /** Moedas estrangeiras presentes nas transações selecionadas. */
+  const foreignCurrencies = useMemo(() => {
+    const set = new Set<string>();
+    for (const tx of activeTransactions) {
+      const c = String(tx.currency || "BRL").toUpperCase();
+      if (/^[A-Z]{3}$/.test(c) && c !== "BRL") set.add(c);
+    }
+    return Array.from(set);
+  }, [activeTransactions]);
+  const hasForeignCurrency = foreignCurrencies.length > 0;
+
+
+
   const runAi = useCallback(async (tx: PagCorpTransaction, opts: { forceOcr?: boolean } = {}) => {
     if (!companyDb) return;
     setAiBusy(true);
