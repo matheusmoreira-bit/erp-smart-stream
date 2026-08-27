@@ -420,7 +420,30 @@ export function PagCorpIntegrateDialog({
 
   if (!transaction) return null;
 
+  /** Cotação informada manualmente (aceita vírgula). Vazio = PTAX automática. */
+  const parsedExchangeRate = (() => {
+    const raw = exchangeRate.replace(/\./g, "").replace(",", ".").trim();
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  })();
+
+  /** Overrides de CC/Projeto por transação (modo LCM). */
+  const journalLineOverrides = Object.fromEntries(
+    activeTransactions
+      .map((tx) => {
+        const ov = jeOverrides[String(tx.id)];
+        if (!ov?.costCenter && !ov?.project) return null;
+        return [
+          String(tx.id),
+          { costCenter: ov.costCenter?.code || null, project: ov.project?.code || null },
+        ] as const;
+      })
+      .filter(Boolean) as Array<readonly [string, PagCorpLineOverride]>,
+  ) as Record<string, PagCorpLineOverride>;
+
   const handleSubmit = async () => {
+
     if (postingType === "purchase_order" && !supplier) return;
     if (postingType === "journal_entry" && (!debitAccount || !creditAccount || !costCenter || !project)) return;
     setSubmitting(true);
