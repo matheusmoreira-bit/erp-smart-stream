@@ -19,6 +19,7 @@ export const FINDING_LABELS: Record<string, string> = {
   alteracao_itens: "Alteração de itens",
   troca_centro_custo: "Troca de centro de custo",
   troca_projeto: "Troca de projeto",
+  estrutura_rateio_divergente: "Estrutura/rateio divergente",
   divergencia_solicitante: "Divergência de solicitante",
   alteracao_pos_aprovacao: "Alteração pós-aprovação",
   pagamento_sem_documento: "Pagamento sem documento",

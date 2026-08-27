@@ -33,6 +33,22 @@ import { RelationsMapFlow } from "./RelationsMapFlow";
 import { isPendingApproval } from "@/lib/approval-authz";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { resolveDocumentPaymentStatus } from "@/lib/relations-payment-status";
+import { useSap } from "@/contexts/SapContext";
+import { useCompanies } from "@/hooks/useCompanies";
+import { getErpShortLabel } from "@/lib/erp-labels";
+import {
+  useRelationDocumentLines,
+  type RelationCardDetail,
+} from "@/hooks/useRelationDocumentLines";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type LogDecision =
   | "created"
@@ -111,6 +127,7 @@ export interface RelationsMapExpense {
   supplier_name?: string | null;
   supplier_code?: string | null;
   company_db?: string | null;
+  erp_type?: string | null;
   created_at?: string;
   updated_at?: string;
   due_date?: string | null;
@@ -131,7 +148,7 @@ const STAGE_DEFS: { key: StageKey; label: string; icon: React.ComponentType<{ cl
   { key: "rascunho", label: "Rascunho", icon: FileText },
   { key: "pendente_aprovacao", label: "Aprovação", icon: ShieldCheck },
   { key: "aprovado", label: "Aprovado", icon: CheckCircle2 },
-  { key: "pc_lancado", label: "PC no SAP", icon: FileCheck2 },
+  { key: "pc_lancado", label: "PC no ERP", icon: FileCheck2 },
   { key: "nf_entrada", label: "NF Entrada", icon: Receipt },
   { key: "pagamento", label: "Pagamento", icon: Wallet },
   { key: "finalizado", label: "Finalizado", icon: CheckCircle2 },
@@ -173,14 +190,26 @@ function formatCurrency(value?: number, currency?: string | null) {
 
 export function RelationsMap({ open, onClose, expense, title }: Props) {
   const statusLabel = useStatusLabel();
+  const { session } = useSap();
+  const { companies } = useCompanies();
   const [log, setLog] = useState<ApprovalLogRow[]>([]);
   const [levels, setLevels] = useState<RuleLevelRow[]>([]);
   const [sapHistory, setSapHistory] = useState<SapHistoryRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [detailStage, setDetailStage] = useState<StageKey | null>(null);
+  const [lineDetail, setLineDetail] = useState<RelationCardDetail | null>(null);
   const [enriched, setEnriched] = useState(false);
   const [fluxoRow, setFluxoRow] = useState<SapFluxoEnrichment | null>(null);
   const reconciledKeyRef = useRef<string | null>(null);
+
+  const expenseErpType = useMemo(() => {
+    if (expense?.erp_type) return expense.erp_type;
+    const configuredType = companies.find((company) => company.company_db === expense?.company_db)?.erp_type;
+    if (configuredType) return configuredType;
+    if (!expense?.company_db || session?.companyDB === expense.company_db) return session?.erpType;
+    return null;
+  }, [companies, expense?.company_db, expense?.erp_type, session?.companyDB, session?.erpType]);
+  const erpLabel = expenseErpType === "sap" ? "SAP" : getErpShortLabel(expenseErpType);
 
 
   const derivedInput = {
@@ -496,7 +525,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
               <span>{title || "Mapa de Relações"}</span>
               {expense.sap_doc_num && (
                 <Badge variant="outline" className="font-mono text-xs">
-                  SAP #{expense.sap_doc_num}
+                  {erpLabel} #{expense.sap_doc_num}
                 </Badge>
               )}
               {mapStatusLabel && (
@@ -539,6 +568,8 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
                 apPayables={apLinks.data?.payables || []}
                 enriched={enriched}
                 fluxo={fluxoRow}
+                erpLabel={erpLabel}
+                onDetails={setLineDetail}
                 onNodeClick={(id) => {
                   if (id === "root") setDetailStage("pc_lancado");
                   else if (id === "requester") setDetailStage("rascunho");
@@ -571,9 +602,118 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
         apPayables={apLinks.data?.payables || []}
         apPayments={apLinks.data?.payments || []}
         apLoading={apLinks.isLoading}
+        erpLabel={erpLabel}
         onClose={() => setDetailStage(null)}
       />
+      <RelationLinesDialog
+        detail={lineDetail}
+        currency={expense.currency}
+        erpLabel={erpLabel}
+        onClose={() => setLineDetail(null)}
+      />
     </>
+  );
+}
+
+function RelationLinesDialog({
+  detail,
+  currency,
+  erpLabel,
+  onClose,
+}: {
+  detail: RelationCardDetail | null;
+  currency?: string | null;
+  erpLabel: string;
+  onClose: () => void;
+}) {
+  const { lines, isLoading, error } = useRelationDocumentLines(detail);
+  const total = lines.reduce((sum, line) => sum + line.lineTotal, 0);
+  const sourceLabel = detail?.source === "purchase_order"
+    ? `Pedido ${erpLabel}`
+    : detail?.source === "purchase_invoice"
+      ? `NF de Entrada ${erpLabel}`
+      : "ERP Flow";
+
+  return (
+    <Dialog open={!!detail} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <DialogContent className="max-h-[85vh] w-[96vw] max-w-5xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex flex-wrap items-center gap-2">
+            <span>{detail?.title || "Detalhes do documento"}</span>
+            <Badge variant="outline" className="text-[10px]">{sourceLabel}</Badge>
+            {detail?.docNum != null && (
+              <Badge variant="secondary" className="font-mono text-[10px]">
+                #{detail.docNum}
+              </Badge>
+            )}
+          </DialogTitle>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="flex min-h-40 items-center justify-center text-sm text-muted-foreground">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Carregando itens do documento…
+          </div>
+        ) : error ? (
+          <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        ) : lines.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            Este card não possui linhas de itens disponíveis.
+          </p>
+        ) : (
+          <div className="overflow-x-auto rounded-md border">
+            <Table className="min-w-[780px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="min-w-[260px]">Cód. e descrição do item</TableHead>
+                  <TableHead className="w-28 text-right">Quantidade</TableHead>
+                  <TableHead className="w-36 text-right">Valor un.</TableHead>
+                  <TableHead className="w-36 text-right">Valor total</TableHead>
+                  <TableHead className="min-w-[190px]">CC e projeto</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {lines.map((line) => (
+                  <TableRow key={line.id}>
+                    <TableCell>
+                      <div className="font-mono text-xs text-muted-foreground">
+                        {line.itemCode || "Sem código"}
+                      </div>
+                      <div className="mt-0.5 text-sm font-medium">{line.description}</div>
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm">
+                      {line.quantity.toLocaleString("pt-BR", { maximumFractionDigits: 4 })}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm">
+                      {formatCurrency(line.unitPrice, currency)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm font-medium">
+                      {formatCurrency(line.lineTotal, currency)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-xs"><span className="text-muted-foreground">CC:</span> {line.costCenter || "—"}</div>
+                      <div className="mt-1 text-xs"><span className="text-muted-foreground">Projeto:</span> {line.project || "—"}</div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+              <TableFooter>
+                <TableRow>
+                  <TableCell colSpan={3}>{lines.length} linha(s)</TableCell>
+                  <TableCell className="text-right font-mono font-semibold">
+                    {formatCurrency(total, currency)}
+                  </TableCell>
+                  <TableCell />
+                </TableRow>
+              </TableFooter>
+            </Table>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -587,15 +727,17 @@ interface StageDetailProps {
   apPayables: ContaPagarLink[];
   apPayments: VendorPaymentLink[];
   apLoading: boolean;
+  erpLabel: string;
   onClose: () => void;
 }
 
-function StageDetailDialog({ stage, expense, log, approverRows, nfLinks, nfLoading, apPayables, apPayments, apLoading, onClose }: StageDetailProps) {
+function StageDetailDialog({ stage, expense, log, approverRows, nfLinks, nfLoading, apPayables, apPayments, apLoading, erpLabel, onClose }: StageDetailProps) {
   const statusLabel = useStatusLabel();
   if (!stage) return null;
   const def = STAGE_DEFS.find((s) => s.key === stage);
   if (!def) return null;
   const Icon = def.icon;
+  const stageLabel = stage === "pc_lancado" ? `PC no ${erpLabel}` : def.label;
 
   const renderBody = () => {
     switch (stage) {
@@ -648,7 +790,7 @@ function StageDetailDialog({ stage, expense, log, approverRows, nfLinks, nfLoadi
         return (
           <DetailGrid
             rows={[
-              ["Nº SAP", expense.sap_doc_num ? `#${expense.sap_doc_num}` : "—"],
+              [`Nº ${erpLabel}`, expense.sap_doc_num ? `#${expense.sap_doc_num}` : "—"],
               ["DocEntry", expense.sap_doc_entry ? String(expense.sap_doc_entry) : "—"],
               ["Integrado em", formatDateTime(integrated?.decided_at)],
             ]}
@@ -805,7 +947,7 @@ function StageDetailDialog({ stage, expense, log, approverRows, nfLinks, nfLoadi
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icon className="w-5 h-5 text-primary" />
-            {def.label}
+            {stageLabel}
           </DialogTitle>
         </DialogHeader>
         <div className="mt-2">{renderBody()}</div>

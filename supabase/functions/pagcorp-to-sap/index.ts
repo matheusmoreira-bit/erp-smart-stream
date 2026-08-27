@@ -16,9 +16,9 @@ import { ensureCopyToTargetDocument } from "../_shared/sap-attach-copy.ts";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
-import { applyPagCorpJournalDimensions } from "../_shared/pagcorp-journal-entry.ts";
+import { buildPagCorpJournalTransactionPairs } from "../_shared/pagcorp-journal-entry.ts";
 
-const PAGCORP_JOURNAL_PAYLOAD_VERSION = "2026-08-25-dimensions-all-lines-v2";
+const PAGCORP_JOURNAL_PAYLOAD_VERSION = "2026-08-26-pairs-per-transaction-v3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -593,28 +593,30 @@ Deno.serve(async (req) => {
     const sapCreds = await getSapCredentials(supabase, companyDb);
     const sap = await loginSap(sapCreds);
 
-    // 3. Resolve mappings (per transaction so each line can have its own cost center/item)
-    const lineMappings = postingType === "purchase_order" ? await Promise.all(
+    // 3. Resolve mappings per transaction. Purchase orders also need the item;
+    // journal entries reuse the individual cost center/project mappings.
+    const lineMappings = await Promise.all(
       transactions.map(async (t) => {
-        const acctMapping = await resolveAccountMapping(supabase!, t.accountCode || null);
-        const cardMapping = await resolveCardMapping(
-          supabase!,
-          companyDb,
-          resolveCardKey(t),
-        );
-        const itemCode =
-          cardMapping?.item_code || (await resolveItemCode(supabase!, t.accountCode || null));
+        const [acctMapping, cardMapping] = await Promise.all([
+          resolveAccountMapping(supabase!, t.accountCode || null),
+          resolveCardMapping(supabase!, companyDb, resolveCardKey(t)),
+        ]);
+        const itemCode = postingType === "purchase_order"
+          ? cardMapping?.item_code || (await resolveItemCode(supabase!, t.accountCode || null))
+          : null;
         return { tx: t, acctMapping, cardMapping, itemCode };
       }),
-    ) : [];
-    const missing = lineMappings.find((m) => {
-      const ov = lineOverrides[String(m.tx.id)] || {};
-      return !ov.item && !m.itemCode;
-    });
-    if (missing) {
-      throw new Error(
-        `Nenhum item mapeado para a conta "${missing.tx.accountCode || "(sem conta)"}" (cadastre item fallback em Mapeamento PagCorp ou escolha um Item no diálogo)`,
-      );
+    );
+    if (postingType === "purchase_order") {
+      const missing = lineMappings.find((m) => {
+        const ov = lineOverrides[String(m.tx.id)] || {};
+        return !ov.item && !m.itemCode;
+      });
+      if (missing) {
+        throw new Error(
+          `Nenhum item mapeado para a conta "${missing.tx.accountCode || "(sem conta)"}" (cadastre item fallback em Mapeamento PagCorp ou escolha um Item no diálogo)`,
+        );
+      }
     }
 
     // Falha cedo (com mensagem clara) quando o item mapeado/escolhido está
@@ -761,39 +763,48 @@ Deno.serve(async (req) => {
         .filter((value): value is string => !!value)
         .sort();
       const date = documentDate || transactionDates[transactionDates.length - 1] || new Date().toISOString().slice(0, 10);
-      const amount = transactions.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
       const currency = String(transaction.currency || "BRL").toUpperCase();
-      const isForeignCurrency = currency !== "BRL" && /^[A-Z]{3}$/.test(currency);
       const customRemarks = typeof journalEntry.remarks === "string" ? journalEntry.remarks.trim() : "";
       const journalMemo = customRemarks
         ? formatPagCorpComments(customRemarks, 190)
         : description;
-      const debitLines = transactions.map((item) => ({
-        AccountCode: String(journalEntry.debitAccount),
-        LineMemo: truncateSapText(
-          `PagCorp - ${transactions.length > 1 ? `[#${item.id}] ` : ""}${item.description || journalMemo}`,
-          50,
-        ),
-        ...(isForeignCurrency
-          ? { FCDebit: Number(item.amount) || 0, FCCurrency: currency }
-          : { Debit: Number(item.amount) || 0 }),
-      }));
-      const journalEntryLines = applyPagCorpJournalDimensions([
-        ...debitLines,
-        {
-          AccountCode: String(journalEntry.creditAccount),
-          LineMemo: truncateSapText(journalMemo, 50),
-          ...(isForeignCurrency ? { FCCredit: amount, FCCurrency: currency } : { Credit: amount }),
-        },
-      ], {
-        branchId,
-        costCenter: String(journalEntry.costCenter),
-        project: String(journalEntry.project),
+      const projectFallback = companyDb === "open_gaming_sa" ? "OPEN GAMING" : null;
+      const journalTransactions = lineMappings.map(({ tx, acctMapping, cardMapping }) => {
+        const override = lineOverrides[String(tx.id)] || {};
+        const costCenter =
+          override.costCenter ?? cardMapping?.cost_center ?? acctMapping?.cost_center ?? journalEntry.costCenter ?? null;
+        const project =
+          override.project ?? cardMapping?.project ?? acctMapping?.project ?? journalEntry.project ?? projectFallback;
+        if (!costCenter || !project) {
+          throw new Error(
+            `Centro de custo e projeto não encontrados para a transação PagCorp #${tx.id}`,
+          );
+        }
+
+        return {
+          amount: Number(tx.amount) || 0,
+          currency: String(tx.currency || currency).toUpperCase(),
+          lineMemo: truncateSapText(
+            `PagCorp - ${transactions.length > 1 ? `[#${tx.id}] ` : ""}${tx.description || journalMemo}`,
+            50,
+          ),
+          costCenter: String(costCenter),
+          project: String(project),
+        };
       });
+      const journalEntryLines = buildPagCorpJournalTransactionPairs(journalTransactions, {
+        branchId,
+        debitAccount: String(journalEntry.debitAccount),
+        creditAccount: String(journalEntry.creditAccount),
+        localCurrency: "BRL",
+      });
+      if (journalEntryLines.length !== transactions.length * 2) {
+        throw new Error("Payload LCM inválido: cada transação deve gerar uma linha de débito e uma de crédito");
+      }
       const invalidDimensionLine = journalEntryLines.findIndex((line) =>
         line.BPLID !== branchId ||
-        line.CostingCode !== String(journalEntry.costCenter) ||
-        line.ProjectCode !== String(journalEntry.project)
+        !line.CostingCode ||
+        !line.ProjectCode
       );
       if (invalidDimensionLine >= 0) {
         throw new Error(
@@ -822,6 +833,8 @@ Deno.serve(async (req) => {
           branchId: line.BPLID,
           costCenter: line.CostingCode,
           project: line.ProjectCode,
+          debit: line.Debit ?? line.FCDebit ?? null,
+          credit: line.Credit ?? line.FCCredit ?? null,
         })),
       });
       let result;

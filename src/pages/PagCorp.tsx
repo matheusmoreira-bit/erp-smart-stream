@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { Fragment, useState, useEffect, useMemo, useRef } from "react";
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import { motion } from "framer-motion";
 import {
@@ -92,6 +92,8 @@ function formatCurrency(value: number, currency: string = "BRL") {
 
 function formatDate(dateStr: string) {
   if (!dateStr) return "—";
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
   try {
     return new Date(dateStr).toLocaleDateString("pt-BR", {
       day: "2-digit",
@@ -101,6 +103,141 @@ function formatDate(dateStr: string) {
   } catch {
     return dateStr;
   }
+}
+
+function formatDateTime(dateStr?: string | null) {
+  if (!dateStr) return "—";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return formatDate(dateStr);
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return dateStr;
+  return date.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function transactionText(t: PagCorpTransaction, ...keys: string[]): string | null {
+  for (const key of keys) {
+    const value = t[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return null;
+}
+
+function DetailValue({ label, value, wide = false }: { label: string; value: string | null | undefined; wide?: boolean }) {
+  return (
+    <div className={wide ? "sm:col-span-2" : undefined}>
+      <dt className="text-[11px] uppercase text-muted-foreground">{label}</dt>
+      <dd className="mt-1 text-sm text-foreground whitespace-pre-wrap break-words">{value || "—"}</dd>
+    </div>
+  );
+}
+
+function PagCorpTransactionDetails({
+  transaction: t,
+  onOpenAttachments,
+}: {
+  transaction: PagCorpTransaction;
+  onOpenAttachments: (transaction: PagCorpTransaction) => void;
+}) {
+  const receiptCount = (t.receipts?.length || 0) + (t.attachments?.length || 0);
+  const holder = transactionText(t, "employeeName", "userName", "holderName", "cardholderName")
+    || t.cardName
+    || t.accountAlias
+    || t.accountName
+    || null;
+  const accountabilityStatus = t.accountabilityStatus
+    || (t.accountabilityApproved ? "Aprovada" : t.hasAccountability ? "Em análise" : "Pendente");
+  const sapDocuments = t.integrationLinks?.length
+    ? t.integrationLinks.map((link) => `PC #${link.docNum ?? link.docEntry ?? "—"}`).join(", ")
+    : t.sapDocNum != null || t.sapDocEntry != null
+      ? `${t.postingType === "journal_entry" ? "LCM" : "PC"} #${t.sapDocNum ?? t.sapDocEntry}`
+      : null;
+
+  return (
+    <div className="grid gap-6 py-2 lg:grid-cols-3 lg:divide-x lg:divide-border">
+      <section className="space-y-3 lg:pr-6">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <CreditCard className="h-4 w-4 text-primary" />
+          Transação
+        </div>
+        <dl className="grid gap-3 sm:grid-cols-2">
+          <DetailValue label="ID PagCorp" value={String(t.id)} />
+          <DetailValue label="Data da transação" value={formatDateTime(t.date)} />
+          <DetailValue label="Classificação" value={t.eventClassification || null} />
+          <DetailValue label="Status da transação" value={t.status || null} />
+          <DetailValue label="Portador" value={holder} wide />
+          <DetailValue
+            label="Cartão"
+            value={t.cardLastDigits ? `Final ${t.cardLastDigits}` : t.cardId ? `ID ${t.cardId}` : null}
+          />
+          <DetailValue label="Conta" value={t.accountCode || null} />
+          <DetailValue label="Descrição" value={t.description} wide />
+          <DetailValue
+            label="Estabelecimento"
+            value={[t.merchantName, t.merchantTaxId ? formatTaxId(t.merchantTaxId) : null].filter(Boolean).join(" · ") || null}
+            wide
+          />
+        </dl>
+      </section>
+
+      <section className="space-y-3 lg:px-6">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <FileText className="h-4 w-4 text-primary" />
+          Prestação de contas
+        </div>
+        <dl className="grid gap-3 sm:grid-cols-2">
+          <DetailValue label="Status" value={accountabilityStatus} />
+          <DetailValue label="ID da prestação" value={t.accountabilityId != null ? String(t.accountabilityId) : null} />
+          <DetailValue label="Data da prestação" value={formatDateTime(t.accountabilityDate)} />
+          <DetailValue label="Anexos" value={receiptCount > 0 ? String(receiptCount) : "Nenhum"} />
+          <DetailValue label="Descrição da prestação" value={t.accountabilityDescription} wide />
+          {receiptCount > 0 && (
+            <div className="sm:col-span-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-2"
+                onClick={() => onOpenAttachments(t)}
+              >
+                <Paperclip className="h-3.5 w-3.5" />
+                Abrir anexos
+              </Button>
+            </div>
+          )}
+        </dl>
+      </section>
+
+      <section className="space-y-3 lg:pl-6">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <CheckCircle2 className="h-4 w-4 text-primary" />
+          Aprovação e integração
+        </div>
+        <dl className="grid gap-3 sm:grid-cols-2">
+          <DetailValue label="Data da aprovação" value={formatDateTime(t.accountabilityApprovedAt)} />
+          <DetailValue label="Aprovador" value={t.accountabilityApproverName} />
+          <DetailValue
+            label="Integração"
+            value={t.integrated ? "Integrada ao ERP" : t.isReversed ? "Estornada" : "Não integrada"}
+          />
+          <DetailValue label="Tipo de lançamento" value={t.postingType === "journal_entry" ? "Lançamento contábil" : t.integrated ? "Pedido de compra" : null} />
+          <DetailValue label="Documentos ERP" value={sapDocuments} wide />
+          <DetailValue
+            label="Baixa"
+            value={t.paymentFoundInSap || t.settlementStatus === "settled"
+              ? `Concluída${t.settlementPaymentDocNum ? ` #${t.settlementPaymentDocNum}` : ""}`
+              : t.nfFoundInSap ? "Aguardando baixa" : null}
+            wide
+          />
+        </dl>
+      </section>
+    </div>
+  );
 }
 // Traduz uma transação PagCorp para o formato consumido pelo `RelationsMap`.
 // Fluxo esperado nas etapas do mapa:
@@ -214,6 +351,15 @@ export default function PagCorp() {
   const [integratingNondeductible, setIntegratingNondeductible] = useState(false);
   // Grupos de PCs consolidados (várias transações → um único PC no SAP)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [expandedTransactions, setExpandedTransactions] = useState<Set<string>>(new Set());
+  const toggleTransaction = (id: string | number) =>
+    setExpandedTransactions((prev) => {
+      const key = String(id);
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   const toggleGroup = (key: string) =>
     setExpandedGroups((prev) => {
       const next = new Set(prev);
@@ -1585,7 +1731,7 @@ export default function PagCorp() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-border hover:bg-transparent">
-                    <TableHead className="w-10">
+                    <TableHead className="w-20">
                       <Checkbox
                         checked={allSelected}
                         onCheckedChange={toggleSelectAll}
@@ -1606,24 +1752,48 @@ export default function PagCorp() {
                       const isSelected = selectedIds.has(t.id);
                       const inGroup = !!opts.inGroup;
                       const aiEligible = isPagCorpAiEligible(t);
+                      const isExpanded = expandedTransactions.has(String(t.id));
                       return (
+                      <Fragment key={String(t.id)}>
                       <TableRow
-                        key={t.id}
+                        onClick={(event) => {
+                          const target = event.target as HTMLElement;
+                          if (target.closest("button, a, input, [role='menuitem'], [role='checkbox']")) return;
+                          toggleTransaction(t.id);
+                        }}
                         className={
                           inGroup
-                            ? "border-border border-l-2 border-l-success/60 bg-success/5"
-                            : "border-border"
+                            ? "border-border border-l-2 border-l-success/60 bg-success/5 cursor-pointer"
+                            : "border-border cursor-pointer"
                         }
                         data-state={isSelected ? "selected" : undefined}
                       >
-                        <TableCell className="w-10">
-                          {!t.integrated && !t.isReversed && (
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={() => toggleSelect(t.id)}
-                              aria-label="Selecionar"
-                            />
-                          )}
+                        <TableCell className="w-20">
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 shrink-0"
+                              onClick={() => toggleTransaction(t.id)}
+                              aria-expanded={isExpanded}
+                              aria-label={isExpanded ? "Recolher detalhes da transação" : "Expandir detalhes da transação"}
+                              title={isExpanded ? "Recolher detalhes" : "Ver detalhes"}
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                            </Button>
+                            {!t.integrated && !t.isReversed && (
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleSelect(t.id)}
+                                aria-label="Selecionar"
+                              />
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className={`text-sm text-foreground whitespace-nowrap ${inGroup ? "pl-6" : ""}`}>
                           {formatDate(t.date)}
@@ -1974,6 +2144,17 @@ export default function PagCorp() {
 
                         </TableCell>
                       </TableRow>
+                      {isExpanded && (
+                        <TableRow className={inGroup ? "border-border bg-success/[0.03]" : "border-border bg-muted/20"}>
+                          <TableCell colSpan={7} className="px-6 py-4">
+                            <PagCorpTransactionDetails
+                              transaction={t}
+                              onOpenAttachments={openAttachments}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      </Fragment>
                       );
                     };
 
@@ -2002,7 +2183,7 @@ export default function PagCorp() {
                           className="border-border bg-success/10 hover:bg-success/15 cursor-pointer"
                           onClick={() => toggleGroup(item.key)}
                         >
-                          <TableCell className="w-10">
+                          <TableCell className="w-20">
                             {expanded ? (
                               <ChevronDown className="w-4 h-4 text-success" />
                             ) : (

@@ -72,6 +72,9 @@ verify_jwt = false
 [functions.sap-nfse-lookup]
 verify_jwt = false
 
+[functions.sales-nfse-mastertax-file]
+verify_jwt = false
+
 
 
 [functions.sap-suppliers-hana]

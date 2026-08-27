@@ -74,6 +74,10 @@ export interface AttachmentValidationResult {
   errors: string[];
 }
 
+export function isAttachmentRequiredForDocument(docType?: string | null): boolean {
+  return String(docType || "purchase").toLowerCase() !== "sales";
+}
+
 /**
  * Valida uma lista de arquivos anexados. Retorna os aceitos e mensagens
  * de erro para os rejeitados — uma linha por arquivo, pronta para toast.

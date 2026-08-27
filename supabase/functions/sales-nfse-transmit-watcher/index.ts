@@ -253,12 +253,26 @@ Deno.serve(async (req) => {
         const { data: lookup } = await sb.functions.invoke("sap-nfse-lookup", {
           body: { company_db: companyDb, doc_entries: entries },
         });
-        const map = (lookup?.map || {}) as Record<string, { nfse?: string | null }>;
+        const map = (lookup?.map || {}) as Record<string, {
+          nfse?: string | null;
+          rps?: string | null;
+          key?: string | null;
+          authorized_at?: string | null;
+        }>;
         for (const row of list) {
-          const nfse = map[String(row.sap_invoice_doc_entry)]?.nfse;
+          const info = map[String(row.sap_invoice_doc_entry)];
+          const nfse = info?.nfse;
           if (nfse) {
             await sb.from("sales_order_invoices")
-              .update({ nfse_number: String(nfse), status: "authorized", last_error: null })
+              .update({
+                nfse_number: String(nfse),
+                rps_number: info.rps ? String(info.rps) : null,
+                authorized_at: info.authorized_at || null,
+                fiscal_authorized_at: info.authorized_at || null,
+                fiscal_doc_key: info.key ? String(info.key) : null,
+                status: "authorized",
+                last_error: null,
+              })
               .eq("id", row.id);
           }
         }

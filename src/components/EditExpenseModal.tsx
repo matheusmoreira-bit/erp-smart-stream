@@ -381,10 +381,10 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
         return;
       }
     }
-    // Validação de anexos: precisa manter ao menos 1 após todas as mudanças.
+    // Compras precisam manter ao menos um anexo; em pedidos de venda é opcional.
     const existingCount = (expense.attachments || []).length;
     const finalAttachmentCount = existingCount - removedIds.length + newFiles.length;
-    if (finalAttachmentCount < 1) {
+    if (!isSales && finalAttachmentCount < 1) {
       toast.error("O pedido precisa manter ao menos 1 anexo. Adicione um arquivo antes de salvar.");
       return;
     }
@@ -654,7 +654,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
                     Alterar anexos reinicia o fluxo de aprovação a partir do nível 1 com anotação no histórico.
                   </p>
                 )}
-                {finalCount < 1 && (
+                {!isSales && finalCount < 1 && (
                   <p className="text-[11px] text-destructive">
                     O pedido precisa manter ao menos 1 anexo.
                   </p>

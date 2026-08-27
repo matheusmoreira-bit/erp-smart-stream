@@ -13,17 +13,23 @@ import {
   FileCode,
   Mail,
   DollarSign,
-
+  Copy,
+  ExternalLink,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { sapFunctionFetch, authFetch } from "@/lib/auth-fetch";
+import { sapFunctionFetch, authFetch, publicFunctionFetch } from "@/lib/auth-fetch";
 import { sapQueryAll } from "@/lib/sap-client";
 import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
 import { PageHeader } from "@/components/PageHeader";
 import { NfseReconcilePanel } from "@/components/NfseReconcilePanel";
 import { BaixaRecebimentoDialog, type BaixaInvoiceRow } from "@/components/BaixaRecebimentoDialog";
+import {
+  buildNfsePublicConsultationUrl,
+  normalizeNfseAccessKey,
+} from "@/lib/nfse-public-consultation";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -455,10 +461,40 @@ interface NfseRow {
   series: string | null;
   status: string;
   authorized_at: string | null;
+  fiscal_doc_key: string | null;
+  fiscal_authorized_at: string | null;
   total_amount: number;
   currency: string;
   last_error: string | null;
   created_at: string;
+}
+
+interface NfseFiscalInfo {
+  nfse?: string | null;
+  rps?: string | null;
+  serie?: string | null;
+  key?: string | null;
+  authorized_at?: string | null;
+}
+
+async function fetchNfseFiscalMap(
+  companyDb: string,
+  docEntries: number[],
+): Promise<Record<string, NfseFiscalInfo>> {
+  if (!companyDb || docEntries.length === 0) return {};
+  try {
+    const response = await publicFunctionFetch("sap-nfse-lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ company_db: companyDb, doc_entries: docEntries }),
+    });
+    if (!response.ok) return {};
+    const body = await response.json().catch(() => null);
+    return (body?.map || {}) as Record<string, NfseFiscalInfo>;
+  } catch (error) {
+    console.warn("sap-nfse-lookup indisponível:", (error as Error).message);
+    return {};
+  }
 }
 
 interface SapInvoiceRef {
@@ -500,6 +536,7 @@ export default function SalesNfse() {
   const [syncing, setSyncing] = useState(false);
   const [pdfFiles, setPdfFiles] = useState<Set<string>>(new Set());
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+  const [fetchingPdfFor, setFetchingPdfFor] = useState<string | null>(null);
   const [xmlPaths, setXmlPaths] = useState<Record<string, string>>({});
   const [xmlLoadingFor, setXmlLoadingFor] = useState<string | null>(null);
   const [retryingFor, setRetryingFor] = useState<string | null>(null);
@@ -677,8 +714,32 @@ export default function SalesNfse() {
       }
 
 
+      const invoiceRows = (inv || []) as NfseRow[];
+      const fiscalMap = await fetchNfseFiscalMap(
+        companyDb,
+        invoiceRows
+          .map((row) => Number(row.sap_invoice_doc_entry))
+          .filter((entry) => Number.isFinite(entry) && entry > 0),
+      );
+      const enrichedInvoices = invoiceRows.map((row) => {
+        const fiscal = row.sap_invoice_doc_entry
+          ? fiscalMap[String(row.sap_invoice_doc_entry)]
+          : undefined;
+        if (!fiscal) return row;
+        return {
+          ...row,
+          nfse_number: fiscal.nfse || row.nfse_number,
+          rps_number: fiscal.rps || row.rps_number,
+          series: fiscal.serie || row.series,
+          authorized_at: fiscal.authorized_at || row.authorized_at,
+          fiscal_authorized_at: fiscal.authorized_at || row.fiscal_authorized_at,
+          fiscal_doc_key: fiscal.key || row.fiscal_doc_key,
+          status: fiscal.nfse ? "authorized" : row.status,
+        };
+      });
+
       setOrders([...flowRows, ...erpRows]);
-      setInvoices((inv || []) as NfseRow[]);
+      setInvoices(enrichedInvoices);
       await loadPdfIndex();
     } catch (e) {
       setError((e as Error).message || "Falha ao carregar pedidos de venda");
@@ -739,6 +800,47 @@ export default function SalesNfse() {
       window.open(data.signedUrl, "_blank", "noopener,noreferrer");
     },
     [pdfPathFor],
+  );
+
+  const fetchPdfFromMasterTax = useCallback(
+    async (order: SalesOrderRow, inv: NfseRow | null) => {
+      const accessKey = normalizeNfseAccessKey(inv?.fiscal_doc_key);
+      const invoiceDocEntry = Number(inv?.sap_invoice_doc_entry);
+      if (!accessKey || !Number.isInteger(invoiceDocEntry) || invoiceDocEntry <= 0) return;
+
+      setFetchingPdfFor(order.id);
+      try {
+        const response = await sapFunctionFetch("sales-nfse-mastertax-file", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            company_db: companyDb,
+            fiscal_doc_key: accessKey,
+            invoice_doc_entry: invoiceDocEntry,
+          }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || result?.error) {
+          if (result?.code === "MASTER_TAX_NFSE_NOT_FOUND") {
+            const portalUrl = buildNfsePublicConsultationUrl(accessKey);
+            toast.info("NFS-e ainda não capturada pela MasterTax. Abrindo a consulta oficial.");
+            if (portalUrl) window.open(portalUrl, "_blank", "noopener,noreferrer");
+            return;
+          }
+          throw new Error(result?.error || `Falha ao buscar DANFSe (HTTP ${response.status})`);
+        }
+
+        const path = pdfPathFor(order, inv);
+        setPdfFiles((current) => new Set(current).add(path));
+        toast.success("DANFSe obtido pela MasterTax.");
+        if (result?.url) window.open(result.url, "_blank", "noopener,noreferrer");
+      } catch (e) {
+        toast.error((e as Error).message || "Falha ao buscar DANFSe na MasterTax.");
+      } finally {
+        setFetchingPdfFor(null);
+      }
+    },
+    [companyDb, pdfPathFor],
   );
 
   // Reenvia o pedido de venda ao ERP quando a integração falhou/expirou.
@@ -985,7 +1087,8 @@ export default function SalesNfse() {
         o.supplier_name.toLowerCase().includes(q) ||
         (o.supplier_code || "").toLowerCase().includes(q) ||
         String(o.sap_doc_num || "").includes(q) ||
-        (inv?.nfse_number || "").toLowerCase().includes(q)
+        (inv?.nfse_number || "").toLowerCase().includes(q) ||
+        (inv?.fiscal_doc_key || "").includes(q)
       );
     });
   }, [orders, search, invoiceByExpense, originFilter]);
@@ -1164,6 +1267,8 @@ export default function SalesNfse() {
                   const emission = emissionFor(o, inv);
                   const emitted = emission.emitted;
                   const saldoResidual = saldoResidualFor(inv);
+                  const accessKey = normalizeNfseAccessKey(inv?.fiscal_doc_key);
+                  const publicConsultationUrl = buildNfsePublicConsultationUrl(accessKey);
                   return (
                     <tr key={o.id} className="border-t border-border/60">
                       <td className="px-3 py-2 font-mono text-xs">
@@ -1232,11 +1337,38 @@ export default function SalesNfse() {
                       </td>
                       <td className="px-3 py-2">
                         {inv?.status === "authorized" && emitted ? (
-                          <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-500">
-                            <CheckCircle2 className="w-3 h-3" />
-                            NFS-e {inv.nfse_number}
-                            {inv.rps_number ? ` · RPS ${inv.rps_number}` : ""}
-                          </Badge>
+                          <div className="space-y-1.5">
+                            <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-500">
+                              <CheckCircle2 className="w-3 h-3" />
+                              NFS-e {inv.nfse_number}
+                              {inv.rps_number ? ` · RPS ${inv.rps_number}` : ""}
+                            </Badge>
+                            {accessKey && (
+                              <div className="flex max-w-[280px] items-start gap-1 text-[10px] text-muted-foreground">
+                                <span className="break-all font-mono" title={`Chave da NFS-e: ${accessKey}`}>
+                                  Chave: {accessKey}
+                                </span>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-5 w-5 shrink-0"
+                                  title="Copiar chave da NFS-e"
+                                  aria-label="Copiar chave da NFS-e"
+                                  onClick={async () => {
+                                    try {
+                                      await navigator.clipboard.writeText(accessKey);
+                                      toast.success("Chave da NFS-e copiada.");
+                                    } catch {
+                                      toast.error("Não foi possível copiar a chave da NFS-e.");
+                                    }
+                                  }}
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
                         ) : emitted ? (
                           <Badge variant="outline" className="gap-1">
                             <Loader2 className="w-3 h-3" />
@@ -1270,14 +1402,66 @@ export default function SalesNfse() {
                                   onClick={() => void viewPdf(o, inv ?? null)}
                                 >
                                   <Eye className="w-3.5 h-3.5" />
-                                  Ver
+                                  Ver PDF
+                                </Button>
+                              )}
+                              {!hasPdf && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 gap-1 px-2 text-xs"
+                                  disabled={
+                                    !accessKey ||
+                                    !inv?.sap_invoice_doc_entry ||
+                                    fetchingPdfFor === o.id
+                                  }
+                                  title={
+                                    accessKey && inv?.sap_invoice_doc_entry
+                                      ? "Baixar o DANFSe emitido pela MasterTax"
+                                      : emitted
+                                        ? "Chave fiscal ainda indisponível. Atualize o status fiscal."
+                                        : "PDF disponível após a autorização da NFS-e"
+                                  }
+                                  onClick={() => void fetchPdfFromMasterTax(o, inv ?? null)}
+                                >
+                                  {fetchingPdfFor === o.id ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <Download className="w-3.5 h-3.5" />
+                                  )}
+                                  Baixar PDF
                                 </Button>
                               )}
                               <Button
-                                size="sm"
+                                type="button"
+                                size="icon"
                                 variant="ghost"
-                                className="h-7 gap-1 px-2 text-xs"
-                                disabled={uploadingFor === o.id}
+                                className="h-7 w-7"
+                                disabled={!publicConsultationUrl}
+                                title={
+                                  publicConsultationUrl
+                                    ? "Abrir consulta pública da NFS-e (contingência)"
+                                    : emitted
+                                      ? "Chave fiscal ainda indisponível. Atualize o status fiscal."
+                                      : "PDF disponível após a autorização da NFS-e"
+                                }
+                                aria-label="Abrir consulta pública da NFS-e"
+                                onClick={() => {
+                                  if (publicConsultationUrl) {
+                                    window.open(publicConsultationUrl, "_blank", "noopener,noreferrer");
+                                  }
+                                }}
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7"
+                                disabled={!emitted || uploadingFor === o.id}
+                                title="Anexar PDF manualmente (contingência)"
+                                aria-label="Anexar PDF manualmente"
                                 onClick={() => pickPdf(o, inv ?? null)}
                               >
                                 {uploadingFor === o.id ? (
@@ -1285,7 +1469,6 @@ export default function SalesNfse() {
                                 ) : (
                                   <Upload className="w-3.5 h-3.5" />
                                 )}
-                                {hasPdf ? "Substituir" : "Anexar"}
                               </Button>
                               <Button
                                 size="sm"

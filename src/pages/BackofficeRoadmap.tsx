@@ -1,953 +1,1023 @@
 import { useMemo, useState } from "react";
 import {
-  Rocket,
-  Boxes,
-  Plug,
+  ArrowDownUp,
   Bot,
-  Sparkles,
-  ShieldCheck,
+  Boxes,
+  CalendarDays,
+  ExternalLink,
+  GitCommitHorizontal,
+  History,
+  Plug,
+  Rocket,
   Search,
-  Lightbulb,
-  CircleDot,
-  ArrowUpDown,
-
+  ShieldCheck,
+  Sparkles,
+  Tags,
 } from "lucide-react";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-/**
- * Roadmap do ERP Flow: linha do tempo vertical com tudo que já foi entregue
- * (módulos, funções, melhorias, integrações e automações) e, abaixo,
- * a lista de sugestões de backlog.
- */
+type ItemKind =
+  "modulo" | "funcao" | "melhoria" | "integracao" | "automacao" | "seguranca";
 
-type ItemKind = "modulo" | "funcao" | "melhoria" | "integracao" | "automacao" | "seguranca";
-
-const KIND_META: Record<ItemKind, { label: string; icon: typeof Boxes; className: string }> = {
-  modulo: { label: "Módulo", icon: Boxes, className: "bg-primary/15 text-primary border-primary/30" },
-  funcao: { label: "Função", icon: Sparkles, className: "bg-accent/40 text-accent-foreground border-border" },
-  melhoria: { label: "Melhoria", icon: Rocket, className: "bg-muted text-muted-foreground border-border" },
-  integracao: { label: "Integração", icon: Plug, className: "bg-secondary text-secondary-foreground border-border" },
-  automacao: { label: "Automação", icon: Bot, className: "bg-muted text-foreground border-border" },
-  seguranca: { label: "Segurança", icon: ShieldCheck, className: "bg-destructive/10 text-destructive border-destructive/30" },
-};
+type EvidenceKind = "foundation" | "first-delivery" | "feature";
 
 interface RoadmapItem {
-  /** Data da entrega (ISO, YYYY-MM-DD). */
   date: string;
+  commit: string;
   title: string;
   kind: ItemKind;
-  /** Grupo/fase apenas como referência — não agrupa a lista. */
   track: string;
   description: string;
+  evidence: EvidenceKind;
 }
 
-/** Changelog: uma lista única, em ordem cronológica (mais recente primeiro). */
+const REPOSITORY_URL = "https://github.com/matheusmoreira-bit/erp-smart-stream";
+
+const KIND_META: Record<
+  ItemKind,
+  { label: string; icon: typeof Boxes; className: string }
+> = {
+  modulo: {
+    label: "Módulo",
+    icon: Boxes,
+    className: "border-primary/30 bg-primary/10 text-primary",
+  },
+  funcao: {
+    label: "Função",
+    icon: Sparkles,
+    className: "border-border bg-accent/40 text-accent-foreground",
+  },
+  melhoria: {
+    label: "Melhoria",
+    icon: Rocket,
+    className: "border-border bg-muted text-muted-foreground",
+  },
+  integracao: {
+    label: "Integração",
+    icon: Plug,
+    className: "border-border bg-secondary text-secondary-foreground",
+  },
+  automacao: {
+    label: "Automação",
+    icon: Bot,
+    className: "border-border bg-muted text-foreground",
+  },
+  seguranca: {
+    label: "Segurança",
+    icon: ShieldCheck,
+    className: "border-destructive/30 bg-destructive/10 text-destructive",
+  },
+};
+
+const EVIDENCE_LABEL: Record<EvidenceKind, string> = {
+  foundation: "Fundação do repositório",
+  "first-delivery": "Primeiro commit da entrega",
+  feature: "Evolução registrada",
+};
+
+const milestone = (
+  date: string,
+  commit: string,
+  title: string,
+  kind: ItemKind,
+  track: string,
+  description: string,
+  evidence: EvidenceKind = "first-delivery",
+): RoadmapItem => ({ date, commit, title, kind, track, description, evidence });
+
+/**
+ * Marcos curados a partir do histórico Git. Merges, manutenção interna e
+ * correções sem mudança funcional foram omitidos para manter a leitura útil.
+ */
 const CHANGELOG: RoadmapItem[] = [
-  // ---- Fase 8 — Login desacoplado e tempo real (ago/2026)
-  {
-    date: "2026-08-07",
-    title: "Novo fluxo de login (Google + ERP sob demanda)",
-    kind: "funcao",
-    track: "Governança e segurança",
-    description:
-      "A identidade do sistema passa a ser a conta Google corporativa: o acesso ao ERP Flow não exige mais usuário e senha do ERP. A sessão do Service Layer é resolvida somente no momento da ação (aprovar documento do SAP, integrar pedido, dar baixa) — de forma invisível quando há senha provisionada, ou por um modal rápido da empresa quando não há. Inclui tour de boas-vindas explicando a mudança.",
-  },
-  {
-    date: "2026-08-07",
-    title: "Sessão Google persistente e alertas em tempo real",
-    kind: "funcao",
-    track: "Experiência e inteligência",
-    description:
-      "Botão “Manter sessão do Google ativa” no menu da conta renova o token automaticamente (a cada 10 min e ao voltar o foco da aba). Com a sessão viva, aprovações e decisões chegam em tempo real por Realtime, com toast clicável, notificação nativa do navegador e atualização imediata do sino.",
-  },
-  {
-    date: "2026-08-06",
-    title: "Impersonação de usuário para suporte",
-    kind: "seguranca",
-    track: "Governança e segurança",
-    description:
-      "Administradores podem atuar como outro usuário para validar acessos, senha provisionada e visibilidade de documentos, com faixa permanente de aviso na tela e registro de quem impersonou em todos os eventos de auditoria.",
-  },
-  {
-    date: "2026-08-06",
-    title: "Aprovação replicada entre trilhas do mesmo documento",
-    kind: "automacao",
-    track: "Aprovações",
-    description:
-      "Quando o mesmo aprovador aparece em mais de uma trilha (rateio) ou em níveis subsequentes do mesmo documento, a decisão é propagada automaticamente, evitando aprovar o mesmo pedido várias vezes. Cada replicação fica registrada no histórico.",
-  },
-  {
-    date: "2026-08-05",
-    title: "Transparência de roteamento e reprocessamento por CC",
-    kind: "funcao",
-    track: "Aprovações",
-    description:
-      "Segmentos resolvidos por fallback (regra do ramo ou alçada sem níveis) exibem alerta no card e no histórico explicando qual regra foi aplicada e por quê, com ação de administrador para reprocessar apenas aquele centro de custo, preservando as demais trilhas.",
-  },
-  {
-    date: "2026-08-04",
-    title: "Paridade com edições feitas dentro do SAP (pullback)",
-    kind: "integracao",
-    track: "Integrações ERP",
-    description:
-      "Pedidos criados no ERP Flow e alterados diretamente no SAP podem ser sincronizados de volta (itens, valores, datas e anexos) sem disparar nova aprovação, mantendo os dois sistemas alinhados e registrando a origem da alteração no histórico.",
-  },
-  {
-    date: "2026-08-04",
-    title: "Tela de aprovações até 5x mais rápida",
-    kind: "melhoria",
-    track: "Aprovações",
-    description:
-      "Novo feed consolidado de aprovações: uma única chamada ao banco traz documentos, regras, segmentos e identidades, com cache de permissões, pintura imediata a partir do cache local e carregamento em ondas paralelas. Tempo médio de abertura caiu de ~2,7s para menos de 0,5s.",
-  },
-  // ---- Fase 7 — Continuidade e caixa (ago/2026)
-  {
-
-
-    date: "2026-08-03",
-    title: "Previsão de caixa por vencimento",
-    kind: "modulo",
-    track: "Dados e analytics",
-    description:
-      "Consolidação de contas a pagar e a receber por vencimento, com agrupamento por mês, semana, centro de custo ou projeto, KPIs de previsto × realizado, vencidos em aberto e exportação em CSV.",
-  },
-  {
-    date: "2026-08-02",
-    title: "Desprovisionamento automático via IdP",
-    kind: "seguranca",
-    track: "Governança e segurança",
-    description:
-      "Usuário suspenso ou removido no JumpCloud/Okta tem, na mesma sincronização, bloqueio no ERP, revogação de grupos, centros de custo/alçada, substituições vigentes, credenciais provisionadas, licença e dispositivos com push, além de sinalização de regras órfãs e registro em auditoria.",
-  },
-  {
-    date: "2026-08-01",
-    title: "Push nativo nas aprovações (Web Push)",
-    kind: "funcao",
-    track: "Experiência e inteligência",
-    description:
-      "Notificação push no celular pelo PWA quando surge uma aprovação pendente ou uma solicitação do usuário é concluída, com gestão de dispositivos e opt-in na central de notificações.",
-  },
-  // ---- Fase 6 — Experiência e inteligência (jul/2026)
-
-  {
-    date: "2026-07-30",
-    title: "Escalonamento automático por SLA",
-    kind: "funcao",
-    track: "Aprovações",
-    description:
-      "Documento parado além do prazo (horas úteis, configurável por empresa) sobe automaticamente para o substituto vigente ou para o nível superior da matriz, com e-mail de contingência, notificação ao novo aprovador, limite de escalonamentos e registro em audit log.",
-  },
-  {
-    date: "2026-07-30",
-    title: "Versionamento e rollback da matriz de alçadas",
-    kind: "funcao",
-    track: "Governança e segurança",
-    description:
-      "Cada publicação da matriz é congelada em uma versão (regras, critérios e aprovadores), com comparação lado a lado entre versões (ou contra o estado atual) e rollback para um estado anterior, gerando backup automático e registro em audit log.",
-  },
-  {
-
-    date: "2026-07-30",
-    title: "Captura de nota por foto/OCR (celular)",
-    kind: "modulo",
-    track: "Experiência e inteligência",
-    description:
-      "No celular, o usuário fotografa a nota/boleto e a IA (server-side) pré-preenche fornecedor, CNPJ, valor, nº do documento e vencimento para conferência antes de abrir o lançamento com o arquivo já anexado.",
-  },
-  {
-    date: "2026-07-30",
-    title: "App mobile-first para aprovações (PWA)",
-    kind: "modulo",
-    track: "Experiência e inteligência",
-    description:
-      "Aplicativo instalável no celular (Adicionar à tela de início) com tela dedicada de aprovações: aprovar/reprovar com justificativa, consultar status e anexar comprovante direto pela câmera.",
-  },
-  {
-    date: "2026-07-30",
-    title: "Revisão periódica de acessos",
-    kind: "seguranca",
-    track: "Governança e segurança",
-    description:
-      "Campanhas trimestrais de recertificação: retrato automático de grupos e alçadas, decisão de manter/alterar/revogar com justificativa, revogação aplicada na hora e exportação de evidência para auditoria.",
-  },
-  {
-    date: "2026-07-30",
-    title: "Identidade canônica do usuário SAP",
-    kind: "melhoria",
-    track: "Governança e segurança",
-    description:
-      "Usuário SAP como chave única (1:N e-mails, 1:1 nome), unificação de duplicidades por similaridade de grafia e consolidação mantendo o grupo de maior permissão em todas as bases.",
-  },
-  {
-    date: "2026-07-30",
-    title: "Central de notificações configurável",
-    kind: "funcao",
-    track: "Experiência e inteligência",
-    description:
-      "Histórico único de todos os envios (in-app, e-mail, WhatsApp e rotinas) e edição de gatilhos, frequência, canais e templates pelos administradores.",
-  },
-  {
-    date: "2026-07-30",
-    title: "Módulo de usuários unificado",
-    kind: "modulo",
-    track: "Governança e segurança",
-    description:
-      "Hub único com lista de pessoas, grupos, capabilities e sincronização de IdP, substituindo as telas separadas de permissões e usuários SAP.",
-  },
-  {
-    date: "2026-07-30",
-    title: "Permissões por capability (GRUPO > USER)",
-    kind: "funcao",
-    track: "Governança e segurança",
-    description:
-      "Catálogo central de flags por grupo (ver todos, cadastro direto de fornecedor, empresas teste etc.), sem exceções escondidas no usuário.",
-  },
-  {
-    date: "2026-07-30",
-    title: "Onboarding guiado por perfil",
-    kind: "melhoria",
-    track: "Experiência e inteligência",
-    description:
-      "Tour curto no primeiro acesso, adaptado ao grupo de permissão, com opção de reexibir pelo menu do usuário.",
-  },
-  {
-    date: "2026-07-30",
-    title: "Trilha de auditoria unificada por documento",
-    kind: "funcao",
-    track: "Governança e segurança",
-    description:
-      "Linha do tempo pesquisável reunindo eventos de ERP, aprovações, retries do SAP e notificações.",
-  },
-  {
-    date: "2026-07-30",
-    title: "Painel único de saúde das integrações",
-    kind: "funcao",
-    track: "Integrações e dados",
-    description:
-      "SAP Service Layer, HanaAPI V2, PagCorp e Master Tax em um só painel, com latência, taxa de erro e última execução.",
-  },
-  {
-    date: "2026-07-30",
-    title: "Fila de retentativa automática com backoff",
-    kind: "automacao",
-    track: "Integrações e dados",
-    description:
-      "Reprocessamento de falhas transitórias com backoff progressivo, jitter e recuperação de itens travados. Falhas de anexo não são integradas automaticamente sem anexo — exigem decisão manual.",
-  },
-  {
-    date: "2026-07-30",
-    title: "Circuit breaker por empresa",
-    kind: "automacao",
-    track: "Integrações e dados",
-    description:
-      "Base indisponível deixa de ser chamada por alguns minutos após falhas seguidas, sem travar as demais rotinas.",
-  },
-  {
-    date: "2026-07-30",
-    title: "Detecção de conflitos entre regras de aprovação",
-    kind: "funcao",
-    track: "Compras e aprovações",
-    description:
-      "Alerta de empates de prioridade, sobreposição e regras sombreadas, aproveitando a lógica do Raio-X.",
-  },
-  {
-    date: "2026-07-30",
-    title: "Simulador de regras antes de publicar",
-    kind: "funcao",
-    track: "Compras e aprovações",
-    description:
-      "Documento fictício rodado contra a matriz mostra a cadeia de aprovação resultante antes de salvar alterações.",
-  },
-  {
-    date: "2026-07-30",
-    title: "Delegação temporária de alçada (férias)",
-    kind: "funcao",
-    track: "Compras e aprovações",
-    description:
-      "Substituto com vigência definida e registro em audit log, evitando documentos parados.",
-  },
-  {
-    date: "2026-07-30",
-    title: "Aprovação por e-mail, mobile e Slack",
-    kind: "funcao",
-    track: "Compras e aprovações",
-    description:
-      "Link assinado de uso único em /aprovar/:token, com orquestração multicanal preparada para Slack.",
-  },
-  {
-    date: "2026-07-30",
-    title: "Rascunhos, duplicação e reativação de pedidos",
-    kind: "melhoria",
-    track: "Compras e aprovações",
-    description:
-      "Salvar em andamento, criar pedido a partir de outro já lançado e reativar documentos cancelados pelo autor.",
-  },
-  {
-    date: "2026-07-30",
-    title: "Esboço de NF de entrada no ERP",
-    kind: "integracao",
-    track: "Integrações e dados",
-    description:
-      "Lançamento de rascunho no SAP B1 quando o documento capturado pelo Master Tax tem pedido vinculado sem NF de entrada.",
-  },
-
-  {
-    date: "2026-07-30",
-    title: "Relançamento de documentos cancelados",
-    kind: "melhoria",
-    track: "Compras e aprovações",
-    description:
-      "Exceção na deduplicação de anexos: notas cujo lançamento foi cancelado podem ser lançadas novamente; duplicatas ativas seguem bloqueadas.",
-  },
-  {
-    date: "2026-07-30",
-    title: "Troca de grupo do usuário na lista da empresa",
-    kind: "funcao",
-    track: "Governança e segurança",
-    description:
-      "Atribuição de grupo de permissão direto na tela de usuários, com efeito global (todas as empresas), sem passar pelo backoffice.",
-  },
-  {
-    date: "2026-07-30",
-    title: "Usuário Administrativo com visão total de centros de custo",
-    kind: "melhoria",
-    track: "Governança e segurança",
-    description:
-      "O grupo passa a selecionar qualquer CC ao criar pedidos, mantendo a visibilidade de documentos restrita à própria diretoria.",
-  },
-  {
-    date: "2026-07-29",
-    title: "Matriz de alçadas em teia",
-    kind: "funcao",
-    track: "Experiência e inteligência",
-    description:
-      "Mapa mental radial com painel lateral, persistência de zoom/recolhimento, otimizações de renderização e filtros/busca internos.",
-  },
-  {
-    date: "2026-07-28",
-    title: "Raio-X da regra de aprovação",
-    kind: "funcao",
-    track: "Compras e aprovações",
-    description:
-      "Diagnóstico que explica qual regra foi aplicada e por quê, comparando CC + projeto + valor + item + rateio.",
-  },
-  {
-    date: "2026-07-26",
-    title: "Sanitização da base de regras de aprovação",
-    kind: "melhoria",
-    track: "Governança e segurança",
-    description:
-      "Remoção de 122 regras inativas/duplicadas, preservando as que possuem vínculo histórico para auditoria.",
-  },
-  {
-    date: "2026-07-24",
-    title: "Copiloto IA do backoffice",
-    kind: "funcao",
-    track: "Experiência e inteligência",
-    description:
-      "Chat com streaming, cadeia de modelos com fallback, execução de ferramentas e leitura de schema para SQL preciso.",
-  },
-  {
-    date: "2026-07-22",
-    title: "Padronização de exibição de usuários",
-    kind: "melhoria",
-    track: "Experiência e inteligência",
-    description: "Nome do colaborador em vez de e-mail em todas as telas de aprovação e histórico.",
-  },
-  {
-    date: "2026-07-18",
-    title: "Nova navegação e cabeçalhos padronizados",
-    kind: "melhoria",
-    track: "Experiência e inteligência",
-    description:
-      "Menu superior com logo, empresa/usuário em dropdown, submenus em modal, breadcrumbs abaixo da logo e wizard de novidades.",
-  },
-  {
-    date: "2026-07-15",
-    title: "Ocultação de empresas de teste (TST%)",
-    kind: "seguranca",
-    track: "Governança e segurança",
-    description:
-      "Bases de homologação visíveis apenas para admins ou grupos com a capability específica, em login e seletor de empresa.",
-  },
-  {
-    date: "2026-07-12",
-    title: "Retries com fallback de anexo",
-    kind: "automacao",
-    track: "Integrações e dados",
-    description:
-      "Reintegração sem anexo e envio do documento por e-mail para fiscal@{domínio da empresa}.",
-  },
-  {
-    date: "2026-07-30",
-    title: "Modo offline com fila de envio",
-    kind: "funcao",
-    track: "Integrações e dados",
-    description:
-      "Pedidos e despesas podem ser lançados com a base do ERP fora do ar: o envio fica em fila local e é reprocessado quando o circuit breaker fecha.",
-  },
-  // ---- Fase 5 — Governança e segurança (jun–jul/2026)
-  {
-    date: "2026-07-29",
-    title: "Tratativa do pentest whitebox",
-    kind: "seguranca",
-    track: "Governança e segurança",
-    description:
-      "Leituras escopadas no servidor, senha mínima de 12 caracteres, idempotência atômica, CSP/HSTS e tokens anti-CSRF.",
-  },
-  {
-    date: "2026-07-29",
-    title: "Alerta CC × Projeto auditável",
-    kind: "automacao",
-    track: "Governança e segurança",
-    description:
-      "Confirmação obrigatória em combinações sensíveis, com trilha de auditoria, apenas em empresas multiprojeto.",
-  },
-  {
-    date: "2026-06-22",
-    title: "Restrição inteligente de centro de custo",
-    kind: "melhoria",
-    track: "Governança e segurança",
-    description:
-      "Usuário lança em qualquer CC do mesmo prefixo de 2º nível, salvo grupos privilegiados com visão total.",
-  },
-  {
-    date: "2026-06-15",
-    title: "Regra de visibilidade de documentos",
-    kind: "funcao",
-    track: "Governança e segurança",
-    description:
-      "Usuário vê o que criou ou aprova; admin com toggle \"Ver todos\" ligado por padrão, também nas linhas vindas da HanaAPI.",
-  },
-  {
-    date: "2026-06-08",
-    title: "Grupos de permissão V2",
-    kind: "funcao",
-    track: "Governança e segurança",
-    description:
-      "Permissões funcionais por grupo, capability de empresas teste (TST%) e overrides globais de itens (FOL%/IMP%).",
-  },
-  // ---- Fase 4 — Integrações e dados (mai–jun/2026)
-  {
-    date: "2026-06-02",
-    title: "API pública de status PagCorp",
-    kind: "integracao",
-    track: "Integrações e dados",
-    description:
-      "Edge function com autenticação x-api-key, spec OpenAPI 3.1 e Swagger UI para consumo por outros projetos.",
-  },
-  {
-    date: "2026-05-28",
-    title: "Módulo KYP (diligência de fornecedores)",
-    kind: "modulo",
-    track: "Integrações e dados",
-    description:
-      "Orquestrador com adapter agnóstico de provedor (BeCompliance) e tela de auditoria KYP.",
-  },
-  {
-    date: "2026-05-20",
-    title: "Solicitações de cadastro (chamados)",
-    kind: "modulo",
-    track: "Integrações e dados",
-    description:
-      "Fila do time de Facilities, SLA de 48h úteis, anexos privados e notificação ao solicitante na conclusão.",
-  },
-  {
-    date: "2026-05-14",
-    title: "JumpCloud → SAP B1 (colaboradores)",
-    kind: "automacao",
-    track: "Integrações e dados",
-    description: "Sincronização agendada por cron, restrita às bases TST% durante a homologação.",
-  },
-  {
-    date: "2026-05-08",
-    title: "HanaAPI V2 com fallback de IP",
-    kind: "integracao",
-    track: "Integrações e dados",
-    description:
-      "Token dinâmico HMAC-SHA256, views VW_FORNECEDORES e VW_ACOMPANHAMENTO_PEDIDOS, com fallback para Service Layer.",
-  },
-  {
-    date: "2026-05-02",
-    title: "Integração PagCorp",
-    kind: "integracao",
-    track: "Integrações e dados",
-    description:
-      "Importação de despesas de cartão com anexos obrigatórios e auditoria de baixas indevidas.",
-  },
-  // ---- Fase 3 — Vendas e fiscal (abr–mai/2026)
-  {
-    date: "2026-04-26",
-    title: "Notificações do ciclo de vendas",
-    kind: "automacao",
-    track: "Vendas e fiscal",
-    description:
-      "Alertas em aprovação pendente, aprovação realizada, NFS-e emitida, envio ao cliente e baixa.",
-  },
-  {
-    date: "2026-04-20",
-    title: "Auditoria fiscal cruzada",
-    kind: "funcao",
-    track: "Vendas e fiscal",
-    description:
-      "Kanban de conciliação entre pagamentos, notas capturadas pelo Master Tax e documentos do ERP.",
-  },
-  {
-    date: "2026-04-14",
-    title: "NFS-e: PDF, XML e envio por e-mail",
-    kind: "automacao",
-    track: "Vendas e fiscal",
-    description:
-      "Busca do PDF na prefeitura, view VW_NFSE_XML_AUTORIZADO e disparo de e-mail por mapeamento Cliente|Projeto.",
-  },
-  {
-    date: "2026-04-08",
-    title: "Baixa de recebimento no SAP",
-    kind: "integracao",
-    track: "Vendas e fiscal",
-    description:
-      "Modal de confirmação, filial (BPLID) obtida da nota de origem, mapa de relações baixa a baixa com saldo residual e saldos iniciais (SI).",
-  },
-  {
-    date: "2026-04-01",
-    title: "Módulo de vendas em três frentes",
-    kind: "modulo",
-    track: "Vendas e fiscal",
-    description:
-      "Pedidos de venda, NFS-e e contas a receber, com guard de rotas e limpeza de cache local no logout.",
-  },
-  // ---- Fase 2 — Compras e aprovações (mar/2026)
-  {
-    date: "2026-03-24",
-    title: "Integração SAP B1 (Service Layer)",
-    kind: "integracao",
-    track: "Compras e aprovações",
-    description:
-      "Envio de PurchaseOrders, anexos com CopyToTargetDocument, fallback de projeto \"ANA GAMING\" e tratamento de timeout (504 amigável).",
-  },
-  {
-    date: "2026-03-16",
-    title: "Aprovações pendentes e histórico",
-    kind: "modulo",
-    track: "Compras e aprovações",
-    description:
-      "Ordenação por vencimento, KPIs clicáveis, filtros buscáveis, máscara de segmentos de outros aprovadores em rateios.",
-  },
-  {
-    date: "2026-03-09",
-    title: "Motor de regras de aprovação",
-    kind: "funcao",
-    track: "Compras e aprovações",
-    description:
-      "Regras por CC, projeto, faixa de valor, item e fluxo; níveis AP1..AP4 com aprovadores paralelos.",
-  },
-  {
-    date: "2026-03-02",
-    title: "Pedido de compras e rateio",
-    kind: "modulo",
-    track: "Compras e aprovações",
-    description:
-      "Formulário com itens, centro de custo, projeto, tipos de rateio e anexos com upload resiliente (retry exponencial).",
-  },
-  // ---- Fase 1 — Fundação (jan–fev/2026)
-  {
-    date: "2026-02-18",
-    title: "Backoffice administrativo",
-    kind: "modulo",
-    track: "Fundação",
-    description:
-      "Cadastro de empresas, usuários, provisionamento de acesso SAP e reset de senha com política de senha nunca expira.",
-  },
-  {
-    date: "2026-02-05",
-    title: "Login Google + vínculo de identidade",
-    kind: "funcao",
-    track: "Fundação",
-    description:
-      "Gate de autenticação Google, resolução flexível de identidades (sufixos .ext, acentos e domínios) e correção de loops de login.",
-  },
-  {
-    date: "2026-01-22",
-    title: "Multiempresa com login SAP B1",
-    kind: "modulo",
-    track: "Fundação",
-    description:
-      "Seleção de CompanyDB, sessão SAP com renovação automática (keep-alive de 5 min) e troca de empresa sem novo login.",
-  },
+  milestone(
+    "2025-01-01",
+    "95d05da0",
+    "Fundação técnica do frontend",
+    "melhoria",
+    "Plataforma",
+    "Criação do repositório e da base React/Vite que passou a sustentar o ERP Flow.",
+    "foundation",
+  ),
+  milestone(
+    "2026-04-09",
+    "56fd95bc",
+    "Home e analytics operacionais",
+    "modulo",
+    "Dados e analytics",
+    "Primeiro painel operacional e navegação para organizar os módulos do produto.",
+  ),
+  milestone(
+    "2026-04-09",
+    "6167ebcc",
+    "Conectividade com SAP Business One",
+    "integracao",
+    "Integrações ERP",
+    "Primeiro fluxo de autenticação e comunicação com o Service Layer do SAP.",
+    "feature",
+  ),
+  milestone(
+    "2026-04-09",
+    "ca23261b",
+    "Aprovações",
+    "modulo",
+    "Aprovações",
+    "Área para acompanhar documentos submetidos e decisões dos aprovadores.",
+  ),
+  milestone(
+    "2026-04-09",
+    "5ed91f5c",
+    "Despesas e pedidos de compra",
+    "modulo",
+    "Compras e despesas",
+    "Estrutura inicial de despesas, itens e anexos que originou o fluxo de compras.",
+  ),
+  milestone(
+    "2026-04-09",
+    "8cbadd26",
+    "Matriz e regras de aprovação",
+    "modulo",
+    "Aprovações",
+    "Definição de regras, níveis de alçada e responsáveis pela aprovação.",
+  ),
+  milestone(
+    "2026-04-09",
+    "16a302df",
+    "PagCorp",
+    "modulo",
+    "PagCorp",
+    "Consulta de transações de cartões corporativos por meio do proxy PagCorp.",
+  ),
+  milestone(
+    "2026-04-09",
+    "8fc0fb26",
+    "Credenciais de integração",
+    "seguranca",
+    "Governança e segurança",
+    "Cadastro protegido das credenciais usadas pelos conectores internos.",
+  ),
+  milestone(
+    "2026-04-09",
+    "4968a98e",
+    "Leitura de documentos com IA",
+    "automacao",
+    "Experiência e inteligência",
+    "Extração assistida para preencher despesas a partir dos anexos.",
+    "feature",
+  ),
+  milestone(
+    "2026-04-09",
+    "ffdda242",
+    "Mapeamento contábil do PagCorp",
+    "modulo",
+    "PagCorp",
+    "Regras entre transações corporativas e dimensões contábeis.",
+  ),
+  milestone(
+    "2026-04-10",
+    "704799e2",
+    "Usuários e permissões",
+    "modulo",
+    "Governança e segurança",
+    "Cadastro administrativo de usuários e base do controle de acesso.",
+  ),
+  milestone(
+    "2026-04-10",
+    "2528a4ae",
+    "Integração de identidades com JumpCloud",
+    "integracao",
+    "Identidade",
+    "Mapeamento entre identidades corporativas e usuários internos.",
+  ),
+  milestone(
+    "2026-04-10",
+    "8bc10581",
+    "Synapse",
+    "modulo",
+    "Dados e analytics",
+    "Estruturas de dados e políticas do módulo de análise Synapse.",
+  ),
+  milestone(
+    "2026-04-10",
+    "613334c5",
+    "Administração multiempresa",
+    "modulo",
+    "Plataforma",
+    "Cadastro de empresas e seleção do contexto empresarial.",
+  ),
+  milestone(
+    "2026-04-10",
+    "ee6a76fa",
+    "Auditoria e histórico de integrações",
+    "modulo",
+    "Auditoria e observabilidade",
+    "Primeiras trilhas de auditoria e histórico das comunicações externas.",
+  ),
+  milestone(
+    "2026-04-14",
+    "f373a06e",
+    "Central de notificações",
+    "modulo",
+    "Experiência e inteligência",
+    "Acompanhamento de avisos, decisões e eventos relevantes.",
+  ),
+  milestone(
+    "2026-04-17",
+    "a70b163b",
+    "Fornecedores",
+    "modulo",
+    "Fiscal e cadastros",
+    "Cadastro e consulta de fornecedores utilizados nos fluxos financeiros.",
+  ),
+  milestone(
+    "2026-04-17",
+    "a7e16ff2",
+    "Monitor de integrações",
+    "modulo",
+    "Integrações ERP",
+    "Visão operacional do processamento e resultado das integrações.",
+  ),
+  milestone(
+    "2026-05-05",
+    "7bcc7351",
+    "Intercompany",
+    "modulo",
+    "Cadastros compartilhados",
+    "Área para administrar e replicar cadastros entre empresas.",
+  ),
+  milestone(
+    "2026-05-05",
+    "96605069",
+    "Revisão financeira",
+    "modulo",
+    "Financeiro",
+    "Conferência financeira e acompanhamento dos lançamentos.",
+  ),
+  milestone(
+    "2026-05-12",
+    "2ae4e7df",
+    "Gestão e análise de licenças",
+    "modulo",
+    "Governança e segurança",
+    "Importação e análise de licenças para acompanhar uso e disponibilidade.",
+  ),
+  milestone(
+    "2026-05-18",
+    "1dfc251b",
+    "Vendas",
+    "modulo",
+    "Vendas",
+    "Fluxo comercial para criar e acompanhar pedidos de venda.",
+  ),
+  milestone(
+    "2026-05-23",
+    "ba52aad5",
+    "Produtividade dos usuários",
+    "modulo",
+    "Dados e analytics",
+    "Indicadores de atividade e produtividade por usuário.",
+  ),
+  milestone(
+    "2026-05-28",
+    "af25639f",
+    "Histórico de aprovações",
+    "modulo",
+    "Aprovações",
+    "Visão consolidada das decisões e movimentações das aprovações.",
+  ),
+  milestone(
+    "2026-06-10",
+    "cd8879e6",
+    "Indedutíveis do PagCorp",
+    "modulo",
+    "PagCorp",
+    "Tratamento das transações classificadas como indedutíveis.",
+  ),
+  milestone(
+    "2026-06-11",
+    "12670d26",
+    "Auditoria fiscal",
+    "modulo",
+    "Fiscal e cadastros",
+    "Rotinas de análise e conferência dos dados fiscais.",
+  ),
+  milestone(
+    "2026-06-11",
+    "d0375a65",
+    "Cadastro de itens",
+    "modulo",
+    "Fiscal e cadastros",
+    "Manutenção do catálogo de itens utilizado nas integrações.",
+  ),
+  milestone(
+    "2026-06-12",
+    "fc7d6144",
+    "Notas fiscais de entrada",
+    "modulo",
+    "Compras e despesas",
+    "Monitor de NFs e de seus vínculos com pedidos e documentos do ERP.",
+  ),
+  milestone(
+    "2026-06-12",
+    "e8282a8f",
+    "Administração de usuários SAP",
+    "modulo",
+    "Identidade",
+    "Gestão dos usuários SAP a partir do backoffice.",
+  ),
+  milestone(
+    "2026-06-16",
+    "62b9170d",
+    "Replicação de usuários SAP",
+    "automacao",
+    "Identidade",
+    "Replicação de usuários e configurações entre bases SAP.",
+  ),
+  milestone(
+    "2026-06-17",
+    "dee617f5",
+    "Hubs operacionais do backoffice",
+    "melhoria",
+    "Plataforma",
+    "Organização de aprovações, auditoria, integrações e usuários em hubs.",
+    "feature",
+  ),
+  milestone(
+    "2026-06-18",
+    "309fd5bc",
+    "Adiantamentos",
+    "modulo",
+    "Financeiro",
+    "Fluxo de adiantamentos e acompanhamento de sua integração.",
+  ),
+  milestone(
+    "2026-07-02",
+    "3112a838",
+    "Trilha de auditoria detalhada",
+    "modulo",
+    "Auditoria e observabilidade",
+    "Consulta cronológica para investigar alterações e ações.",
+  ),
+  milestone(
+    "2026-07-07",
+    "f1909949",
+    "Sincronização de status SAP",
+    "automacao",
+    "Integrações ERP",
+    "Monitoramento dos ciclos e estados dos documentos enviados ao SAP.",
+  ),
+  milestone(
+    "2026-07-07",
+    "9657089e",
+    "Histórico de transferências",
+    "modulo",
+    "Aprovações",
+    "Rastreabilidade das transferências entre aprovadores.",
+  ),
+  milestone(
+    "2026-07-14",
+    "4a985bc0",
+    "Auditoria fiscal cruzada",
+    "modulo",
+    "Fiscal e cadastros",
+    "Conferência cruzada de documentos para localizar divergências.",
+  ),
+  milestone(
+    "2026-07-15",
+    "dce32001",
+    "Histórico de baixas",
+    "modulo",
+    "Financeiro",
+    "Consulta de baixas financeiras e resultados de integração.",
+  ),
+  milestone(
+    "2026-07-16",
+    "6cb0661d",
+    "Integração de colaboradores",
+    "integracao",
+    "Identidade",
+    "Sincronização de colaboradores com os sistemas corporativos.",
+  ),
+  milestone(
+    "2026-07-22",
+    "fae683f9",
+    "Copiloto do backoffice",
+    "modulo",
+    "Experiência e inteligência",
+    "Assistente para consultas e apoio às rotinas administrativas.",
+  ),
+  milestone(
+    "2026-07-23",
+    "fccff784",
+    "Saúde da infraestrutura",
+    "modulo",
+    "Auditoria e observabilidade",
+    "Disponibilidade dos serviços e dependências essenciais.",
+  ),
+  milestone(
+    "2026-07-24",
+    "8dc9a620",
+    "Fila de retentativas",
+    "modulo",
+    "Integrações ERP",
+    "Acompanhamento e reexecução das operações que falharam.",
+  ),
+  milestone(
+    "2026-07-29",
+    "06de95ec",
+    "KYP e solicitações de cadastro",
+    "modulo",
+    "Governança e segurança",
+    "Auditoria KYP e fluxo de solicitações para novos cadastros.",
+  ),
+  milestone(
+    "2026-07-29",
+    "2fad78fe",
+    "Hub de vendas e NFS-e",
+    "modulo",
+    "Vendas",
+    "Organização da operação comercial e entrada da gestão de NFS-e.",
+  ),
+  milestone(
+    "2026-07-30",
+    "6315a679",
+    "Matriz visual de aprovações",
+    "modulo",
+    "Aprovações",
+    "Visão administrativa das alçadas, regras e aprovadores.",
+  ),
+  milestone(
+    "2026-07-30",
+    "4c352bcc",
+    "SLA e saúde das integrações",
+    "modulo",
+    "Auditoria e observabilidade",
+    "Escalonamento por SLA e acompanhamento da saúde dos conectores.",
+  ),
+  milestone(
+    "2026-07-30",
+    "f0e3c0cd",
+    "Aprovações no celular",
+    "modulo",
+    "Aprovações",
+    "Experiência mobile para analisar e decidir documentos.",
+  ),
+  milestone(
+    "2026-07-30",
+    "b15fc4c4",
+    "Revisão de acessos",
+    "seguranca",
+    "Governança e segurança",
+    "Revisão de administradores, grupos e permissões efetivas.",
+  ),
+  milestone(
+    "2026-08-01",
+    "fd9d71b3",
+    "Conciliação do PagCorp",
+    "modulo",
+    "PagCorp",
+    "Acompanhamento de prestações e liquidações corporativas.",
+  ),
+  milestone(
+    "2026-08-03",
+    "63fa2fa8",
+    "Previsão de caixa",
+    "modulo",
+    "Financeiro",
+    "Projeção financeira baseada nos vencimentos dos documentos.",
+  ),
+  milestone(
+    "2026-08-03",
+    "68eced4b",
+    "Notificações push nativas",
+    "funcao",
+    "Experiência e inteligência",
+    "Avisos de aprovações e eventos importantes também por Web Push.",
+    "feature",
+  ),
+  milestone(
+    "2026-08-05",
+    "ee30fcc5",
+    "Governança de notificações",
+    "modulo",
+    "Governança e segurança",
+    "Controles de canais, preferências e comportamento das notificações.",
+  ),
+  milestone(
+    "2026-08-06",
+    "45b63390",
+    "Desempenho de banco e fluxos",
+    "modulo",
+    "Auditoria e observabilidade",
+    "Métricas de banco de dados e tempos dos principais fluxos.",
+  ),
+  milestone(
+    "2026-08-07",
+    "076d67d3",
+    "Login desacoplado do ERP",
+    "seguranca",
+    "Identidade",
+    "Autenticação do ERP resolvida sob demanda, sem prender a sessão do usuário.",
+    "feature",
+  ),
+  milestone(
+    "2026-08-11",
+    "5a3e4358",
+    "Chaves de API e auditoria unificada",
+    "modulo",
+    "Governança e segurança",
+    "Gestão de chaves e visão unificada para consultas de auditoria.",
+  ),
+  milestone(
+    "2026-08-18",
+    "04c66fb8",
+    "Acesso de usuários por empresa",
+    "seguranca",
+    "Governança e segurança",
+    "Escopo de acesso passou a respeitar as empresas de cada usuário.",
+    "feature",
+  ),
+  milestone(
+    "2026-08-18",
+    "7a113797",
+    "Mapa de relações dos documentos SAP",
+    "funcao",
+    "Integrações ERP",
+    "Reconciliação visual entre pedido, aprovação, nota e financeiro.",
+    "feature",
+  ),
+  milestone(
+    "2026-08-19",
+    "e8a6d62a",
+    "Emissão de NFS-e pelas vendas",
+    "integracao",
+    "Vendas",
+    "Pedidos de venda passaram a originar a emissão de NFS-e.",
+    "feature",
+  ),
+  milestone(
+    "2026-08-19",
+    "75796746",
+    "Adiantamentos de clientes",
+    "funcao",
+    "Vendas",
+    "Processo financeiro de adiantamentos recebidos de clientes.",
+    "feature",
+  ),
+  milestone(
+    "2026-08-20",
+    "30ec5f91",
+    "Integração SAP resiliente",
+    "melhoria",
+    "Integrações ERP",
+    "Recuperação e estados operacionais para indisponibilidades do SAP.",
+    "feature",
+  ),
+  milestone(
+    "2026-08-20",
+    "241e4f1a",
+    "PagCorp por lançamento contábil",
+    "integracao",
+    "PagCorp",
+    "Transações passaram a ser integradas em lote como lançamentos manuais.",
+    "feature",
+  ),
+  milestone(
+    "2026-08-20",
+    "03fdd626",
+    "Persistência da análise de IA",
+    "automacao",
+    "PagCorp",
+    "Resultado da leitura dos anexos salvo para evitar processamento repetido.",
+    "feature",
+  ),
+  milestone(
+    "2026-08-20",
+    "22ae1560",
+    "Pedidos de compra no Omie",
+    "integracao",
+    "Integrações ERP",
+    "Compras passaram a criar pedidos em empresas conectadas ao Omie.",
+    "feature",
+  ),
+  milestone(
+    "2026-08-21",
+    "fb06d3a6",
+    "Condições de pagamento nas compras",
+    "funcao",
+    "Compras e despesas",
+    "Condição de pagamento por empresa incluída no pedido de compra.",
+    "feature",
+  ),
+  milestone(
+    "2026-08-21",
+    "e3b9dcc9",
+    "Rascunhos persistentes",
+    "funcao",
+    "Compras e despesas",
+    "Rascunhos permanecem entre sessões até submissão ou exclusão.",
+    "feature",
+  ),
+  milestone(
+    "2026-08-21",
+    "81bbe177",
+    "IA do PagCorp com consumo controlado",
+    "automacao",
+    "PagCorp",
+    "Análise limitada a anexos aprovados, não processados e não integrados.",
+    "feature",
+  ),
+  milestone(
+    "2026-08-21",
+    "58680101",
+    "Controles manuais de integração",
+    "funcao",
+    "Integrações ERP",
+    "Ações idempotentes para disparar, repetir ou cancelar integrações.",
+    "feature",
+  ),
+  milestone(
+    "2026-08-25",
+    "3493b7e6",
+    "Reprocessamento de aprovação e Omie",
+    "funcao",
+    "Aprovações",
+    "Novos controles de aprovação e ampliação das integrações de compra e venda.",
+    "feature",
+  ),
+  milestone(
+    "2026-08-25",
+    "e83f1e18",
+    "Perfil global do usuário",
+    "melhoria",
+    "Identidade",
+    "Nome, e-mail e telefone compartilhados entre as empresas do usuário.",
+    "feature",
+  ),
+  milestone(
+    "2026-08-26",
+    "8a6e2199",
+    "Okta como provedor de identidade",
+    "integracao",
+    "Identidade",
+    "Okta incluído em paralelo ao JumpCloud na gestão de identidades.",
+    "feature",
+  ),
+  milestone(
+    "2026-08-26",
+    "8a6e2199",
+    "Privacidade em aprovações rateadas",
+    "seguranca",
+    "Aprovações",
+    "Cada ramo exibe apenas sua alçada e preserva decisões no reprocessamento.",
+    "feature",
+  ),
+  milestone(
+    "2026-08-26",
+    "a652d685",
+    "Sincronização de formas de pagamento",
+    "automacao",
+    "Cadastros compartilhados",
+    "Formas de pagamento incluídas na replicação entre empresas.",
+    "feature",
+  ),
 ];
 
-const DATE_FMT = new Intl.DateTimeFormat("pt-BR", {
+const DATE_FORMAT = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "short",
   year: "numeric",
-  timeZone: "UTC",
 });
 
-const MONTH_FMT = new Intl.DateTimeFormat("pt-BR", {
+const MONTH_FORMAT = new Intl.DateTimeFormat("pt-BR", {
   month: "long",
   year: "numeric",
-  timeZone: "UTC",
 });
 
-function formatDate(iso: string) {
-  return DATE_FMT.format(new Date(`${iso}T00:00:00Z`));
+function parseDate(date: string) {
+  return new Date(`${date}T12:00:00`);
 }
 
-function monthKey(iso: string) {
-  return iso.slice(0, 7);
+function capitalize(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
-
-function formatMonth(iso: string) {
-  const label = MONTH_FMT.format(new Date(`${iso}T00:00:00Z`));
-  return label.charAt(0).toUpperCase() + label.slice(1);
-}
-
-
-interface BacklogItem {
-  title: string;
-  impact: "alto" | "médio" | "baixo";
-  effort: "alto" | "médio" | "baixo";
-  description: string;
-}
-
-const BACKLOG: { group: string; items: BacklogItem[] }[] = [
-  {
-    group: "Confiabilidade das integrações",
-    items: [
-      {
-        title: "Alertas proativos de degradação",
-        impact: "alto",
-        effort: "baixo",
-        description:
-          "Disparar aviso (e-mail/Slack) quando o painel de saúde detectar latência ou taxa de erro acima do limite, sem depender de alguém abrir a tela.",
-      },
-      {
-        title: "Contrato de dados das views HanaAPI",
-        impact: "médio",
-        effort: "médio",
-        description:
-          "Validar schema das views (VW_FORNECEDORES, VW_ACOMPANHAMENTO_PEDIDOS) a cada execução e alertar mudanças antes de quebrar telas.",
-      },
-      {
-        title: "Painel único de reprocessamento",
-        impact: "médio",
-        effort: "médio",
-        description:
-          "Reunir em uma tela as filas de retentativa, circuit breakers abertos e documentos travados por empresa, com ação de reprocessar em lote e histórico do que foi feito.",
-      },
-    ],
-  },
-  {
-    group: "Aprovações e governança",
-    items: [
-      {
-        title: "Dashboard de SLA de aprovação",
-        impact: "alto",
-        effort: "médio",
-        description: "Tempo médio por aprovador, gargalos por CC/projeto e ranking de atrasos.",
-      },
-      {
-        title: "Aprovação em lote com filtros salvos",
-        impact: "médio",
-        effort: "baixo",
-        description:
-          "Selecionar vários documentos do mesmo CC/projeto e aprovar de uma vez, respeitando o mascaramento de rateios.",
-      },
-      {
-        title: "Publicação agendada da matriz",
-        impact: "médio",
-        effort: "médio",
-        description:
-          "Programar a entrada em vigor de uma versão da matriz de alçadas (ex.: virada de mês ou reestruturação), com aviso prévio aos aprovadores impactados.",
-      },
-      {
-        title: "Alerta de alçada sem cobertura",
-        impact: "alto",
-        effort: "baixo",
-        description:
-          "Varredura periódica que aponta centros de custo, projetos ou faixas de valor sem regra ativa antes que um documento caia no aprovador padrão de contingência.",
-      },
-    ],
-  },
-  {
-    group: "Dados e analytics",
-    items: [
-      {
-        title: "Conciliação fiscal automática",
-        impact: "alto",
-        effort: "alto",
-        description:
-          "Casar automaticamente NFS-e, pagamento e lançamento no ERP, deixando no Kanban só as exceções.",
-      },
-      {
-        title: "Exportações agendadas",
-        impact: "baixo",
-        effort: "baixo",
-        description: "Envio recorrente de relatórios (compras, vendas, fiscal) por e-mail em CSV/XLSX.",
-      },
-      {
-        title: "Orçado × realizado por CC/projeto",
-        impact: "alto",
-        effort: "alto",
-        description:
-          "Carregar o orçamento anual por centro de custo/projeto e comparar com o comprometido (pedidos) e o realizado, com alerta de estouro no momento do lançamento.",
-      },
-      {
-        title: "Copiloto com relatórios salvos",
-        impact: "médio",
-        effort: "baixo",
-        description:
-          "Permitir salvar e reexecutar consultas do copiloto do backoffice como relatórios nomeados, com controle por grupo.",
-      },
-    ],
-  },
-  {
-    group: "Segurança e conformidade",
-    items: [
-      {
-        title: "SSO corporativo (Okta/OIDC) com MFA",
-        impact: "alto",
-        effort: "alto",
-        description: "Substituir o login local por identidade corporativa, com MFA obrigatório.",
-      },
-      {
-        title: "Retenção e mascaramento de dados sensíveis",
-        impact: "médio",
-        effort: "médio",
-        description:
-          "Política de expurgo de anexos e mascaramento de dados bancários/PII fora do grupo responsável.",
-      },
-      {
-        title: "Detecção de duplicidade e fraude em pagamentos",
-        impact: "alto",
-        effort: "médio",
-        description:
-          "Bloquear ou sinalizar documentos com mesmo fornecedor/valor/nº de nota, alterações de dados bancários recentes e pagamentos fora do padrão histórico do CC.",
-      },
-    ],
-  },
-  {
-    group: "Experiência do usuário",
-    items: [
-      {
-        title: "Busca global (documentos, fornecedores, pessoas)",
-        impact: "médio",
-        effort: "médio",
-        description:
-          "Campo único com atalho de teclado, retornando documentos, fornecedores e usuários respeitando as capabilities do grupo.",
-      },
-      {
-        title: "Modo offline do PWA para aprovações",
-        impact: "baixo",
-        effort: "médio",
-        description:
-          "Consultar a fila e registrar decisões sem conexão, sincronizando quando o celular voltar à rede.",
-      },
-      {
-        title: "Onboarding guiado por grupo",
-        impact: "médio",
-        effort: "baixo",
-        description:
-          "Tour inicial e checklist de primeiros passos específicos do perfil (solicitante, aprovador, fiscal, backoffice), reduzindo dúvidas recorrentes de suporte.",
-      },
-    ],
-  },
-];
-
-
-
-const IMPACT_CLASS: Record<BacklogItem["impact"], string> = {
-  alto: "border-primary/40 text-primary",
-  médio: "border-border text-muted-foreground",
-  baixo: "border-border text-muted-foreground",
-};
 
 export default function BackofficeRoadmap() {
   const [search, setSearch] = useState("");
-  const [kind, setKind] = useState<"all" | ItemKind>("all");
+  const [kind, setKind] = useState<ItemKind | "all">("all");
+  const [track, setTrack] = useState("all");
+  const [order, setOrder] = useState<"asc" | "desc">("asc");
 
-  const [order, setOrder] = useState<"desc" | "asc">("asc");
+  const tracks = useMemo(
+    () =>
+      [...new Set(CHANGELOG.map((item) => item.track))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [],
+  );
 
-  const entries = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    const filtered = CHANGELOG.filter((item) => {
-      if (kind !== "all" && item.kind !== kind) return false;
-      if (!term) return true;
-      return (
-        item.title.toLowerCase().includes(term) ||
-        item.description.toLowerCase().includes(term) ||
-        item.track.toLowerCase().includes(term) ||
-        formatDate(item.date).toLowerCase().includes(term)
-      );
+  const filteredItems = useMemo(() => {
+    const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR");
+
+    return CHANGELOG.filter((item) => {
+      const matchesKind = kind === "all" || item.kind === kind;
+      const matchesTrack = track === "all" || item.track === track;
+      const matchesSearch =
+        !normalizedSearch ||
+        [item.title, item.description, item.track, item.commit]
+          .join(" ")
+          .toLocaleLowerCase("pt-BR")
+          .includes(normalizedSearch);
+
+      return matchesKind && matchesTrack && matchesSearch;
+    }).sort((a, b) => {
+      const comparison = a.date.localeCompare(b.date);
+      return order === "asc" ? comparison : -comparison;
     });
-    return filtered.sort((a, b) =>
-      order === "desc" ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date),
-    );
-  }, [search, kind, order]);
+  }, [kind, order, search, track]);
 
-  const total = CHANGELOG.length;
-  const shown = entries.length;
+  const groupedItems = useMemo(() => {
+    const groups = new Map<string, RoadmapItem[]>();
+    filteredItems.forEach((item) => {
+      const key = item.date.slice(0, 7);
+      groups.set(key, [...(groups.get(key) ?? []), item]);
+    });
+    return [...groups.entries()];
+  }, [filteredItems]);
 
+  const firstDate = parseDate(CHANGELOG[0].date);
+  const lastDate = parseDate(CHANGELOG[CHANGELOG.length - 1].date);
+  const moduleCount = CHANGELOG.filter((item) => item.kind === "modulo").length;
 
   return (
-    <div className="min-h-screen bg-background px-6 pb-16">
+    <div className="min-h-screen bg-background">
       <BackofficePageHeader
         title="Roadmap"
-        description="Linha do tempo das entregas e sugestões de backlog"
-        icon={<Rocket className="h-5 w-5 text-primary" />}
+        description="História do produto reconstruída a partir dos commits do Git"
+        icon={<History className="h-5 w-5" />}
       />
 
-      <main className="mx-auto max-w-5xl py-6">
-        <p className="mb-4 text-xs text-muted-foreground">
-          Datas confirmadas nas entregas recentes; entregas mais antigas usam data
-          aproximada do período de implantação.
-        </p>
-        {/* Filtros */}
-        <div className="mb-6 flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[220px] flex-1">
-            <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar entrega, módulo ou integração..."
-              className="h-9 pl-8"
-              aria-label="Buscar no roadmap"
+      <main className="mx-auto w-full max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
+        <section
+          className="grid overflow-hidden rounded-lg border bg-card md:grid-cols-3"
+          aria-label="Resumo do histórico"
+        >
+          <div className="flex items-center gap-3 border-b p-4 md:border-b-0 md:border-r">
+            <GitCommitHorizontal
+              className="h-5 w-5 text-primary"
+              aria-hidden="true"
             />
-          </div>
-          <Button
-            size="sm"
-            variant={kind === "all" ? "default" : "outline"}
-            onClick={() => setKind("all")}
-          >
-            Tudo
-          </Button>
-          {(Object.keys(KIND_META) as ItemKind[]).map((k) => {
-            const Icon = KIND_META[k].icon;
-            return (
-              <Button
-                key={k}
-                size="sm"
-                variant={kind === k ? "default" : "outline"}
-                onClick={() => setKind(k)}
-              >
-                <Icon className="mr-1 h-3.5 w-3.5" />
-                {KIND_META[k].label}
-              </Button>
-            );
-          })}
-          <Badge variant="secondary" className="h-7">
-            {shown} de {total} entregas
-          </Badge>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setOrder((o) => (o === "desc" ? "asc" : "desc"))}
-          >
-            <ArrowUpDown className="mr-1 h-3.5 w-3.5" />
-            {order === "desc" ? "Mais recentes" : "Mais antigas"}
-          </Button>
-        </div>
-
-        {/* Changelog cronológico */}
-        <section aria-label="Changelog de entregas">
-          {entries.length === 0 && (
-            <p className="py-12 text-center text-sm text-muted-foreground">
-              Nenhuma entrega corresponde aos filtros.
-            </p>
-          )}
-
-          <ol className="relative ml-3 border-l border-border pl-6">
-            {entries.map((item, i) => {
-              const meta = KIND_META[item.kind];
-              const Icon = meta.icon;
-              const newMonth = i === 0 || monthKey(entries[i - 1].date) !== monthKey(item.date);
-              return (
-                <li key={`${item.date}-${item.title}`} className="mb-4">
-                  {newMonth && (
-                    <h2 className="-ml-6 mb-3 mt-6 border-b border-border/60 pb-1 pl-6 text-xs font-semibold uppercase tracking-wide text-muted-foreground first:mt-0">
-                      {formatMonth(item.date)}
-                    </h2>
-                  )}
-                  <span className="absolute -left-[9px] mt-4 flex h-4 w-4 items-center justify-center rounded-full border border-primary/40 bg-primary/20">
-                    <CircleDot className="h-3 w-3 text-primary" />
-                  </span>
-                  <Card className="border-border/70">
-                    <CardContent className="flex gap-3 p-4">
-                      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted">
-                        <Icon className="h-4 w-4 text-muted-foreground" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <time
-                            dateTime={item.date}
-                            className="font-mono text-xs text-muted-foreground"
-                          >
-                            {formatDate(item.date)}
-                          </time>
-                          <h3 className="text-sm font-medium text-foreground">{item.title}</h3>
-                          <Badge variant="outline" className={`text-[10px] ${meta.className}`}>
-                            {meta.label}
-                          </Badge>
-                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                            {item.track}
-                          </Badge>
-                        </div>
-                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                          {item.description}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </li>
-              );
-            })}
-          </ol>
-        </section>
-
-
-        {/* Backlog */}
-        <section aria-label="Sugestões de backlog" className="mt-10">
-          <div className="mb-4 flex items-center gap-2">
-            <Lightbulb className="h-5 w-5 text-[hsl(var(--cactus-amber))]" />
             <div>
-              <h2 className="text-base font-semibold text-foreground">Sugestões de backlog</h2>
-              <p className="text-xs text-muted-foreground">
-                Pendências e melhorias propostas — ainda não implementadas.
+              <p className="text-2xl font-semibold tabular-nums">
+                {CHANGELOG.length}
+              </p>
+              <p className="text-sm text-muted-foreground">marcos funcionais</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 border-b p-4 md:border-b-0 md:border-r">
+            <Boxes className="h-5 w-5 text-primary" aria-hidden="true" />
+            <div>
+              <p className="text-2xl font-semibold tabular-nums">
+                {moduleCount}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                módulos identificados
               </p>
             </div>
           </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            {BACKLOG.map((group) => (
-              <Card key={group.group}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">{group.group}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {group.items.map((item) => (
-                    <div key={item.title} className="rounded-md border border-border/70 p-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-sm font-medium text-foreground">{item.title}</h3>
-                        <Badge variant="outline" className={`text-[10px] ${IMPACT_CLASS[item.impact]}`}>
-                          Impacto {item.impact}
-                        </Badge>
-                        <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                          Esforço {item.effort}
-                        </Badge>
-                      </div>
-                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                        {item.description}
-                      </p>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            ))}
+          <div className="flex items-center gap-3 p-4">
+            <CalendarDays className="h-5 w-5 text-primary" aria-hidden="true" />
+            <div>
+              <p className="font-semibold">
+                {DATE_FORMAT.format(firstDate)} a {DATE_FORMAT.format(lastDate)}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                período coberto pelo Git
+              </p>
+            </div>
           </div>
+        </section>
+
+        <section className="space-y-4" aria-labelledby="history-title">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 id="history-title" className="text-xl font-semibold">
+                Histórico de entregas
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Cada marco aponta para o commit que introduziu o módulo ou
+                registrou a evolução.
+              </p>
+            </div>
+            <a
+              href={`${REPOSITORY_URL}/commits/main`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+            >
+              Ver histórico completo
+              <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+            </a>
+          </div>
+
+          <div className="flex flex-col gap-3 rounded-lg border bg-card p-3 lg:flex-row lg:items-center">
+            <div className="relative min-w-0 flex-1">
+              <Search
+                className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar entrega, área ou commit..."
+                className="pl-9"
+              />
+            </div>
+
+            <Select value={track} onValueChange={setTrack}>
+              <SelectTrigger
+                className="w-full lg:w-[230px]"
+                aria-label="Filtrar por área"
+              >
+                <Tags
+                  className="mr-2 h-4 w-4 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <SelectValue placeholder="Todas as áreas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as áreas</SelectItem>
+                {tracks.map((trackName) => (
+                  <SelectItem key={trackName} value={trackName}>
+                    {trackName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Button
+              variant="outline"
+              onClick={() =>
+                setOrder((current) => (current === "asc" ? "desc" : "asc"))
+              }
+              className="justify-start lg:justify-center"
+            >
+              <ArrowDownUp className="mr-2 h-4 w-4" aria-hidden="true" />
+              {order === "asc"
+                ? "Mais antigos primeiro"
+                : "Mais recentes primeiro"}
+            </Button>
+          </div>
+
+          <div
+            className="flex gap-2 overflow-x-auto pb-1"
+            aria-label="Filtrar por natureza"
+          >
+            <Button
+              size="sm"
+              variant={kind === "all" ? "default" : "outline"}
+              onClick={() => setKind("all")}
+            >
+              Todos
+            </Button>
+            {(
+              Object.entries(KIND_META) as [
+                ItemKind,
+                (typeof KIND_META)[ItemKind],
+              ][]
+            ).map(([kindValue, meta]) => {
+              const Icon = meta.icon;
+              return (
+                <Button
+                  key={kindValue}
+                  size="sm"
+                  variant={kind === kindValue ? "default" : "outline"}
+                  onClick={() => setKind(kindValue)}
+                >
+                  <Icon className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+                  {meta.label}
+                </Button>
+              );
+            })}
+          </div>
+
+          <p className="text-sm text-muted-foreground" role="status">
+            {filteredItems.length}{" "}
+            {filteredItems.length === 1
+              ? "marco encontrado"
+              : "marcos encontrados"}
+          </p>
+
+          {groupedItems.length > 0 ? (
+            <div className="space-y-8">
+              {groupedItems.map(([month, items]) => (
+                <section
+                  key={month}
+                  className="grid gap-4 md:grid-cols-[150px_minmax(0,1fr)]"
+                >
+                  <div className="md:pt-1">
+                    <h3 className="sticky top-4 font-semibold text-foreground">
+                      {capitalize(
+                        MONTH_FORMAT.format(parseDate(`${month}-01`)),
+                      )}
+                    </h3>
+                  </div>
+
+                  <div className="relative space-y-3 border-l pl-5 sm:pl-7">
+                    {items.map((item) => {
+                      const meta = KIND_META[item.kind];
+                      const Icon = meta.icon;
+
+                      return (
+                        <article
+                          key={`${item.commit}-${item.title}`}
+                          className="relative rounded-lg border bg-card p-4 shadow-sm"
+                        >
+                          <span
+                            className="absolute -left-[27px] top-6 h-3 w-3 rounded-full border-2 border-background bg-primary sm:-left-[35px]"
+                            aria-hidden="true"
+                          />
+
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0 space-y-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <time
+                                  dateTime={item.date}
+                                  className="text-xs font-medium uppercase text-muted-foreground"
+                                >
+                                  {DATE_FORMAT.format(parseDate(item.date))}
+                                </time>
+                                <Badge
+                                  variant="outline"
+                                  className={meta.className}
+                                >
+                                  <Icon
+                                    className="mr-1 h-3 w-3"
+                                    aria-hidden="true"
+                                  />
+                                  {meta.label}
+                                </Badge>
+                                <Badge variant="outline">{item.track}</Badge>
+                              </div>
+                              <h4 className="text-base font-semibold">
+                                {item.title}
+                              </h4>
+                              <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+                                {item.description}
+                              </p>
+                            </div>
+
+                            <a
+                              href={`${REPOSITORY_URL}/commit/${item.commit}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              title={`Abrir commit ${item.commit} no GitHub`}
+                              className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-md border px-2.5 py-1.5 font-mono text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
+                            >
+                              <GitCommitHorizontal
+                                className="h-3.5 w-3.5"
+                                aria-hidden="true"
+                              />
+                              {item.commit}
+                              <ExternalLink
+                                className="h-3 w-3"
+                                aria-hidden="true"
+                              />
+                            </a>
+                          </div>
+
+                          <p className="mt-3 border-t pt-3 text-xs text-muted-foreground">
+                            {EVIDENCE_LABEL[item.evidence]}
+                          </p>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed py-16 text-center">
+              <Search
+                className="mx-auto mb-3 h-8 w-8 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <p className="font-medium">Nenhum marco encontrado</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Ajuste a busca ou remova algum filtro.
+              </p>
+            </div>
+          )}
         </section>
       </main>
     </div>

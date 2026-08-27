@@ -11,7 +11,10 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { unzip } from "https://esm.sh/fflate@0.8.2";
+import {
+  fetchMasterTaxPdf,
+  masterTaxAuthHeader,
+} from "../_shared/mastertax-files.ts";
 
 const DEFAULT_BASE_URL = "https://api.mastertax.app";
 
@@ -21,7 +24,8 @@ interface MasterTaxCreds {
 }
 
 async function loadCredsForCompany(
-  supabase: ReturnType<typeof createClient>,
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
   companyDb: string | null,
 ): Promise<MasterTaxCreds | null> {
   const { data } = await supabase
@@ -48,10 +52,6 @@ async function loadCredsForCompany(
   return null;
 }
 
-function authHeader(token: string): string {
-  return token.toLowerCase().startsWith("bearer ") ? token : `Bearer ${token}`;
-}
-
 function extractInternalId(raw: unknown, fallback: string): string | null {
   const r = raw as Record<string, unknown> | null | undefined;
   if (r && typeof r === "object") {
@@ -63,23 +63,10 @@ function extractInternalId(raw: unknown, fallback: string): string | null {
   return fallback || null;
 }
 
-async function unzipToPdf(bytes: Uint8Array): Promise<Uint8Array | null> {
-  return await new Promise((resolve) => {
-    unzip(bytes, (err, files) => {
-      if (err || !files) return resolve(null);
-      const entries = Object.entries(files);
-      // Prefer .pdf; else first non-empty file
-      let pick = entries.find(([n]) => n.toLowerCase().endsWith(".pdf"));
-      if (!pick) pick = entries.find(([, b]) => b && b.byteLength > 0);
-      resolve(pick ? pick[1] : null);
-    });
-  });
-}
-
 async function fetchXml(creds: MasterTaxCreds, id: string): Promise<{ bytes: Uint8Array; contentType: string } | { error: string }> {
   const url = `${creds.base_url}/api/notas-servico/xml/${encodeURIComponent(id)}`;
   const r = await fetch(url, {
-    headers: { Authorization: authHeader(creds.token), Accept: "application/json" },
+    headers: { Authorization: masterTaxAuthHeader(creds.token), Accept: "application/json" },
     signal: AbortSignal.timeout(30_000),
   });
   const text = await r.text();
@@ -95,30 +82,6 @@ async function fetchXml(creds: MasterTaxCreds, id: string): Promise<{ bytes: Uin
   } catch (e) {
     return { error: `JSON inválido: ${(e as Error).message}` };
   }
-}
-
-async function fetchPdf(creds: MasterTaxCreds, id: string): Promise<{ bytes: Uint8Array; contentType: string } | { error: string }> {
-  const url = `${creds.base_url}/api/notas-servico/danfse/${encodeURIComponent(id)}`;
-  const r = await fetch(url, {
-    headers: { Authorization: authHeader(creds.token), Accept: "*/*" },
-    signal: AbortSignal.timeout(45_000),
-  });
-  if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    return { error: `HTTP ${r.status}: ${t.slice(0, 200)}` };
-  }
-  const ct = (r.headers.get("content-type") || "").toLowerCase();
-  const buf = new Uint8Array(await r.arrayBuffer());
-  // MasterTax devolve ZIP com o PDF dentro
-  if (ct.includes("zip") || (buf[0] === 0x50 && buf[1] === 0x4b)) {
-    const pdf = await unzipToPdf(buf);
-    if (!pdf) return { error: "Não foi possível extrair o PDF do ZIP DANFSE" };
-    return { bytes: pdf, contentType: "application/pdf" };
-  }
-  if (ct.includes("pdf") || (buf[0] === 0x25 && buf[1] === 0x50)) {
-    return { bytes: buf, contentType: "application/pdf" };
-  }
-  return { error: `Formato inesperado (${ct || "sem content-type"})` };
 }
 
 Deno.serve(async (req) => {
@@ -174,7 +137,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const dl = kind === "xml" ? await fetchXml(creds, mtId) : await fetchPdf(creds, mtId);
+    const dl = kind === "xml" ? await fetchXml(creds, mtId) : await fetchMasterTaxPdf(creds, mtId);
     if ("error" in dl) {
       const notFound = /HTTP 404/.test(dl.error);
       return new Response(

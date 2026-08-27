@@ -443,10 +443,17 @@ export async function validateSapSession(req: Request) {
       );
       const [revoked, deprovisioned] = await Promise.all([
         isErpSessionRevoked(securityAdmin, sapSession).catch(() => false),
-        securityAdmin
-          .rpc("is_erp_user_deprovisioned", { _user_key: sapUser, _company_db: companyDB })
-          .then(({ data, error }) => (!error && data === true))
-          .catch(() => false),
+        (async () => {
+          try {
+            const { data, error } = await securityAdmin.rpc(
+              "is_erp_user_deprovisioned",
+              { _user_key: sapUser, _company_db: companyDB },
+            );
+            return !error && data === true;
+          } catch {
+            return false;
+          }
+        })(),
       ]);
       if (revoked || deprovisioned) {
         sapSessionValidationCache.delete(cacheKey);

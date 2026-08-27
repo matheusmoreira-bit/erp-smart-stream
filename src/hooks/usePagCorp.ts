@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { classifyPagCorpDocuments, isPagCorpAiEligible } from "@/lib/pagcorp-document-classification";
+import { extractPagCorpAccountability } from "@/lib/pagcorp-accountability";
 
 // ---------------------------------------------------------------------------
 // In-memory cache for pagcorp-integration-status
@@ -146,6 +147,11 @@ export interface PagCorpTransaction {
   hasAccountability?: boolean;
   accountabilityApproved?: boolean;
   accountabilityId?: string | number | null;
+  accountabilityDate?: string | null;
+  accountabilityDescription?: string | null;
+  accountabilityStatus?: string | null;
+  accountabilityApprovedAt?: string | null;
+  accountabilityApproverName?: string | null;
   attachments?: unknown[];
   receipts?: any[];
   integrated?: boolean;
@@ -185,6 +191,24 @@ export interface PagCorpTransaction {
   nondeductibleSupplierCode?: string;
   nondeductibleSupplierName?: string;
   [key: string]: unknown;
+}
+
+function enrichPagCorpAccountability(transaction: PagCorpTransaction): PagCorpTransaction {
+  const details = extractPagCorpAccountability(transaction);
+  const receipts = Array.isArray(transaction.receipts) ? transaction.receipts : [];
+  transaction.hasAccountability = receipts.length > 0
+    || details.id != null
+    || details.date != null
+    || details.description != null;
+  transaction.accountabilityApproved = Number(transaction.statusId) === 3
+    || receipts.some((receipt) => Number(receipt?.statusId) === 3);
+  transaction.accountabilityId = transaction.accountabilityId ?? details.id;
+  transaction.accountabilityDate = details.date;
+  transaction.accountabilityDescription = details.description;
+  transaction.accountabilityStatus = details.status;
+  transaction.accountabilityApprovedAt = details.approvedAt;
+  transaction.accountabilityApproverName = details.approverName;
+  return transaction;
 }
 
 /**
@@ -358,6 +382,7 @@ export function usePagCorp() {
         const cached = await readCache<PagCorpTransaction[]>(cacheKey, companyDb);
         if (cached?.data?.length) {
           hadCache = true;
+          cached.data.forEach(enrichPagCorpAccountability);
           // O cache guarda os dados do PagCorp, mas o status de integração /
           // NF / baixa muda no SAP a qualquer momento. Revalida ANTES de
           // publicar na tela para não disparar IA sobre status `pending`
@@ -430,14 +455,6 @@ export function usePagCorp() {
       const seenIds = new Set<string | number>();
       const items: PagCorpTransaction[] = dedupedRaw.map((item: any, index: number) => {
         const receipts = item.receipts || [];
-        const hasAccountability = receipts.length > 0;
-        // Uma prestação está aprovada quando o statusId do próprio expense é 3
-        // (Aprovado) OU quando qualquer recibo/anexo já foi aprovado (statusId=3).
-        // Antes olhávamos apenas os receipts, e alguns expenses aprovados vinham
-        // sem receipt marcado como 3 — mantendo o card em "Em análise".
-        const accountabilityApproved =
-          Number(item.statusId) === 3 ||
-          receipts.some((r: any) => Number(r.statusId) === 3);
 
         // Resolve a STABLE + UNIQUE id. Spread item LAST would otherwise let an
         // undefined item.id overwrite our computed id, and duplicate ids would
@@ -448,7 +465,7 @@ export function usePagCorp() {
         }
         seenIds.add(resolvedId);
 
-        return {
+        return enrichPagCorpAccountability({
           ...item,
           id: resolvedId,
           date: item.eventDate || item.date || item.expenseDate || item.createdAt || "",
@@ -496,16 +513,13 @@ export function usePagCorp() {
             (typeof item.aiAnalysis?.companyName === "string" && item.aiAnalysis.companyName.trim()) || null,
           merchantTaxId:
             (item.aiAnalysis?.companyDocument != null && String(item.aiAnalysis.companyDocument).trim()) || null,
-          hasAccountability,
-          accountabilityApproved,
-          accountabilityId: item.accountabilityId || null,
           attachments: item.attachments || [],
 
           receipts,
           integrated: false,
           integrationStatusResolved: false,
           isReversed: Number(item.amount || item.value || item.expenseValue || 0) === 0,
-        };
+        });
       });
 
       // Busca status de integração + marcações de não-dedutibilidade via
