@@ -10,6 +10,8 @@ export interface PagCorpJournalTransactionPair {
   lineMemo: string;
   costCenter: string;
   project: string;
+  /** Cotação (PTAX) aplicada quando a linha é em moeda estrangeira. */
+  exchangeRate?: number | null;
 }
 
 export interface PagCorpJournalLine {
@@ -23,7 +25,9 @@ export interface PagCorpJournalLine {
   FCDebit?: number;
   FCCredit?: number;
   FCCurrency?: string;
+  Rate?: number;
 }
+
 
 export function applyPagCorpJournalDimensions<T extends Record<string, unknown>>(
   lines: T[],
