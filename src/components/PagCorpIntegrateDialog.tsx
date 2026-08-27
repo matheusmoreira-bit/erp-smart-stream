@@ -299,6 +299,9 @@ export function PagCorpIntegrateDialog({
     setDebitAccount(null);
     setCreditAccount(null);
     setRemarks("");
+    setExchangeRate("");
+    setJeOverrides({});
+
     setSubmitting(false);
     setAiTried(false);
     setAiResult(null);
