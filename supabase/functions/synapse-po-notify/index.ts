@@ -458,7 +458,7 @@ Deno.serve(async (req) => {
     }
     const startedAt = new Date().toISOString();
     try {
-      const summary = await processCompany(supabase, companyDb, daysBack);
+      const summary = await processCompany(supabase as unknown as Sup, companyDb, daysBack);
       const sent =
         (summary.approved as number) + (summary.grpo as number) +
         (summary.ap_invoice as number) + (summary.ap_paid as number);

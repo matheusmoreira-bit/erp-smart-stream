@@ -714,7 +714,7 @@ export default function SalesNfse() {
       }
 
 
-      const invoiceRows = (inv || []) as NfseRow[];
+      const invoiceRows = (inv || []) as unknown as NfseRow[];
       const fiscalMap = await fetchNfseFiscalMap(
         companyDb,
         invoiceRows
