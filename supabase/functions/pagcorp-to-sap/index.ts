@@ -28,6 +28,38 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-sap-session, x-sap-route, x-sap-user, x-company-db, x-sap-auth-token, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+/**
+ * Cotação de venda (PTAX) do Banco Central para uma moeda em uma data.
+ * Retrocede até 8 dias para cobrir feriados/fins de semana.
+ */
+async function fetchPtaxRate(currency: string, isoDate: string): Promise<number | null> {
+  const cur = (currency || "").toUpperCase();
+  if (!cur || cur === "BRL" || !/^[A-Z]{3}$/.test(cur)) return null;
+  const base = new Date(`${isoDate}T12:00:00Z`);
+  for (let back = 0; back < 8; back++) {
+    const d = new Date(base.getTime() - back * 24 * 60 * 60 * 1000);
+    const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(d.getUTCDate()).padStart(2, "0");
+    const dataParam = `${mm}-${dd}-${d.getUTCFullYear()}`;
+    const url =
+      `https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoMoedaDia(moeda=@moeda,dataCotacao=@dataCotacao)` +
+      `?@moeda='${cur}'&@dataCotacao='${dataParam}'&$format=json&$select=cotacaoVenda`;
+    try {
+      const r = await fetch(url);
+      if (!r.ok) continue;
+      const j = await r.json();
+      const row = Array.isArray(j?.value) && j.value.length > 0 ? j.value[0] : null;
+      const rate = row ? Number(row.cotacaoVenda) : NaN;
+      if (Number.isFinite(rate) && rate > 0) return rate;
+    } catch {
+      // tenta o dia anterior
+    }
+  }
+  return null;
+}
+
+
+
 // Fire-and-forget notification about ERP integration attempts (PagCorp path).
 async function notifyErpIntegration(params: {
   status: "success" | "error";
