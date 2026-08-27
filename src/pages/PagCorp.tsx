@@ -1075,7 +1075,9 @@ export default function PagCorp() {
             session.companyDB,
             session.userName || undefined,
             options.journalEntry,
+            lineOverrides,
           )
+
         : await integrateDirect(
             t,
             integrateDialog.type,
