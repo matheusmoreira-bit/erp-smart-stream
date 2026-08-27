@@ -229,6 +229,7 @@ async function readRelations(companyDb: string, sapDocEntry: number): Promise<Sa
 export function useNfEntradaLinks({
   sapDocEntry,
   companyDb,
+  supplierCode,
   enabled = true,
 }: RelationsMapDerivedInput) {
   const fetcher = useCallback(async (): Promise<NfEntradaLink[]> => {
@@ -245,20 +246,31 @@ export function useNfEntradaLinks({
     const { data, error } = await supabase
       .from("nf_entrada_imports")
       .select(
-        "id,chave_acesso,numero_nf,serie,nome_fornecedor,valor_total,status,sap_invoice_draft_id,erp_invoice_doc_entry,erp_invoice_doc_num,created_at,updated_at",
+        "id,chave_acesso,numero_nf,serie,nome_fornecedor,valor_total,status,sap_invoice_draft_id,erp_invoice_doc_entry,erp_invoice_doc_num,created_at,updated_at,sap_matched_card_code",
       )
       .eq("sap_matched_po_doc_entry", String(sapDocEntry))
       .eq("sap_company_db", companyDb)
       .order("created_at", { ascending: false });
     if (error) throw error;
+    const expectedSupplier = String(supplierCode || "").trim().toUpperCase();
     const importRows = ((data || []) as Array<Omit<NfEntradaLink, "ap_links"> & {
       erp_invoice_doc_entry?: string | null;
       erp_invoice_doc_num?: string | null;
-    }>).map((r) => ({
-      ...r,
-      sap_invoice_draft_id: r.erp_invoice_doc_entry || r.sap_invoice_draft_id,
-      numero_nf: r.numero_nf || r.erp_invoice_doc_num || null,
-    })) as Omit<NfEntradaLink, "ap_links">[];
+      sap_matched_card_code?: string | null;
+    }>)
+      // Guarda contra vínculos cruzados: o DocEntry pode colidir entre bases/
+      // documentos, então só aceitamos a NF quando o fornecedor confere.
+      .filter((r) => {
+        const matched = String(r.sap_matched_card_code || "").trim().toUpperCase();
+        if (!expectedSupplier || !matched) return true;
+        return matched === expectedSupplier;
+      })
+      .map((r) => ({
+        ...r,
+        sap_invoice_draft_id: r.erp_invoice_doc_entry || r.sap_invoice_draft_id,
+        numero_nf: r.numero_nf || r.erp_invoice_doc_num || null,
+      })) as Omit<NfEntradaLink, "ap_links">[];
+
 
     // Também busca NFs lançadas manualmente no SAP (não passaram pelo ERP Flow),
     // via função security-definer no cache de NF de entrada.
