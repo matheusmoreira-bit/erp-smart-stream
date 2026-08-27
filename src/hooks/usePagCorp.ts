@@ -694,7 +694,15 @@ export function usePagCorp() {
     transactions: PagCorpTransaction[],
     companyDb: string,
     integratedBy: string | undefined,
-    journalEntry: { debitAccount: string; creditAccount: string; costCenter?: string | null; project?: string | null; remarks?: string },
+    journalEntry: {
+      debitAccount: string;
+      creditAccount: string;
+      costCenter?: string | null;
+      project?: string | null;
+      remarks?: string;
+      exchangeRate?: number | null;
+    },
+    lineOverrides?: Record<string, { costCenter?: string | null; project?: string | null; item?: string | null }>,
   ) => {
     const { sapFunctionFetch } = await import("@/lib/auth-fetch");
     const response = await sapFunctionFetch("pagcorp-to-sap", {
@@ -707,8 +715,10 @@ export function usePagCorp() {
         integratedBy,
         postingType: "journal_entry",
         journalEntry,
+        ...(lineOverrides && Object.keys(lineOverrides).length > 0 ? { lineOverrides } : {}),
       }),
     });
+
     const result = await response.json().catch(() => ({}));
     if (!response.ok || result.success === false) {
       throw new Error(result.error || `Erro ${response.status}`);
