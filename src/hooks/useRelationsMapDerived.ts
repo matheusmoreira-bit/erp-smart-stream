@@ -397,10 +397,11 @@ export function useNfEntradaLinks({
     }
 
     return nfs.map((n) => ({ ...n, ap_links: byNf.get(n.id) || [] })) as NfEntradaLink[];
-  }, [sapDocEntry, companyDb]);
+  }, [sapDocEntry, companyDb, supplierCode]);
 
   return useExternalCache<NfEntradaLink[]>({
-    cacheKey: sapDocEntry && companyDb ? `relmap:nf:v3:${sapDocEntry}` : null,
+    cacheKey: sapDocEntry && companyDb ? `relmap:nf:v4:${sapDocEntry}:${supplierCode || ""}` : null,
+
     companyDb: companyDb ?? null,
     fetcher,
     ttlMs: TTL_MS,
