@@ -96,6 +96,11 @@ export function PagCorpIntegrateDialog({
   const [debitAccount, setDebitAccount] = useState<SapSearchOption | null>(null);
   const [creditAccount, setCreditAccount] = useState<SapSearchOption | null>(null);
   const [remarks, setRemarks] = useState("");
+  const [exchangeRate, setExchangeRate] = useState("");
+  const [jeOverrides, setJeOverrides] = useState<
+    Record<string, { costCenter: SapSearchOption | null; project: SapSearchOption | null }>
+  >({});
+
   const [aiBusy, setAiBusy] = useState(false);
   const [aiTried, setAiTried] = useState(false);
   const [aiResult, setAiResult] = useState<SupplierFormPrefill | null>(null);
