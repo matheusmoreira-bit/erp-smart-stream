@@ -202,9 +202,10 @@ Deno.serve(async (req) => {
 
     await supabase.from("audit_log").insert({
       action: "expense_line_item_patched",
-      table_name: "expense_items",
-      record_id: target?.id || expenseId,
-      new_values: { expense_id: expenseId, line_num: lineNum, item_code: itemCode, description },
+      entity_type: "expense",
+      entity_id: expenseId,
+      company_db: expense.company_db,
+      details: { expense_id: expenseId, line_num: lineNum, item_code: itemCode, description },
     }).then(() => {}, () => {});
 
     return json({ success: true, doc_entry: expense.sap_doc_entry, doc_num: expense.sap_doc_num, item_code: itemCode });
