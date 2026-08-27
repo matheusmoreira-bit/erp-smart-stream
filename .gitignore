@@ -18,10 +18,14 @@ supabase/.temp/
 
 # Local-only configuration and generated work
 .env
+.env.local
+.env.*.local
 docker/.env
+docker/.env.local
 docker/docker-compose.local.yml
 docker/local/
 .lovable/plan/
+/scripts/setup-local-env.mjs
 
 # Editor directories and files
 .vscode/*

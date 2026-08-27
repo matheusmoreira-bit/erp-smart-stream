@@ -1626,8 +1626,34 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   }, [sourceMode, showSourceToggle, session?.companyDB, session?.sessionId, fetchSapPage]);
 
   const refreshSapNow = useCallback(async () => {
-    await refreshSapNowRef.current();
-  }, []);
+    const visibleExpenseIds = expenses
+      .filter((expense) => expense.sap_doc_entry != null)
+      .slice(0, 200)
+      .map((expense) => expense.id);
+
+    const statusSync = async () => {
+      if (!isLovableAdmin || visibleExpenseIds.length === 0) return;
+      const response = await sapFunctionFetch("expense-sap-status-sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expenseIds: visibleExpenseIds }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.ok === false) {
+        throw new Error(payload?.error || "Falha ao atualizar o estágio dos documentos");
+      }
+    };
+
+    const [, statusResult] = await Promise.allSettled([
+      refreshSapNowRef.current(),
+      statusSync(),
+    ]);
+    await refresh();
+    if (statusResult.status === "rejected") {
+      console.warn("[Expenses] sincronização de status falhou:", statusResult.reason);
+      toast.warning("Pedidos atualizados, mas alguns status ainda aguardam a sincronização automática.");
+    }
+  }, [expenses, isLovableAdmin, refresh]);
 
   const loadMoreSap = useCallback(async () => {
     if (isLoadingMoreSap || !sapHasMore) return;
@@ -2258,7 +2284,9 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     { value: "pendente_aprovacao", label: "Pendente" },
     { value: "aprovado", label: "Aprovado" },
     { value: "pc_lancado", label: isSales ? "PV Lançado" : "PC Lançado" },
-    { value: "finalizado", label: "Finalizado" },
+    { value: "nf_entrada", label: "NF de Entrada" },
+    { value: "pagamento", label: "Pago Parcialmente" },
+    { value: "finalizado", label: "Baixado/Pago" },
   ];
 
   // Refs para gerenciamento de foco no toggle de filtros mobile.

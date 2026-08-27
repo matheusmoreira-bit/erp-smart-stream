@@ -24,8 +24,10 @@ import {
   CreditCard,
   FileText,
   Paperclip,
+  ListTree,
 } from "lucide-react";
 import type { NfEntradaLink, ContaPagarLink } from "@/hooks/useRelationsMapDerived";
+import type { RelationCardDetail } from "@/hooks/useRelationDocumentLines";
 import type { RelationsMapExpense, SapFluxoEnrichment } from "./RelationsMap";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { resolveDocumentPaymentStatus } from "@/lib/relations-payment-status";
@@ -51,8 +53,10 @@ interface Props {
   enriched: boolean;
   /** Marcos de tempo do documento (VW_FIN_ANALISE_FLUXO) — exibidos quando `enriched`. */
   fluxo?: SapFluxoEnrichment | null;
+  erpLabel: string;
   flowType?: RelationsFlowType;
   onNodeClick?: (id: string, kind: string) => void;
+  onDetails?: (detail: RelationCardDetail) => void;
 }
 
 function formatCurrency(value?: number | null, currency?: string | null) {
@@ -77,7 +81,7 @@ function formatDateShort(iso?: string | null) {
 const COL_WIDTH = 320;         // horizontal spacing between columns (center-to-center)
 const CARD_WIDTH = 240;
 const CARD_SPACING = 40;       // vertical gap between stacked cards
-const CARD_ROW_H = 180;        // approx card height + gap
+const CARD_ROW_H = 205;        // approx card height + gap
 const HEADER_Y = 24;
 const FIRST_CARD_Y = 110;
 
@@ -143,6 +147,8 @@ interface DocCardData extends Record<string, unknown> {
   hasSource?: boolean;
   hasTarget?: boolean;
   edgeAnimated?: boolean;
+  detail?: RelationCardDetail;
+  onDetails?: (detail: RelationCardDetail) => void;
 }
 
 const stateBadge = (state: DocCardData["state"]) => {
@@ -249,6 +255,20 @@ const DocCardNode = memo(function DocCardNode({ data }: NodeProps) {
                   </span>
                 </div>
               )}
+
+              {d.detail && d.onDetails && (
+                <button
+                  type="button"
+                  className="nodrag nopan nowheel mt-2 flex w-full items-center justify-center gap-1.5 border-t border-border/60 pt-2 text-[10px] font-medium text-muted-foreground hover:text-foreground"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    d.onDetails?.(d.detail!);
+                  }}
+                >
+                  <ListTree className="h-3 w-3" />
+                  Detalhes
+                </button>
+              )}
             </div>
 
             {d.hasSource !== false && (
@@ -303,7 +323,7 @@ const STAGE_DEFS: Record<StageKey, StageDef> = {
   pedido:          { key: "pedido",          label: "Pedido de Compra", icon: FileText,    tone: "amber"  },
   despesa_pagcorp: { key: "despesa_pagcorp", label: "Despesa PagCorp",  icon: CreditCard,  tone: "amber"  },
   aprovacao:       { key: "aprovacao",       label: "Aprovação",        icon: ShieldCheck, tone: "blue"   },
-  pc_sap:          { key: "pc_sap",          label: "PC lançado no SAP",icon: FileCheck2,  tone: "amber"  },
+  pc_sap:          { key: "pc_sap",          label: "PC lançado no ERP",icon: FileCheck2,  tone: "amber"  },
   nf_entrada:      { key: "nf_entrada",      label: "NF de Entrada",    icon: Receipt,     tone: "green"  },
   contas_pagar:    { key: "contas_pagar",    label: "Contas a Pagar",   icon: Wallet,      tone: "violet" },
 };
@@ -337,12 +357,15 @@ function fmtDays(d: number | null): string {
 }
 
 function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width: number } {
-  const { expense, approverRows, nfLinks, apPayables, flowType = "compras", enriched, fluxo } = props;
+  const { expense, approverRows, nfLinks, apPayables, flowType = "compras", enriched, fluxo, erpLabel } = props;
 
   const stageKeys = FLOW_STAGES[flowType];
   const buckets: Record<StageKey, StageBucket> = {} as Record<StageKey, StageBucket>;
   stageKeys.forEach((key, idx) => {
-    buckets[key] = { stage: STAGE_DEFS[key], colIndex: idx, items: [] };
+    const stage = key === "pc_sap"
+      ? { ...STAGE_DEFS[key], label: `PC lançado no ${erpLabel}` }
+      : STAGE_DEFS[key];
+    buckets[key] = { stage, colIndex: idx, items: [] };
   });
 
   const edges: Edge[] = [];
@@ -386,7 +409,7 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
       tone: rootStage.tone,
       icon: rootStage.icon,
       kind: rootStage.label,
-      identifier: expense.sap_doc_num ? `SAP #${expense.sap_doc_num}` : expense.id.slice(0, 8),
+      identifier: expense.sap_doc_num ? `${erpLabel} #${expense.sap_doc_num}` : expense.id.slice(0, 8),
       amount: expense.total_amount,
       currency: expense.currency,
       who:
@@ -409,6 +432,12 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
         : expense.supplier_name || null,
       state: rootState,
       hasTarget: false,
+      detail: {
+        source: "expense",
+        title: rootStage.label,
+        expenseId: expense.id,
+        docNum: expense.sap_doc_num,
+      },
     },
   });
 
@@ -460,6 +489,11 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
                   .filter(Boolean)
                   .join(" · ")
               : r.remarks || null,
+          detail: {
+            source: "expense",
+            title: `Aprovação · Nível ${r.level_order}`,
+            expenseId: expense.id,
+          },
         },
       });
 
@@ -494,8 +528,8 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
     data: {
       tone: pcSapBottleneck ? "warn" : "amber",
       icon: FileCheck2,
-      kind: "PC no SAP",
-      identifier: expense.sap_doc_num ? `SAP #${expense.sap_doc_num}` : "Aguardando integração",
+      kind: `PC no ${erpLabel}`,
+      identifier: expense.sap_doc_num ? `${erpLabel} #${expense.sap_doc_num}` : "Aguardando integração",
       amount: expense.total_amount,
       currency: expense.currency,
       extra: enrichmentActive
@@ -515,6 +549,13 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
       status: integrated ? "integrado" : isFailed ? statusRaw : "pendente",
       statusTone: integrated ? "success" : isFailed ? "warn" : "muted",
       state: pcSapState,
+      detail: {
+        source: expense.sap_doc_entry ? "purchase_order" : "expense",
+        title: "Pedido de Compra",
+        expenseId: expense.id,
+        docEntry: expense.sap_doc_entry,
+        docNum: expense.sap_doc_num,
+      },
     },
   });
 
@@ -584,6 +625,13 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
         statusTone: statusOk ? "success" : paidPartially ? "amber" : "muted",
         state: statusOk ? "done" : "current",
         extra: matchesFluxoNf ? `Vínculo fluxo · NF #${fluxoNfId}` : undefined,
+        detail: {
+          source: nf.sap_invoice_draft_id ? "purchase_invoice" : "expense",
+          title: `NF de Entrada ${nf.numero_nf || ""}`.trim(),
+          expenseId: expense.id,
+          docEntry: nf.sap_invoice_draft_id ? Number(nf.sap_invoice_draft_id) : null,
+          docNum: nf.numero_nf,
+        },
       },
     });
     edges.push({
@@ -632,6 +680,13 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
           statusTone: paidFully ? "success" : paidPartially ? "amber" : "muted",
           state: paidFully ? "done" : paidPartially ? "current" : "pending",
           extra: [paidExtra, isFluxoCp ? `Vínculo fluxo · CP #${fluxoCpId}` : null].filter(Boolean).join(" · ") || null,
+          detail: {
+            source: nf.sap_invoice_draft_id ? "purchase_invoice" : "expense",
+            title: `Conta a Pagar ${ap.ap_doc_num || ap.ap_doc_entry}`,
+            expenseId: expense.id,
+            docEntry: nf.sap_invoice_draft_id ? Number(nf.sap_invoice_draft_id) : null,
+            docNum: ap.ap_doc_num,
+          },
         },
       });
       nfById[nf.id]?.apChildren.push(apId);
@@ -678,6 +733,13 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
         statusTone: paidFully ? "success" : paidPartially ? "amber" : "muted",
         state: paidFully ? "done" : paidPartially ? "current" : "pending",
         extra: [vencExtra, isFluxoCp ? `Vínculo fluxo · CP #${fluxoCpId}` : null].filter(Boolean).join(" · ") || null,
+        detail: {
+          source: ap.source === "sap" && !idStr.startsWith("sap-vp:") ? "purchase_invoice" : "expense",
+          title: `Conta a Pagar ${ap.numero_documento || ""}`.trim(),
+          expenseId: expense.id,
+          docEntry: ap.source === "sap" && !idStr.startsWith("sap-vp:") ? Number(entry) : null,
+          docNum: ap.numero_documento,
+        },
       },
     });
     edges.push({
@@ -713,6 +775,13 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
         statusTone: "muted",
         state: "pending",
         extra: "Referência VW_FIN_ANALISE_FLUXO",
+        detail: {
+          source: "purchase_invoice",
+          title: `NF de Entrada ${fluxoNfId}`,
+          expenseId: expense.id,
+          docEntry: null,
+          docNum: fluxoNfId,
+        },
       },
     });
     edges.push({
@@ -754,6 +823,13 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
         ]
           .filter(Boolean)
           .join(" · "),
+        detail: {
+          source: fluxoNfId ? "purchase_invoice" : "expense",
+          title: `Conta a Pagar ${fluxoCpId}`,
+          expenseId: expense.id,
+          docEntry: null,
+          docNum: fluxoNfId || fluxoCpId,
+        },
       },
     });
     edges.push({
@@ -823,7 +899,10 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
         id: it.id,
         type: "docCard",
         position: { x, y: startY + i * CARD_ROW_H },
-        data: it.data,
+        data: {
+          ...it.data,
+          onDetails: props.onDetails,
+        },
       });
     });
   });
@@ -834,17 +913,16 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
 
 /* ────────────────────────────── Legend ────────────────────────────── */
 
-const LEGEND_ITEMS: Array<{ tone: NodeTone; label: string }> = [
-  { tone: "amber",  label: "Pedido / PC SAP" },
-  { tone: "blue",   label: "Aprovação" },
-  { tone: "green",  label: "NF de Entrada" },
-  { tone: "violet", label: "Contas a Pagar" },
-];
-
-function FlowLegend() {
+function FlowLegend({ erpLabel }: { erpLabel: string }) {
+  const items: Array<{ tone: NodeTone; label: string }> = [
+    { tone: "amber",  label: `Pedido / PC ${erpLabel}` },
+    { tone: "blue",   label: "Aprovação" },
+    { tone: "green",  label: "NF de Entrada" },
+    { tone: "violet", label: "Contas a Pagar" },
+  ];
   return (
     <div className="absolute top-3 right-3 z-10 flex flex-wrap gap-1.5 rounded-md border border-border bg-background/80 backdrop-blur px-2 py-1.5 shadow-sm">
-      {LEGEND_ITEMS.map((it) => (
+      {items.map((it) => (
         <div key={it.tone} className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
           <span
             className={`inline-block w-2.5 h-2.5 rounded-sm border ${TONE_STYLES[it.tone].border} ${TONE_STYLES[it.tone].bg}`}
@@ -881,7 +959,7 @@ export function RelationsMapFlow(props: Props) {
 
   return (
     <div className="relative w-full h-[65vh] rounded-xl border border-border bg-[radial-gradient(circle_at_center,hsl(var(--muted)/0.35),transparent_70%)] overflow-hidden">
-      <FlowLegend />
+      <FlowLegend erpLabel={props.erpLabel} />
       <ReactFlow
         nodes={nodes}
         edges={edges}

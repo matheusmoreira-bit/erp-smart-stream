@@ -1,14 +1,16 @@
 // Edge function: expense-sap-status-sync
-// Sincroniza periodicamente o status dos Pedidos de Compra (PO) no SAP B1
-// para expenses que já foram lançadas (sap_doc_entry preenchido).
-// Atualiza expenses.sap_purchase_order_status e, quando o PO é cancelado no
-// SAP, move expenses.status para 'cancelado'.
+// Sincroniza periodicamente a etapa atual das compras no SAP B1 usando o PO,
+// as NFs de entrada e os valores pagos mantidos nos caches de integração.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { tryWatcherLock, releaseWatcherLock } from "../_shared/watcher-lock.ts";
 import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
+import {
+  deriveExpenseLifecycleStatus,
+  type SapInvoiceLifecycle,
+} from "../_shared/expense-status-chain.ts";
 
 interface ExpenseRow {
   id: string;
@@ -16,8 +18,16 @@ interface ExpenseRow {
   sap_doc_entry: number | null;
   status: string;
   supplier_name: string;
+  total_amount: number | null;
   sap_sync_attempts?: number | null;
   sap_purchase_order_status?: string | null;
+}
+
+interface NfCacheRow {
+  base_po_doc_entry: number | null;
+  doc_total: number | null;
+  paid_to_date?: number | null;
+  cancelled: string | null;
 }
 
 // Backoff exponencial: 1, 2, 4, 8, 16, 32, 60min (cap 60), depois desiste (deixa em sync_error).
@@ -112,14 +122,14 @@ Deno.serve(async (req) => {
 
   try {
 
-    // Alvos: expenses com sap_doc_entry preenchido e status não-terminal
-    // ('finalizado' e 'cancelado' são terminais e não precisam de polling contínuo).
+    // Alvos: documentos já aprovados, cuja etapa atual é determinada pelo PO,
+    // pelas NFs e pelos pagamentos conhecidos no cache SAP.
     let query = sb
       .from("expenses")
-      .select("id, company_db, sap_doc_entry, status, supplier_name, sap_sync_attempts, sap_purchase_order_status")
+      .select("id, company_db, sap_doc_entry, status, supplier_name, total_amount, sap_sync_attempts, sap_purchase_order_status")
       .not("sap_doc_entry", "is", null)
-      .not("status", "in", "(finalizado,cancelado,rascunho)")
-      .order("sap_integration_last_attempt_at", { ascending: true, nullsFirst: true })
+      .in("status", ["aprovado", "pc_lancado", "nf_entrada", "pagamento", "finalizado"])
+      .order("sap_status_last_check_at", { ascending: true, nullsFirst: true })
       .limit(200);
 
     if (expenseIdsFilter) {
@@ -172,6 +182,7 @@ Deno.serve(async (req) => {
       docEntry: number,
       documentStatus: string | null,
       cancelledRaw: string | null,
+      invoices: SapInvoiceLifecycle[],
       source: "cache" | "sl",
     ) => {
       const now = new Date().toISOString();
@@ -186,13 +197,17 @@ Deno.serve(async (req) => {
         sap_sync_attempts: 0,
         sap_sync_next_retry_at: null,
       };
+      const derivedStatus = deriveExpenseLifecycleStatus({
+        currentStatus: row.status,
+        expenseTotal: row.total_amount,
+        poDocumentStatus: documentStatus,
+        poCancelled: cancelledRaw,
+        invoices,
+      });
       let newExpenseStatus: string | undefined;
-      if (cancelled && row.status !== "cancelado") {
-        patch.status = "cancelado";
-        newExpenseStatus = "cancelado";
-      } else if (closed && (row.status === "pc_lancado" || row.status === "aprovado")) {
-        patch.status = "nf_entrada";
-        newExpenseStatus = "nf_entrada";
+      if (derivedStatus !== row.status) {
+        patch.status = derivedStatus;
+        newExpenseStatus = derivedStatus;
       }
       const poStatusChanged = row.sap_purchase_order_status !== poStatus;
       if (poStatusChanged || newExpenseStatus) patch.sap_integration_last_attempt_at = now;
@@ -206,6 +221,7 @@ Deno.serve(async (req) => {
         .map((r) => Number(r.sap_doc_entry))
         .filter((n) => Number.isFinite(n));
       const cacheMap = new Map<number, { document_status: string | null; cancelled: string | null }>();
+      const invoicesByPo = new Map<number, SapInvoiceLifecycle[]>();
       if (docEntries.length) {
         const { data: cacheRows } = await sb
           .from("sap_purchase_order_cache")
@@ -216,13 +232,51 @@ Deno.serve(async (req) => {
         for (const c of (cacheRows || []) as Array<{ doc_entry: number; document_status: string | null; cancelled: string | null }>) {
           cacheMap.set(Number(c.doc_entry), { document_status: c.document_status, cancelled: c.cancelled });
         }
+
+        let { data: nfRows, error: nfError } = await sb
+          .from("sap_nf_entrada_cache")
+          .select("base_po_doc_entry, doc_total, paid_to_date, cancelled")
+          .eq("company_db", companyDb)
+          .in("base_po_doc_entry", docEntries);
+        // Compatibilidade durante rollout: a presença da NF continua atualizando
+        // o status mesmo se a coluna de valor pago ainda não estiver no schema.
+        if (nfError && nfError.message.includes("paid_to_date")) {
+          const fallback = await sb
+            .from("sap_nf_entrada_cache")
+            .select("base_po_doc_entry, doc_total, cancelled")
+            .eq("company_db", companyDb)
+            .in("base_po_doc_entry", docEntries);
+          nfRows = fallback.data;
+          nfError = fallback.error;
+        }
+        if (nfError) throw new Error(`Cache de NF erro: ${nfError.message}`);
+        for (const nf of (nfRows || []) as NfCacheRow[]) {
+          const poEntry = Number(nf.base_po_doc_entry);
+          if (!Number.isFinite(poEntry)) continue;
+          const invoices = invoicesByPo.get(poEntry) || [];
+          invoices.push({
+            docTotal: nf.doc_total,
+            paidToDate: nf.paid_to_date ?? null,
+            cancelled: nf.cancelled,
+          });
+          invoicesByPo.set(poEntry, invoices);
+        }
       }
 
       const pending: ExpenseRow[] = [];
       for (const row of list) {
         const de = Number(row.sap_doc_entry);
         const hit = cacheMap.get(de);
-        if (hit) await applyStatus(row, de, hit.document_status, hit.cancelled, "cache");
+        if (hit) {
+          await applyStatus(
+            row,
+            de,
+            hit.document_status,
+            hit.cancelled,
+            invoicesByPo.get(de) || [],
+            "cache",
+          );
+        }
         else pending.push(row);
       }
 
@@ -273,7 +327,14 @@ Deno.serve(async (req) => {
             if (!r.ok) throw new Error(`PO fetch ${r.status}: ${(await r.text()).slice(0, 200)}`);
 
             const po = await r.json();
-            await applyStatus(row, docEntry, po.DocumentStatus ?? null, po.Cancelled ?? null, "sl");
+            await applyStatus(
+              row,
+              docEntry,
+              po.DocumentStatus ?? null,
+              po.Cancelled ?? null,
+              invoicesByPo.get(docEntry) || [],
+              "sl",
+            );
           } catch (e) {
             const msg = (e as Error).message;
             const info = await recordFailure(row, msg);

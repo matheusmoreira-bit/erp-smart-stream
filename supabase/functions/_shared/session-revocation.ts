@@ -5,7 +5,7 @@
 // validador de sessão (`_shared/auth.ts`) recusa qualquer requisição que
 // apresente uma sessão revogada, forçando novo login.
 
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { sha256Hex } from "./csrf.ts";
 
 export { sha256Hex };

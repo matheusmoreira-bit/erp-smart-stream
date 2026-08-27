@@ -11,6 +11,7 @@ import { getErpShortLabel } from "@/lib/erp-labels";
 import { createNotification } from "@/lib/notifications";
 import { expenseRead } from "@/lib/expense-read";
 import { pickHierarchicalFallbackRule } from "@/lib/approval-fallback";
+import { isAttachmentRequiredForDocument } from "@/lib/attachment-validation";
 
 /** Aprovadora global quando a matriz não tem regra aplicável (todas as empresas). */
 const MATRIX_FALLBACK_APPROVER_NAME = "Matheus Moreira";
@@ -268,8 +269,8 @@ const STATUS_LABELS: Record<ExpenseStatus, string> = {
   cancelado: "Cancelado",
   pc_lancado: "PC Lançado no SAP",
   nf_entrada: "NF de Entrada",
-  pagamento: "Pagamento",
-  finalizado: "Finalizado",
+  pagamento: "Pago Parcialmente",
+  finalizado: "Baixado/Pago",
 };
 
 const STATUS_COLORS: Record<ExpenseStatus, string> = {
@@ -684,7 +685,7 @@ export function useExpenses(
       const totalAmount = input.items.reduce((sum, item) => sum + item.line_total, 0);
       const origin: ExpenseOrigin = input.origin || "manual";
       const effectiveDocType = input.doc_type || docType;
-      if (!input.files || input.files.length === 0) {
+      if (isAttachmentRequiredForDocument(effectiveDocType) && (!input.files || input.files.length === 0)) {
         throw new Error("Anexo obrigatório: documentos devem ser criados com ao menos 1 anexo.");
       }
 

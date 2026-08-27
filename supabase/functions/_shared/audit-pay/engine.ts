@@ -11,6 +11,7 @@ export type FindingType =
   | "alteracao_itens"
   | "troca_centro_custo"
   | "troca_projeto"
+  | "estrutura_rateio_divergente"
   | "divergencia_solicitante"
   | "alteracao_pos_aprovacao"
   | "pagamento_sem_documento"
@@ -81,6 +82,50 @@ function norm(v: unknown): string {
 function num(v: unknown): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
+}
+
+function closeTo(a: unknown, b: unknown, tolerance: number): boolean {
+  return Math.abs(num(a) - num(b)) <= tolerance;
+}
+
+interface AggregatedItem {
+  sample: SnapshotLine;
+  quantity: number;
+  lineTotal: number;
+}
+
+function itemKey(line: SnapshotLine): string {
+  return norm(line.item_code) || norm(line.description);
+}
+
+function aggregateItems(lines: SnapshotLine[]): Map<string, AggregatedItem> {
+  const result = new Map<string, AggregatedItem>();
+  for (const line of lines) {
+    const key = itemKey(line);
+    if (!key) continue;
+    const current = result.get(key) ?? { sample: line, quantity: 0, lineTotal: 0 };
+    current.quantity += num(line.quantity);
+    current.lineTotal += num(line.line_total);
+    result.set(key, current);
+  }
+  return result;
+}
+
+function allocationSummary(lines: SnapshotLine[]) {
+  return {
+    line_count: lines.length,
+    cost_centers: [...new Set(lines.map((line) => line.cost_center).filter(Boolean))].sort(),
+    projects: [...new Set(lines.map((line) => line.project).filter(Boolean))].sort(),
+    allocations: lines
+      .map((line) => ({
+        item: line.item_code || line.description || "sem_item",
+        quantity: num(line.quantity),
+        line_total: num(line.line_total),
+        cost_center: line.cost_center,
+        project: line.project,
+      }))
+      .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+  };
 }
 
 function bankKey(b: Snapshot["bank"]): string {
@@ -184,8 +229,10 @@ export function compareSnapshots(
   }
 
   // ---- Itens ----
-  const mapB = new Map(baseline.lines.map((l) => [norm(l.item_code) || norm(l.description), l]));
-  const mapS = new Map(settlement.lines.map((l) => [norm(l.item_code) || norm(l.description), l]));
+  // Compara o conteúdo econômico agregado por item. Isso evita interpretar o
+  // mesmo item dividido em mais linhas como uma alteração de quantidade.
+  const mapB = aggregateItems(baseline.lines);
+  const mapS = aggregateItems(settlement.lines);
   const added = [...mapS.keys()].filter((k) => k && !mapB.has(k));
   const removed = [...mapB.keys()].filter((k) => k && !mapS.has(k));
   const substituicao = added.length > 0 && removed.length > 0;
@@ -196,9 +243,9 @@ export function compareSnapshots(
       severity: substituicao ? "alta" : "media",
       field_name: "item_adicionado",
       value_before: null,
-      value_after: mapS.get(k),
-      delta: num(mapS.get(k)?.line_total),
-      explanation: `Item ${mapS.get(k)?.item_code ?? k} presente no pagamento mas ausente na aprovação.`,
+      value_after: mapS.get(k)?.sample,
+      delta: num(mapS.get(k)?.lineTotal),
+      explanation: `Item ${mapS.get(k)?.sample.item_code ?? k} presente no pagamento mas ausente na aprovação.`,
     });
   }
   for (const k of removed) {
@@ -206,28 +253,68 @@ export function compareSnapshots(
       finding_type: "alteracao_itens",
       severity: substituicao ? "alta" : "media",
       field_name: "item_removido",
-      value_before: mapB.get(k),
+      value_before: mapB.get(k)?.sample,
       value_after: null,
-      delta: num(mapB.get(k)?.line_total),
-      explanation: `Item ${mapB.get(k)?.item_code ?? k} aprovado mas ausente no pagamento.`,
+      delta: num(mapB.get(k)?.lineTotal),
+      explanation: `Item ${mapB.get(k)?.sample.item_code ?? k} aprovado mas ausente no pagamento.`,
     });
   }
-  for (const [k, lb] of mapB.entries()) {
-    const ls = mapS.get(k);
-    if (!k || !ls) continue;
-    const dq = num(ls.quantity) - num(lb.quantity);
-    const dp = num(ls.unit_price) - num(lb.unit_price);
-    if (Math.abs(dq) > 0.0001 || Math.abs(dp) > 0.009) {
+  for (const [k, baselineItem] of mapB.entries()) {
+    const settlementItem = mapS.get(k);
+    if (!k || !settlementItem) continue;
+    const dq = settlementItem.quantity - baselineItem.quantity;
+    const dt = settlementItem.lineTotal - baselineItem.lineTotal;
+    if (Math.abs(dq) > 0.0001 || Math.abs(dt) > 0.009) {
       findings.push({
         finding_type: "alteracao_itens",
         severity: "media",
-        field_name: `item:${lb.item_code ?? k}`,
-        value_before: { quantity: lb.quantity, unit_price: lb.unit_price },
-        value_after: { quantity: ls.quantity, unit_price: ls.unit_price },
-        delta: Number((num(ls.line_total) - num(lb.line_total)).toFixed(2)),
-        explanation: `Quantidade/preço do item ${lb.item_code ?? k} mudou entre aprovação e pagamento.`,
+        field_name: `item:${baselineItem.sample.item_code ?? k}`,
+        value_before: { quantity: baselineItem.quantity, line_total: baselineItem.lineTotal },
+        value_after: { quantity: settlementItem.quantity, line_total: settlementItem.lineTotal },
+        delta: Number(dt.toFixed(2)),
+        explanation: `Quantidade/valor do item ${baselineItem.sample.item_code ?? k} mudou entre aprovação e pagamento.`,
       });
     }
+  }
+
+  // Mesmo valor, mesmos itens e mesmas quantidades, mas distribuição diferente
+  // entre linhas, centros de custo ou projetos.
+  const sameEconomicContent =
+    closeTo(vB, vS, 0.01) &&
+    added.length === 0 &&
+    removed.length === 0 &&
+    [...mapB.entries()].every(([key, baselineItem]) => {
+      const settlementItem = mapS.get(key);
+      return !!settlementItem &&
+        closeTo(baselineItem.quantity, settlementItem.quantity, 0.0001) &&
+        closeTo(baselineItem.lineTotal, settlementItem.lineTotal, 0.01);
+    });
+  const baselineAllocation = allocationSummary(baseline.lines);
+  const settlementAllocation = allocationSummary(settlement.lines);
+  const allocationChanged = JSON.stringify(baselineAllocation.allocations) !== JSON.stringify(settlementAllocation.allocations);
+
+  if (sameEconomicContent && allocationChanged) {
+    const reasons: string[] = [];
+    if (baselineAllocation.line_count !== settlementAllocation.line_count) {
+      reasons.push(`quantidade de linhas ${baselineAllocation.line_count} → ${settlementAllocation.line_count}`);
+    }
+    if (JSON.stringify(baselineAllocation.cost_centers) !== JSON.stringify(settlementAllocation.cost_centers)) {
+      reasons.push("centros de custo diferentes");
+    }
+    if (JSON.stringify(baselineAllocation.projects) !== JSON.stringify(settlementAllocation.projects)) {
+      reasons.push("projetos diferentes");
+    }
+    if (reasons.length === 0) reasons.push("distribuição dos itens entre as linhas alterada");
+
+    findings.push({
+      finding_type: "estrutura_rateio_divergente",
+      severity: "media",
+      field_name: "estrutura_rateio",
+      value_before: baselineAllocation,
+      value_after: settlementAllocation,
+      delta: 0,
+      explanation: `O valor, os itens e as quantidades foram mantidos, mas a estrutura do pedido e da NF diverge: ${reasons.join(", ")}.`,
+    });
   }
 
   // ---- Solicitante ----

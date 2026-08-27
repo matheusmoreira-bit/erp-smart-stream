@@ -104,7 +104,6 @@ Deno.serve(async (req) => {
         .select("id, sap_invoice_doc_entry, status")
         .eq("company_db", companyDb)
         .not("sap_invoice_doc_entry", "is", null)
-        .neq("status", "authorized")
         .limit(200);
       if (error) throw new Error(error.message);
 
@@ -119,7 +118,7 @@ Deno.serve(async (req) => {
       if (fnErr) throw new Error(`Consulta fiscal falhou: ${fnErr.message}`);
 
       const map = (lookup?.map || {}) as Record<string, {
-        nfse?: string | null; rps?: string | null; status?: string | null; authorized_at?: string | null;
+        nfse?: string | null; rps?: string | null; key?: string | null; status?: string | null; authorized_at?: string | null;
       }>;
 
       let updated = 0;
@@ -133,6 +132,8 @@ Deno.serve(async (req) => {
             nfse_number: nfse,
             rps_number: info.rps ? String(info.rps) : null,
             authorized_at: info.authorized_at || null,
+            fiscal_authorized_at: info.authorized_at || null,
+            fiscal_doc_key: info.key ? String(info.key) : null,
             status: nfse ? "authorized" : "issued",
           })
           .eq("id", row.id);

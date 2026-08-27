@@ -14,4 +14,10 @@ describe("getStatusLabel", () => {
   it("uses the sales document prefix with the current ERP", () => {
     expect(getStatusLabel("pc_lancado", true, "omie")).toBe("PV Lançado no Omie");
   });
+
+  it("describes the current payment stage", () => {
+    expect(getStatusLabel("nf_entrada", false, "sap")).toBe("NF de Entrada");
+    expect(getStatusLabel("pagamento", false, "sap")).toBe("Pago Parcialmente");
+    expect(getStatusLabel("finalizado", false, "sap")).toBe("Baixado/Pago");
+  });
 });

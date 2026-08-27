@@ -105,6 +105,7 @@ import {
   validateAttachments,
   ALLOWED_ATTACHMENT_ACCEPT,
   ALLOWED_ATTACHMENT_HINT,
+  isAttachmentRequiredForDocument,
 } from "@/lib/attachment-validation";
 import { useCurrentUserCostCenter, isItemAllowedForCostCenter, isCostCenterAllowedForUser, costCenterBranch, isRateioTypeAllowedForCostCenter, isSalesOnlyItemCode } from "@/hooks/useCurrentUserCostCenter";
 import { useCanSeeAllCostCenters } from "@/hooks/useCanSeeAllCostCenters";
@@ -2266,7 +2267,7 @@ export function CreateExpenseModal({
 
     // Centro de custo padrão é opcional — se o usuário tiver CC via IdP,
     // já é pré-preenchido; caso contrário, cada linha pode ter seu próprio CC.
-    if (files.length === 0) {
+    if (isAttachmentRequiredForDocument(mode) && files.length === 0) {
       toast.error("Anexo obrigatório: documentos devem ser criados com ao menos 1 anexo.");
       return;
     }
@@ -2914,7 +2915,9 @@ export function CreateExpenseModal({
 
           {/* File Upload */}
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Documentos (NF, Recibos, Boletos)</label>
+            <label className="text-xs text-muted-foreground mb-1 block">
+              Documentos (NF, Recibos, Boletos){isSales ? " (opcional)" : ""}
+            </label>
             <div
               className={`relative block w-full max-w-full border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all sm:p-6 ${
                 isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
