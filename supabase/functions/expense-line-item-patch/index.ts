@@ -167,6 +167,15 @@ Deno.serve(async (req) => {
         details: { expense_id: expenseId, from_item_code: fromItemCode, to_item_code: toItemCode, lines: changed },
       }).then(() => {}, () => {});
 
+      await supabase.from("expense_approval_log").insert({
+        expense_id: expenseId,
+        decision: "edited",
+        approver_name: "Sistema",
+        remarks:
+          `Troca de item aplicada no Flow e no ERP: ${fromItemCode} → ${toItemCode} (${changed} linha(s)). Sem reenvio para aprovação.`,
+      }).then(() => {}, () => {});
+
+
       return json({
         success: true,
         doc_entry: expense.sap_doc_entry,
@@ -207,6 +216,16 @@ Deno.serve(async (req) => {
       company_db: expense.company_db,
       details: { expense_id: expenseId, line_num: lineNum, item_code: itemCode, description },
     }).then(() => {}, () => {});
+
+    await supabase.from("expense_approval_log").insert({
+      expense_id: expenseId,
+      decision: "edited",
+      approver_name: "Sistema",
+      remarks: `Linha ${lineNum + 1} alterada no Flow e no ERP: item ${itemCode}${
+        description ? ` — ${description}` : ""
+      }. Sem reenvio para aprovação.`,
+    }).then(() => {}, () => {});
+
 
     return json({ success: true, doc_entry: expense.sap_doc_entry, doc_num: expense.sap_doc_num, item_code: itemCode });
 

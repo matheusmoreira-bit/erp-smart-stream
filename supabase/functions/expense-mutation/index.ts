@@ -1101,6 +1101,17 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   }
 
   const persistedUpdates = withoutUnsupportedExpenseColumns(updates);
+  // Snapshot das linhas antes da escrita — usado para descrever a alteração
+  // no histórico de eventos do documento.
+  let previousItems: Array<Record<string, unknown>> = [];
+  if (items) {
+    const { data: prev } = await admin
+      .from("expense_items")
+      .select("item_code, item_name, description, quantity, line_total, cost_center, project")
+      .eq("expense_id", expenseId);
+    previousItems = (prev || []) as Array<Record<string, unknown>>;
+  }
+
   if (items) {
     const updateErr = await updateExpenseWithItems(admin, expenseId, persistedUpdates, items);
     if (updateErr) return json(500, { error: `Falha ao atualizar pedido e itens: ${updateErr}` });
@@ -1108,6 +1119,7 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
     const { error: upErr } = await admin.from("expenses").update(persistedUpdates).eq("id", expenseId);
     if (upErr) return json(500, { error: `Falha ao atualizar: ${upErr.message}` });
   }
+
 
   if (shouldResubmit) {
     if (resubmittedSegments && resubmittedSegments.length > 0 && !resubmittedAutoApproved) {
@@ -1190,6 +1202,79 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
       }
     }
   }
+
+  // ── Evento "editado": sempre registrado, mesmo quando a edição não
+  // reinicia o fluxo de aprovação (rascunho, troca de item, etc.).
+  {
+    const fmt = (v: unknown) => {
+      if (v === null || v === undefined || v === "") return "—";
+      return String(v);
+    };
+    const changes: string[] = [];
+    const labels: Record<string, string> = {
+      supplier_name: "Fornecedor",
+      supplier_code: "Código do fornecedor",
+      remarks: "Observação",
+      doc_date: "Data do documento",
+      due_date: "Vencimento",
+      rateio_type: "Tipo de rateio",
+      cost_center: "Centro de custo",
+      project: "Projeto",
+      total_amount: "Valor total",
+    };
+    for (const [field, label] of Object.entries(labels)) {
+      if (!(field in updates)) continue;
+      const before = (current as Record<string, unknown>)[field];
+      const after = (updates as Record<string, unknown>)[field];
+      if (String(before ?? "") === String(after ?? "")) continue;
+      changes.push(`${label}: ${fmt(before)} → ${fmt(after)}`);
+    }
+    if (items) {
+      const key = (it: Record<string, unknown>) =>
+        `${String(it.item_code ?? "").trim()}|${String(it.cost_center ?? "").trim()}|${
+          String(it.project ?? "").trim()
+        }|${Number(it.quantity ?? 0)}|${Number(it.line_total ?? 0)}`;
+      const beforeKeys = previousItems.map(key).sort();
+      const afterKeys = (items as Array<Record<string, unknown>>).map(key).sort();
+      if (beforeKeys.join("~") !== afterKeys.join("~")) {
+        const beforeCodes = Array.from(
+          new Set(previousItems.map((it) => String(it.item_code ?? "").trim()).filter(Boolean)),
+        );
+        const afterCodes = Array.from(
+          new Set(
+            (items as Array<Record<string, unknown>>)
+              .map((it) => String(it.item_code ?? "").trim())
+              .filter(Boolean),
+          ),
+        );
+        const removedCodes = beforeCodes.filter((c) => !afterCodes.includes(c));
+        const addedCodes = afterCodes.filter((c) => !beforeCodes.includes(c));
+        const itemNote = removedCodes.length > 0 || addedCodes.length > 0
+          ? ` (itens ${removedCodes.join(", ") || "—"} → ${addedCodes.join(", ") || "—"})`
+          : "";
+        changes.push(
+          `Linhas: ${previousItems.length} → ${(items as unknown[]).length}${itemNote}`,
+        );
+      }
+    }
+    if (addedNames.length > 0) changes.push(`Anexos adicionados: ${addedNames.join(", ")}`);
+    if (removedNames.length > 0) changes.push(`Anexos removidos: ${removedNames.join(", ")}`);
+
+    if (changes.length > 0) {
+      await admin.from("expense_approval_log").insert({
+        expense_id: expenseId,
+        decision: "edited",
+        approver_name: caller.identity,
+        approver_email: caller.email ||
+          (caller.identity && caller.identity.includes("@") ? caller.identity : null),
+        level_order: null,
+        remarks: `Pedido alterado (revisão ${
+          updates.revision_number ?? current.revision_number ?? 1
+        }). ${changes.join(" · ")}`,
+      } as any);
+    }
+  }
+
 
   if (shouldResubmit || (attachmentsChanged && status === "pendente_aprovacao")) {
     // Motivo(s) que dispararam o reinício do fluxo — o log serve como

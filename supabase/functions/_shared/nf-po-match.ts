@@ -327,11 +327,17 @@ export async function findPoForNf(
     return { ...pick, confidence: "media", reason: `valor aproximado (PC ${pick.docTotal.toFixed(2)} × NF ${valor.toFixed(2)})` };
   }
 
-  // 3.4) Fallback: PC aberto mais recente do fornecedor (cardinalidade 1 PC : N NF)
+  // 3.4) Fallback: PC aberto mais recente do fornecedor (cardinalidade 1 PC : N NF).
+  // Nunca vinculamos quando a NF é maior que o PC (+5% de tolerância): isso indica
+  // que a nota pertence a outro pedido do mesmo fornecedor.
   if (opts.allowLooseFallback) {
-    const openPick = uniq.find((c) => !c.isDraft && c.status === "bost_Open") || uniq[0];
-    return { ...openPick, confidence: "baixa", reason: "fornecedor compatível, PC mais recente (valores divergentes)" };
+    const candidates = uniq.filter((c) => c.docTotal > 0 && valor <= c.docTotal * 1.05);
+    const openPick = candidates.find((c) => !c.isDraft && c.status === "bost_Open") || candidates[0];
+    if (openPick) {
+      return { ...openPick, confidence: "baixa", reason: "fornecedor compatível, PC mais recente (valores divergentes)" };
+    }
   }
+
 
   return null;
 }
