@@ -1101,6 +1101,17 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   }
 
   const persistedUpdates = withoutUnsupportedExpenseColumns(updates);
+  // Snapshot das linhas antes da escrita — usado para descrever a alteração
+  // no histórico de eventos do documento.
+  let previousItems: Array<Record<string, unknown>> = [];
+  if (items) {
+    const { data: prev } = await admin
+      .from("expense_items")
+      .select("item_code, item_name, description, quantity, line_total, cost_center, project")
+      .eq("expense_id", expenseId);
+    previousItems = (prev || []) as Array<Record<string, unknown>>;
+  }
+
   if (items) {
     const updateErr = await updateExpenseWithItems(admin, expenseId, persistedUpdates, items);
     if (updateErr) return json(500, { error: `Falha ao atualizar pedido e itens: ${updateErr}` });
@@ -1108,6 +1119,7 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
     const { error: upErr } = await admin.from("expenses").update(persistedUpdates).eq("id", expenseId);
     if (upErr) return json(500, { error: `Falha ao atualizar: ${upErr.message}` });
   }
+
 
   if (shouldResubmit) {
     if (resubmittedSegments && resubmittedSegments.length > 0 && !resubmittedAutoApproved) {
