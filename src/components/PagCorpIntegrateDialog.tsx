@@ -59,10 +59,19 @@ interface Props {
     options: {
       markNondeductible: boolean;
       postingType: "purchase_order" | "journal_entry";
-      journalEntry?: { debitAccount: string; creditAccount: string; costCenter?: string | null; project?: string | null; remarks?: string };
+      journalEntry?: {
+        debitAccount: string;
+        creditAccount: string;
+        costCenter?: string | null;
+        project?: string | null;
+        remarks?: string;
+        exchangeRate?: number | null;
+      };
+      lineOverrides?: Record<string, PagCorpLineOverride>;
     },
   ) => Promise<void>;
 }
+
 
 
 export function PagCorpIntegrateDialog({
