@@ -220,6 +220,7 @@ export type Database = {
       }
       advance_payments: {
         Row: {
+          advance_type: string
           amount: number
           company_db: string
           cost_center: string | null
@@ -248,6 +249,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          advance_type?: string
           amount: number
           company_db: string
           cost_center?: string | null
@@ -276,6 +278,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          advance_type?: string
           amount?: number
           company_db?: string
           cost_center?: string | null
