@@ -837,6 +837,75 @@ export function PagCorpIntegrateDialog({
                       />
                     </div>
                   </div>
+
+                  {hasForeignCurrency && (
+                    <div>
+                      <label htmlFor="pagcorp-journal-rate" className="text-xs font-medium text-muted-foreground mb-1 block">
+                        Cotação / PTAX ({foreignCurrencies.join(", ")} → BRL)
+                      </label>
+                      <Input
+                        id="pagcorp-journal-rate"
+                        inputMode="decimal"
+                        value={exchangeRate}
+                        onChange={(event) => setExchangeRate(event.target.value)}
+                        placeholder="Automático (PTAX de venda do BCB)"
+                      />
+                      <p className="mt-1 text-[10px] text-muted-foreground">
+                        Deixe em branco para usar a PTAX de venda do Banco Central na data do lançamento.
+                        O SAP recusa o lançamento em moeda estrangeira sem taxa de câmbio.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Centro de custo e projeto por transação
+                    </p>
+                    {activeTransactions.map((tx) => {
+                      const key = String(tx.id);
+                      const ov = jeOverrides[key] || { costCenter: null, project: null };
+                      return (
+                        <div key={key} className="rounded-md border border-border p-2 space-y-2">
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="truncate">{tx.description || `#${tx.id}`}</span>
+                            <span className="tabular-nums font-medium shrink-0">
+                              {formatCurrency(Number(tx.amount) || 0, tx.currency)}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <CachedSearchCombobox
+                              options={ccOptions}
+                              isLoading={ccLoading}
+                              value={ov.costCenter}
+                              onChange={(value) =>
+                                setJeOverrides((prev) => ({
+                                  ...prev,
+                                  [key]: { ...(prev[key] || { costCenter: null, project: null }), costCenter: value },
+                                }))
+                              }
+                              placeholder={costCenter ? `Padrão: ${costCenter.name}` : "Centro de custo…"}
+                            />
+                            <CachedSearchCombobox
+                              options={prOptions}
+                              isLoading={prLoading}
+                              value={ov.project}
+                              onChange={(value) =>
+                                setJeOverrides((prev) => ({
+                                  ...prev,
+                                  [key]: { ...(prev[key] || { costCenter: null, project: null }), project: value },
+                                }))
+                              }
+                              placeholder={project ? `Padrão: ${project.name}` : "Projeto…"}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <p className="text-[10px] text-muted-foreground">
+                      Em branco = usa o centro de custo e projeto definidos acima.
+                    </p>
+                  </div>
+
                   <div>
                     <label htmlFor="pagcorp-journal-remarks" className="text-xs font-medium text-muted-foreground mb-1 block">
                       Observação
