@@ -161,9 +161,10 @@ Deno.serve(async (req) => {
 
       await supabase.from("audit_log").insert({
         action: "expense_line_item_bulk_swapped",
-        table_name: "expense_items",
-        record_id: expenseId,
-        new_values: { expense_id: expenseId, from_item_code: fromItemCode, to_item_code: toItemCode, lines: changed },
+        entity_type: "expense",
+        entity_id: expenseId,
+        company_db: expense.company_db,
+        details: { expense_id: expenseId, from_item_code: fromItemCode, to_item_code: toItemCode, lines: changed },
       }).then(() => {}, () => {});
 
       return json({
