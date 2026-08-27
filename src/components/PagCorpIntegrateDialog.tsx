@@ -443,10 +443,13 @@ export function PagCorpIntegrateDialog({
                   costCenter: costCenter?.code || null,
                   project: project?.code || null,
                   remarks: remarks.trim() || undefined,
+                  exchangeRate: parsedExchangeRate,
                 },
+                lineOverrides: journalLineOverrides,
               }
             : {}),
         },
+
       );
       if (storageKey) {
         try { sessionStorage.removeItem(storageKey); } catch {/* ignore */}
