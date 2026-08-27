@@ -769,7 +769,32 @@ Deno.serve(async (req) => {
         ? formatPagCorpComments(customRemarks, 190)
         : description;
       const projectFallback = companyDb === "open_gaming_sa" ? "OPEN GAMING" : null;
-      const journalTransactions = lineMappings.map(({ tx, acctMapping, cardMapping }) => {
+
+      // Cotação (PTAX) para linhas em moeda estrangeira. O SAP recusa o
+      // lançamento com "Update the exchange rate" quando a taxa do dia não
+      // existe na base — então enviamos a taxa explicitamente.
+      const manualRate = Number(journalEntry.exchangeRate);
+      const hasManualRate = Number.isFinite(manualRate) && manualRate > 0;
+      const rateCache = new Map<string, number>();
+      const resolveRate = async (curr: string): Promise<number | null> => {
+        if (curr === "BRL") return null;
+        if (hasManualRate) return manualRate;
+        const cacheKey = `${curr}:${date}`;
+        if (rateCache.has(cacheKey)) return rateCache.get(cacheKey)!;
+        const rate = await fetchPtaxRate(curr, date);
+        if (rate) rateCache.set(cacheKey, rate);
+        return rate;
+      };
+
+      const journalTransactions = [] as Array<{
+        amount: number;
+        currency: string;
+        lineMemo: string;
+        costCenter: string;
+        project: string;
+        exchangeRate: number | null;
+      }>;
+      for (const { tx, acctMapping, cardMapping } of lineMappings) {
         const override = lineOverrides[String(tx.id)] || {};
         const costCenter =
           override.costCenter ?? cardMapping?.cost_center ?? acctMapping?.cost_center ?? journalEntry.costCenter ?? null;
@@ -780,24 +805,33 @@ Deno.serve(async (req) => {
             `Centro de custo e projeto não encontrados para a transação PagCorp #${tx.id}`,
           );
         }
+        const txCurrency = String(tx.currency || currency).toUpperCase();
+        const rate = await resolveRate(txCurrency);
+        if (txCurrency !== "BRL" && !rate) {
+          throw new Error(
+            `Informe a cotação (PTAX) de ${txCurrency} para ${date} — o SAP exige a taxa de câmbio no lançamento contábil.`,
+          );
+        }
 
-        return {
+        journalTransactions.push({
           amount: Number(tx.amount) || 0,
-          currency: String(tx.currency || currency).toUpperCase(),
+          currency: txCurrency,
           lineMemo: truncateSapText(
             `PagCorp - ${transactions.length > 1 ? `[#${tx.id}] ` : ""}${tx.description || journalMemo}`,
             50,
           ),
           costCenter: String(costCenter),
           project: String(project),
-        };
-      });
+          exchangeRate: rate,
+        });
+      }
       const journalEntryLines = buildPagCorpJournalTransactionPairs(journalTransactions, {
         branchId,
         debitAccount: String(journalEntry.debitAccount),
         creditAccount: String(journalEntry.creditAccount),
         localCurrency: "BRL",
       });
+
       if (journalEntryLines.length !== transactions.length * 2) {
         throw new Error("Payload LCM inválido: cada transação deve gerar uma linha de débito e uma de crédito");
       }
