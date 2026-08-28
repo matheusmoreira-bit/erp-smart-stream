@@ -445,6 +445,11 @@ async function fetchDraftsByEntries(session: SapSession, entries: number[]): Pro
   return map;
 }
 
+/** Rascunho cancelado (ou encerrado) no SAP: não deve aparecer como pendência. */
+function isCancelledDraft(draft: SLDraft): boolean {
+  return draft?.Cancelled === "tYES" || draft?.DocumentStatus === "bost_Close";
+}
+
 async function fetchApprovalsViaServiceLayer(
   session: SapSession,
   excludeRequestIds?: Set<number>,
