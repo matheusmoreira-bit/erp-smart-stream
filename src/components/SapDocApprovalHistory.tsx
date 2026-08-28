@@ -165,15 +165,9 @@ async function fetchApprovalRequests(
   );
   let raw = dedupe(objResults.flat());
 
-  // 2) Fallback: DocumentEntry (algumas versões do SL expõem esse alias)
-  if (raw.length === 0) {
-    const docResults = await Promise.all(
-      types.map((t) => tryFilter(`DocumentEntry eq ${docEntry} and ObjectType eq '${t}'`)),
-    );
-    raw = dedupe(docResults.flat());
-  }
-
-  // 3) Fallback: DraftEntry (documento ainda como rascunho ODRF)
+  // 2) Fallback: DraftEntry (documento ainda como rascunho ODRF).
+  //    Obs.: DocumentEntry não é uma propriedade válida de ApprovalRequest
+  //    neste Service Layer (retorna 400), por isso não é usada como fallback.
   if (raw.length === 0) {
     const draftResults = await Promise.all(
       types.map((t) => tryFilter(`DraftEntry eq ${docEntry} and ObjectType eq '${t}'`)),
@@ -181,16 +175,15 @@ async function fetchApprovalRequests(
     raw = dedupe(draftResults.flat());
   }
 
-  // 4) Último fallback: sem filtro de ObjectType (cobre tipos não listados
-  //    e variações de patch level onde o campo do vínculo é outro).
+  // 3) Último fallback: sem filtro de ObjectType (cobre tipos não listados).
   if (raw.length === 0) {
-    const [byObj, byDoc, byDraft] = await Promise.all([
+    const [byObj, byDraft] = await Promise.all([
       tryFilter(`ObjectEntry eq ${docEntry}`),
-      tryFilter(`DocumentEntry eq ${docEntry}`),
       tryFilter(`DraftEntry eq ${docEntry}`),
     ]);
-    raw = dedupe([...byObj, ...byDoc, ...byDraft]);
+    raw = dedupe([...byObj, ...byDraft]);
   }
+
 
   return raw;
 }
