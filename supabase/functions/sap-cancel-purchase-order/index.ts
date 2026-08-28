@@ -41,8 +41,39 @@ async function login(creds: Record<string, string>) {
   if (!r.ok) throw new Error(`SAP Login falhou (${r.status}): ${await r.text()}`);
   return { baseUrl, cookies: r.headers.get("set-cookie") || "" };
 }
+/**
+ * Padrão do sistema: ao cancelar um pedido de compra no SAP, qualquer transação
+ * PagCorp vinculada àquele DocEntry volta a ficar livre para novo lançamento.
+ * Transações já baixadas/conciliadas (settlement concluído) são preservadas.
+ */
+async function unlinkPagcorpTransactions(
+  sb: ReturnType<typeof createClient>,
+  companyDb: string,
+  docEntry: number,
+) {
+  const { data: logs } = await sb
+    .from("pagcorp_integration_log")
+    .select("id, pagcorp_expense_id, settlement_status, settlement_journal_entry, settlement_invoice_doc_entry")
+    .eq("company_db", companyDb)
+    .eq("sap_doc_entry", docEntry);
+  if (!logs || logs.length === 0) return { unlinked: [], kept: [] };
 
-Deno.serve(async (req) => {
+  const kept = (logs as any[]).filter((l) =>
+    l.settlement_journal_entry || l.settlement_invoice_doc_entry ||
+    String(l.settlement_status || "") === "completed"
+  );
+  const removable = (logs as any[]).filter((l) => !kept.some((k) => k.id === l.id));
+  if (removable.length === 0) return { unlinked: [], kept };
+
+  const { data: removed } = await sb
+    .from("pagcorp_integration_log")
+    .delete()
+    .in("id", removable.map((l) => l.id))
+    .select("id, pagcorp_expense_id");
+  return { unlinked: removed || [], kept };
+}
+
+
   const foreignOrigin = rejectForeignOrigin(req);
   if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
