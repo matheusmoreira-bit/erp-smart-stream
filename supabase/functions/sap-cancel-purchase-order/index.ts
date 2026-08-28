@@ -77,9 +77,20 @@ Deno.serve(async (req) => {
         .or(`sap_integration_locked_at.is.null,sap_integration_locked_at.lt.${cutoffIso}`)
         .select("id, requester_email");
 
-      if (!lockedRows || lockedRows.length === 0) {
-        results.push({ docEntry: de, status: 0, ok: false, body: "skipped: já cancelado ou em curso" });
-        continue;
+      // Pedidos criados direto pela integração PagCorp não têm linha em
+      // `expenses`. Nesse caso cancelamos no SAP e desvinculamos o log do
+      // PagCorp para que a transação possa ser relançada.
+      const orphan = !lockedRows || lockedRows.length === 0;
+      if (orphan) {
+        const { data: pcLogs } = await sb
+          .from("pagcorp_integration_log")
+          .select("id")
+          .eq("company_db", companyDb)
+          .eq("sap_doc_entry", Number(de));
+        if (!pcLogs || pcLogs.length === 0) {
+          results.push({ docEntry: de, status: 0, ok: false, body: "skipped: já cancelado ou em curso" });
+          continue;
+        }
       }
 
       const url = `${sap.baseUrl}/PurchaseOrders(${Number(de)})/Cancel`;
@@ -91,7 +102,31 @@ Deno.serve(async (req) => {
       const ok = r.status === 204 || r.ok;
       results.push({ docEntry: de, status: r.status, ok, body: body.slice(0, 300) });
 
+      if (orphan) {
+        if (ok) {
+          const { data: removed } = await sb
+            .from("pagcorp_integration_log")
+            .delete()
+            .eq("company_db", companyDb)
+            .eq("sap_doc_entry", Number(de))
+            .select("id, pagcorp_expense_id");
+          await sb.rpc("insert_audit_log", {
+            p_action: "pagcorp_purchase_order_cancelled",
+            p_entity_type: "pagcorp_transaction",
+            p_entity_id: null,
+            p_company_db: companyDb,
+            p_details: {
+              docEntry: de,
+              reason: reason || null,
+              unlinked: removed || [],
+            } as any,
+          });
+        }
+        continue;
+      }
+
       const exp = lockedRows[0] as any;
+
       if (ok) {
         await sb
           .from("expenses")
