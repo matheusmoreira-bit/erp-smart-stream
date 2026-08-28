@@ -136,12 +136,7 @@ Deno.serve(async (req) => {
 
       if (orphan) {
         if (ok) {
-          const { data: removed } = await sb
-            .from("pagcorp_integration_log")
-            .delete()
-            .eq("company_db", companyDb)
-            .eq("sap_doc_entry", Number(de))
-            .select("id, pagcorp_expense_id");
+          const { unlinked, kept } = await unlinkPagcorpTransactions(sb, companyDb, Number(de));
           await sb.rpc("insert_audit_log", {
             p_action: "pagcorp_purchase_order_cancelled",
             p_entity_type: "pagcorp_transaction",
@@ -150,7 +145,8 @@ Deno.serve(async (req) => {
             p_details: {
               docEntry: de,
               reason: reason || null,
-              unlinked: removed || [],
+              unlinked,
+              kept_settled: kept.map((k: any) => k.pagcorp_expense_id),
             } as any,
           });
         }
@@ -181,14 +177,24 @@ Deno.serve(async (req) => {
                 } as any),
           )
           .eq("id", exp.id);
+        // Padrão do sistema: transações PagCorp vinculadas ao pedido cancelado
+        // voltam a ficar disponíveis para novo lançamento.
+        const { unlinked, kept } = await unlinkPagcorpTransactions(sb, companyDb, Number(de));
         await sb.rpc("insert_audit_log", {
           p_action: "sap_purchase_order_cancelled",
           p_entity_type: "expense",
           p_entity_id: exp.id,
           p_company_db: companyDb,
-          p_details: { docEntry: de, reason: reason || null, final_status: markCancelled ? "cancelado" : "pendente_aprovacao" } as any,
+          p_details: {
+            docEntry: de,
+            reason: reason || null,
+            final_status: markCancelled ? "cancelado" : "pendente_aprovacao",
+            pagcorp_unlinked: unlinked,
+            pagcorp_kept_settled: kept.map((k: any) => k.pagcorp_expense_id),
+          } as any,
         });
       } else {
+
 
         // Libera o lock para permitir nova tentativa imediata
         await sb.from("expenses").update({ sap_integration_locked_at: null }).eq("id", exp.id);
