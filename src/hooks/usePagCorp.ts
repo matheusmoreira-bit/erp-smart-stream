@@ -24,6 +24,12 @@ const integrationStatusCache = new Map<string, { at: number; data: IntegrationSt
 const integrationStatusInflight = new Map<string, Promise<IntegrationStatusPayload>>();
 let lastIntegrationStatusWarnAt = 0;
 
+// Reconciliação automática (PagCorp ⇄ despesa já integrada ao SAP):
+// roda no máximo uma vez a cada 2 min por empresa, para transações que
+// aparecem como "não integradas" mas podem ter pedido no SAP.
+const RECONCILE_COOLDOWN_MS = 120_000;
+const lastReconcileAt = new Map<string, number>();
+
 function integrationStatusKey(companyDb: string, ids: number[]): string {
   // Ordena e junta para gerar chave estável independente da ordem do array.
   const sorted = [...ids].sort((a, b) => a - b);
