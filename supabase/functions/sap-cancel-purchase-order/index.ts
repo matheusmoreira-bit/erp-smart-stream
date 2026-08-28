@@ -73,6 +73,7 @@ async function unlinkPagcorpTransactions(
   return { unlinked: removed || [], kept };
 }
 
+Deno.serve(async (req) => {
 
   const foreignOrigin = rejectForeignOrigin(req);
   if (foreignOrigin) return foreignOrigin;
