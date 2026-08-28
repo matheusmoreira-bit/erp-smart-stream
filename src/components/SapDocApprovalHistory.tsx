@@ -132,11 +132,11 @@ async function fetchApprovalRequests(
   objectTypes: string[],
 ): Promise<SLApprovalRequest[]> {
   const tryFilter = async (filter: string): Promise<SLApprovalRequest[]> => {
-    // Ordenamos por AbsoluteEntry desc para trazer a solicitação mais recente
-    // primeiro (útil quando o documento foi reenviado para aprovação após
-    // rejeição — cada envio gera uma nova ApprovalRequest para o mesmo
-    // ObjectEntry, e queremos manter todas em ordem cronológica invertida).
-    const path = `ApprovalRequests?$filter=${encodeURIComponent(filter)}&$orderby=AbsoluteEntry desc&$top=20`;
+    // Ordenamos por Code desc para trazer a solicitação mais recente primeiro.
+    // (AbsoluteEntry NÃO existe em ApprovalRequest neste Service Layer — usar
+    // esse campo faz o SL devolver 400 em todas as consultas.)
+    const path = `ApprovalRequests?$filter=${encodeURIComponent(filter)}&$orderby=Code desc&$top=20`;
+
     try {
       const res = await sapQuery(session, path, undefined, false);
       const data = res.data as { value?: SLApprovalRequest[] } | SLApprovalRequest[];
