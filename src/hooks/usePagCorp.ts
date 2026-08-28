@@ -24,6 +24,12 @@ const integrationStatusCache = new Map<string, { at: number; data: IntegrationSt
 const integrationStatusInflight = new Map<string, Promise<IntegrationStatusPayload>>();
 let lastIntegrationStatusWarnAt = 0;
 
+// Reconciliação automática (PagCorp ⇄ despesa já integrada ao SAP):
+// roda no máximo uma vez a cada 2 min por empresa, para transações que
+// aparecem como "não integradas" mas podem ter pedido no SAP.
+const RECONCILE_COOLDOWN_MS = 120_000;
+const lastReconcileAt = new Map<string, number>();
+
 function integrationStatusKey(companyDb: string, ids: number[]): string {
   // Ordena e junta para gerar chave estável independente da ordem do array.
   const sorted = [...ids].sort((a, b) => a - b);
@@ -220,6 +226,7 @@ function enrichPagCorpAccountability(transaction: PagCorpTransaction): PagCorpTr
 async function applyIntegrationStatus(
   items: PagCorpTransaction[],
   companyDb: string,
+  skipReconcile = false,
 ): Promise<boolean> {
   const expenseIds = items
     .map((t) => Number(t.id))
@@ -312,6 +319,43 @@ async function applyIntegrationStatus(
         ? null
         : links.find((l) => l.settlementError)?.settlementError ?? null;
     });
+
+    // Auto-cura: transações sem log, mas cujo pedido já existe no SAP
+    // (integração concluída por outro caminho ou log perdido no meio do
+    // fluxo). Reconciliamos no servidor e repintamos o status.
+    if (!skipReconcile) {
+      const unlinked = items.filter((t) => !t.integrated && Number.isFinite(Number(t.id)));
+      const lastRun = lastReconcileAt.get(companyDb) || 0;
+      if (unlinked.length > 0 && Date.now() - lastRun > RECONCILE_COOLDOWN_MS) {
+        lastReconcileAt.set(companyDb, Date.now());
+        try {
+          const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+          const res = await sapFunctionFetch("pagcorp-integration-reconcile", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              companyDb,
+              transactions: unlinked.slice(0, 500).map((t) => ({
+                id: Number(t.id),
+                description: t.description,
+                amount: t.amount,
+                currency: t.currency,
+                date: t.date,
+              })),
+            }),
+          });
+          const payload = await res.json().catch(() => null);
+          if (res.ok && Number(payload?.created) > 0) {
+            integrationStatusCache.clear();
+            return await applyIntegrationStatus(items, companyDb, true);
+          }
+        } catch (reconcileError) {
+          console.warn("PagCorp reconcile failed:", reconcileError);
+        }
+      }
+    }
+
+
 
     // Não-dedutíveis por cartão
     if ((nondeductibleCards as any[]).length) {
