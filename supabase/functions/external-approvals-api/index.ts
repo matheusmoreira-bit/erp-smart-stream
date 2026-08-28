@@ -85,6 +85,8 @@ interface SLDraft {
   DocDate?: string;
   DocDueDate?: string;
   TaxDate?: string;
+  Cancelled?: string;
+  DocumentStatus?: string;
   Project?: string;
   Comments?: string;
   DocumentLines?: SLDocumentLine[];
@@ -237,7 +239,7 @@ async function fetchDraftBrief(s: SapSession, draftEntry: number): Promise<SLDra
   try {
     return (await sapGet(
       s,
-      `Drafts(${draftEntry})?$select=DocEntry,DocNum,DocTotal,DocCurrency,CardCode,CardName,DocDate,DocDueDate,TaxDate,Project,Comments,DocumentLines,DocumentInstallments`,
+      `Drafts(${draftEntry})?$select=DocEntry,DocNum,DocTotal,DocCurrency,CardCode,CardName,DocDate,DocDueDate,TaxDate,Cancelled,DocumentStatus,Project,Comments,DocumentLines,DocumentInstallments`,
     )) as SLDraft;
   } catch {
     return null;
@@ -328,6 +330,8 @@ async function listPending(
     }
 
     const draft = draftEntry ? await fetchDraftBrief(s, draftEntry) : null;
+    // Documento cancelado/encerrado no SAP não é mais pendência de aprovação.
+    if (draft && (draft.Cancelled === "tYES" || draft.DocumentStatus === "bost_Close")) continue;
     const objCode = String(r.ObjectType || "");
     const pendingApprovers = userKey == null ? pendingApproversFromRequest(r, usersMap) : undefined;
 
