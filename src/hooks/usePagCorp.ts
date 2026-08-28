@@ -226,6 +226,7 @@ function enrichPagCorpAccountability(transaction: PagCorpTransaction): PagCorpTr
 async function applyIntegrationStatus(
   items: PagCorpTransaction[],
   companyDb: string,
+  skipReconcile = false,
 ): Promise<boolean> {
   const expenseIds = items
     .map((t) => Number(t.id))
