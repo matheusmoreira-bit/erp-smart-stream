@@ -207,8 +207,11 @@ interface SLDraft {
   DocDueDate?: string;
   Comments?: string;
   AttachmentEntry?: number;
+  Cancelled?: string;
+  DocumentStatus?: string;
   DocumentLines?: Array<Record<string, unknown>>;
 }
+
 
 interface SLTemplate {
   Code?: number;
