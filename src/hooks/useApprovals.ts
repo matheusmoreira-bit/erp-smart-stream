@@ -483,11 +483,14 @@ async function fetchApprovalsViaServiceLayer(
 
   // Evita tempestade de chamadas ao Service Layer: drafts são carregados em lotes.
   const draftsByEntry = await fetchDraftsByEntries(session, requests.map((r) => Number(r.DraftEntry || 0)));
-  const enriched = requests.map((r) => ({
-    r,
-    decisions: r.ApprovalRequestDecisions || [],
-    draft: r.DraftEntry ? (draftsByEntry.get(Number(r.DraftEntry)) || {} as SLDraft) : ({} as SLDraft),
-  }));
+  const enriched = requests
+    .map((r) => ({
+      r,
+      decisions: r.ApprovalRequestDecisions || [],
+      draft: r.DraftEntry ? (draftsByEntry.get(Number(r.DraftEntry)) || {} as SLDraft) : ({} as SLDraft),
+    }))
+    // Documento cancelado/encerrado no SAP não é mais uma aprovação pendente.
+    .filter(({ draft }) => !isCancelledDraft(draft));
 
   // Buscar approvers das etapas pendentes (com cache por etapa)
   const pendingStageCodes = new Set<number>();
