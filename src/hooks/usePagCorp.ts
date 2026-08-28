@@ -320,6 +320,43 @@ async function applyIntegrationStatus(
         : links.find((l) => l.settlementError)?.settlementError ?? null;
     });
 
+    // Auto-cura: transações sem log, mas cujo pedido já existe no SAP
+    // (integração concluída por outro caminho ou log perdido no meio do
+    // fluxo). Reconciliamos no servidor e repintamos o status.
+    if (!skipReconcile) {
+      const unlinked = items.filter((t) => !t.integrated && Number.isFinite(Number(t.id)));
+      const lastRun = lastReconcileAt.get(companyDb) || 0;
+      if (unlinked.length > 0 && Date.now() - lastRun > RECONCILE_COOLDOWN_MS) {
+        lastReconcileAt.set(companyDb, Date.now());
+        try {
+          const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+          const res = await sapFunctionFetch("pagcorp-integration-reconcile", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              companyDb,
+              transactions: unlinked.slice(0, 500).map((t) => ({
+                id: Number(t.id),
+                description: t.description,
+                amount: t.amount,
+                currency: t.currency,
+                date: t.date,
+              })),
+            }),
+          });
+          const payload = await res.json().catch(() => null);
+          if (res.ok && Number(payload?.created) > 0) {
+            integrationStatusCache.clear();
+            return await applyIntegrationStatus(items, companyDb, true);
+          }
+        } catch (reconcileError) {
+          console.warn("PagCorp reconcile failed:", reconcileError);
+        }
+      }
+    }
+
+
+
     // Não-dedutíveis por cartão
     if ((nondeductibleCards as any[]).length) {
       const map = new Map<string, { code: string; name?: string }>();
