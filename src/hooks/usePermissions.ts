@@ -380,6 +380,9 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
   const [loading, setLoading] = useState(true);
   const [refreshTick, setRefreshTick] = useState(0);
   const resolvedScopeRef = useRef<string | null>(null);
+  /** Último escopo em que os grupos foram resolvidos com sucesso (não-default). */
+  const resolvedRichRef = useRef<string | null>(null);
+
 
   useEffect(() => {
     const allKeys = ALL_MODULES.map((m) => m.key);
