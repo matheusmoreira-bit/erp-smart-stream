@@ -85,12 +85,16 @@ export interface GroupAssignmentRow {
 /** Vínculos usuário × grupo (tabela pequena, lida uma vez por TTL). */
 export function getGroupAssignments(): Promise<GroupAssignmentRow[]> {
   return memo("group-assignments", async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("user_group_assignments")
       .select("sap_email, group_id, company_db, permission_groups(name)");
+    // Erro (sessão expirada, RLS, rede) NÃO pode virar "usuário sem grupo":
+    // propagamos para quem chama manter o snapshot anterior de permissões.
+    if (error) throw new Error(error.message);
     return (data || []) as unknown as GroupAssignmentRow[];
   });
 }
+
 
 export interface GroupModuleRow {
   module_key: string;
