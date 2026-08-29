@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
