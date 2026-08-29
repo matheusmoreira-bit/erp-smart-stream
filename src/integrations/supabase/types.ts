@@ -6847,6 +6847,7 @@ export type Database = {
           doc_total: number | null
           document_status: string | null
           id: string
+          paid_to_date: number | null
           raw_json: Json
           sap_update_date: string | null
           series: number | null
@@ -6869,6 +6870,7 @@ export type Database = {
           doc_total?: number | null
           document_status?: string | null
           id?: string
+          paid_to_date?: number | null
           raw_json?: Json
           sap_update_date?: string | null
           series?: number | null
@@ -6891,6 +6893,7 @@ export type Database = {
           doc_total?: number | null
           document_status?: string | null
           id?: string
+          paid_to_date?: number | null
           raw_json?: Json
           sap_update_date?: string | null
           series?: number | null
@@ -8580,6 +8583,7 @@ export type Database = {
           doc_num: number
           doc_total: number
           document_status: string
+          paid_to_date: number
           sap_update_date: string
           series: number
         }[]
