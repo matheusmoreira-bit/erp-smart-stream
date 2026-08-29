@@ -45,7 +45,12 @@ export default function ApprovalHistory() {
   const isAdmin = isLovableAdmin || (session?.isSuperUser ?? false);
   const { hasAccess: canViewAllApprovals } = useModuleAccess("approvals_view_all");
   const { canViewAll: canViewAllByGroup } = useCanViewAllDocuments();
-  const canViewAll = isAdmin || canViewAllApprovals || canViewAllByGroup;
+  // Permissão concedida não é retirada por revalidação incompleta.
+  const grantedViewAllRef = useRef(false);
+  if (isAdmin || canViewAllApprovals || canViewAllByGroup) grantedViewAllRef.current = true;
+  const canViewAll =
+    isAdmin || canViewAllApprovals || canViewAllByGroup || grantedViewAllRef.current;
+
   const { getLabel } = useCompanies(true);
   const PAGE_SIZE = 50;
   const [page, setPage] = useState(1);
