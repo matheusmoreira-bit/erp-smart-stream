@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSap } from "@/contexts/SapContext";
 import { identityMatches } from "@/lib/permission-group-utils";
 import {
@@ -33,6 +33,7 @@ export function useMyCapabilities(): MyCapabilities {
   const [groups, setGroups] = useState<string[]>([]);
   const [isPrivileged, setIsPrivileged] = useState(false);
   const [loading, setLoading] = useState(true);
+  const resolvedRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
