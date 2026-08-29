@@ -458,11 +458,15 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
       if (cancelled) return;
 
       if (!mine || mine.length === 0) {
+        // Revalidação que "perdeu" os grupos (sessão renovando, RLS, rede)
+        // não pode rebaixar quem já resolveu permissões neste mesmo escopo.
+        if (resolvedRichRef.current === scopeKey) { finishLoading(); return; }
         setUserModules(DEFAULT_MODULES);
         setPerms(Object.fromEntries(DEFAULT_MODULES.map((k) => [k, defaultPermsFor(k)])));
         finishLoading();
         return;
       }
+
 
       const groupIds = mine.map((a: any) => a.group_id).filter(Boolean) as string[];
 
