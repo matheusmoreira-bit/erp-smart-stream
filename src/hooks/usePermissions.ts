@@ -502,9 +502,17 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
 
       const keys = Object.keys(merged).filter((k) => merged[k].view);
 
+      if (keys.length === 0 && resolvedRichRef.current === scopeKey) {
+        // Leitura vazia dos módulos do grupo: preserva o snapshot atual.
+        finishLoading();
+        return;
+      }
+
       setPerms(merged);
       setUserModules(keys.length > 0 ? keys : DEFAULT_MODULES);
+      if (keys.length > 0) resolvedRichRef.current = scopeKey;
       finishLoading();
+
     })().catch((error) => {
       console.error("[useModuleAccess] falha ao atualizar permissões", error);
       finishLoading();
