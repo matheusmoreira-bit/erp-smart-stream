@@ -454,20 +454,17 @@ async function fetchApprovalsViaServiceLayer(
   session: SapSession,
   excludeRequestIds?: Set<number>,
 ): Promise<ApprovalDoc[]> {
-  let reqRes = await sapQuery(
+  // `ApprovalRequestDecisions`/`ApprovalRequestLines` são coleções internas da
+  // entidade (não navegações): o Service Layer recusa `$expand` nelas com
+  // "Cannot expand invalid navigation property". Buscando a entidade completa
+  // (sem `$select`) as decisões já vêm no payload.
+  const reqRes = await sapQuery(
     session,
-    "ApprovalRequests?$filter=Status eq 'arsPending'&$select=Code,OriginatorID,DraftEntry,DocumentEntry,ObjectType,Status,RemarksFromOriginator,CreationDate,UpdateDate,ApprovalTemplatesID&$expand=ApprovalRequestDecisions,ApprovalRequestLines&$top=200",
+    "ApprovalRequests?$filter=Status eq 'arsPending'&$top=200",
     undefined,
     true,
   );
-  if (!reqRes.data) {
-    reqRes = await sapQuery(
-      session,
-      "ApprovalRequests?$filter=Status eq 'arsPending'&$top=200",
-      undefined,
-      true,
-    );
-  }
+
   const reqData = reqRes.data as { value?: SLApprovalRequest[] } | SLApprovalRequest[];
   let requests: SLApprovalRequest[] = Array.isArray(reqData)
     ? (reqData as SLApprovalRequest[])
