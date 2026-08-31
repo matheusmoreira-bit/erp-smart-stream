@@ -34,6 +34,55 @@ const HANA_SCHEMA_OVERRIDES: Record<string, string> = {
   open_gaming_sa: "SBO_OPENGAMING",
 };
 
+type HanaRow = Record<string, unknown>;
+
+/** Identifica quem chamou (Cloud user ou sessão SAP), sem derrubar a request. */
+async function resolveCaller(req: Request): Promise<{ email?: string; userName?: string; id?: string } | null> {
+  try {
+    const user = await requireUser(req);
+    const u = user as { id?: string; email?: string };
+    return { id: u.id, email: u.email };
+  } catch (_e) {
+    const sap = await validateSapSession(req).catch(() => null);
+    if (!sap) return null;
+    const s = sap as { sapUser?: string; email?: string };
+    return { userName: s.sapUser, email: s.email };
+  }
+}
+
+/**
+ * Confidencialidade: a view devolve TODAS as pendências da empresa. Cada
+ * usuário só pode receber o que ele aprova (ou o que ele mesmo solicitou).
+ * Apenas grupos com visão total (`expenses_view_all`/`approvals_view_all`)
+ * recebem a lista completa.
+ */
+async function scopeRowsToCaller(
+  admin: SupabaseClient,
+  req: Request,
+  rows: HanaRow[],
+): Promise<HanaRow[]> {
+  const caller = await resolveCaller(req);
+  if (!caller) throw new AuthError("Não autenticado", 401);
+
+  const identities = [caller.email, caller.userName].filter(Boolean) as string[];
+  if (await canViewAllDocuments(admin, identities)) return rows;
+
+  const aliases = Array.from(await resolveCallerAliases(admin, caller));
+  const all = [...new Set([...identities, ...aliases])];
+  if (all.length === 0) return [];
+
+  const matches = (value: unknown) =>
+    all.some((ident) =>
+      identityMatches(ident, value) || personMatches(ident, value) || personListMatches(value, ident),
+    );
+
+  return rows.filter((row) =>
+    matches(row["Email do aprovador"]) ||
+    matches(row["Aprovador"]) ||
+    matches(row["Solicitante"]),
+  );
+}
+
 Deno.serve(withEdgeMetrics("sap-approvals-hana", async (req, _mctx) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
