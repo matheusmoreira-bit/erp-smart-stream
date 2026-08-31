@@ -31,6 +31,7 @@
 - [Cadeia de aprovação em rateio](mem://features/rateio-approval-chain.md) — Segmento = CC + projeto; cadeias mescladas quando o doc é rateado entre alçadas diferentes.
 - [Grupos de permissão consolidados](mem://features/permission-groups-simplified.md) — Estrutura oficial de 8 grupos globais; não recriar CFO/Contas a Pagar/PagCorp/Contábil nem grupos por empresa.
 - [Critério Tipo de Rateio](mem://features/criterio-tipo-rateio.md) — rateio_type como critério das regras de aprovação; regra Folha do Instituto (Ketlhenn, prioridade 999).
+- [Regra Folha por tipo de rateio](mem://features/regra-folha-rateio.md) — rateio_type=folha vai sempre para Ketlhenn Monteiro (aprovadora única), ignorando a matriz por CC.
 - [Aprovador de contingência da matriz](mem://features/approval-matrix-fallback-approver.md) — Fallback global = Matheus Moreira; regras 1.80/1.81/1.90/1.91 na Cactus (Juliana até 300k, +Marco Tulio acima).
 - [NF de Entrada por empresa](mem://features/nf-entrada-segregacao-empresa.md) — Notas do Master Tax filtradas por base SAP ativa + CNPJ do tomador; status derivado do fluxo.
 - [Regra de reembolso é paralela](mem://features/reembolso-regra-paralela.md) — Reembolso soma uma trilha extra à alçada padrão, em vez de substituí-la.
