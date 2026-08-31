@@ -148,7 +148,13 @@ Deno.serve(withEdgeMetrics("sap-approvals-hana", async (req, _mctx) => {
         sessionId: effectiveSessionId,
         hanaApiUrl: creds.hana_api_url || null,
       });
-      return new Response(JSON.stringify({ schema, data: rows }),
+      let scoped: HanaRow[];
+      try {
+        scoped = await scopeRowsToCaller(sb, req, (rows || []) as HanaRow[]);
+      } catch (authErr) {
+        return authErrorResponse(authErr, corsHeaders);
+      }
+      return new Response(JSON.stringify({ schema, data: scoped }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     } catch (e) {
       const msg = (e as Error).message || "";
