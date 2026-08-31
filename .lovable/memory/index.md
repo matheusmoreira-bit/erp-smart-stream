@@ -35,5 +35,5 @@
 - [NF de Entrada por empresa](mem://features/nf-entrada-segregacao-empresa.md) — Notas do Master Tax filtradas por base SAP ativa + CNPJ do tomador; status derivado do fluxo.
 - [Regra de reembolso é paralela](mem://features/reembolso-regra-paralela.md) — Reembolso soma uma trilha extra à alçada padrão, em vez de substituí-la.
 - [Cancelamento de PC libera PagCorp](mem://features/cancelamento-pc-libera-pagcorp.md) — Cancelar pedido no SAP desvincula as transações PagCorp (exceto as já baixadas), liberando novo lançamento.
-- [Regra Viagens](mem://features/regra-viagens.md) — rateio_type=viagens com aprovador único (Daniela Camargos) em Open Gaming, ANA Gaming e Cactus.
+- [Regras Viagens/Folha/Impostos](mem://features/regra-viagens.md) — regras temáticas com aprovador único (Daniela, Ketlhenn, Fernanda/Marco/Juliana) em todas as empresas.
 - [Visibilidade das aprovações SAP](mem://features/sap-approvals-visibility.md) — sap-approvals-hana filtra no servidor: só o que o usuário aprova ou solicitou.
