@@ -5,11 +5,24 @@ import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 // retorna 401 com código SAP_SESSION_EXPIRED para que o cliente redirecione
 // o usuário à tela de login — NÃO fazemos fallback com apiuser.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { fetchHanaView } from "../_shared/hana-views.ts";
 import { sapSessionLogin, buildSapBaseUrl } from "../_shared/sap-cache.ts";
-import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
+import {
+  requireUser,
+  validateSapSession,
+  requireUserOrSapSession,
+  authErrorResponse,
+  AuthError,
+} from "../_shared/auth.ts";
+import {
+  canViewAllDocuments,
+  identityMatches,
+  personMatches,
+  personListMatches,
+} from "../_shared/permission-groups.ts";
+import { resolveCallerAliases } from "../_shared/user-aliases.ts";
 
 const corsHeaders = {
   ...baseCorsHeaders,
