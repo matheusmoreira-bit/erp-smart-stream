@@ -1847,8 +1847,9 @@ export default function PagCorp() {
                               (Array.isArray(t.attachments) ? t.attachments.length : 0);
                             const statusBadge = t.isReversed ? (
                               <Badge variant="secondary" className="bg-muted text-muted-foreground border-border gap-1">
-                                <XCircle className="w-3 h-3" /> Estornado
+                                <XCircle className="w-3 h-3" /> {t.isCredit ? "Crédito" : "Estornado"}
                               </Badge>
+
                             ) : t.hasAccountability ? (
                               t.accountabilityApproved ? (
                                 <Badge variant="secondary" className="bg-success/15 text-success border-success/30 gap-1">
