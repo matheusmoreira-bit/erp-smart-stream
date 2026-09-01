@@ -49,53 +49,46 @@ export function useUserGroupAdmin() {
   );
 
   /**
-   * Define o grupo/acesso do usuário no escopo informado.
+   * Define o grupo/acesso do usuário.
+   *
+   * O vínculo é GLOBAL (uma linha por usuário) — o banco tem UNIQUE
+   * (sap_email, group_id) sem considerar company_db, então manter linhas
+   * por empresa gera "duplicate key". Aqui removemos todos os vínculos do
+   * usuário (qualquer escopo) e inserimos um único registro global.
    */
   const setGroup = useCallback(
     async (opts: { userCode: string; email?: string | null; groupId: string | null; companyDb?: string | null }) => {
       const identities = [opts.userCode, opts.email].filter(Boolean) as string[];
-      const companyDb = opts.companyDb ?? null;
       const key = canonicalUserKey(opts.userCode || opts.email);
       if (!key) throw new Error("Usuário SAP inválido");
 
-      let query = supabase
+      const { data: current, error: readError } = await supabase
         .from("user_group_assignments")
         .select("id, sap_email, group_id, company_db");
-      query = companyDb === null
-        ? query.is("company_db", null)
-        : query.eq("company_db", companyDb);
-      const { data: current, error: readError } = await query;
       if (readError) throw new Error(readError.message);
 
-      const scoped = ((current || []) as Assignment[]).filter((assignment) =>
+      const mine = ((current || []) as Assignment[]).filter((assignment) =>
         identities.some((id) => identityMatches(assignment.sap_email, id)),
       );
 
-      if (!opts.groupId) {
-        if (scoped.length === 0) return;
+      // Já está exatamente no estado desejado?
+      const alreadyGlobal = mine.find(
+        (a) => a.company_db === null && a.group_id === opts.groupId,
+      );
+      const toDelete = mine.filter((a) => a.id !== alreadyGlobal?.id);
+
+      if (toDelete.length > 0) {
         const { error } = await supabase
           .from("user_group_assignments")
           .delete()
-          .in("id", scoped.map((assignment) => assignment.id));
+          .in("id", toDelete.map((a) => a.id));
         if (error) throw new Error(error.message);
-      } else if (scoped.length === 0) {
-        const { error } = await supabase.from("user_group_assignments").insert(
-          [{ sap_email: key, group_id: opts.groupId, company_db: companyDb }],
-        );
-        if (error) throw new Error(error.message);
-      } else {
-        const [primary, ...duplicates] = scoped;
-        if (duplicates.length > 0) {
-          const { error } = await supabase
-            .from("user_group_assignments")
-            .delete()
-            .in("id", duplicates.map((assignment) => assignment.id));
-          if (error) throw new Error(error.message);
-        }
+      }
+
+      if (opts.groupId && !alreadyGlobal) {
         const { error } = await supabase
           .from("user_group_assignments")
-          .update({ sap_email: key, group_id: opts.groupId })
-          .eq("id", primary.id);
+          .insert([{ sap_email: key, group_id: opts.groupId, company_db: null }]);
         if (error) throw new Error(error.message);
       }
 
@@ -103,6 +96,7 @@ export function useUserGroupAdmin() {
     },
     [refresh],
   );
+
 
   return { groups, loading, groupOf, setGroup, refresh };
 }
