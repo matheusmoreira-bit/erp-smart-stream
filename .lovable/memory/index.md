@@ -13,6 +13,7 @@
 - [Auto-aprovação](mem://features/auto-aprovacao.md) — Regra de escalonamento quando o solicitante também é aprovador.
 - [Debug discipline](skill://lovable-debug-discipline) — Checklist root-cause / reuse / trace-before-fix para evitar loops de fix em sintoma.
 - [Users screen actions](mem://preferences/users-screen-actions.md) — Keep the Users screen action buttons minimal and icon-based instead of large filled buttons.
+- [Alçadas CASSINO/VERA 1.80-1.90](mem://features/alcada-ana-lotus-1801-901.md) — ANA Gaming: faixas e aprovadores (Fernando/Gustavo/Anderson) dos projetos CASSINO e VERA nos CCs 1.80.% e 1.90.%.
 - [OMIE open modules](mem://features/omie-open-modules.md) — Temporary rule: OMIE companies must keep all modules unlocked for all users, without permission-level control.
 - [WhatsApp notifications](mem://features/whatsapp-notifications.md) — Cron-based WhatsApp pipes (login failures, pending approvals) with per-user phone book imported from SAP MobilePhone or manual.
 - [Integration base segregation](mem://features/integration-base-segregation.md) — Toda integração persiste e filtra por company_db do contexto SAP ativo, sem vazar entre bases.
