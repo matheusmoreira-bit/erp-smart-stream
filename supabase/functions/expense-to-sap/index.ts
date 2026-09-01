@@ -1570,7 +1570,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         // Fallback de período contábil: o SAP recusa datas fora do intervalo
         // permitido ("Specify a date within the permissible range", -5002).
         // Nesse caso reintegramos com a data de hoje em TaxDate/DocDueDate.
-        const outOfDateRange = /permissible range|-5002|intervalo permitido/i.test(msg1);
+        const outOfDateRange = /permissible range|intervalo permitido|date within the permissible|data dentro do intervalo|per[ií]odo cont[aá]bil/i.test(msg1);
         if (outOfDateRange && !isPatchMode) {
           (sapPayload as any).DocDate = today;
           (sapPayload as any).TaxDate = today;
