@@ -578,7 +578,8 @@ export function usePagCorp() {
           receipts,
           integrated: false,
           integrationStatusResolved: false,
-          isReversed: Number(item.amount || item.value || item.expenseValue || 0) === 0,
+          // Crédito (estorno/devolução) ou valor zerado: não é despesa integrável.
+          isReversed: amount === 0 || isCredit,
         });
       });
 
