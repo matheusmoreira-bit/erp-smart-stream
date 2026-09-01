@@ -509,28 +509,35 @@ Deno.serve(async (req) => {
         select === "*" ||
         (select.includes("requester_email") && select.includes("approval_rule_id") &&
           (!caller.directorateBranch || select.includes("cost_center")));
+      const decidedAliases = new Set([...aliases, ...subAliases]);
       if (hasOwnerCols) {
-        const byItems = await directorateItemIds(
-          admin,
-          batch.map((r) => String(r.id)).filter(Boolean),
-          caller.directorateBranch,
-        );
+        const batchIds = batch.map((r) => String(r.id)).filter(Boolean);
+        const [byItems, byLog] = await Promise.all([
+          directorateItemIds(admin, batchIds, caller.directorateBranch),
+          decidedByCallerIds(admin, batchIds, decidedAliases),
+        ]);
         return batch.filter(
-          (r) => ownsExpense(r, aliases, caller.directorateBranch, myRules, subAliases) || byItems.has(String(r.id)),
+          (r) => ownsExpense(r, aliases, caller.directorateBranch, myRules, subAliases) ||
+            byItems.has(String(r.id)) || byLog.has(String(r.id)),
         );
       }
       const ids = batch.map((r) => r.id).filter(Boolean);
       if (ids.length === 0) return [];
       const { data: owners } = await admin.from("expenses").select(OWNER_COLUMNS).in("id", ids);
-      const byItems = await directorateItemIds(admin, ids, caller.directorateBranch);
+      const [byItems, byLog] = await Promise.all([
+        directorateItemIds(admin, ids, caller.directorateBranch),
+        decidedByCallerIds(admin, ids.map(String), decidedAliases),
+      ]);
       const allowed = new Set(
         (owners || [])
           .filter((r: any) =>
-            ownsExpense(r, aliases, caller.directorateBranch, myRules, subAliases) || byItems.has(String(r.id)),
+            ownsExpense(r, aliases, caller.directorateBranch, myRules, subAliases) ||
+            byItems.has(String(r.id)) || byLog.has(String(r.id)),
           )
           .map((r: any) => String(r.id)),
       );
       return batch.filter((r) => allowed.has(String(r.id)));
+
     };
 
     let rows: any[] = [];
