@@ -128,7 +128,14 @@ export interface PagCorpTransaction {
   id: string | number;
   date: string;
   description: string;
+  /** Valor sempre positivo (módulo). A natureza fica em `isCredit`. */
   amount: number;
+  /**
+   * Natureza do lançamento na API PagCorp (a partir de 07/09/2026 o campo
+   * `amount` traz o valor de crédito OU de débito conforme esta flag).
+   * `true` = crédito (estorno/devolução), `false`/ausente = débito (despesa).
+   */
+  isCredit?: boolean;
   currency?: string;
   accountCode?: string;
   accountName?: string;
