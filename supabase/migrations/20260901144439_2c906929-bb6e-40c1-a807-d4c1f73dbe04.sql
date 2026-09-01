@@ -1,0 +1,1 @@
+ALTER TABLE public.api_keys ADD COLUMN IF NOT EXISTS project_codes text[] NOT NULL DEFAULT '{}'::text[];

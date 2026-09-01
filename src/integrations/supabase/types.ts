@@ -382,6 +382,7 @@ export type Database = {
           last_used_at: string | null
           name: string
           notes: string | null
+          project_codes: string[]
           revoke_reason: string | null
           revoked_at: string | null
           revoked_by: string | null
@@ -400,6 +401,7 @@ export type Database = {
           last_used_at?: string | null
           name: string
           notes?: string | null
+          project_codes?: string[]
           revoke_reason?: string | null
           revoked_at?: string | null
           revoked_by?: string | null
@@ -418,6 +420,7 @@ export type Database = {
           last_used_at?: string | null
           name?: string
           notes?: string | null
+          project_codes?: string[]
           revoke_reason?: string | null
           revoked_at?: string | null
           revoked_by?: string | null
