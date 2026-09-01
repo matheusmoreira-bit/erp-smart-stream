@@ -97,3 +97,6 @@ verify_jwt = false
 
 [functions.registration-supplier-create]
 verify_jwt = false
+
+[functions.expense-tracking-api]
+verify_jwt = false

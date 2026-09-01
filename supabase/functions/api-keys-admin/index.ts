@@ -2,7 +2,7 @@
 //
 // Ops (POST JSON):
 //   { op: "list" }                      → lista as chaves (sem o valor em claro)
-//   { op: "create", name, service, expires_at?, notes? } → cria e devolve o valor UMA vez
+//   { op: "create", name, service, expires_at?, notes?, project_codes? } → cria e devolve o valor UMA vez
 //   { op: "revoke", id, reason? }       → revoga
 //   { op: "delete", id }                → remove o registro (apenas chaves já revogadas)
 //
@@ -13,7 +13,11 @@ import { requireUser, authErrorResponse } from "../_shared/auth.ts";
 import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { sha256Hex } from "../_shared/api-keys.ts";
 
-const SERVICES = ["external-approvals-api", "pagcorp-status-api"] as const;
+const SERVICES = ["external-approvals-api", "pagcorp-status-api", "expense-tracking-api"] as const;
+const LEGACY_SECRETS: Partial<Record<(typeof SERVICES)[number], string>> = {
+  "external-approvals-api": "EXTERNAL_APPROVALS_API_KEY",
+  "pagcorp-status-api": "PAGCORP_STATUS_API_KEY",
+};
 
 function service(): SupabaseClient {
   return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
@@ -32,7 +36,7 @@ function generateKey(svc: string): { plain: string; prefix: string } {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   const secret = Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
-  const tag = svc === "pagcorp-status-api" ? "pgc" : "apr";
+  const tag = svc === "pagcorp-status-api" ? "pgc" : svc === "expense-tracking-api" ? "exp" : "apr";
   const plain = `erpf_${tag}_${secret}`;
   return { plain, prefix: plain.slice(0, 14) };
 }
@@ -63,15 +67,15 @@ Deno.serve(async (req) => {
   if (op === "list") {
     const { data, error } = await admin
       .from("api_keys")
-      .select("id, name, service, key_prefix, notes, created_by, created_at, expires_at, last_used_at, use_count, revoked_at, revoked_by, revoke_reason")
+      .select("id, name, service, key_prefix, notes, project_codes, created_by, created_at, expires_at, last_used_at, use_count, revoked_at, revoked_by, revoke_reason")
       .order("created_at", { ascending: false });
     if (error) return json(500, { error: error.message }, cors);
-    const legacy = SERVICES.filter((s) =>
-      Deno.env.get(s === "pagcorp-status-api" ? "PAGCORP_STATUS_API_KEY" : "EXTERNAL_APPROVALS_API_KEY"),
-    ).map((s) => ({
-      service: s,
-      secret_name: s === "pagcorp-status-api" ? "PAGCORP_STATUS_API_KEY" : "EXTERNAL_APPROVALS_API_KEY",
-    }));
+    const legacy = SERVICES.flatMap((service) => {
+      const secretName = LEGACY_SECRETS[service];
+      return secretName && Deno.env.get(secretName)
+        ? [{ service, secret_name: secretName }]
+        : [];
+    });
     return json(200, { keys: data ?? [], legacy, services: SERVICES }, cors);
   }
 
@@ -79,9 +83,18 @@ Deno.serve(async (req) => {
     const name = String((body as Record<string, unknown>).name || "").trim();
     const svc = String((body as Record<string, unknown>).service || "").trim();
     const notes = String((body as Record<string, unknown>).notes || "").trim() || null;
+    const projectCodesRaw = (body as Record<string, unknown>).project_codes;
+    const project_codes = Array.from(new Set(
+      (Array.isArray(projectCodesRaw) ? projectCodesRaw : [])
+        .map((code) => String(code).trim())
+        .filter(Boolean),
+    )).slice(0, 500);
     const expiresRaw = (body as Record<string, unknown>).expires_at;
     if (name.length < 3 || name.length > 120) return json(400, { error: "Nome deve ter entre 3 e 120 caracteres" }, cors);
     if (!(SERVICES as readonly string[]).includes(svc)) return json(400, { error: "Serviço inválido" }, cors);
+    if (svc === "expense-tracking-api" && project_codes.length === 0) {
+      return json(400, { error: "Informe ao menos um projeto para esta credencial" }, cors);
+    }
     let expires_at: string | null = null;
     if (expiresRaw) {
       const d = new Date(String(expiresRaw));
@@ -93,8 +106,8 @@ Deno.serve(async (req) => {
     const key_hash = await sha256Hex(plain);
     const { data, error } = await admin
       .from("api_keys")
-      .insert({ name, service: svc, key_prefix: prefix, key_hash, notes, expires_at, created_by: actor })
-      .select("id, name, service, key_prefix, created_at, expires_at")
+      .insert({ name, service: svc, key_prefix: prefix, key_hash, notes, project_codes, expires_at, created_by: actor })
+      .select("id, name, service, key_prefix, project_codes, created_at, expires_at")
       .single();
     if (error) return json(500, { error: error.message }, cors);
     // O valor em claro só existe nesta resposta.

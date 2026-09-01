@@ -31,6 +31,7 @@ interface ApiKeyRow {
   service: string;
   key_prefix: string;
   notes: string | null;
+  project_codes: string[];
   created_by: string | null;
   created_at: string;
   expires_at: string | null;
@@ -49,7 +50,14 @@ interface LegacyKey {
 const SERVICE_LABELS: Record<string, string> = {
   "external-approvals-api": "Aprovações pendentes (external-approvals-api)",
   "pagcorp-status-api": "Status de cartões (pagcorp-status-api)",
+  "expense-tracking-api": "Acompanhamento de despesas (expense-tracking-api)",
 };
+
+function parseProjectCodes(value: string): string[] {
+  return Array.from(new Set(
+    value.split(/[\n,;]+/).map((code) => code.trim()).filter(Boolean),
+  ));
+}
 
 function fmt(value: string | null): string {
   if (!value) return "—";
@@ -67,6 +75,7 @@ export default function ApiKeys() {
   const [service, setService] = useState("external-approvals-api");
   const [expiresAt, setExpiresAt] = useState("");
   const [notes, setNotes] = useState("");
+  const [projectCodes, setProjectCodes] = useState("");
   const [plaintext, setPlaintext] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -99,6 +108,11 @@ export default function ApiKeys() {
       toast.error("Informe um nome com pelo menos 3 caracteres");
       return;
     }
+    const projects = parseProjectCodes(projectCodes);
+    if (service === "expense-tracking-api" && projects.length === 0) {
+      toast.error("Informe ao menos um projeto permitido");
+      return;
+    }
     setSaving(true);
     const { data, error } = await invokeFn<{ plaintext: string }>("api-keys-admin", {
       body: {
@@ -107,6 +121,7 @@ export default function ApiKeys() {
         service,
         expires_at: expiresAt || null,
         notes: notes.trim() || null,
+        project_codes: service === "expense-tracking-api" ? projects : [],
       },
     });
     setSaving(false);
@@ -119,6 +134,7 @@ export default function ApiKeys() {
     setName("");
     setExpiresAt("");
     setNotes("");
+    setProjectCodes("");
     void load();
   }
 
@@ -231,6 +247,7 @@ export default function ApiKeys() {
                       <th className="text-left font-medium px-4 py-2">Nome</th>
                       <th className="text-left font-medium px-4 py-2">Serviço</th>
                       <th className="text-left font-medium px-4 py-2">Prefixo</th>
+                      <th className="text-left font-medium px-4 py-2">Projetos</th>
                       <th className="text-left font-medium px-4 py-2">Criada</th>
                       <th className="text-left font-medium px-4 py-2">Último uso</th>
                       <th className="text-left font-medium px-4 py-2">Usos</th>
@@ -252,6 +269,22 @@ export default function ApiKeys() {
                             {SERVICE_LABELS[k.service] ?? k.service}
                           </td>
                           <td className="px-4 py-2 font-mono text-xs">{k.key_prefix}…</td>
+                          <td className="px-4 py-2">
+                            {k.project_codes?.length ? (
+                              <div className="flex max-w-52 flex-wrap gap-1">
+                                {k.project_codes.slice(0, 3).map((project) => (
+                                  <Badge key={project} variant="outline" className="max-w-full truncate">
+                                    {project}
+                                  </Badge>
+                                ))}
+                                {k.project_codes.length > 3 && (
+                                  <Badge variant="secondary">+{k.project_codes.length - 3}</Badge>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
                           <td className="px-4 py-2 text-muted-foreground">
                             {fmt(k.created_at)}
                             {k.created_by && <div className="text-xs">por {k.created_by}</div>}
@@ -332,6 +365,18 @@ export default function ApiKeys() {
                 </SelectContent>
               </Select>
             </div>
+            {service === "expense-tracking-api" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="api-key-projects">Projetos permitidos</Label>
+                <Textarea
+                  id="api-key-projects"
+                  value={projectCodes}
+                  onChange={(e) => setProjectCodes(e.target.value)}
+                  placeholder="PROJETO A, PROJETO B"
+                  rows={3}
+                />
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="api-key-exp">Expira em (opcional)</Label>
               <Input

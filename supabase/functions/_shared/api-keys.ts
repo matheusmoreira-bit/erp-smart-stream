@@ -35,6 +35,7 @@ export interface ApiKeyValidation {
   reason?: string;
   keyId?: string;
   keyName?: string;
+  projectCodes?: string[];
   legacy?: boolean;
 }
 
@@ -54,7 +55,7 @@ export async function validateApiKey(
   const hash = await sha256Hex(provided);
   const { data, error } = await admin
     .from("api_keys")
-    .select("id, name, service, revoked_at, expires_at")
+    .select("id, name, service, revoked_at, expires_at, project_codes")
     .eq("key_hash", hash)
     .maybeSingle();
 
@@ -73,7 +74,14 @@ export async function validateApiKey(
       .eq("id", data.id)
       .then(() => {}, () => {});
     admin.rpc("api_key_register_use", { _id: data.id }).then(() => {}, () => {});
-    return { valid: true, keyId: data.id, keyName: data.name };
+    return {
+      valid: true,
+      keyId: data.id,
+      keyName: data.name,
+      projectCodes: Array.isArray(data.project_codes)
+        ? data.project_codes.map((code: unknown) => String(code).trim()).filter(Boolean)
+        : [],
+    };
   }
 
   // Fallback: chave legada em variável de ambiente (mantida funcional).
