@@ -516,12 +516,21 @@ export function usePagCorp() {
         }
         seenIds.add(resolvedId);
 
+        // A partir de 07/09/2026 o `amount` da PagCorp traz o valor de crédito
+        // ou de débito conforme `isCredit`. Normalizamos para módulo + flag,
+        // para que um crédito nunca seja integrado como despesa.
+        const rawAmount = Number(item.amount ?? item.value ?? item.expenseValue ?? 0) || 0;
+        const isCredit = item.isCredit === true || rawAmount < 0;
+        const amount = Math.abs(rawAmount);
+
         return enrichPagCorpAccountability({
           ...item,
           id: resolvedId,
           date: item.eventDate || item.date || item.expenseDate || item.createdAt || "",
           description: item.description || item.expenseDescription || "—",
-          amount: item.amount || item.value || item.expenseValue || 0,
+          amount,
+          isCredit,
+
           currency: (() => {
             // Prioriza a moeda original da compra; só assume BRL como último recurso.
             const candidates = [
