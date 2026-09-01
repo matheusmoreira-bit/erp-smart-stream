@@ -444,10 +444,17 @@ Deno.serve(async (req) => {
         (parents || []).map((r: any) => String(r.id)),
         caller.directorateBranch,
       );
+      const byLog = await decidedByCallerIds(
+        admin,
+        (parents || []).map((r: any) => String(r.id)),
+        new Set([...aliases, ...subAliases]),
+      );
       allowedExpenseIds = (parents || [])
         .filter((r: any) =>
-          ownsExpense(r, aliases, caller.directorateBranch, myRules, subAliases) || byItems.has(String(r.id)),
+          ownsExpense(r, aliases, caller.directorateBranch, myRules, subAliases) ||
+          byItems.has(String(r.id)) || byLog.has(String(r.id)),
         )
+
         .map((r: any) => String(r.id));
       if (allowedExpenseIds.length === 0) return json(200, { data: [] }, cors);
     }
