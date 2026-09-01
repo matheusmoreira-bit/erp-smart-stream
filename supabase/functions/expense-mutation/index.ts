@@ -38,6 +38,7 @@ import {
   type RateioSegment,
 } from "../_shared/rateio-segments.ts";
 import { classifyExpenseEdit, normalizeExpenseItems } from "../_shared/expense-items.ts";
+import { isPagCorpExpense } from "../_shared/pagcorp-expense.ts";
 import { isNativeErpExpenseOrigin } from "../_shared/expense-origin.ts";
 
 
@@ -427,10 +428,15 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
 
   const origin = String(input.origin || "manual");
   let status = String(input.status || "rascunho");
-  const isAutoApproved = status === "aprovado" && AUTO_APPROVED_ORIGINS.has(origin);
+  // Cartão corporativo (PagCorp): nunca passa por aprovação, mesmo quando o
+  // documento é digitado manualmente pelo time de cartões.
+  const isCardExpense = isPagCorpExpense(origin, input.remarks);
+  if (isCardExpense && status !== "rascunho") status = "aprovado";
+  const isAutoApproved = status === "aprovado" && (isCardExpense || AUTO_APPROVED_ORIGINS.has(origin));
   if (!ALLOWED_CREATE_STATUS.has(status) && !isAutoApproved) {
     return json(400, { error: `status inicial inválido: ${status}` });
   }
+
 
   const items: any[] = Array.isArray(input.items) ? input.items : [];
   const totalAmount = items.reduce((s, it) => s + Number(it.line_total || 0), 0);
@@ -1377,7 +1383,9 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
     return json(409, { error: `Despesa não está em rascunho (status: ${current.status})` });
   }
 
-  const autoApprovedByRule = await isAutomaticApprovalRule(admin, current.approval_rule_id);
+  // Cartão corporativo (PagCorp) nunca entra em fluxo de aprovação.
+  const autoApprovedByRule = isPagCorpExpense(current.origin, current.remarks)
+    || await isAutomaticApprovalRule(admin, current.approval_rule_id);
   if (autoApprovedByRule) {
     const { error } = await admin
       .from("expenses")

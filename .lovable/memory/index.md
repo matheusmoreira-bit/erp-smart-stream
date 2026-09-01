@@ -38,3 +38,4 @@
 - [Cancelamento de PC libera PagCorp](mem://features/cancelamento-pc-libera-pagcorp.md) — Cancelar pedido no SAP desvincula as transações PagCorp (exceto as já baixadas), liberando novo lançamento.
 - [Regras Viagens/Folha/Impostos](mem://features/regra-viagens.md) — regras temáticas com aprovador único (Daniela, Ketlhenn, Fernanda/Marco/Juliana) em todas as empresas.
 - [Visibilidade das aprovações SAP](mem://features/sap-approvals-visibility.md) — sap-approvals-hana filtra no servidor: só o que o usuário aprova ou solicitou.
+- [PagCorp sem aprovação](mem://features/pagcorp-sem-aprovacao.md) — cartão corporativo (origin pagcorp ou observação "PagCorp") nasce aprovado, sem matriz de alçadas.
