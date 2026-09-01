@@ -14,6 +14,7 @@ import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { sha256Hex } from "../_shared/api-keys.ts";
 
 const SERVICES = ["external-approvals-api", "pagcorp-status-api", "expense-tracking-api"] as const;
+const SERVICE_CATALOG_VERSION = 2;
 const LEGACY_SECRETS: Partial<Record<(typeof SERVICES)[number], string>> = {
   "external-approvals-api": "EXTERNAL_APPROVALS_API_KEY",
   "pagcorp-status-api": "PAGCORP_STATUS_API_KEY",
@@ -76,7 +77,12 @@ Deno.serve(async (req) => {
         ? [{ service, secret_name: secretName }]
         : [];
     });
-    return json(200, { keys: data ?? [], legacy, services: SERVICES }, cors);
+    return json(200, {
+      keys: data ?? [],
+      legacy,
+      services: SERVICES,
+      service_catalog_version: SERVICE_CATALOG_VERSION,
+    }, cors);
   }
 
   if (op === "create") {

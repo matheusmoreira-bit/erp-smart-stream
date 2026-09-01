@@ -53,6 +53,15 @@ const SERVICE_LABELS: Record<string, string> = {
   "expense-tracking-api": "Acompanhamento de despesas (expense-tracking-api)",
 };
 
+const KNOWN_SERVICES = Object.keys(SERVICE_LABELS);
+
+function mergeServices(remoteServices?: string[]): string[] {
+  return Array.from(new Set([
+    ...KNOWN_SERVICES,
+    ...(Array.isArray(remoteServices) ? remoteServices : []),
+  ]));
+}
+
 function parseProjectCodes(value: string): string[] {
   return Array.from(new Set(
     value.split(/[\n,;]+/).map((code) => code.trim()).filter(Boolean),
@@ -67,7 +76,7 @@ function fmt(value: string | null): string {
 export default function ApiKeys() {
   const [keys, setKeys] = useState<ApiKeyRow[]>([]);
   const [legacy, setLegacy] = useState<LegacyKey[]>([]);
-  const [services, setServices] = useState<string[]>([]);
+  const [services, setServices] = useState<string[]>(KNOWN_SERVICES);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -91,7 +100,7 @@ export default function ApiKeys() {
     }
     setKeys(data.keys || []);
     setLegacy(data.legacy || []);
-    setServices(data.services || Object.keys(SERVICE_LABELS));
+    setServices(mergeServices(data.services));
   }, []);
 
   useEffect(() => {
@@ -357,7 +366,7 @@ export default function ApiKeys() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {(services.length ? services : Object.keys(SERVICE_LABELS)).map((s) => (
+                  {services.map((s) => (
                     <SelectItem key={s} value={s}>
                       {SERVICE_LABELS[s] ?? s}
                     </SelectItem>
