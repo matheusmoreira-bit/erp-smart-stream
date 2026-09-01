@@ -428,10 +428,15 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
 
   const origin = String(input.origin || "manual");
   let status = String(input.status || "rascunho");
-  const isAutoApproved = status === "aprovado" && AUTO_APPROVED_ORIGINS.has(origin);
+  // Cartão corporativo (PagCorp): nunca passa por aprovação, mesmo quando o
+  // documento é digitado manualmente pelo time de cartões.
+  const isCardExpense = isPagCorpExpense(origin, input.remarks);
+  if (isCardExpense && status !== "rascunho") status = "aprovado";
+  const isAutoApproved = status === "aprovado" && (isCardExpense || AUTO_APPROVED_ORIGINS.has(origin));
   if (!ALLOWED_CREATE_STATUS.has(status) && !isAutoApproved) {
     return json(400, { error: `status inicial inválido: ${status}` });
   }
+
 
   const items: any[] = Array.isArray(input.items) ? input.items : [];
   const totalAmount = items.reduce((s, it) => s + Number(it.line_total || 0), 0);
