@@ -38,6 +38,7 @@ import {
   type RateioSegment,
 } from "../_shared/rateio-segments.ts";
 import { classifyExpenseEdit, normalizeExpenseItems } from "../_shared/expense-items.ts";
+import { isPagCorpExpense } from "../_shared/pagcorp-expense.ts";
 import { isNativeErpExpenseOrigin } from "../_shared/expense-origin.ts";
 
 
