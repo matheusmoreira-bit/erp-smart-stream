@@ -14,8 +14,23 @@ export function evaluateCriterion(
   const val = String(raw).toLowerCase();
   const target = String(c.value ?? "").toLowerCase();
   const tokens = val.split(/\s+/).filter(Boolean);
-  const matchesExact = val === target || tokens.includes(target);
   const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  /** Compila um padrão SQL-like ("1.2.%") em regex. */
+  const likeTest = (pattern: string): boolean => {
+    const clean = pattern.trim().replace(/^%\s+/, "%").replace(/\s+%$/, "%");
+    const src = clean.split("").map((ch) => ch === "%" ? ".*" : ch === "_" ? "." : escapeRegex(ch)).join("");
+    try {
+      const re = new RegExp(`^${src}$`);
+      return re.test(val) || tokens.some((t) => re.test(t));
+    } catch {
+      return false;
+    }
+  };
+  // Regras salvas com operador "igual" mas valor curinga ("1.2.%") devem se
+  // comportar como LIKE — caso contrário nunca casam e o documento cai no fallback.
+  const matchesExact = target.includes("%")
+    ? likeTest(target)
+    : val === target || tokens.includes(target);
 
   switch (c.operator) {
     case "greater_than":
@@ -31,22 +46,14 @@ export function evaluateCriterion(
       return matchesExact;
     case "not_equal":
       return !matchesExact;
+
     case "contains":
       return val.includes(target);
     case "not_contains":
       return !val.includes(target);
-    case "like": {
-      // Padrões salvos com espaços colados nos curingas ("% folha %") não devem
-      // exigir o espaço literal — normaliza as bordas antes de compilar.
-      const cleanPattern = target.trim().replace(/^%\s+/, "%").replace(/\s+%$/, "%");
-      const pattern = cleanPattern.split("").map((ch) => ch === "%" ? ".*" : ch === "_" ? "." : escapeRegex(ch)).join("");
-      try {
-        const re = new RegExp(`^${pattern}$`);
-        return re.test(val) || tokens.some((t) => re.test(t));
-      } catch {
-        return false;
-      }
-    }
+    case "like":
+      return likeTest(target);
+
     default:
       return false;
   }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSap } from "@/contexts/SapContext";
 import { identityMatches } from "@/lib/permission-group-utils";
 import {
@@ -33,6 +33,7 @@ export function useMyCapabilities(): MyCapabilities {
   const [groups, setGroups] = useState<string[]>([]);
   const [isPrivileged, setIsPrivileged] = useState(false);
   const [loading, setLoading] = useState(true);
+  const resolvedRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,6 +54,7 @@ export function useMyCapabilities(): MyCapabilities {
       let caps = new Set<string>();
       let names: string[] = [];
 
+      let failed = false;
       try {
         if (!privileged) {
           if (await getIsCloudAdmin()) privileged = true;
@@ -77,16 +79,29 @@ export function useMyCapabilities(): MyCapabilities {
           );
         }
       } catch {
-
-        /* mantém defaults restritos */
+        // Falha de rede/sessão não pode rebaixar o usuário: mantém o que já
+        // havia sido resolvido nesta sessão.
+        failed = true;
       }
 
       if (!cancelled) {
-        setCapabilities(caps);
-        setGroups(names);
-        setIsPrivileged(privileged);
+        if (!failed) {
+          // Resultado vazio depois de já ter capacidades = leitura incompleta.
+          if (caps.size > 0 || resolvedRef.current !== identifier) {
+            setCapabilities(caps);
+            setGroups(names);
+            if (caps.size > 0) resolvedRef.current = identifier;
+          }
+        }
+        // Recalcula sempre que a leitura foi bem-sucedida: trocar de empresa
+        // ou de usuário deve rebaixar quem não é mais privilegiado. Em falha
+        // de rede mantém o valor anterior para não rebaixar por instabilidade.
+        if (!failed) setIsPrivileged(privileged);
+        else setIsPrivileged((prev) => prev || privileged);
+
         setLoading(false);
       }
+
     })();
 
     return () => {

@@ -85,12 +85,16 @@ export interface GroupAssignmentRow {
 /** Vínculos usuário × grupo (tabela pequena, lida uma vez por TTL). */
 export function getGroupAssignments(): Promise<GroupAssignmentRow[]> {
   return memo("group-assignments", async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("user_group_assignments")
       .select("sap_email, group_id, company_db, permission_groups(name)");
+    // Erro (sessão expirada, RLS, rede) NÃO pode virar "usuário sem grupo":
+    // propagamos para quem chama manter o snapshot anterior de permissões.
+    if (error) throw new Error(error.message);
     return (data || []) as unknown as GroupAssignmentRow[];
   });
 }
+
 
 export interface GroupModuleRow {
   module_key: string;
@@ -109,12 +113,14 @@ export function getGroupModules(groupIds: string[]): Promise<GroupModuleRow[]> {
   const ids = Array.from(new Set(groupIds.filter(Boolean))).sort();
   if (ids.length === 0) return Promise.resolve([]);
   return memo(`group-modules:${ids.join(",")}`, async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("permission_group_modules")
       .select(
         "module_key, group_id, can_view, can_create, can_edit, can_delete, can_approve, can_integrate, can_export",
       )
       .in("group_id", ids);
+    if (error) throw new Error(error.message);
     return (data || []) as unknown as GroupModuleRow[];
   });
+
 }

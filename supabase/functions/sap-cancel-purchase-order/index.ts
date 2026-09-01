@@ -41,8 +41,40 @@ async function login(creds: Record<string, string>) {
   if (!r.ok) throw new Error(`SAP Login falhou (${r.status}): ${await r.text()}`);
   return { baseUrl, cookies: r.headers.get("set-cookie") || "" };
 }
+/**
+ * Padrão do sistema: ao cancelar um pedido de compra no SAP, qualquer transação
+ * PagCorp vinculada àquele DocEntry volta a ficar livre para novo lançamento.
+ * Transações já baixadas/conciliadas (settlement concluído) são preservadas.
+ */
+async function unlinkPagcorpTransactions(
+  sb: ReturnType<typeof createClient>,
+  companyDb: string,
+  docEntry: number,
+) {
+  const { data: logs } = await sb
+    .from("pagcorp_integration_log")
+    .select("id, pagcorp_expense_id, settlement_status, settlement_journal_entry, settlement_invoice_doc_entry")
+    .eq("company_db", companyDb)
+    .eq("sap_doc_entry", docEntry);
+  if (!logs || logs.length === 0) return { unlinked: [], kept: [] };
+
+  const kept = (logs as any[]).filter((l) =>
+    l.settlement_journal_entry || l.settlement_invoice_doc_entry ||
+    String(l.settlement_status || "") === "completed"
+  );
+  const removable = (logs as any[]).filter((l) => !kept.some((k) => k.id === l.id));
+  if (removable.length === 0) return { unlinked: [], kept };
+
+  const { data: removed } = await sb
+    .from("pagcorp_integration_log")
+    .delete()
+    .in("id", removable.map((l) => l.id))
+    .select("id, pagcorp_expense_id");
+  return { unlinked: removed || [], kept };
+}
 
 Deno.serve(async (req) => {
+
   const foreignOrigin = rejectForeignOrigin(req);
   if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -77,9 +109,20 @@ Deno.serve(async (req) => {
         .or(`sap_integration_locked_at.is.null,sap_integration_locked_at.lt.${cutoffIso}`)
         .select("id, requester_email");
 
-      if (!lockedRows || lockedRows.length === 0) {
-        results.push({ docEntry: de, status: 0, ok: false, body: "skipped: já cancelado ou em curso" });
-        continue;
+      // Pedidos criados direto pela integração PagCorp não têm linha em
+      // `expenses`. Nesse caso cancelamos no SAP e desvinculamos o log do
+      // PagCorp para que a transação possa ser relançada.
+      const orphan = !lockedRows || lockedRows.length === 0;
+      if (orphan) {
+        const { data: pcLogs } = await sb
+          .from("pagcorp_integration_log")
+          .select("id")
+          .eq("company_db", companyDb)
+          .eq("sap_doc_entry", Number(de));
+        if (!pcLogs || pcLogs.length === 0) {
+          results.push({ docEntry: de, status: 0, ok: false, body: "skipped: já cancelado ou em curso" });
+          continue;
+        }
       }
 
       const url = `${sap.baseUrl}/PurchaseOrders(${Number(de)})/Cancel`;
@@ -91,7 +134,27 @@ Deno.serve(async (req) => {
       const ok = r.status === 204 || r.ok;
       results.push({ docEntry: de, status: r.status, ok, body: body.slice(0, 300) });
 
+      if (orphan) {
+        if (ok) {
+          const { unlinked, kept } = await unlinkPagcorpTransactions(sb, companyDb, Number(de));
+          await sb.rpc("insert_audit_log", {
+            p_action: "pagcorp_purchase_order_cancelled",
+            p_entity_type: "pagcorp_transaction",
+            p_entity_id: null,
+            p_company_db: companyDb,
+            p_details: {
+              docEntry: de,
+              reason: reason || null,
+              unlinked,
+              kept_settled: kept.map((k: any) => k.pagcorp_expense_id),
+            } as any,
+          });
+        }
+        continue;
+      }
+
       const exp = lockedRows[0] as any;
+
       if (ok) {
         await sb
           .from("expenses")
@@ -114,14 +177,24 @@ Deno.serve(async (req) => {
                 } as any),
           )
           .eq("id", exp.id);
+        // Padrão do sistema: transações PagCorp vinculadas ao pedido cancelado
+        // voltam a ficar disponíveis para novo lançamento.
+        const { unlinked, kept } = await unlinkPagcorpTransactions(sb, companyDb, Number(de));
         await sb.rpc("insert_audit_log", {
           p_action: "sap_purchase_order_cancelled",
           p_entity_type: "expense",
           p_entity_id: exp.id,
           p_company_db: companyDb,
-          p_details: { docEntry: de, reason: reason || null, final_status: markCancelled ? "cancelado" : "pendente_aprovacao" } as any,
+          p_details: {
+            docEntry: de,
+            reason: reason || null,
+            final_status: markCancelled ? "cancelado" : "pendente_aprovacao",
+            pagcorp_unlinked: unlinked,
+            pagcorp_kept_settled: kept.map((k: any) => k.pagcorp_expense_id),
+          } as any,
         });
       } else {
+
 
         // Libera o lock para permitir nova tentativa imediata
         await sb.from("expenses").update({ sap_integration_locked_at: null }).eq("id", exp.id);

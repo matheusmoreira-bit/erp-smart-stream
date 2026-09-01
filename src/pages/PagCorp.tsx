@@ -1019,7 +1019,15 @@ export default function PagCorp() {
     options: {
       markNondeductible: boolean;
       postingType: "purchase_order" | "journal_entry";
-      journalEntry?: { debitAccount: string; creditAccount: string; costCenter?: string | null; project?: string | null; remarks?: string };
+      journalEntry?: {
+        debitAccount: string;
+        creditAccount: string;
+        costCenter?: string | null;
+        project?: string | null;
+        remarks?: string;
+        exchangeRate?: number | null;
+      };
+      lineOverrides?: Record<string, { costCenter?: string | null; project?: string | null; item?: string | null }>;
     } = { markNondeductible: false, postingType: "purchase_order" },
   ) => {
     const t = integrateDialog.tx;
@@ -1029,10 +1037,15 @@ export default function PagCorp() {
     programmaticCloseRef.current = true;
     setIntegrateDialog({ open: false, tx: null, transactions: [], type: "generic", postingType: "purchase_order" });
     try {
-      const lineOverrides =
+      const baseOverrides =
         override.costCenter || override.project || override.item
           ? { [String(t.id)]: { costCenter: override.costCenter ?? null, project: override.project ?? null, item: override.item ?? null } }
           : undefined;
+      // Overrides por transação (modo LCM) prevalecem sobre o cabeçalho.
+      const lineOverrides = options.lineOverrides && Object.keys(options.lineOverrides).length > 0
+        ? { ...(baseOverrides || {}), ...options.lineOverrides }
+        : baseOverrides;
+
       // Sem prestação ⇒ indedutível por padrão; toggle do usuário tem prioridade
       const asNondeductible =
         options.markNondeductible ||
@@ -1062,7 +1075,9 @@ export default function PagCorp() {
             session.companyDB,
             session.userName || undefined,
             options.journalEntry,
+            lineOverrides,
           )
+
         : await integrateDirect(
             t,
             integrateDialog.type,
@@ -1832,8 +1847,9 @@ export default function PagCorp() {
                               (Array.isArray(t.attachments) ? t.attachments.length : 0);
                             const statusBadge = t.isReversed ? (
                               <Badge variant="secondary" className="bg-muted text-muted-foreground border-border gap-1">
-                                <XCircle className="w-3 h-3" /> Estornado
+                                <XCircle className="w-3 h-3" /> {t.isCredit ? "Crédito" : "Estornado"}
                               </Badge>
+
                             ) : t.hasAccountability ? (
                               t.accountabilityApproved ? (
                                 <Badge variant="secondary" className="bg-success/15 text-success border-success/30 gap-1">

@@ -207,8 +207,11 @@ interface SLDraft {
   DocDueDate?: string;
   Comments?: string;
   AttachmentEntry?: number;
+  Cancelled?: string;
+  DocumentStatus?: string;
   DocumentLines?: Array<Record<string, unknown>>;
 }
+
 
 interface SLTemplate {
   Code?: number;
@@ -426,7 +429,7 @@ async function fetchDraftsByEntries(session: SapSession, entries: number[]): Pro
   for (let i = 0; i < uniqueEntries.length; i += CHUNK) {
     const chunk = uniqueEntries.slice(i, i + CHUNK);
     const filter = chunk.map((entry) => `DocEntry eq ${entry}`).join(" or ");
-    const path = `Drafts?$select=DocEntry,DocNum,DocTotal,DocTotalFc,DocCurrency,CardCode,CardName,DocDate,DocDueDate,Comments,AttachmentEntry,DocumentLines&$filter=${encodeURIComponent(filter)}&$top=${chunk.length}`;
+    const path = `Drafts?$select=DocEntry,DocNum,DocTotal,DocTotalFc,DocCurrency,CardCode,CardName,DocDate,DocDueDate,Comments,AttachmentEntry,Cancelled,DocumentStatus,DocumentLines&$filter=${encodeURIComponent(filter)}&$top=${chunk.length}`;
     try {
       const res = await sapQuery(session, path, undefined, true);
       const data = res.data as { value?: SLDraft[] } | SLDraft[] | null;
@@ -442,24 +445,26 @@ async function fetchDraftsByEntries(session: SapSession, entries: number[]): Pro
   return map;
 }
 
+/** Rascunho cancelado (ou encerrado) no SAP: não deve aparecer como pendência. */
+function isCancelledDraft(draft: SLDraft): boolean {
+  return draft?.Cancelled === "tYES" || draft?.DocumentStatus === "bost_Close";
+}
+
 async function fetchApprovalsViaServiceLayer(
   session: SapSession,
   excludeRequestIds?: Set<number>,
 ): Promise<ApprovalDoc[]> {
-  let reqRes = await sapQuery(
+  // `ApprovalRequestDecisions`/`ApprovalRequestLines` são coleções internas da
+  // entidade (não navegações): o Service Layer recusa `$expand` nelas com
+  // "Cannot expand invalid navigation property". Buscando a entidade completa
+  // (sem `$select`) as decisões já vêm no payload.
+  const reqRes = await sapQuery(
     session,
-    "ApprovalRequests?$filter=Status eq 'arsPending'&$select=Code,OriginatorID,DraftEntry,DocumentEntry,ObjectType,Status,RemarksFromOriginator,CreationDate,UpdateDate,ApprovalTemplatesID&$expand=ApprovalRequestDecisions,ApprovalRequestLines&$top=200",
+    "ApprovalRequests?$filter=Status eq 'arsPending'&$top=200",
     undefined,
     true,
   );
-  if (!reqRes.data) {
-    reqRes = await sapQuery(
-      session,
-      "ApprovalRequests?$filter=Status eq 'arsPending'&$top=200",
-      undefined,
-      true,
-    );
-  }
+
   const reqData = reqRes.data as { value?: SLApprovalRequest[] } | SLApprovalRequest[];
   let requests: SLApprovalRequest[] = Array.isArray(reqData)
     ? (reqData as SLApprovalRequest[])
@@ -480,11 +485,14 @@ async function fetchApprovalsViaServiceLayer(
 
   // Evita tempestade de chamadas ao Service Layer: drafts são carregados em lotes.
   const draftsByEntry = await fetchDraftsByEntries(session, requests.map((r) => Number(r.DraftEntry || 0)));
-  const enriched = requests.map((r) => ({
-    r,
-    decisions: r.ApprovalRequestDecisions || [],
-    draft: r.DraftEntry ? (draftsByEntry.get(Number(r.DraftEntry)) || {} as SLDraft) : ({} as SLDraft),
-  }));
+  const enriched = requests
+    .map((r) => ({
+      r,
+      decisions: r.ApprovalRequestDecisions || [],
+      draft: r.DraftEntry ? (draftsByEntry.get(Number(r.DraftEntry)) || {} as SLDraft) : ({} as SLDraft),
+    }))
+    // Documento cancelado/encerrado no SAP não é mais uma aprovação pendente.
+    .filter(({ draft }) => !isCancelledDraft(draft));
 
   // Buscar approvers das etapas pendentes (com cache por etapa)
   const pendingStageCodes = new Set<number>();

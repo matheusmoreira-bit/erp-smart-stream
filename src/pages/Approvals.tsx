@@ -2297,7 +2297,13 @@ export default function ApprovalsPage() {
   // "Ver todas as aprovações" começa DESMARCADO por padrão para todos —
   // inclusive super-usuários/admins. Quem tem permissão pode ligar manualmente.
   // Apenas o grupo "Usuário" não enxerga a opção.
-  const canToggleShowAll = isAdmin || canViewAllApprovals || canViewAllByGroup;
+  // Uma vez concedida, a permissão de "ver todas" não é retirada no meio da
+  // sessão: revalidações incompletas faziam o toggle (e a lista) sumirem.
+  const grantedShowAllRef = useRef(false);
+  if (isAdmin || canViewAllApprovals || canViewAllByGroup) grantedShowAllRef.current = true;
+  const canToggleShowAll =
+    isAdmin || canViewAllApprovals || canViewAllByGroup || grantedShowAllRef.current;
+
   const { has: hasCapability } = useMyCapabilities();
   const [showAll, setShowAll] = useState<boolean>(false);
   // O grupo pode optar por já abrir a tela com "Ver todas" ligado.

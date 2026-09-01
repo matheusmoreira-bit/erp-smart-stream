@@ -380,6 +380,9 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
   const [loading, setLoading] = useState(true);
   const [refreshTick, setRefreshTick] = useState(0);
   const resolvedScopeRef = useRef<string | null>(null);
+  /** Último escopo em que os grupos foram resolvidos com sucesso (não-default). */
+  const resolvedRichRef = useRef<string | null>(null);
+
 
   useEffect(() => {
     const allKeys = ALL_MODULES.map((m) => m.key);
@@ -458,11 +461,15 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
       if (cancelled) return;
 
       if (!mine || mine.length === 0) {
+        // Revalidação que "perdeu" os grupos (sessão renovando, RLS, rede)
+        // não pode rebaixar quem já resolveu permissões neste mesmo escopo.
+        if (resolvedRichRef.current === scopeKey) { finishLoading(); return; }
         setUserModules(DEFAULT_MODULES);
         setPerms(Object.fromEntries(DEFAULT_MODULES.map((k) => [k, defaultPermsFor(k)])));
         finishLoading();
         return;
       }
+
 
       const groupIds = mine.map((a: any) => a.group_id).filter(Boolean) as string[];
 
@@ -498,9 +505,17 @@ export function useModuleAccess(moduleKey?: string): ModuleAccess {
 
       const keys = Object.keys(merged).filter((k) => merged[k].view);
 
+      if (keys.length === 0 && resolvedRichRef.current === scopeKey) {
+        // Leitura vazia dos módulos do grupo: preserva o snapshot atual.
+        finishLoading();
+        return;
+      }
+
       setPerms(merged);
       setUserModules(keys.length > 0 ? keys : DEFAULT_MODULES);
+      if (keys.length > 0) resolvedRichRef.current = scopeKey;
       finishLoading();
+
     })().catch((error) => {
       console.error("[useModuleAccess] falha ao atualizar permissões", error);
       finishLoading();

@@ -10,6 +10,8 @@ export interface PagCorpJournalTransactionPair {
   lineMemo: string;
   costCenter: string;
   project: string;
+  /** Cotação (PTAX) aplicada quando a linha é em moeda estrangeira. */
+  exchangeRate?: number | null;
 }
 
 export interface PagCorpJournalLine {
@@ -23,6 +25,7 @@ export interface PagCorpJournalLine {
   FCDebit?: number;
   FCCredit?: number;
   FCCurrency?: string;
+  Rate?: number;
 }
 
 export function applyPagCorpJournalDimensions<T extends Record<string, unknown>>(
@@ -51,6 +54,8 @@ export function buildPagCorpJournalTransactionPairs(
   return transactions.flatMap((transaction) => {
     const currency = String(transaction.currency || localCurrency).toUpperCase();
     const isForeignCurrency = currency !== localCurrency && /^[A-Z]{3}$/.test(currency);
+    const rate = Number(transaction.exchangeRate);
+    const rateFields = isForeignCurrency && Number.isFinite(rate) && rate > 0 ? { Rate: rate } : {};
     const dimensions = {
       branchId: options.branchId,
       costCenter: transaction.costCenter,
@@ -62,14 +67,14 @@ export function buildPagCorpJournalTransactionPairs(
         AccountCode: options.debitAccount,
         LineMemo: transaction.lineMemo,
         ...(isForeignCurrency
-          ? { FCDebit: transaction.amount, FCCurrency: currency }
+          ? { FCDebit: transaction.amount, FCCurrency: currency, ...rateFields }
           : { Debit: transaction.amount }),
       },
       {
         AccountCode: options.creditAccount,
         LineMemo: transaction.lineMemo,
         ...(isForeignCurrency
-          ? { FCCredit: transaction.amount, FCCurrency: currency }
+          ? { FCCredit: transaction.amount, FCCurrency: currency, ...rateFields }
           : { Credit: transaction.amount }),
       },
     ], dimensions) as PagCorpJournalLine[];

@@ -24,6 +24,12 @@ const integrationStatusCache = new Map<string, { at: number; data: IntegrationSt
 const integrationStatusInflight = new Map<string, Promise<IntegrationStatusPayload>>();
 let lastIntegrationStatusWarnAt = 0;
 
+// Reconciliação automática (PagCorp ⇄ despesa já integrada ao SAP):
+// roda no máximo uma vez a cada 2 min por empresa, para transações que
+// aparecem como "não integradas" mas podem ter pedido no SAP.
+const RECONCILE_COOLDOWN_MS = 120_000;
+const lastReconcileAt = new Map<string, number>();
+
 function integrationStatusKey(companyDb: string, ids: number[]): string {
   // Ordena e junta para gerar chave estável independente da ordem do array.
   const sorted = [...ids].sort((a, b) => a - b);
@@ -122,7 +128,14 @@ export interface PagCorpTransaction {
   id: string | number;
   date: string;
   description: string;
+  /** Valor sempre positivo (módulo). A natureza fica em `isCredit`. */
   amount: number;
+  /**
+   * Natureza do lançamento na API PagCorp (a partir de 07/09/2026 o campo
+   * `amount` traz o valor de crédito OU de débito conforme esta flag).
+   * `true` = crédito (estorno/devolução), `false`/ausente = débito (despesa).
+   */
+  isCredit?: boolean;
   currency?: string;
   accountCode?: string;
   accountName?: string;
@@ -220,6 +233,7 @@ function enrichPagCorpAccountability(transaction: PagCorpTransaction): PagCorpTr
 async function applyIntegrationStatus(
   items: PagCorpTransaction[],
   companyDb: string,
+  skipReconcile = false,
 ): Promise<boolean> {
   const expenseIds = items
     .map((t) => Number(t.id))
@@ -312,6 +326,43 @@ async function applyIntegrationStatus(
         ? null
         : links.find((l) => l.settlementError)?.settlementError ?? null;
     });
+
+    // Auto-cura: transações sem log, mas cujo pedido já existe no SAP
+    // (integração concluída por outro caminho ou log perdido no meio do
+    // fluxo). Reconciliamos no servidor e repintamos o status.
+    if (!skipReconcile) {
+      const unlinked = items.filter((t) => !t.integrated && Number.isFinite(Number(t.id)));
+      const lastRun = lastReconcileAt.get(companyDb) || 0;
+      if (unlinked.length > 0 && Date.now() - lastRun > RECONCILE_COOLDOWN_MS) {
+        lastReconcileAt.set(companyDb, Date.now());
+        try {
+          const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+          const res = await sapFunctionFetch("pagcorp-integration-reconcile", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              companyDb,
+              transactions: unlinked.slice(0, 500).map((t) => ({
+                id: Number(t.id),
+                description: t.description,
+                amount: t.amount,
+                currency: t.currency,
+                date: t.date,
+              })),
+            }),
+          });
+          const payload = await res.json().catch(() => null);
+          if (res.ok && Number(payload?.created) > 0) {
+            integrationStatusCache.clear();
+            return await applyIntegrationStatus(items, companyDb, true);
+          }
+        } catch (reconcileError) {
+          console.warn("PagCorp reconcile failed:", reconcileError);
+        }
+      }
+    }
+
+
 
     // Não-dedutíveis por cartão
     if ((nondeductibleCards as any[]).length) {
@@ -465,12 +516,20 @@ export function usePagCorp() {
         }
         seenIds.add(resolvedId);
 
+        // A partir de 07/09/2026 o `amount` da PagCorp traz o valor de crédito
+        // ou de débito conforme `isCredit`. Normalizamos para módulo + flag,
+        // para que um crédito nunca seja integrado como despesa.
+        const rawAmount = Number(item.amount ?? item.value ?? item.expenseValue ?? 0) || 0;
+        const isCredit = item.isCredit === true || rawAmount < 0;
+        const amount = Math.abs(rawAmount);
         return enrichPagCorpAccountability({
           ...item,
           id: resolvedId,
           date: item.eventDate || item.date || item.expenseDate || item.createdAt || "",
           description: item.description || item.expenseDescription || "—",
-          amount: item.amount || item.value || item.expenseValue || 0,
+          amount,
+          isCredit,
+
           currency: (() => {
             // Prioriza a moeda original da compra; só assume BRL como último recurso.
             const candidates = [
@@ -518,7 +577,8 @@ export function usePagCorp() {
           receipts,
           integrated: false,
           integrationStatusResolved: false,
-          isReversed: Number(item.amount || item.value || item.expenseValue || 0) === 0,
+          // Crédito (estorno/devolução) ou valor zerado: não é despesa integrável.
+          isReversed: amount === 0 || isCredit,
         });
       });
 
@@ -694,7 +754,15 @@ export function usePagCorp() {
     transactions: PagCorpTransaction[],
     companyDb: string,
     integratedBy: string | undefined,
-    journalEntry: { debitAccount: string; creditAccount: string; costCenter?: string | null; project?: string | null; remarks?: string },
+    journalEntry: {
+      debitAccount: string;
+      creditAccount: string;
+      costCenter?: string | null;
+      project?: string | null;
+      remarks?: string;
+      exchangeRate?: number | null;
+    },
+    lineOverrides?: Record<string, { costCenter?: string | null; project?: string | null; item?: string | null }>,
   ) => {
     const { sapFunctionFetch } = await import("@/lib/auth-fetch");
     const response = await sapFunctionFetch("pagcorp-to-sap", {
@@ -707,8 +775,10 @@ export function usePagCorp() {
         integratedBy,
         postingType: "journal_entry",
         journalEntry,
+        ...(lineOverrides && Object.keys(lineOverrides).length > 0 ? { lineOverrides } : {}),
       }),
     });
+
     const result = await response.json().catch(() => ({}));
     if (!response.ok || result.success === false) {
       throw new Error(result.error || `Erro ${response.status}`);

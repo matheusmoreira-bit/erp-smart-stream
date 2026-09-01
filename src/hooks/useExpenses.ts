@@ -690,14 +690,15 @@ export function useExpenses(
       }
 
       // Determine initial status
-      // Regra de negócio: despesas com origem PagCorp (gastos de cartão) NÃO
-      // passam por processo de aprovação — vão direto para integração no ERP.
-      // Se o chamador não informar `initialStatus`, forçamos "aprovado" para
-      // que o fluxo pós-criação já dispare a integração SAP.
+      // Regra de negócio: despesas de cartão corporativo (PagCorp) NÃO passam
+      // por processo de aprovação — vão direto para integração no ERP. Vale
+      // tanto para a origem "pagcorp" quanto para documentos digitados
+      // manualmente pelo time de cartões (observação com "PagCorp").
+      const isCardExpense = origin === "pagcorp" || /pag\s*corp/i.test(String(input.remarks || ""));
       const pagcorpDefaultStatus: ExpenseStatus | undefined =
-        origin === "pagcorp" ? "aprovado" : undefined;
+        isCardExpense ? "aprovado" : undefined;
       let status: ExpenseStatus =
-        input.initialStatus || pagcorpDefaultStatus || "rascunho";
+        pagcorpDefaultStatus || input.initialStatus || "rascunho";
       let currentApprover: string | null = null;
       let matchedRuleId: string | null = null;
 
@@ -709,7 +710,8 @@ export function useExpenses(
 
       // Evaluate approval rules for manual expenses only.
       // PagCorp (cartão) sempre pula aprovação — regra fixa do negócio.
-      if (!input.skipRules && origin === "manual") {
+      if (!input.skipRules && !isCardExpense) {
+
         // Tipo de rateio no cabeçalho força uma regra específica (override)
         const rt = input.rateio_type && input.rateio_type !== "padrao" ? input.rateio_type : null;
         if (rt) {

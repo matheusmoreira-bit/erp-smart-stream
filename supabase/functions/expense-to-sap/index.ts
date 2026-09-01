@@ -1469,7 +1469,10 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
           // Mantém a descrição do item vinda do SAP (não sobrescreve com a da NF).
           // A descrição vinda da NF vai para o campo "Texto Livre" (FreeText).
           line.ItemCode = it.item_code;
-          if (invoiceDesc) line.FreeText = invoiceDesc;
+          // Quando a linha não tinha descrição, o fallback é o próprio código do
+          // item — nesse caso não enviamos FreeText e o SAP usa o nome do item.
+          if (invoiceDesc && invoiceDesc !== it.item_code) line.FreeText = invoiceDesc;
+
         } else {
           // Linha de serviço: sem ItemCode, a descrição é o próprio texto do item.
           line.LineType = "dDocument_Service";
@@ -1495,7 +1498,32 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         return line;
       }),
     };
+
+    // Consistência de tipo do documento: o SAP recusa linhas de serviço (sem
+    // ItemCode) em um pedido de itens ("Item number is missing [line: N]").
+    // - Todas as linhas sem item  -> documento de serviço (DocType).
+    // - Mistura de itens e serviços -> falha explícita antes de postar, com a
+    //   indicação da linha, em vez de um 400 genérico repetido no retry.
+    {
+      const docLines = (sapPayload as any).DocumentLines as Array<Record<string, unknown>>;
+      const withItem = docLines.filter((l) => !!l.ItemCode);
+      const withoutItem = docLines
+        .map((l, i) => ({ l, i }))
+        .filter(({ l }) => !l.ItemCode);
+      if (withItem.length && withoutItem.length) {
+        const linhas = withoutItem.map(({ i }) => i + 1).join(", ");
+        throw new Error(
+          `Documento com linhas mistas: as linhas ${linhas} estão sem código de item enquanto outras têm item. ` +
+            `Preencha o código do item nessas linhas (ou remova o item das demais) antes de integrar ao ERP.`,
+        );
+      }
+      if (!withItem.length && docLines.length) {
+        (sapPayload as any).DocType = "dDocument_Service";
+      }
+    }
+
     lastSapPayload = sapPayload;
+
 
     // 4. Cria (POST) ou atualiza (PATCH) o documento no SAP.
     // No patch, campos imutáveis do cabeçalho (filial, data de lançamento e
@@ -1542,7 +1570,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         // Fallback de período contábil: o SAP recusa datas fora do intervalo
         // permitido ("Specify a date within the permissible range", -5002).
         // Nesse caso reintegramos com a data de hoje em TaxDate/DocDueDate.
-        const outOfDateRange = /permissible range|-5002|intervalo permitido/i.test(msg1);
+        const outOfDateRange = /permissible range|intervalo permitido|date within the permissible|data dentro do intervalo|per[ií]odo cont[aá]bil/i.test(msg1);
         if (outOfDateRange && !isPatchMode) {
           (sapPayload as any).DocDate = today;
           (sapPayload as any).TaxDate = today;
