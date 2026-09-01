@@ -313,8 +313,43 @@ async function directorateItemIds(
   return out;
 }
 
+/**
+ * Ids (dentre os informados) em que o caller JÁ DECIDIU (aprovou/reprovou).
+ * Sem isso, quem aprovou perde a visibilidade assim que o documento avança de
+ * nível — e o Histórico de Aprovações fica vazio para o aprovador.
+ */
+async function decidedByCallerIds(
+  admin: SupabaseClient,
+  ids: string[],
+  aliases: Set<string>,
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (ids.length === 0 || aliases.size === 0) return out;
+  try {
+    const { data } = await admin
+      .from("expense_approval_log")
+      .select("expense_id, approver_email, approver_name")
+      .in("expense_id", ids.slice(0, 5000));
+    for (const r of (data || []) as any[]) {
+      for (const alias of aliases) {
+        if (
+          identityMatches(r.approver_email, alias) ||
+          personMatches(r.approver_email, alias) ||
+          identityMatches(r.approver_name, alias) ||
+          personMatches(r.approver_name, alias)
+        ) {
+          out.add(String(r.expense_id));
+          break;
+        }
+      }
+    }
+  } catch { /* ignore */ }
+  return out;
+}
+
 const OWNER_COLUMNS =
   "id, cost_center, requester_email, requester_name, created_by_email, current_approver, original_approver, approval_rule_id";
+
 
 function applyFilters(query: any, filters: any[]): { query: any; error?: string } {
   for (const f of filters) {
