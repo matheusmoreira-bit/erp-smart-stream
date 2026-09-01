@@ -93,7 +93,12 @@ export function useMyCapabilities(): MyCapabilities {
             if (caps.size > 0) resolvedRef.current = identifier;
           }
         }
-        setIsPrivileged((prev) => prev || privileged);
+        // Recalcula sempre que a leitura foi bem-sucedida: trocar de empresa
+        // ou de usuário deve rebaixar quem não é mais privilegiado. Em falha
+        // de rede mantém o valor anterior para não rebaixar por instabilidade.
+        if (!failed) setIsPrivileged(privileged);
+        else setIsPrivileged((prev) => prev || privileged);
+
         setLoading(false);
       }
 
