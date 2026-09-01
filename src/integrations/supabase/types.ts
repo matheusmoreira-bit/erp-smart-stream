@@ -382,7 +382,6 @@ export type Database = {
           last_used_at: string | null
           name: string
           notes: string | null
-          project_codes: string[]
           revoke_reason: string | null
           revoked_at: string | null
           revoked_by: string | null
@@ -401,7 +400,6 @@ export type Database = {
           last_used_at?: string | null
           name: string
           notes?: string | null
-          project_codes?: string[]
           revoke_reason?: string | null
           revoked_at?: string | null
           revoked_by?: string | null
@@ -420,7 +418,6 @@ export type Database = {
           last_used_at?: string | null
           name?: string
           notes?: string | null
-          project_codes?: string[]
           revoke_reason?: string | null
           revoked_at?: string | null
           revoked_by?: string | null
@@ -6543,8 +6540,6 @@ export type Database = {
           created_by_email: string | null
           currency: string
           expense_id: string | null
-          fiscal_authorized_at: string | null
-          fiscal_doc_key: string | null
           id: string
           last_error: string | null
           nfse_number: string | null
@@ -6565,8 +6560,6 @@ export type Database = {
           created_by_email?: string | null
           currency?: string
           expense_id?: string | null
-          fiscal_authorized_at?: string | null
-          fiscal_doc_key?: string | null
           id?: string
           last_error?: string | null
           nfse_number?: string | null
@@ -6587,8 +6580,6 @@ export type Database = {
           created_by_email?: string | null
           currency?: string
           expense_id?: string | null
-          fiscal_authorized_at?: string | null
-          fiscal_doc_key?: string | null
           id?: string
           last_error?: string | null
           nfse_number?: string | null
@@ -8866,7 +8857,6 @@ export type Database = {
         | "alteracao_itens"
         | "troca_centro_custo"
         | "troca_projeto"
-        | "estrutura_rateio_divergente"
         | "divergencia_solicitante"
         | "alteracao_pos_aprovacao"
         | "pagamento_sem_documento"
@@ -9086,7 +9076,6 @@ export const Constants = {
         "alteracao_itens",
         "troca_centro_custo",
         "troca_projeto",
-        "estrutura_rateio_divergente",
         "divergencia_solicitante",
         "alteracao_pos_aprovacao",
         "pagamento_sem_documento",
