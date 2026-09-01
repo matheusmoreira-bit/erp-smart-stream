@@ -1383,7 +1383,9 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
     return json(409, { error: `Despesa não está em rascunho (status: ${current.status})` });
   }
 
-  const autoApprovedByRule = await isAutomaticApprovalRule(admin, current.approval_rule_id);
+  // Cartão corporativo (PagCorp) nunca entra em fluxo de aprovação.
+  const autoApprovedByRule = isPagCorpExpense(current.origin, current.remarks)
+    || await isAutomaticApprovalRule(admin, current.approval_rule_id);
   if (autoApprovedByRule) {
     const { error } = await admin
       .from("expenses")
