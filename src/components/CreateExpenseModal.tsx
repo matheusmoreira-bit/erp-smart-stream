@@ -527,13 +527,18 @@ export function CreateExpenseModal({
     // Na Omie, produtos e serviços compartilham o catálogo do formulário e
     // não usam os prefixos/restrições de códigos definidos para o SAP.
     if (isOmie) return itemOptions;
-    // Vendas: apenas os itens de receita liberados (SV0003 e SV0006).
-    if (isSales) return itemOptions.filter((o) => SALES_ALLOWED_ITEMS.includes(o.code));
+    // Vendas: na Cactus restringe aos itens de receita liberados (SV0003/SV0006).
+    // Nas demais empresas usa o catálogo de venda ativo do próprio SAP.
+    if (isSales) {
+      if (!isCactusDb) return itemOptions;
+      const allowed = itemOptions.filter((o) => SALES_ALLOWED_ITEMS.includes(o.code));
+      return allowed.length > 0 ? allowed : itemOptions;
+    }
     // Compras: itens SV% são exclusivos de venda e nunca aparecem aqui.
     return itemOptions.filter(
       (o) => !isSalesOnlyItemCode(o.code) && isItemAllowedForCostCenter(o.code, userCostCenter, bypassCcItemRules),
     );
-  }, [itemOptions, userCostCenter, isSales, isOmie, bypassCcItemRules]);
+  }, [itemOptions, userCostCenter, isSales, isOmie, isCactusDb, bypassCcItemRules]);
 
   // Alçada de CC: quem é do 1.6.1.2 pode lançar em qualquer 1.6.%.
   // Grupos com visão total (Facilities, Contábil, Fiscal, Financeiro, CFO,
