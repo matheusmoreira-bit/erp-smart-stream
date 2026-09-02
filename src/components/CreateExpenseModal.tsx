@@ -358,10 +358,11 @@ export function CreateExpenseModal({
     enabled: isSales,
   });
 
-  // Mantém apenas as utilizações de receita permitidas. A comparação ignora
-  // acentos, caixa, espaços e o prefixo numérico ("01-", "1 - ", etc.), pois
-  // dependendo da base o número vem no código e não no nome.
+  // Cactus: mantém apenas as utilizações de receita permitidas. A comparação
+  // ignora acentos, caixa, espaços e o prefixo numérico ("01-", "1 - ", etc.).
+  // Demais empresas: usa a lista completa retornada pelo SAP.
   const filteredUsageOptions = useMemo(() => {
+    if (!isCactusDb) return usageOptions;
     const norm = (s: string) =>
       (s || "")
         .normalize("NFD")
@@ -371,12 +372,14 @@ export function CreateExpenseModal({
         .replace(/[^a-z0-9]+/g, " ")
         .trim();
     const allowed = SALES_ALLOWED_USAGES.map(norm);
-    return usageOptions.filter((o) => {
+    const filtered = usageOptions.filter((o) => {
       const candidates = [norm(o.name), norm(`${o.code} ${o.name}`)];
       return allowed.some((a) => candidates.some((c) => c === a || c.startsWith(a) || a.startsWith(c)));
     });
+    // Se o filtro não casar com nada, não deixa o campo vazio.
+    return filtered.length > 0 ? filtered : usageOptions;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usageOptions]);
+  }, [usageOptions, isCactusDb]);
 
 
 
