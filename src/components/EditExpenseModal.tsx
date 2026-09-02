@@ -275,7 +275,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
       setNewFiles([]);
       setSupplier(null);
     }
-  }, [open, expense]);
+  }, [open, expense?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Resolve o fornecedor no cache quando as opções carregarem
   useEffect(() => {
