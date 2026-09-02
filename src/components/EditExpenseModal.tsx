@@ -139,6 +139,9 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
   const [docDate, setDocDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [items, setItems] = useState<EditItem[]>([]);
+  // Id do documento já hidratado no formulário (evita reset por refresh da lista).
+  const hydratedForRef = useRef<string | null>(null);
+
   const [rateioType, setRateioType] = useState<RateioType>("padrao");
   const initialRateioTypeRef = useRef<RateioType>("padrao");
   const [isSaving, setIsSaving] = useState(false);
