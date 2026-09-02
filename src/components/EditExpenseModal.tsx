@@ -139,6 +139,9 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
   const [docDate, setDocDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [items, setItems] = useState<EditItem[]>([]);
+  // Id do documento já hidratado no formulário (evita reset por refresh da lista).
+  const hydratedForRef = useRef<string | null>(null);
+
   const [rateioType, setRateioType] = useState<RateioType>("padrao");
   const initialRateioTypeRef = useRef<RateioType>("padrao");
   const [isSaving, setIsSaving] = useState(false);
@@ -235,9 +238,20 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
     mapRow: projectMapRow,
   });
 
-  // Popula estado inicial ao abrir / trocar despesa
+  // Popula estado inicial ao abrir / trocar despesa.
+  // Importante: só re-hidrata quando o modal abre ou o documento muda de id.
+  // Sem essa trava, um refresh da lista (que recria os objetos de despesa)
+  // sobrescrevia as alterações em edição — o usuário trocava o item e o
+  // formulário voltava silenciosamente ao valor original antes de salvar.
   useEffect(() => {
-    if (open && expense) {
+    if (!open || !expense) {
+      if (!open) hydratedForRef.current = null;
+      return;
+    }
+    if (hydratedForRef.current === expense.id) return;
+    hydratedForRef.current = expense.id;
+    {
+
       setSupplierName(expense.supplier_name || "");
       setRemarks(expense.remarks || "");
       setDocDate(expense.doc_date ? expense.doc_date.slice(0, 10) : "");
@@ -264,7 +278,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
       setNewFiles([]);
       setSupplier(null);
     }
-  }, [open, expense]);
+  }, [open, expense?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Resolve o fornecedor no cache quando as opções carregarem
   useEffect(() => {
@@ -391,7 +405,11 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
 
     setIsSaving(true);
     try {
-      const itemsChanged = hasItemChanges(items, expense.items || []);
+      // Documento já integrado ao ERP: sempre reenvia as linhas atuais, mesmo
+      // quando o diff local não acusa mudança. Assim o PATCH pós-reaprovação
+      // grava no ERP exatamente o que está no Flow (item, CC, projeto, valor).
+      const alreadyInErp = !!(expense.sap_doc_entry || expense.sap_doc_num);
+      const itemsChanged = alreadyInErp || hasItemChanges(items, expense.items || []);
       await onSave({
         supplier_name: supplierName.trim(),
         supplier_code: supplier?.code || expense.supplier_code || null,
@@ -400,6 +418,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
         due_date: dueDate || null,
         rateio_type: !isSales ? rateioType : undefined,
         items: itemsChanged ? items.map((it) => ({
+
           item_code: it.item_code,
           description: it.description,
           quantity: it.quantity,
