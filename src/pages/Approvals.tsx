@@ -1132,7 +1132,14 @@ function ApprovalDetailModal({
               )}
             </div>
 
+            {/* Aviso de atualização: pedido já enviado antes, agora alterado */}
+            <ExpenseUpdateNotice
+              expenseId={(doc as unknown as { __internalId?: string }).__internalId}
+              revisionNumber={(doc as unknown as { __revision?: number }).__revision}
+            />
+
             {/* Histórico detalhado — apenas para aprovações internas */}
+
             {(doc as unknown as { __internalId?: string }).__internalId && !doc.viewerSegmented && (
               <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
                 <InternalApprovalHistory
