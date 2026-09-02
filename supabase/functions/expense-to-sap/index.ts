@@ -1178,12 +1178,23 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         return existingAttachmentEntry;
       }
 
+      // Pedidos de venda não exigem anexo (regra válida para todas as empresas):
+      // quando não há anexo, ou a base tem anexos desativados, seguimos a
+      // integração sem AttachmentEntry em vez de bloquear o documento.
       const attachmentsEnabled = (sapCreds.integrate_attachments || "").toLowerCase() === "true";
       if (skipAttachments) {
+        if (isSales) {
+          attachmentStatus = "not_applicable";
+          return 0;
+        }
         attachmentStatus = "failed";
         throw new Error("Documentos não podem ser integrados sem anexo.");
       }
       if (!attachmentsEnabled) {
+        if (isSales) {
+          attachmentStatus = "not_applicable";
+          return 0;
+        }
         attachmentStatus = "failed";
         throw new Error("Integração de anexos está desativada para esta empresa. Ative anexos para criar documentos no SAP.");
       }
@@ -1198,6 +1209,10 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
 
         const storedAttachments = Array.isArray(atts) ? atts : [];
         if (storedAttachments.length === 0) {
+          if (isSales) {
+            attachmentStatus = "not_applicable";
+            return 0;
+          }
           throw new Error("Documento sem anexo interno. Anexe ao menos 1 arquivo antes de integrar ao SAP.");
         }
 
@@ -1215,7 +1230,11 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
           files.push({ name: a.file_name, blob });
         }
         if (failedDownloads.length > 0) {
-          throw new Error(`Falha ao baixar anexo(s) obrigatório(s): ${failedDownloads.join(", ")}`);
+          if (isSales) {
+            console.warn(`Pedido de venda seguirá sem anexo — falha ao baixar: ${failedDownloads.join(", ")}`);
+          } else {
+            throw new Error(`Falha ao baixar anexo(s) obrigatório(s): ${failedDownloads.join(", ")}`);
+          }
         }
 
         // Sempre incluir o "Comprovante de Aprovação (ERP Flow)" como anexo
@@ -1223,6 +1242,14 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         // documento do ERP, além dos anexos enviados pelo usuário.
         const approvalPdf = await buildApprovalReportPdf(supabase, expense as any, items as any[]);
         if (approvalPdf) files.push(approvalPdf);
+
+        if (files.length === 0) {
+          if (isSales) {
+            attachmentStatus = "not_applicable";
+            return 0;
+          }
+          throw new Error("Documento sem anexo válido para envio ao SAP.");
+        }
 
         const uploadedEntry = await uploadAttachmentsToSap(sap.baseUrl, sap.cookies, files);
         if (uploadedEntry === null) {
@@ -1240,8 +1267,14 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         console.log(`Anexos enviados ao SAP — AbsoluteEntry=${uploadedEntry}`);
         return uploadedEntry;
       } catch (e) {
-        attachmentStatus = "failed";
         const msg = e instanceof Error ? e.message : String(e);
+        if (isSales) {
+          // Anexo é opcional em pedidos de venda — registra e segue.
+          attachmentStatus = "failed";
+          console.warn(`Pedido de venda integrado sem anexo — falha no envio: ${msg}`);
+          return 0;
+        }
+        attachmentStatus = "failed";
         await persistStatus({ sap_integration_error: `Falha no envio do anexo: ${msg}` });
         throw e;
       }
@@ -1251,17 +1284,21 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       let existingAttachmentEntry = 0;
       try {
         existingAttachmentEntry = await ensureAttachmentEntryUploaded();
-        attachmentStatus = "success";
         purchaseOrderStatus = "success";
-        attachmentLinkStatus = "pending";
-        await ensureSapDocumentAttachmentLinked(
-          sap.baseUrl,
-          sap.cookies,
-          sapEndpoint,
-          Number(expense.sap_doc_entry),
-          existingAttachmentEntry,
-        );
-        attachmentLinkStatus = "success";
+        if (existingAttachmentEntry > 0) {
+          attachmentStatus = "success";
+          attachmentLinkStatus = "pending";
+          await ensureSapDocumentAttachmentLinked(
+            sap.baseUrl,
+            sap.cookies,
+            sapEndpoint,
+            Number(expense.sap_doc_entry),
+            existingAttachmentEntry,
+          );
+          attachmentLinkStatus = "success";
+        } else {
+          attachmentLinkStatus = "not_applicable";
+        }
         await persistStatus({ sap_integration_error: null });
       } catch (e) {
         attachmentLinkStatus = "failed";
@@ -1350,7 +1387,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
 
     // If we have an attachment to link, mark the link stage as pending so it
     // shows up in audit even if the PO creation fails.
-    attachmentLinkStatus = "pending";
+    attachmentLinkStatus = attachmentEntry > 0 ? "pending" : "not_applicable";
 
     // Normalize dates to YYYY-MM-DD for SAP. Fallback to today when absent.
     // The expense stores dates as ISO strings from a date input (already YYYY-MM-DD)
@@ -1424,7 +1461,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       // Campo dedicado no SAP (UDF) — quando existir na base, permite filtrar
       // pelos pedidos criados por um usuário específico sem depender do texto.
       ...(requesterCode ? { U_FGR_SOLICITANTE: truncateSapText(requesterCode, 50) } : {}),
-      AttachmentEntry: attachmentEntry,
+      ...(attachmentEntry > 0 ? { AttachmentEntry: attachmentEntry } : {}),
       // Moeda do documento: sem DocCurrency, o SAP assume moeda local (BRL/R$).
       // Só enviamos DocCurrency para moedas estrangeiras — algumas bases do SAP
       // rejeitam "BRL" como código válido quando a moeda local está cadastrada
@@ -1610,14 +1647,18 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
 
       lastSapResponse = sapResult.response;
       purchaseOrderStatus = "success";
-      await ensureSapDocumentAttachmentLinked(sap.baseUrl, sap.cookies, sapEndpoint, sapResult.docEntry, attachmentEntry);
-      attachmentLinkStatus = "success";
+      if (attachmentEntry > 0) {
+        await ensureSapDocumentAttachmentLinked(sap.baseUrl, sap.cookies, sapEndpoint, sapResult.docEntry, attachmentEntry);
+        attachmentLinkStatus = "success";
+      } else {
+        attachmentLinkStatus = "not_applicable";
+      }
     } catch (e) {
       purchaseOrderStatus = "failed";
       // If the PO failed, the attachment was uploaded but never linked to a
       // document — surface that explicitly instead of leaving the stage as
       // "pending" forever.
-      attachmentLinkStatus = "failed";
+      if (attachmentEntry > 0) attachmentLinkStatus = "failed";
       const msg = e instanceof Error ? e.message : String(e);
       await persistStatus({
         sap_integration_error: `${isPatchMode ? "Falha ao atualizar o documento no ERP" : "Falha ao criar Pedido de Compra"}: ${msg}`,
