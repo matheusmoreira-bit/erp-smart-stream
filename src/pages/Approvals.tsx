@@ -98,6 +98,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCompanies } from "@/hooks/useCompanies";
 import { PageTitle } from "@/components/PageTitle";
 import { InternalApprovalHistory } from "@/components/InternalApprovalHistory";
+import { ExpenseUpdateNotice } from "@/components/ExpenseRevisionHistory";
+
 import { AttachmentViewer } from "@/components/AttachmentViewer";
 import { displayUserName } from "@/lib/user-display";
 import { isDesignatedApprover, matchesApproverIdentity } from "@/lib/approval-authz";
@@ -1132,7 +1134,14 @@ function ApprovalDetailModal({
               )}
             </div>
 
+            {/* Aviso de atualização: pedido já enviado antes, agora alterado */}
+            <ExpenseUpdateNotice
+              expenseId={(doc as unknown as { __internalId?: string }).__internalId}
+              revisionNumber={(doc as unknown as { __revision?: number }).__revision}
+            />
+
             {/* Histórico detalhado — apenas para aprovações internas */}
+
             {(doc as unknown as { __internalId?: string }).__internalId && !doc.viewerSegmented && (
               <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
                 <InternalApprovalHistory
@@ -1845,6 +1854,8 @@ function mapInternalExpense(e: ApprovalFeedDoc, ruleName?: string | null): Appro
     restrictedSegmentCount: Number(e.restricted_segment_count || 0),
     restrictedItemCount: Number(e.restricted_item_count || 0),
     __internalId: e.id,
+    __revision: Number(e.revision_number || 1),
+
     __explain: {
       ruleId: e.approval_rule_id || null,
       currentLevel: e.current_level_order ?? null,

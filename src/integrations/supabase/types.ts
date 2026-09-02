@@ -3421,6 +3421,56 @@ export type Database = {
           },
         ]
       }
+      expense_revisions: {
+        Row: {
+          changed_by_email: string | null
+          changed_by_name: string | null
+          changes: Json
+          created_at: string
+          expense_id: string
+          id: string
+          resubmitted: boolean
+          revision_number: number
+          snapshot: Json
+          status_after: string | null
+          status_before: string | null
+        }
+        Insert: {
+          changed_by_email?: string | null
+          changed_by_name?: string | null
+          changes?: Json
+          created_at?: string
+          expense_id: string
+          id?: string
+          resubmitted?: boolean
+          revision_number: number
+          snapshot?: Json
+          status_after?: string | null
+          status_before?: string | null
+        }
+        Update: {
+          changed_by_email?: string | null
+          changed_by_name?: string | null
+          changes?: Json
+          created_at?: string
+          expense_id?: string
+          id?: string
+          resubmitted?: boolean
+          revision_number?: number
+          snapshot?: Json
+          status_after?: string | null
+          status_before?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_revisions_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expense_sap_sync_runs: {
         Row: {
           duration_ms: number | null

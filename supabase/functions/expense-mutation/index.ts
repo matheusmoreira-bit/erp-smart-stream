@@ -1217,6 +1217,9 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
       return String(v);
     };
     const changes: string[] = [];
+    // Versão estruturada das mudanças — alimenta o histórico de versões
+    // (public.expense_revisions) e o aviso de "atualização" ao aprovador.
+    const structured: Array<{ field: string; label: string; before: unknown; after: unknown }> = [];
     const labels: Record<string, string> = {
       supplier_name: "Fornecedor",
       supplier_code: "Código do fornecedor",
@@ -1234,6 +1237,7 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
       const after = (updates as Record<string, unknown>)[field];
       if (String(before ?? "") === String(after ?? "")) continue;
       changes.push(`${label}: ${fmt(before)} → ${fmt(after)}`);
+      structured.push({ field, label, before: before ?? null, after: after ?? null });
     }
     if (items) {
       const key = (it: Record<string, unknown>) =>
@@ -1261,10 +1265,24 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
         changes.push(
           `Linhas: ${previousItems.length} → ${(items as unknown[]).length}${itemNote}`,
         );
+        structured.push({
+          field: "items",
+          label: "Itens do pedido",
+          before: `${previousItems.length} linha(s)${beforeCodes.length ? `: ${beforeCodes.join(", ")}` : ""}`,
+          after: `${(items as unknown[]).length} linha(s)${afterCodes.length ? `: ${afterCodes.join(", ")}` : ""}`,
+        });
       }
     }
-    if (addedNames.length > 0) changes.push(`Anexos adicionados: ${addedNames.join(", ")}`);
-    if (removedNames.length > 0) changes.push(`Anexos removidos: ${removedNames.join(", ")}`);
+    if (addedNames.length > 0) {
+      changes.push(`Anexos adicionados: ${addedNames.join(", ")}`);
+      structured.push({ field: "attachments_added", label: "Anexos adicionados", before: null, after: addedNames.join(", ") });
+    }
+    if (removedNames.length > 0) {
+      changes.push(`Anexos removidos: ${removedNames.join(", ")}`);
+      structured.push({ field: "attachments_removed", label: "Anexos removidos", before: removedNames.join(", "), after: null });
+    }
+
+    const revisionNumber = Number(updates.revision_number ?? current.revision_number ?? 1);
 
     if (changes.length > 0) {
       await admin.from("expense_approval_log").insert({
@@ -1274,12 +1292,42 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
         approver_email: caller.email ||
           (caller.identity && caller.identity.includes("@") ? caller.identity : null),
         level_order: null,
-        remarks: `Pedido alterado (revisão ${
-          updates.revision_number ?? current.revision_number ?? 1
-        }). ${changes.join(" · ")}`,
+        remarks: `Pedido alterado (revisão ${revisionNumber}). ${changes.join(" · ")}`,
       } as any);
+
+      const { error: revErr } = await admin.from("expense_revisions").insert({
+        expense_id: expenseId,
+        revision_number: revisionNumber,
+        changed_by_name: caller.identity,
+        changed_by_email: caller.email ||
+          (caller.identity && caller.identity.includes("@") ? caller.identity : null),
+        status_before: status,
+        status_after: String(updates.status ?? current.status ?? status),
+        resubmitted: !!shouldResubmit,
+        changes: structured,
+        snapshot: {
+          supplier_name: updates.supplier_name ?? current.supplier_name ?? null,
+          supplier_code: updates.supplier_code ?? current.supplier_code ?? null,
+          cost_center: updates.cost_center ?? current.cost_center ?? null,
+          project: updates.project ?? current.project ?? null,
+          total_amount: updates.total_amount ?? current.total_amount ?? null,
+          currency: current.currency ?? null,
+          doc_date: updates.doc_date ?? current.doc_date ?? null,
+          due_date: updates.due_date ?? current.due_date ?? null,
+          remarks: updates.remarks ?? current.remarks ?? null,
+          items: (items ?? previousItems) as unknown,
+        },
+      } as any);
+      if (revErr) {
+        console.error("[expense-mutation] falha ao registrar versão do pedido", {
+          expense_id: expenseId,
+          revision: revisionNumber,
+          error: revErr.message,
+        });
+      }
     }
   }
+
 
 
   if (shouldResubmit || (attachmentsChanged && status === "pendente_aprovacao")) {

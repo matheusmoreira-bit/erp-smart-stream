@@ -96,6 +96,8 @@ import {
 import { savePostLoginPath } from "@/lib/post-login-redirect";
 import { useNavigate } from "react-router-dom";
 import { ExpenseEventHistory } from "@/components/ExpenseEventHistory";
+import { ExpenseRevisionHistory } from "@/components/ExpenseRevisionHistory";
+
 import { SegmentFallbackAlert } from "@/components/SegmentFallbackAlert";
 
 import { SapPoDetails } from "@/components/SapPoDetails";
@@ -777,6 +779,9 @@ function ExpenseDetailModal({
 
 
             <ExpenseEventHistory expense={expense} refreshKey={expense.updated_at} />
+
+            <ExpenseRevisionHistory expenseId={expense.id} refreshKey={expense.updated_at} />
+
 
             {isErpNative && (
               <SapPoDetails
