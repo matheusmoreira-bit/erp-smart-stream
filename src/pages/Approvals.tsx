@@ -1854,6 +1854,8 @@ function mapInternalExpense(e: ApprovalFeedDoc, ruleName?: string | null): Appro
     restrictedSegmentCount: Number(e.restricted_segment_count || 0),
     restrictedItemCount: Number(e.restricted_item_count || 0),
     __internalId: e.id,
+    __revision: Number(e.revision_number || 1),
+
     __explain: {
       ruleId: e.approval_rule_id || null,
       currentLevel: e.current_level_order ?? null,
