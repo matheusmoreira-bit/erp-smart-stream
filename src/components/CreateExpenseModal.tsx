@@ -197,8 +197,11 @@ export function CreateExpenseModal({
   onPagcorpPostingTypeChange?: (type: "purchase_order" | "journal_entry") => void;
 }) {
   // Vendas: itens de receita liberados no formulário de pedido de venda.
+  // ATENÇÃO: esta lista é específica da base Cactus. Em outras empresas
+  // (ANA Gaming etc.) os catálogos de venda são diferentes, então usamos o
+  // que o próprio SAP retorna (itens de venda ativos / utilizações da base).
   const SALES_ALLOWED_ITEMS = ["SV0003", "SV0006"];
-  // Vendas: utilizações (NotaFiscalUsage) liberadas.
+  // Vendas: utilizações (NotaFiscalUsage) liberadas — também só na Cactus.
   const SALES_ALLOWED_USAGES = [
     "01-Rec Cactus Plat",
     "02-Rec Cactus Comiss",
@@ -206,6 +209,7 @@ export function CreateExpenseModal({
   ];
   const isSales = mode === "sales";
   const isOmie = sapSession?.erpType?.toLowerCase() === "omie";
+  const isCactusDb = (sapSession?.companyDB || "").toUpperCase().includes("CACTUS");
   const isProjectRequired = !isOmie && sapSession?.companyDB !== "SBO_CACTUS";
 
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
@@ -354,10 +358,11 @@ export function CreateExpenseModal({
     enabled: isSales,
   });
 
-  // Mantém apenas as utilizações de receita permitidas. A comparação ignora
-  // acentos, caixa, espaços e o prefixo numérico ("01-", "1 - ", etc.), pois
-  // dependendo da base o número vem no código e não no nome.
+  // Cactus: mantém apenas as utilizações de receita permitidas. A comparação
+  // ignora acentos, caixa, espaços e o prefixo numérico ("01-", "1 - ", etc.).
+  // Demais empresas: usa a lista completa retornada pelo SAP.
   const filteredUsageOptions = useMemo(() => {
+    if (!isCactusDb) return usageOptions;
     const norm = (s: string) =>
       (s || "")
         .normalize("NFD")
@@ -367,12 +372,14 @@ export function CreateExpenseModal({
         .replace(/[^a-z0-9]+/g, " ")
         .trim();
     const allowed = SALES_ALLOWED_USAGES.map(norm);
-    return usageOptions.filter((o) => {
+    const filtered = usageOptions.filter((o) => {
       const candidates = [norm(o.name), norm(`${o.code} ${o.name}`)];
       return allowed.some((a) => candidates.some((c) => c === a || c.startsWith(a) || a.startsWith(c)));
     });
+    // Se o filtro não casar com nada, não deixa o campo vazio.
+    return filtered.length > 0 ? filtered : usageOptions;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usageOptions]);
+  }, [usageOptions, isCactusDb]);
 
 
 
@@ -520,13 +527,18 @@ export function CreateExpenseModal({
     // Na Omie, produtos e serviços compartilham o catálogo do formulário e
     // não usam os prefixos/restrições de códigos definidos para o SAP.
     if (isOmie) return itemOptions;
-    // Vendas: apenas os itens de receita liberados (SV0003 e SV0006).
-    if (isSales) return itemOptions.filter((o) => SALES_ALLOWED_ITEMS.includes(o.code));
+    // Vendas: na Cactus restringe aos itens de receita liberados (SV0003/SV0006).
+    // Nas demais empresas usa o catálogo de venda ativo do próprio SAP.
+    if (isSales) {
+      if (!isCactusDb) return itemOptions;
+      const allowed = itemOptions.filter((o) => SALES_ALLOWED_ITEMS.includes(o.code));
+      return allowed.length > 0 ? allowed : itemOptions;
+    }
     // Compras: itens SV% são exclusivos de venda e nunca aparecem aqui.
     return itemOptions.filter(
       (o) => !isSalesOnlyItemCode(o.code) && isItemAllowedForCostCenter(o.code, userCostCenter, bypassCcItemRules),
     );
-  }, [itemOptions, userCostCenter, isSales, isOmie, bypassCcItemRules]);
+  }, [itemOptions, userCostCenter, isSales, isOmie, isCactusDb, bypassCcItemRules]);
 
   // Alçada de CC: quem é do 1.6.1.2 pode lançar em qualquer 1.6.%.
   // Grupos com visão total (Facilities, Contábil, Fiscal, Financeiro, CFO,
