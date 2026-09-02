@@ -98,6 +98,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCompanies } from "@/hooks/useCompanies";
 import { PageTitle } from "@/components/PageTitle";
 import { InternalApprovalHistory } from "@/components/InternalApprovalHistory";
+import { ExpenseUpdateNotice } from "@/components/ExpenseRevisionHistory";
+
 import { AttachmentViewer } from "@/components/AttachmentViewer";
 import { displayUserName } from "@/lib/user-display";
 import { isDesignatedApprover, matchesApproverIdentity } from "@/lib/approval-authz";
