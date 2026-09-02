@@ -235,9 +235,20 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
     mapRow: projectMapRow,
   });
 
-  // Popula estado inicial ao abrir / trocar despesa
+  // Popula estado inicial ao abrir / trocar despesa.
+  // Importante: só re-hidrata quando o modal abre ou o documento muda de id.
+  // Sem essa trava, um refresh da lista (que recria os objetos de despesa)
+  // sobrescrevia as alterações em edição — o usuário trocava o item e o
+  // formulário voltava silenciosamente ao valor original antes de salvar.
   useEffect(() => {
-    if (open && expense) {
+    if (!open || !expense) {
+      if (!open) hydratedForRef.current = null;
+      return;
+    }
+    if (hydratedForRef.current === expense.id) return;
+    hydratedForRef.current = expense.id;
+    {
+
       setSupplierName(expense.supplier_name || "");
       setRemarks(expense.remarks || "");
       setDocDate(expense.doc_date ? expense.doc_date.slice(0, 10) : "");
