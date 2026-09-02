@@ -405,7 +405,11 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
 
     setIsSaving(true);
     try {
-      const itemsChanged = hasItemChanges(items, expense.items || []);
+      // Documento já integrado ao ERP: sempre reenvia as linhas atuais, mesmo
+      // quando o diff local não acusa mudança. Assim o PATCH pós-reaprovação
+      // grava no ERP exatamente o que está no Flow (item, CC, projeto, valor).
+      const alreadyInErp = !!(expense.sap_doc_entry || expense.sap_doc_num);
+      const itemsChanged = alreadyInErp || hasItemChanges(items, expense.items || []);
       await onSave({
         supplier_name: supplierName.trim(),
         supplier_code: supplier?.code || expense.supplier_code || null,
@@ -414,6 +418,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
         due_date: dueDate || null,
         rateio_type: !isSales ? rateioType : undefined,
         items: itemsChanged ? items.map((it) => ({
+
           item_code: it.item_code,
           description: it.description,
           quantity: it.quantity,
