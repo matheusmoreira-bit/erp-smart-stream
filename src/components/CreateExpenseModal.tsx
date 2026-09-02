@@ -197,8 +197,11 @@ export function CreateExpenseModal({
   onPagcorpPostingTypeChange?: (type: "purchase_order" | "journal_entry") => void;
 }) {
   // Vendas: itens de receita liberados no formulário de pedido de venda.
+  // ATENÇÃO: esta lista é específica da base Cactus. Em outras empresas
+  // (ANA Gaming etc.) os catálogos de venda são diferentes, então usamos o
+  // que o próprio SAP retorna (itens de venda ativos / utilizações da base).
   const SALES_ALLOWED_ITEMS = ["SV0003", "SV0006"];
-  // Vendas: utilizações (NotaFiscalUsage) liberadas.
+  // Vendas: utilizações (NotaFiscalUsage) liberadas — também só na Cactus.
   const SALES_ALLOWED_USAGES = [
     "01-Rec Cactus Plat",
     "02-Rec Cactus Comiss",
@@ -206,6 +209,7 @@ export function CreateExpenseModal({
   ];
   const isSales = mode === "sales";
   const isOmie = sapSession?.erpType?.toLowerCase() === "omie";
+  const isCactusDb = (sapSession?.companyDB || "").toUpperCase().includes("CACTUS");
   const isProjectRequired = !isOmie && sapSession?.companyDB !== "SBO_CACTUS";
 
   const bpLabel = isSales ? "Cliente" : "Fornecedor";
