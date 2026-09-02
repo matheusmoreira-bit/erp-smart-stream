@@ -11,9 +11,13 @@ export interface BpBankAccount {
   bankName: string;
   bankCode: string;
   branch: string;
+  branchDigit: string;
   account: string;
+  accountDigit: string;
+  accountType: string;
   iban: string;
   isDefault: boolean;
+  pixKeyType: string;
   /** Chave PIX identificada em campos padrão/UDF da conta. */
   pixKey: string;
 }
@@ -45,22 +49,82 @@ function str(v: unknown): string {
 function collectPixKeys(row: Record<string, unknown>): string[] {
   const out: string[] = [];
   for (const [k, v] of Object.entries(row)) {
-    if (!/pix/i.test(k)) continue;
+    if (!/pix/i.test(k) || /(tipo|type)/i.test(k)) continue;
     const val = str(v);
     if (val) out.push(val);
   }
   return Array.from(new Set(out));
 }
 
-function mapBankAccount(row: Record<string, unknown>, defaultAccountKey: string): BpBankAccount {
+function fiscalTaxId(row: Record<string, unknown>, fallbackPixKey?: string): string {
+  const direct = str(row.FederalTaxID) || str(row.UnifiedFederalTaxID) || str(row.VatRegistrationNumber) || str(row.TaxId0) || str(row.TaxId4);
+  const directDigits = onlyDigits(direct);
+  if (directDigits.length === 11 || directDigits.length === 14) return direct;
+
+  const fiscalRows = Array.isArray(row.BPFiscalTaxIDCollection) ? (row.BPFiscalTaxIDCollection as Record<string, unknown>[]) : [];
+  for (const fiscalRow of fiscalRows) {
+    for (const [key, value] of Object.entries(fiscalRow)) {
+      if (!/^TaxId\d+$/i.test(key)) continue;
+      const candidate = str(value);
+      const candidateDigits = onlyDigits(candidate);
+      if (candidateDigits.length === 11 || candidateDigits.length === 14) return candidate;
+    }
+  }
+
+  const pixDigits = onlyDigits(fallbackPixKey || "");
+  return pixDigits.length === 11 || pixDigits.length === 14 ? fallbackPixKey || "" : "";
+}
+
+function normalizePixKeyType(value: unknown): string {
+  const text = str(value).toLowerCase();
+  if (!text) return "";
+  if (text === "1" || text.includes("telefone") || text.includes("phone") || text.includes("celular")) return "phone";
+  if (text === "2" || text.includes("email") || text.includes("mail")) return "email";
+  if (text === "3" || text.includes("cnpj")) return "cnpj";
+  if (text === "4" || text.includes("cpf")) return "cpf";
+  if (text === "5" || text.includes("aleat") || text.includes("random") || text.includes("evp")) return "random";
+  return text;
+}
+
+function normalizeAccountType(value: unknown): string {
+  const text = str(value).toLowerCase();
+  if (!text) return "";
+  if (text === "2" || text.includes("poup") || text.includes("saving")) return "savings";
+  if (text === "3" || text.includes("pagamento") || text.includes("payment")) return "payment";
+  return "checking";
+}
+
+function matchesDefaults(
+  account: { bankCode: string; branch: string; account: string },
+  defaults: { bankCode: string; branch: string; account: string },
+): boolean {
+  const checks = [
+    defaults.bankCode ? account.bankCode === defaults.bankCode : null,
+    defaults.branch ? account.branch === defaults.branch : null,
+    defaults.account ? account.account === defaults.account : null,
+  ].filter((value): value is boolean => value !== null);
+  return checks.length > 0 && checks.every(Boolean);
+}
+
+function mapBankAccount(
+  row: Record<string, unknown>,
+  defaults: { bankCode: string; branch: string; account: string },
+): BpBankAccount {
   const pix = collectPixKeys(row);
+  const bankCode = str(row.BankCode);
+  const branch = str(row.Branch) || str(row.BranchCode);
+  const account = str(row.AccountNo) || str(row.Account) || str(row.IBAN);
   return {
-    bankName: str(row.BankName) || str(row.BankCode),
-    bankCode: str(row.BankCode),
-    branch: str(row.Branch),
-    account: str(row.AccountNo),
+    bankName: str(row.BankName) || bankCode,
+    bankCode,
+    branch,
+    branchDigit: str(row.BranchDigit),
+    account,
+    accountDigit: str(row.ControlKey) || str(row.AccountDigit) || str(row.CheckDigit),
+    accountType: normalizeAccountType(row.U_TipoConta || row.AccountType),
     iban: str(row.IBAN),
-    isDefault: defaultAccountKey !== "" && str(row.InternalKey) === defaultAccountKey,
+    isDefault: matchesDefaults({ bankCode, branch, account }, defaults),
+    pixKeyType: normalizePixKeyType(row.U_TipoChavePix),
     pixKey: pix[0] || "",
   };
 }
@@ -81,9 +145,12 @@ export async function fetchBusinessPartnerDetails(
   );
   const row = (data || {}) as Record<string, unknown>;
 
-  const taxId = str(row.FederalTaxID) || str(row.UnifiedFederalTaxID);
   const accounts = Array.isArray(row.BPBankAccounts) ? (row.BPBankAccounts as Record<string, unknown>[]) : [];
-  const defaultKey = str(row.DefaultBankCode) ? "" : str(row.BankCode);
+  const defaults = {
+    bankCode: str(row.DefaultBankCode) || str(row.BankCode),
+    branch: str(row.DefaultBranch) || str(row.Branch) || str(row.HouseBankBranch),
+    account: str(row.DefaultAccount) || str(row.AccountNo) || str(row.HouseBankAccount),
+  };
 
   const address = [
     str(row.Address),
@@ -94,6 +161,10 @@ export async function fetchBusinessPartnerDetails(
   ]
     .filter(Boolean)
     .join(" · ");
+
+  const bankAccounts = accounts.map((a) => mapBankAccount(a, defaults));
+  const pixKeys = Array.from(new Set([...collectPixKeys(row), ...bankAccounts.map((account) => account.pixKey)].filter(Boolean)));
+  const taxId = fiscalTaxId(row, pixKeys[0]);
 
   return {
     cardCode: str(row.CardCode) || cardCode,
@@ -108,8 +179,8 @@ export async function fetchBusinessPartnerDetails(
     email: str(row.EmailAddress),
     phone: str(row.Phone1) || str(row.Cellular),
     address,
-    bankAccounts: accounts.map((a) => mapBankAccount(a, defaultKey)),
-    pixKeys: collectPixKeys(row),
+    bankAccounts,
+    pixKeys,
   };
 }
 

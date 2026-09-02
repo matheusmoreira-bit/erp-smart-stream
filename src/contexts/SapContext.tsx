@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { clearErpLocalState } from "@/lib/clear-erp-local-state";
 import { registerSapSessionResolver, type ResolvedSapSession } from "@/lib/sap-session-broker";
 import { SapCredentialsDialog } from "@/components/SapCredentialsDialog";
+import { runtime } from "@/config/runtime";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -160,7 +161,14 @@ export function SapProvider({ children }: { children: ReactNode }) {
         const isOAuth = provider && provider !== "email";
         const prevLocal = (prev?.user?.email || "").split("@")[0].trim().toLowerCase();
         const newLocal = (userName || "").split("@")[0].trim().toLowerCase();
-        if (prev && !isOAuth && prevLocal && newLocal && prevLocal !== newLocal) {
+        if (
+          prev &&
+          !runtime.disableGoogleAuth &&
+          !isOAuth &&
+          prevLocal &&
+          newLocal &&
+          prevLocal !== newLocal
+        ) {
           await supabase.auth.signOut();
         }
       } catch { /* ignore */ }

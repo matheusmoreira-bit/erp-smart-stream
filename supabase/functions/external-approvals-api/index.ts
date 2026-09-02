@@ -16,6 +16,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
 import { validateApiKey } from "../_shared/api-keys.ts";
+import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
 
 
 const corsHeaders = {
@@ -35,6 +36,8 @@ interface SapSession {
   routeId: string;
   baseUrl: string;
 }
+
+type SapLoginError = Error & { body?: string; status?: number };
 
 interface SLDecision {
   Status?: string;
@@ -70,6 +73,7 @@ interface SLDocumentLine {
   CostingCode4?: string;
   CostingCode5?: string;
   ProjectCode?: string;
+  Project?: string;
 }
 interface SLInstallment {
   DueDate?: string;
@@ -91,6 +95,33 @@ interface SLDraft {
   Comments?: string;
   DocumentLines?: SLDocumentLine[];
   DocumentInstallments?: SLInstallment[];
+}
+
+interface SapUserIdentity {
+  userCode: string;
+  userName: string;
+  email: string;
+}
+
+interface HanaApprovalRow {
+  Code?: number;
+  Aprovador?: string;
+  "Email do aprovador"?: string;
+  Solicitante?: string;
+  Observações?: string;
+  "Tipo de solicitação"?: string;
+  "Draft DocEntry"?: number;
+  "Nº do documento"?: number | string;
+  "Código PN/Fornecedor"?: string;
+  "Fornecedor / Parceiro"?: string;
+  "Código da moeda original"?: string;
+  "Valor do documento na moeda original"?: number | string;
+  "Valor total"?: number | string;
+  "Data do documento"?: string;
+  "Data de criação"?: string;
+  "Data de vencimento"?: string;
+  "Modelo de aprovação"?: string;
+  DocumentLines?: string | SLDocumentLine[];
 }
 
 const OBJECT_CODE_TO_NAME: Record<string, string> = {
@@ -129,7 +160,7 @@ async function getCompanyConfig(companyDB: string) {
   const username = map.get("username");
   const password = map.get("password");
   let url = map.get("service_layer_url");
-  let sapCompanyDb = map.get("company_db") || companyDB;
+  const sapCompanyDb = map.get("company_db") || companyDB;
 
   if (!url) {
     const { data: row } = await client
@@ -148,7 +179,13 @@ async function getCompanyConfig(companyDB: string) {
   if (url.includes("/b1s/v1")) url = url.replace("/b1s/v1", "/b1s/v2");
   else if (!url.includes("/b1s/v2")) url = `${url}/b1s/v2`;
 
-  return { baseUrl: url, username, password, sapCompanyDb };
+  return {
+    baseUrl: url,
+    username,
+    password,
+    sapCompanyDb,
+    hanaApiUrl: map.get("hana_api_url") || null,
+  };
 }
 
 async function sapLoginOnce(cfg: { baseUrl: string; username: string; password: string; sapCompanyDb: string }): Promise<SapSession> {
@@ -159,11 +196,9 @@ async function sapLoginOnce(cfg: { baseUrl: string; username: string; password: 
   });
   if (!resp.ok) {
     const t = await resp.text();
-    const err = new Error(`Falha no login SAP (${resp.status}): ${t.slice(0, 300)}`);
-    // deno-lint-ignore no-explicit-any
-    (err as any).body = t;
-    // deno-lint-ignore no-explicit-any
-    (err as any).status = resp.status;
+    const err = new Error(`Falha no login SAP (${resp.status}): ${t.slice(0, 300)}`) as SapLoginError;
+    err.body = t;
+    err.status = resp.status;
     throw err;
   }
   const data = await resp.json();
@@ -177,8 +212,7 @@ async function sapLogin(cfg: { baseUrl: string; username: string; password: stri
   try {
     return await sapLoginOnce(cfg);
   } catch (e) {
-    // deno-lint-ignore no-explicit-any
-    const body = String((e as any)?.body || (e instanceof Error ? e.message : ""));
+    const body = String((e as SapLoginError)?.body || (e instanceof Error ? e.message : ""));
     const looksSaml = /SAML Login Failed|SSO|user.*disabled|password.*expired|Invalid.*credentials/i.test(body);
     const fbUser = Deno.env.get("SAP_FALLBACK_ADMIN_USERNAME");
     const fbPass = Deno.env.get("SAP_FALLBACK_ADMIN_PASSWORD");
@@ -246,15 +280,22 @@ async function fetchDraftBrief(s: SapSession, draftEntry: number): Promise<SLDra
   }
 }
 
-async function fetchAllUsersMap(s: SapSession): Promise<Map<number, string>> {
-  const map = new Map<number, string>();
+async function fetchAllUsersMap(s: SapSession): Promise<Map<number, SapUserIdentity>> {
+  const map = new Map<number, SapUserIdentity>();
   try {
     const data = (await sapGet(
       s,
-      `Users?$select=InternalKey,UserCode&$top=2000`,
-    )) as { value?: Array<{ InternalKey?: number; UserCode?: string }> };
+      `Users?$select=InternalKey,UserCode,UserName,eMail&$top=2000`,
+    )) as {
+      value?: Array<{ InternalKey?: number; UserCode?: string; UserName?: string; eMail?: string }>;
+    };
     for (const u of data?.value || []) {
-      if (u.InternalKey != null) map.set(Number(u.InternalKey), String(u.UserCode || ""));
+      if (u.InternalKey == null) continue;
+      map.set(Number(u.InternalKey), {
+        userCode: String(u.UserCode || ""),
+        userName: String(u.UserName || u.UserCode || ""),
+        email: String(u.eMail || ""),
+      });
     }
   } catch (e) {
     console.warn("fetchAllUsersMap falhou:", e);
@@ -264,17 +305,24 @@ async function fetchAllUsersMap(s: SapSession): Promise<Map<number, string>> {
 
 function pendingApproversFromRequest(
   r: SLApprovalRequest,
-  usersMap: Map<number, string>,
-): Array<{ user_id: number; user_code: string; step: number }> {
+  usersMap: Map<number, SapUserIdentity>,
+): Array<{ user_id: number; user_code: string; user_name: string; email: string; step: number }> {
   const seen = new Set<string>();
-  const out: Array<{ user_id: number; user_code: string; step: number }> = [];
+  const out: Array<{ user_id: number; user_code: string; user_name: string; email: string; step: number }> = [];
   const push = (uid: number | undefined, step: number | undefined) => {
     if (!uid) return;
     const s = Number(step || 1);
     const key = `${uid}:${s}`;
     if (seen.has(key)) return;
     seen.add(key);
-    out.push({ user_id: Number(uid), user_code: usersMap.get(Number(uid)) || "", step: s });
+    const identity = usersMap.get(Number(uid));
+    out.push({
+      user_id: Number(uid),
+      user_code: identity?.userCode || "",
+      user_name: identity?.userName || "",
+      email: identity?.email || "",
+      step: s,
+    });
   };
   for (const d of r.ApprovalRequestDecisions || []) {
     if (d.Status === "ardPending" || d.Status === "asWithoutDecision" || !d.Status) {
@@ -287,6 +335,142 @@ function pendingApproversFromRequest(
     }
   }
   return out;
+}
+
+function parseHanaDocumentLines(raw: HanaApprovalRow["DocumentLines"]): SLDocumentLine[] {
+  if (Array.isArray(raw)) return raw;
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed as SLDocumentLine[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function hanaNumber(value: number | string | undefined): number {
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/** Usa a mesma fila consolidada exibida na tela de Aprovações. */
+async function listCurrentPurchaseOrdersFromHana(
+  s: SapSession,
+  companyDB: string,
+  sapCompanyDb: string,
+  hanaApiUrl: string | null,
+) {
+  const rows = await fetchHanaView({
+    schema: resolveHanaSchema(companyDB, sapCompanyDb),
+    view: "VW_APROVACOES_DETALHADAS",
+    sessionId: s.sessionId,
+    hanaApiUrl,
+    limit: 5000,
+    timeoutMs: 60_000,
+  }) as HanaApprovalRow[];
+  const purchaseRows = rows.filter((row) =>
+    String(row["Tipo de solicitação"] || "").trim().toLowerCase() === "pedido de compra"
+  );
+
+  // O histórico SAP pode manter mais de uma solicitação para um draft.
+  // Somente o maior Code representa a solicitação atual.
+  const latestCodeByDraft = new Map<string, number>();
+  for (const row of purchaseRows) {
+    const draftEntry = hanaNumber(row["Draft DocEntry"]);
+    const docNum = hanaNumber(row["Nº do documento"]);
+    const requestCode = hanaNumber(row.Code);
+    const key = draftEntry > 0
+      ? `draft:${draftEntry}`
+      : docNum > 0 ? `doc:${docNum}` : `request:${requestCode}`;
+    latestCodeByDraft.set(key, Math.max(latestCodeByDraft.get(key) || 0, hanaNumber(row.Code)));
+  }
+
+  const grouped = new Map<string, Record<string, unknown>>();
+  for (const row of purchaseRows) {
+    const draftEntry = hanaNumber(row["Draft DocEntry"]);
+    const docNum = hanaNumber(row["Nº do documento"]);
+    const requestCode = hanaNumber(row.Code);
+    const draftKey = draftEntry > 0
+      ? `draft:${draftEntry}`
+      : docNum > 0 ? `doc:${docNum}` : `request:${requestCode}`;
+    if (requestCode !== latestCodeByDraft.get(draftKey)) continue;
+
+    const lines = parseHanaDocumentLines(row.DocumentLines);
+    const uniq = (values: Array<string | undefined>) =>
+      Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)));
+    const costCenters = uniq(lines.map((line) => line.CostingCode));
+    const departments = uniq(lines.map((line) => line.CostingCode2));
+    const projects = uniq(lines.map((line) => line.ProjectCode || line.Project));
+    const currencyRaw = String(row["Código da moeda original"] || "BRL").trim();
+    const currency = currencyRaw === "R$" ? "BRL" : currencyRaw;
+    const valueOriginal = hanaNumber(row["Valor do documento na moeda original"]);
+    const valueTotal = hanaNumber(row["Valor total"]);
+    const docTotal = currency !== "BRL" && valueOriginal > 0 ? valueOriginal : valueTotal;
+    const approverName = String(row.Aprovador || "").trim();
+    const approverEmail = String(row["Email do aprovador"] || "").trim();
+    const groupedKey = `${draftKey}:request:${requestCode}`;
+    const existing = grouped.get(groupedKey);
+
+    if (existing) {
+      const approvers = existing.pending_approvers as Array<Record<string, unknown>>;
+      const alreadyIncluded = approvers.some((approver) =>
+        String(approver.user_name || "").toLowerCase() === approverName.toLowerCase() &&
+        String(approver.email || "").toLowerCase() === approverEmail.toLowerCase()
+      );
+      if ((approverName || approverEmail) && !alreadyIncluded) {
+        approvers.push({
+          user_id: null,
+          user_code: "",
+          user_name: approverName,
+          email: approverEmail,
+          step: 1,
+        });
+      }
+      continue;
+    }
+
+    grouped.set(groupedKey, {
+      approval_request_id: requestCode,
+      step: 1,
+      doc_object_type: "22",
+      doc_type_name: "Pedido de Compra",
+      doc_entry: draftEntry,
+      doc_num: docNum,
+      doc_total: docTotal,
+      currency: currency || "BRL",
+      card_code: String(row["Código PN/Fornecedor"] || ""),
+      card_name: String(row["Fornecedor / Parceiro"] || ""),
+      remarks: String(row.Observações || ""),
+      creation_date: String(row["Data de criação"] || ""),
+      update_date: "",
+      due_date: String(row["Data de vencimento"] || ""),
+      payment_date: String(row["Data de vencimento"] || ""),
+      doc_date: String(row["Data do documento"] || ""),
+      tax_date: String(row["Data do documento"] || ""),
+      cost_center: costCenters[0] || "",
+      cost_centers: costCenters,
+      department: departments[0] || "",
+      departments,
+      project: projects[0] || "",
+      projects,
+      approval_model: String(row["Modelo de aprovação"] || ""),
+      originator_id: null,
+      originator_user_code: "",
+      originator_name: String(row.Solicitante || ""),
+      approver_user_code: "",
+      pending_approvers: approverName || approverEmail
+        ? [{
+          user_id: null,
+          user_code: "",
+          user_name: approverName,
+          email: approverEmail,
+          step: 1,
+        }]
+        : [],
+    });
+  }
+
+  return Array.from(grouped.values());
 }
 
 /**
@@ -304,14 +488,18 @@ async function listPending(
   s: SapSession,
   userKey: number | null,
   userCode: string,
+  docObjectType: string | null = null,
 ) {
   const data = (await sapGet(
     s,
     `ApprovalRequests?$filter=Status eq 'arsPending'&$orderby=CreationDate desc&$top=200`,
   )) as { value?: SLApprovalRequest[] };
-  const raw = data?.value || [];
+  const pending = data?.value || [];
+  const raw = docObjectType
+    ? pending.filter((request) => String(request.ObjectType || "") === docObjectType)
+    : pending;
 
-  const usersMap = userKey == null ? await fetchAllUsersMap(s) : new Map<number, string>();
+  const usersMap = userKey == null ? await fetchAllUsersMap(s) : new Map<number, SapUserIdentity>();
 
   const result: Array<Record<string, unknown>> = [];
   for (const r of raw) {
@@ -334,6 +522,7 @@ async function listPending(
     if (draft && (draft.Cancelled === "tYES" || draft.DocumentStatus === "bost_Close")) continue;
     const objCode = String(r.ObjectType || "");
     const pendingApprovers = userKey == null ? pendingApproversFromRequest(r, usersMap) : undefined;
+    const originator = r.OriginatorID ? usersMap.get(Number(r.OriginatorID)) : undefined;
 
     const uniq = (arr: Array<string | undefined | null>) =>
       Array.from(new Set(arr.map((v) => (v ?? "").toString().trim()).filter((v) => v.length > 0)));
@@ -369,6 +558,8 @@ async function listPending(
       project: projects[0] || "",
       projects: projects,
       originator_id: r.OriginatorID || null,
+      originator_user_code: originator?.userCode || "",
+      originator_name: originator?.userName || originator?.userCode || "",
       approver_user_code: userKey != null ? userCode : "",
       ...(pendingApprovers ? { pending_approvers: pendingApprovers } : {}),
     });
@@ -452,11 +643,15 @@ Deno.serve(async (req) => {
     };
     const companyDB = COMPANY_DB_ALIASES[rawCompanyDB.toUpperCase()] || rawCompanyDB;
     const userCode = String(body.user_code || "").trim();
+    const docObjectType = String(body.doc_object_type || "").trim();
 
     if (!op || !["list", "approve", "reject"].includes(op)) {
       return json(400, { error: "op deve ser 'list', 'approve' ou 'reject'" });
     }
     if (!companyDB) return json(400, { error: "company_db é obrigatório" });
+    if (docObjectType && !/^\d+$/.test(docObjectType)) {
+      return json(400, { error: "doc_object_type deve conter apenas números" });
+    }
     // user_code é opcional apenas para op=list (retorna todas as pendências da empresa).
     // approve/reject continuam exigindo user_code (a decisão é registrada em nome dele).
     if (op !== "list" && !userCode) {
@@ -498,7 +693,14 @@ Deno.serve(async (req) => {
       const userKey = userCode ? await getUserKey(session, userCode) : null;
 
       if (op === "list") {
-        const docs = await listPending(session, userKey, userCode);
+        const docs = !userCode && docObjectType === "22"
+          ? await listCurrentPurchaseOrdersFromHana(
+            session,
+            companyDB,
+            cfg.sapCompanyDb,
+            cfg.hanaApiUrl,
+          )
+          : await listPending(session, userKey, userCode, docObjectType || null);
         if (userCode) {
           await admin.rpc("register_external_api_success", { _company_db: companyDB, _user_code: userCode });
         }

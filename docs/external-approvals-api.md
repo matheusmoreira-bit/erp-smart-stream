@@ -86,7 +86,8 @@ Content-Type: application/json
 ```json
 {
   "op": "list",
-  "company_db": "SBO_EMPRESA_X"
+  "company_db": "SBO_EMPRESA_X",
+  "doc_object_type": "22"
 }
 ```
 
@@ -95,6 +96,9 @@ Nesse modo, cada documento traz `pending_approvers` com os aprovadores atuais
 A allowlist por `user_code` **não** é aplicada — a `X-API-Key` já autoriza a
 leitura no nível da empresa; compartilhe a chave apenas com sistemas de
 confiança.
+
+O campo opcional `doc_object_type` filtra os documentos no SAP antes de carregar
+os drafts. Use `"22"` para retornar apenas pedidos de compra.
 
 **Response 200** (modo b, `scope: "company"`):
 ```json
@@ -119,10 +123,11 @@ confiança.
       "creation_date": "2026-05-22T14:33:00Z",
       "update_date": "2026-05-23T09:10:00Z",
       "originator_id": 47,
+      "originator_name": "Carlos Souza",
       "approver_user_code": "",
       "pending_approvers": [
-        { "user_id": 112, "user_code": "joao.silva", "step": 1 },
-        { "user_id": 118, "user_code": "maria.santos", "step": 2 }
+        { "user_id": 112, "user_code": "joao.silva", "user_name": "João Silva", "email": "joao@empresa.com", "step": 1 },
+        { "user_id": 118, "user_code": "maria.santos", "user_name": "Maria Santos", "email": "maria@empresa.com", "step": 2 }
       ]
     }
   ]
@@ -137,6 +142,15 @@ Campos importantes:
 - `step` — passo de aprovação; no modo empresa, use o `step` do aprovador dentro de `pending_approvers`.
 - `doc_object_type` — código SAP do objeto (22 = Pedido de Compra, 18 = NF de Entrada, etc.).
 - `doc_total` / `currency` — valor e moeda do documento original (Draft).
+- `originator_name` — nome do solicitante resolvido pela mesma fonte da tela de Aprovações.
+- `pending_approvers[].user_name` — nome do aprovador atual; `user_code` e `email` permanecem disponíveis quando informados pelo SAP.
+
+Quando `doc_object_type` é `"22"` no modo empresa, a fila vem da
+`VW_APROVACOES_DETALHADAS`, a mesma fonte da tela de Aprovações. Solicitações
+históricas ainda marcadas como pendentes no Service Layer não são retornadas,
+e linhas repetidas do mesmo esboço são agrupadas. Após consolidar os dados do
+HanaAPI e do ERP Flow, o script da planilha mantém somente registros com status
+`Pendente` ou `Pendente de aprovação`.
 
 ### 3.2 Aprovar
 

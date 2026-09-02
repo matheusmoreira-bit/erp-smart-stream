@@ -1,43 +1,99 @@
-# API de acompanhamento de despesas
+# API de acompanhamento de documentos
 
-Endpoint de leitura para acompanhar pedidos de compra do ERP Flow com isolamento por projeto.
+API somente leitura para acompanhar despesas e pedidos de compra do ERP Flow. Cada credencial possui um escopo próprio de projetos e recebe apenas os valores e dados das linhas autorizadas.
+
+## URLs
+
+Base Supabase:
+
+```text
+https://ryxlofwbyhkqcvzavbwn.supabase.co
+```
+
+Endpoint:
+
+```http
+GET https://ryxlofwbyhkqcvzavbwn.supabase.co/functions/v1/expense-tracking-api
+```
+
+Contrato OpenAPI:
+
+```http
+GET https://ryxlofwbyhkqcvzavbwn.supabase.co/functions/v1/expense-tracking-api?spec=openapi
+```
 
 ## Credencial
 
-Crie a chave em **Backoffice > Chaves de API**, selecione o serviço `expense-tracking-api` e informe os códigos dos projetos permitidos. A chave só é exibida uma vez.
+No ERP Flow, acesse **Backoffice > Chaves de API**, crie uma chave para o serviço **Acompanhamento de despesas (expense-tracking-api)** e informe os códigos dos projetos permitidos.
 
-Envie a credencial no header:
-
-```http
-x-api-key: erpf_exp_...
-```
-
-Uma credencial deste serviço precisa ter pelo menos um projeto. Não existe acesso global implícito.
-
-## Consulta
+A chave é exibida somente uma vez. Envie-a em todas as consultas no header `x-api-key`:
 
 ```http
-GET {SUPABASE_URL}/functions/v1/expense-tracking-api?limit=50&offset=0
+x-api-key: erpf_exp_SUA_CHAVE
 ```
 
-Filtros opcionais:
+Cada credencial precisa ter ao menos um projeto autorizado. Não existe acesso global implícito.
+
+## Consulta básica
+
+```bash
+curl --request GET \
+  --url 'https://ryxlofwbyhkqcvzavbwn.supabase.co/functions/v1/expense-tracking-api?limit=50&offset=0' \
+  --header 'accept: application/json' \
+  --header 'x-api-key: erpf_exp_SUA_CHAVE'
+```
+
+Exemplo em JavaScript:
+
+```javascript
+const endpoint = new URL(
+  "https://ryxlofwbyhkqcvzavbwn.supabase.co/functions/v1/expense-tracking-api",
+);
+
+endpoint.searchParams.set("limit", "50");
+endpoint.searchParams.set("offset", "0");
+
+const response = await fetch(endpoint, {
+  headers: {
+    Accept: "application/json",
+    "x-api-key": process.env.ERP_FLOW_EXPENSE_API_KEY,
+  },
+});
+
+if (!response.ok) {
+  throw new Error(`ERP Flow retornou HTTP ${response.status}: ${await response.text()}`);
+}
+
+const result = await response.json();
+console.log(result.items);
+```
+
+## Filtros
 
 | Parâmetro | Formato | Descrição |
 | --- | --- | --- |
 | `expenseId` | UUID | Retorna uma despesa específica |
 | `companyDb` | texto | Filtra pela base da empresa |
-| `status` | texto | Filtra pelo status do ERP Flow |
-| `updatedSince` | ISO 8601 | Retorna despesas atualizadas a partir da data |
-| `limit` | 1 a 200 | Tamanho da página, padrão 50 |
-| `offset` | 0 a 5000 | Deslocamento nos resultados autorizados |
+| `status` | texto | Filtra pelo status interno do ERP Flow |
+| `updatedSince` | ISO 8601 com fuso | Retorna documentos atualizados a partir da data informada |
+| `limit` | inteiro de 1 a 200 | Quantidade por página. Padrão: `50` |
+| `offset` | inteiro de 0 a 5000 | Deslocamento nos documentos autorizados. Padrão: `0` |
 
-O contrato OpenAPI está disponível em:
+Exemplo incremental:
 
 ```http
-GET {SUPABASE_URL}/functions/v1/expense-tracking-api?spec=openapi
+GET https://ryxlofwbyhkqcvzavbwn.supabase.co/functions/v1/expense-tracking-api?updatedSince=2026-09-01T00%3A00%3A00-03%3A00&limit=100&offset=0
 ```
 
-## Resposta
+Exemplo de uma despesa:
+
+```http
+GET https://ryxlofwbyhkqcvzavbwn.supabase.co/functions/v1/expense-tracking-api?expenseId=b89dd7e0-ce39-40bd-a892-518eedf337c5
+```
+
+Quando `expenseId` é usado, a resposta é o objeto da despesa, sem o envelope de paginação. Caso o documento não exista ou esteja fora do escopo da credencial, a API retorna `404`.
+
+## Resposta paginada
 
 ```json
 {
@@ -76,14 +132,71 @@ GET {SUPABASE_URL}/functions/v1/expense-tracking-api?spec=openapi
 }
 ```
 
-`sapDocumentId` usa o `DocNum` e, quando ele não estiver disponível, o `DocEntry`.
+## Campos do documento
 
-`description` é formada pelas descrições das linhas visíveis à credencial e usa a observação do cabeçalho como fallback. `observation` preserva a observação do pedido.
+| Campo | Tipo | Descrição |
+| --- | --- | --- |
+| `supplierCode` | string ou `null` | Código do fornecedor no ERP |
+| `supplierName` | string | Nome do fornecedor |
+| `supplierTaxId` | string ou `null` | CNPJ ou identificador fiscal do fornecedor |
+| `erpFlowId` | UUID | ID interno do documento no ERP Flow |
+| `sapDocumentId` | número ou `null` | `DocNum` do ERP e, na ausência, `DocEntry` |
+| `invoiceDate` | data ou `null` | Data do documento ou da nota fiscal |
+| `createdAt` | data/hora | Data de criação no ERP Flow |
+| `dueDate` | data ou `null` | Data de vencimento |
+| `totalAmount` | número | Valor das linhas pertencentes aos projetos autorizados |
+| `currency` | string | Moeda do documento, como `BRL`, `USD` ou `EUR` |
+| `description` | string ou `null` | Descrições das linhas visíveis, separadas por ` | ` |
+| `observation` | string ou `null` | Observação do cabeçalho do pedido |
+| `costCenters` | array de string | Centros de custo das linhas visíveis |
+| `projects` | array de string | Projetos das linhas visíveis |
+| `status` | string | Status interno atual do documento |
+| `pendingApprovers` | array | Aprovadores atuais das ramificações visíveis |
 
-O endpoint não se limita a documentos aprovados: despesas com status `pendente_aprovacao` também são retornadas. Para elas, `pendingApprovers` informa com quem está cada ramificação autorizada. Em outros status, o array é vazio.
+O endpoint inclui documentos aprovados e documentos em processo de autorização. Quando o status representa uma aprovação em aberto, `pendingApprovers` informa com quem está cada ramificação autorizada. Nos demais status, o array é vazio.
 
-## Regra de escopo
+## Escopo por projeto
 
-Em despesas rateadas, apenas linhas cujo projeto pertence à credencial são consideradas. `totalAmount`, `description`, `costCenters`, `projects` e `pendingApprovers` são reconstruídos com essas linhas e ramificações. Se nenhuma linha estiver no escopo, a despesa não é retornada.
+Em pedidos rateados, a API considera somente as linhas cujo projeto está autorizado para a credencial. Os campos abaixo são reconstruídos apenas com essas linhas:
 
-Para registros legados sem itens, o projeto e o valor do cabeçalho são usados, desde que o projeto do cabeçalho esteja autorizado.
+- `totalAmount`
+- `description`
+- `costCenters`
+- `projects`
+- `pendingApprovers`
+
+Se nenhuma linha estiver no escopo, o documento não é retornado. Para registros legados sem itens, são usados o projeto e o valor do cabeçalho, desde que o projeto esteja autorizado.
+
+## Paginação
+
+Use `limit` e `offset` até que `hasMore` seja `false`:
+
+```text
+Página 1: ?limit=100&offset=0
+Página 2: ?limit=100&offset=100
+Página 3: ?limit=100&offset=200
+```
+
+`count` representa a quantidade retornada na página atual, não o total global.
+
+## Respostas HTTP
+
+| Código | Significado |
+| --- | --- |
+| `200` | Consulta realizada |
+| `400` | Filtro ou formato inválido |
+| `401` | Chave ausente, inválida, expirada ou revogada |
+| `403` | Credencial sem projetos autorizados |
+| `404` | Documento não encontrado ou fora do escopo |
+| `405` | Método diferente de `GET` |
+| `429` | Limite de requisições excedido |
+| `500` | Falha interna ao consultar os dados |
+
+O limite atual é de 120 requisições por minuto por combinação de credencial e endereço IP.
+
+## Segurança
+
+- Não envie a chave em query string, logs, planilhas públicas ou código versionado.
+- Armazene a chave em um cofre de segredos ou variável de ambiente.
+- Gere credenciais distintas por consumidor e conceda somente os projetos necessários.
+- Revogue imediatamente chaves expostas ou que não sejam mais utilizadas.

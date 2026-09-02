@@ -115,9 +115,8 @@ export function SapLoginForm() {
   const isOmie = erpType === "omie";
   const googleAuthDisabled = runtime.disableGoogleAuth;
   const isManagedSap = erpType === "sap" && !googleAuthDisabled && !!cloudEmail && managedCompanyDbs.has(companyDB);
-  // Com a identidade do Google validada, o SAP B1 nunca pede usuário/senha na
-  // tela de login: a autenticação no Service Layer é adiada para o momento da
-  // ação (login invisível com senha provisionada ou modal sob demanda).
+  // No ambiente local o Google é fake, então o SAP B1 precisa abrir uma sessão
+  // real no Service Layer para disponibilizar o sessionId às consultas.
   const needsCredentials = erpType === "sap" && (googleAuthDisabled || !cloudEmail);
 
   const isStateless = (erpType === "omie" || erpType.startsWith("s4hana") || erpType.startsWith("totvs") || erpType === "netsuite");
@@ -341,13 +340,13 @@ export function SapLoginForm() {
       toast.error("Selecione a empresa");
       return;
     }
-    // SAP B1: a identidade já foi validada pelo Google. Entramos direto na
-    // empresa, sem abrir sessão no Service Layer — ela é criada sob demanda,
-    // apenas quando alguma ação precisar (invisível se houver senha
-    // provisionada; senão, o modal de credenciais aparece na hora da ação).
-    if (erpType === "sap" && cloudEmail) {
+    // SAP B1 com Google real: a identidade já foi validada. Entramos direto na
+    // empresa e a sessão técnica é criada sob demanda. No local, onde o Google
+    // é fake, caímos no fluxo de credenciais para obter o B1SESSION real.
+    if (erpType === "sap" && !googleAuthDisabled && cloudEmail) {
+      const identityEmail = cloudEmail;
       try {
-        if (!isAdmin && !(await isEmailAllowedForCompany(cloudEmail, companyDB))) {
+        if (!isAdmin && identityEmail && !(await isEmailAllowedForCompany(identityEmail, companyDB))) {
           toast.error("Acesso não liberado", {
             description: "Seu usuário não está autorizado a entrar nesta empresa.",
           });
