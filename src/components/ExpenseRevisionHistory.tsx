@@ -73,13 +73,15 @@ export function useExpenseRevisions(expenseId?: string | null, refreshKey?: unkn
         setRevisions([]);
       } else {
         setRevisions(
-          (data || []).map((r) => ({
-            ...(r as unknown as ExpenseRevision),
-            changes: Array.isArray((r as { changes?: unknown }).changes)
-              ? ((r as { changes: RevisionChange[] }).changes)
-              : [],
-          })),
+          (data || []).map((r) => {
+            const row = r as unknown as ExpenseRevision & { changes: unknown };
+            return {
+              ...row,
+              changes: Array.isArray(row.changes) ? (row.changes as RevisionChange[]) : [],
+            };
+          }),
         );
+
       }
       setLoading(false);
     })();
