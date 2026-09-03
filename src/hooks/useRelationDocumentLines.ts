@@ -3,7 +3,12 @@ import { useSap } from "@/contexts/SapContext";
 import { supabase } from "@/integrations/supabase/client";
 import { sapQuery } from "@/lib/sap-client";
 
-export type RelationDocumentSource = "expense" | "purchase_order" | "purchase_invoice";
+export type RelationDocumentSource =
+  | "expense"
+  | "purchase_order"
+  | "purchase_invoice"
+  | "sales_order"
+  | "sales_invoice";
 
 export interface RelationCardDetail {
   source: RelationDocumentSource;
@@ -111,7 +116,14 @@ export function useRelationDocumentLines(detail: RelationCardDetail | null) {
         }
 
         if (!session) throw new Error("Sessão ERP indisponível para consultar o documento.");
-        const resource = detail.source === "purchase_invoice" ? "PurchaseInvoices" : "PurchaseOrders";
+        const resource =
+          detail.source === "purchase_invoice"
+            ? "PurchaseInvoices"
+            : detail.source === "sales_invoice"
+              ? "Invoices"
+              : detail.source === "sales_order"
+                ? "Orders"
+                : "PurchaseOrders";
         const endpoint = detail.docEntry
           ? `${resource}(${detail.docEntry})?$select=DocEntry,DocNum,DocumentLines`
           : `${resource}?$filter=DocNum eq ${numericDocNum}&$select=DocEntry,DocNum,DocumentLines&$top=1`;

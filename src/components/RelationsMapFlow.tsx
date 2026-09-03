@@ -43,7 +43,7 @@ type ChainRow = {
   remarks?: string | null;
 };
 
-export type RelationsFlowType = "compras" | "pagcorp";
+export type RelationsFlowType = "compras" | "pagcorp" | "vendas";
 
 interface Props {
   expense: RelationsMapExpense;
@@ -331,6 +331,15 @@ const STAGE_DEFS: Record<StageKey, StageDef> = {
 const FLOW_STAGES: Record<RelationsFlowType, StageKey[]> = {
   compras: ["pedido", "aprovacao", "pc_sap", "nf_entrada", "contas_pagar"],
   pagcorp: ["despesa_pagcorp", "pc_sap", "nf_entrada", "contas_pagar"],
+  // Vendas reutiliza as mesmas colunas, com rótulos do lado de saída.
+  vendas: ["pedido", "aprovacao", "pc_sap", "nf_entrada", "contas_pagar"],
+};
+
+/** Rótulos das colunas quando o documento é um pedido de venda. */
+const SALES_STAGE_LABELS: Partial<Record<StageKey, string>> = {
+  pedido: "Pedido de Venda",
+  nf_entrada: "NF de Saída",
+  contas_pagar: "Contas a Receber",
 };
 
 /* ────────────────────────────── Build graph ────────────────────────────── */
@@ -359,12 +368,16 @@ function fmtDays(d: number | null): string {
 function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width: number } {
   const { expense, approverRows, nfLinks, apPayables, flowType = "compras", enriched, fluxo, erpLabel } = props;
 
+  const isSalesFlow = flowType === "vendas";
+  const docShort = isSalesFlow ? "PV" : "PC";
   const stageKeys = FLOW_STAGES[flowType];
   const buckets: Record<StageKey, StageBucket> = {} as Record<StageKey, StageBucket>;
   stageKeys.forEach((key, idx) => {
     const stage = key === "pc_sap"
-      ? { ...STAGE_DEFS[key], label: `PC lançado no ${erpLabel}` }
-      : STAGE_DEFS[key];
+      ? { ...STAGE_DEFS[key], label: `${docShort} lançado no ${erpLabel}` }
+      : isSalesFlow && SALES_STAGE_LABELS[key]
+        ? { ...STAGE_DEFS[key], label: SALES_STAGE_LABELS[key]! }
+        : STAGE_DEFS[key];
     buckets[key] = { stage, colIndex: idx, items: [] };
   });
 
@@ -444,7 +457,7 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
 
   /* ── Stage 2 (compras only): Aprovadores empilhados ── */
   const approverIds: string[] = [];
-  if (flowType === "compras") {
+  if (flowType !== "pagcorp") {
     approverRows.forEach((r, i) => {
       const id = `app-${i}`;
       approverIds.push(id);
@@ -528,7 +541,7 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
     data: {
       tone: pcSapBottleneck ? "warn" : "amber",
       icon: FileCheck2,
-      kind: `PC no ${erpLabel}`,
+      kind: `${docShort} no ${erpLabel}`,
       identifier: expense.sap_doc_num ? `${erpLabel} #${expense.sap_doc_num}` : "Aguardando integração",
       amount: expense.total_amount,
       currency: expense.currency,
@@ -550,8 +563,8 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
       statusTone: integrated ? "success" : isFailed ? "warn" : "muted",
       state: pcSapState,
       detail: {
-        source: expense.sap_doc_entry ? "purchase_order" : "expense",
-        title: "Pedido de Compra",
+        source: expense.sap_doc_entry ? (isSalesFlow ? "sales_order" : "purchase_order") : "expense",
+        title: isSalesFlow ? "Pedido de Venda" : "Pedido de Compra",
         expenseId: expense.id,
         docEntry: expense.sap_doc_entry,
         docNum: expense.sap_doc_num,
@@ -560,7 +573,7 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
   });
 
   // fan-in from approvers → PC SAP (compras) OR direct from root (pagcorp)
-  if (flowType === "compras" && approverIds.length > 0) {
+  if (flowType !== "pagcorp" && approverIds.length > 0) {
     approverIds.forEach((aid) => {
       const app = approverRows[Number(aid.slice(4))];
       const dashed = !(app?.done);
@@ -626,8 +639,8 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
         state: statusOk ? "done" : "current",
         extra: matchesFluxoNf ? `Vínculo fluxo · NF #${fluxoNfId}` : undefined,
         detail: {
-          source: nf.sap_invoice_draft_id ? "purchase_invoice" : "expense",
-          title: `NF de Entrada ${nf.numero_nf || ""}`.trim(),
+          source: nf.sap_invoice_draft_id ? (isSalesFlow ? "sales_invoice" : "purchase_invoice") : "expense",
+          title: `${isSalesFlow ? "NF de Saída" : "NF de Entrada"} ${nf.numero_nf || ""}`.trim(),
           expenseId: expense.id,
           docEntry: nf.sap_invoice_draft_id ? Number(nf.sap_invoice_draft_id) : null,
           docNum: nf.numero_nf,
@@ -681,8 +694,8 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
           state: paidFully ? "done" : paidPartially ? "current" : "pending",
           extra: [paidExtra, isFluxoCp ? `Vínculo fluxo · CP #${fluxoCpId}` : null].filter(Boolean).join(" · ") || null,
           detail: {
-            source: nf.sap_invoice_draft_id ? "purchase_invoice" : "expense",
-            title: `Conta a Pagar ${ap.ap_doc_num || ap.ap_doc_entry}`,
+            source: nf.sap_invoice_draft_id ? (isSalesFlow ? "sales_invoice" : "purchase_invoice") : "expense",
+            title: `${isSalesFlow ? "Conta a Receber" : "Conta a Pagar"} ${ap.ap_doc_num || ap.ap_doc_entry}`,
             expenseId: expense.id,
             docEntry: nf.sap_invoice_draft_id ? Number(nf.sap_invoice_draft_id) : null,
             docNum: ap.ap_doc_num,
@@ -913,12 +926,13 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
 
 /* ────────────────────────────── Legend ────────────────────────────── */
 
-function FlowLegend({ erpLabel }: { erpLabel: string }) {
+function FlowLegend({ erpLabel, flowType }: { erpLabel: string; flowType?: RelationsFlowType }) {
+  const sales = flowType === "vendas";
   const items: Array<{ tone: NodeTone; label: string }> = [
-    { tone: "amber",  label: `Pedido / PC ${erpLabel}` },
+    { tone: "amber",  label: `Pedido / ${sales ? "PV" : "PC"} ${erpLabel}` },
     { tone: "blue",   label: "Aprovação" },
-    { tone: "green",  label: "NF de Entrada" },
-    { tone: "violet", label: "Contas a Pagar" },
+    { tone: "green",  label: sales ? "NF de Saída" : "NF de Entrada" },
+    { tone: "violet", label: sales ? "Contas a Receber" : "Contas a Pagar" },
   ];
   return (
     <div className="absolute top-3 right-3 z-10 flex flex-wrap gap-1.5 rounded-md border border-border bg-background/80 backdrop-blur px-2 py-1.5 shadow-sm">
@@ -959,7 +973,7 @@ export function RelationsMapFlow(props: Props) {
 
   return (
     <div className="relative w-full h-[65vh] rounded-xl border border-border bg-[radial-gradient(circle_at_center,hsl(var(--muted)/0.35),transparent_70%)] overflow-hidden">
-      <FlowLegend erpLabel={props.erpLabel} />
+      <FlowLegend erpLabel={props.erpLabel} flowType={props.flowType} />
       <ReactFlow
         nodes={nodes}
         edges={edges}
