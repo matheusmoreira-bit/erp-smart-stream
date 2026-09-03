@@ -3611,6 +3611,17 @@ export function CreateExpenseModal({
                       portalContainer={dialogContainer}
                     />
                   </div>
+                  {isSales && (
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 accent-primary"
+                        checked={item.free_of_charge === true}
+                        onChange={(e) => updateItem(i, "free_of_charge", e.target.checked)}
+                      />
+                      Gratuito (item sem cobrança no SAP)
+                    </label>
+                  )}
                 </div>
               ))}
             </div>
