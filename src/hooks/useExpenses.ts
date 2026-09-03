@@ -163,6 +163,8 @@ export interface ExpenseItem {
   project?: string;
   items_group_code?: number | null;
   items_group_name?: string | null;
+  /** "Gratuito" no SAP (FreeOfChargeBP). Padrão: false. */
+  free_of_charge?: boolean;
 }
 
 export interface ExpenseAttachment {
@@ -870,6 +872,7 @@ export function useExpenses(
           project: item.project || input.project || null,
           items_group_code: meta?.items_group_code ?? null,
           items_group_name: meta?.items_group_name ?? null,
+          free_of_charge: item.free_of_charge === true,
         };
       });
 
@@ -1101,6 +1104,7 @@ export function useExpenses(
             project: item.project || null,
             items_group_code: e?.items_group_code ?? null,
             items_group_name: e?.items_group_name ?? null,
+            free_of_charge: item.free_of_charge === true,
           };
         });
       }

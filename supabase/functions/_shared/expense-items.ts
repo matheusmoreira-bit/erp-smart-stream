@@ -8,6 +8,7 @@ export interface NormalizedExpenseItem {
   project: string | null;
   items_group_code: number | null;
   items_group_name: string | null;
+  free_of_charge: boolean;
 }
 
 export type ExpenseEditMode = "draft" | "pending" | "approved" | "integrated" | "blocked";
@@ -72,6 +73,8 @@ export function normalizeExpenseItems(
       project: String(item.project || "").trim() || null,
       items_group_code: item.items_group_code == null ? null : Number(item.items_group_code),
       items_group_name: String(item.items_group_name || "").trim() || null,
+      // "Gratuito" (SAP: FreeOfChargeBP). Desmarcado por padrão.
+      free_of_charge: item.free_of_charge === true || item.free_of_charge === "true",
     };
   });
 }
