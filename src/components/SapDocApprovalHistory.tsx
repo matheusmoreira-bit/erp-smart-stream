@@ -126,6 +126,19 @@ export const DEFAULT_PURCHASE_OBJECT_TYPES = [
   "540000006",
 ] as const;
 
+/**
+ * Tipos de objeto de VENDA. ORDR/OPOR (e demais pares venda/compra) têm
+ * numeração de DocEntry independente no SAP: consultar um pedido de venda
+ * com os tipos de compra traz o histórico de outro documento.
+ */
+export const DEFAULT_SALES_OBJECT_TYPES = [
+  "17",
+  "13",
+  "23",
+  "203",
+  "24",
+] as const;
+
 async function fetchApprovalRequests(
   session: SapSession,
   docEntry: number,
