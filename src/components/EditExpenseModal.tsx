@@ -866,6 +866,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
         onClose={() => setShowRelationsMap(false)}
         expense={expense as any}
         title={isSales ? "Mapa de Relações — Pedido de Venda" : "Mapa de Relações — Pedido de Compra"}
+        flowType={isSales ? "vendas" : "compras"}
       />
     </Dialog>
   );
