@@ -2080,7 +2080,7 @@ export function CreateExpenseModal({
     };
   }, [open]);
 
-  const updateItem = (index: number, field: string, value: string | number) => {
+  const updateItem = (index: number, field: string, value: string | number | boolean) => {
     setItems((prev) => {
       const updated = [...prev];
       (updated[index] as any)[field] = value;

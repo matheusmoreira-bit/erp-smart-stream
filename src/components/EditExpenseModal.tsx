@@ -76,7 +76,8 @@ function hasItemChanges(current: EditItem[], original: ExpenseItem[]) {
       Number(item.unit_price || 0) !== Number(previous.unit_price || 0) ||
       Number(item.line_total || 0) !== Number(previous.line_total || 0) ||
       String(item.cost_center || "").trim() !== String(previous.cost_center || "").trim() ||
-      String(item.project || "").trim() !== String(previous.project || "").trim()
+      String(item.project || "").trim() !== String(previous.project || "").trim() ||
+      (item.free_of_charge === true) !== (previous.free_of_charge === true)
     );
   });
 }
@@ -325,7 +326,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
 
   if (!expense) return null;
 
-  const updateItem = (i: number, field: keyof EditItem, value: string | number) => {
+  const updateItem = (i: number, field: keyof EditItem, value: string | number | boolean) => {
     setItems((prev) => {
       const next = [...prev];
       (next[i] as any)[field] = value;
