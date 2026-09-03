@@ -1,0 +1,1 @@
+ALTER TABLE public.expense_items ADD COLUMN IF NOT EXISTS free_of_charge boolean NOT NULL DEFAULT false;

@@ -3374,6 +3374,7 @@ export type Database = {
           created_at: string
           description: string
           expense_id: string
+          free_of_charge: boolean
           id: string
           item_code: string | null
           items_group_code: number | null
@@ -3388,6 +3389,7 @@ export type Database = {
           created_at?: string
           description: string
           expense_id: string
+          free_of_charge?: boolean
           id?: string
           item_code?: string | null
           items_group_code?: number | null
@@ -3402,6 +3404,7 @@ export type Database = {
           created_at?: string
           description?: string
           expense_id?: string
+          free_of_charge?: boolean
           id?: string
           item_code?: string | null
           items_group_code?: number | null

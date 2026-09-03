@@ -194,6 +194,7 @@ async function updateExpenseWithItems(
     project: it.project || null,
     items_group_code: it.items_group_code ?? null,
     items_group_name: it.items_group_name ?? null,
+    free_of_charge: it.free_of_charge === true,
   }));
   const { error: insErr } = await admin.from("expense_items").insert(rows as any);
   return insErr?.message || null;
@@ -655,6 +656,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
       project: it.project || input.project || null,
       items_group_code: it.items_group_code ?? null,
       items_group_name: it.items_group_name ?? null,
+      free_of_charge: it.free_of_charge === true,
     }));
     const { error: itemsErr } = await admin.from("expense_items").insert(rows as any);
     if (itemsErr) return json(500, { error: `Falha ao inserir itens: ${itemsErr.message}` });

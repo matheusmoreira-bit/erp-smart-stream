@@ -1500,6 +1500,8 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
           DiscountPercent: 0,
           ...(/^[A-Z]{3}$/.test(lineCurrency) && lineCurrency !== "BRL" && lineCurrency !== "R$" ? { Currency: lineCurrency } : {}),
           ...usageLine,
+          // "Gratuito" (localização Brasil): marcado na linha do ERP Flow.
+          ...(it.free_of_charge === true ? { FreeOfChargeBP: "tYES" } : {}),
         };
 
         if (hasItem) {
