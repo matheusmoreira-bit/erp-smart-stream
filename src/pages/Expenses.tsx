@@ -3077,6 +3077,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         onClose={() => setRelationsMapExpense(null)}
         expense={relationsMapExpense as any}
         title={isSales ? "Mapa de Relações — Pedido de Venda" : "Mapa de Relações — Pedido de Compra"}
+        flowType={isSales ? "vendas" : "compras"}
       />
 
       <AlertDialog open={!!nfseConfirm} onOpenChange={(open) => { if (!open && !emittingNfseFor) setNfseConfirm(null); }}>

@@ -29,7 +29,8 @@ import {
 
 } from "@/hooks/useRelationsMapDerived";
 import { Loader2 } from "lucide-react";
-import { RelationsMapFlow } from "./RelationsMapFlow";
+import { RelationsMapFlow, type RelationsFlowType } from "./RelationsMapFlow";
+import { useSalesRelationsLinks } from "@/hooks/useSalesRelationsLinks";
 import { isPendingApproval } from "@/lib/approval-authz";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { resolveDocumentPaymentStatus } from "@/lib/relations-payment-status";
@@ -140,6 +141,8 @@ interface Props {
   onClose: () => void;
   expense: RelationsMapExpense | null;
   title?: string;
+  /** "vendas" evita derivar NF de entrada / contas a pagar (cadeia de compras). */
+  flowType?: RelationsFlowType;
 }
 
 type StageKey = "rascunho" | "pendente_aprovacao" | "aprovado" | "pc_lancado" | "nf_entrada" | "pagamento" | "finalizado";
@@ -188,7 +191,7 @@ function formatCurrency(value?: number, currency?: string | null) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: code }).format(value);
 }
 
-export function RelationsMap({ open, onClose, expense, title }: Props) {
+export function RelationsMap({ open, onClose, expense, title, flowType = "compras" }: Props) {
   const statusLabel = useStatusLabel();
   const { session } = useSap();
   const { companies } = useCompanies();
@@ -212,20 +215,32 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
   const erpLabel = expenseErpType === "sap" ? "SAP" : getErpShortLabel(expenseErpType);
 
 
+  const isSalesFlow = flowType === "vendas";
+
   const derivedInput = {
     expenseId: expense?.id || "",
     sapDocEntry: expense?.sap_doc_entry ?? null,
     sapDocNum: expense?.sap_doc_num ?? null,
     companyDb: expense?.company_db ?? null,
     supplierCode: expense?.supplier_code ?? null,
-    enabled: open && !!expense,
+    // ORDR (venda) e OPOR (compra) têm DocEntry independentes: derivar a cadeia
+    // de compras a partir de um pedido de venda vincula documentos errados.
+    enabled: open && !!expense && !isSalesFlow,
   };
   const nfLinks = useNfEntradaLinks(derivedInput);
   const apLinks = useContasPagarLinks(derivedInput);
+  const salesLinks = useSalesRelationsLinks({
+    expenseId: expense?.id || "",
+    companyDb: expense?.company_db ?? null,
+    sapDocEntry: expense?.sap_doc_entry ?? null,
+    customerName: expense?.supplier_name ?? null,
+    enabled: open && !!expense && isSalesFlow,
+  });
   const refreshNfLinks = nfLinks.refresh;
   const refreshApLinks = apLinks.refresh;
 
   useEffect(() => {
+    if (isSalesFlow) return;
     if (!open || !expense?.company_db || !expense?.sap_doc_entry) return;
     const key = `${expense.company_db}:${expense.sap_doc_entry}`;
     if (reconciledKeyRef.current === key) return;
@@ -258,10 +273,11 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [open, expense?.company_db, expense?.sap_doc_entry, refreshNfLinks, refreshApLinks]);
+  }, [isSalesFlow, open, expense?.company_db, expense?.sap_doc_entry, refreshNfLinks, refreshApLinks]);
 
   // Une pagamentos SAP (VendorPayments) às NFs pelo DocEntry da fatura.
   const nfLinksWithPayments = useMemo(() => {
+    if (isSalesFlow) return salesLinks.data || [];
     const raw = nfLinks.data || [];
     const byInv = apLinks.data?.paymentsByInvoice || {};
     const invoices = new Map((apLinks.data?.invoices || []).map((invoice) => [invoice.DocEntry, invoice]));
@@ -320,7 +336,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
         ap_links: merged,
       };
     });
-  }, [nfLinks.data, apLinks.data]);
+  }, [isSalesFlow, salesLinks.data, nfLinks.data, apLinks.data]);
 
   useEffect(() => {
     if (!open || !expense) return;
@@ -496,6 +512,15 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
 
   const mapStatusLabel = useMemo(() => {
     if (!expense) return null;
+    if (isSalesFlow) {
+      const total = nfLinksWithPayments.reduce((sum, nf) => sum + (Number(nf.valor_total) || 0), 0);
+      const paid = nfLinksWithPayments.reduce((sum, nf) => sum + (Number(nf.paid_amount) || 0), 0);
+      const salesStatus = resolveDocumentPaymentStatus(total, paid);
+      if (salesStatus.state === "paid" || salesStatus.state === "partial") return salesStatus.label;
+      if (nfLinksWithPayments.length > 0) return "NF de saída emitida";
+      if (expense.sap_doc_entry || expense.sap_doc_num) return statusLabel("pc_lancado");
+      return statusLabel(expense.status);
+    }
     const payables = apLinks.data?.payables || [];
     const invoices = apLinks.data?.invoices || [];
     const titleRows = invoices.length > 0
@@ -510,7 +535,7 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
     if (nfLinksWithPayments.length > 0) return "NF vinculada";
     if (expense.sap_doc_entry || expense.sap_doc_num) return statusLabel("pc_lancado");
     return statusLabel(expense.status);
-  }, [expense, apLinks.data, nfLinksWithPayments, statusLabel]);
+  }, [expense, isSalesFlow, apLinks.data, nfLinksWithPayments, statusLabel]);
 
 
 
@@ -565,7 +590,8 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
                 expense={expense}
                 approverRows={approverRows}
                 nfLinks={nfLinksWithPayments}
-                apPayables={apLinks.data?.payables || []}
+                apPayables={isSalesFlow ? [] : apLinks.data?.payables || []}
+                flowType={flowType}
                 enriched={enriched}
                 fluxo={fluxoRow}
                 erpLabel={erpLabel}
@@ -581,10 +607,10 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
               />
             )}
 
-            {(nfLinks.isLoading || apLinks.isLoading) && (
+            {(isSalesFlow ? salesLinks.isLoading : nfLinks.isLoading || apLinks.isLoading) && (
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                 <Loader2 className="w-3 h-3 animate-spin" />
-                Buscando NFs e contas a pagar…
+                {isSalesFlow ? "Buscando NFs de saída e recebimentos…" : "Buscando NFs e contas a pagar…"}
               </div>
             )}
           </div>
@@ -598,10 +624,10 @@ export function RelationsMap({ open, onClose, expense, title }: Props) {
         log={log}
         approverRows={approverRows}
         nfLinks={nfLinksWithPayments}
-        nfLoading={nfLinks.isLoading}
-        apPayables={apLinks.data?.payables || []}
-        apPayments={apLinks.data?.payments || []}
-        apLoading={apLinks.isLoading}
+        nfLoading={isSalesFlow ? salesLinks.isLoading : nfLinks.isLoading}
+        apPayables={isSalesFlow ? [] : apLinks.data?.payables || []}
+        apPayments={isSalesFlow ? [] : apLinks.data?.payments || []}
+        apLoading={isSalesFlow ? salesLinks.isLoading : apLinks.isLoading}
         erpLabel={erpLabel}
         onClose={() => setDetailStage(null)}
       />
@@ -630,9 +656,13 @@ function RelationLinesDialog({
   const total = lines.reduce((sum, line) => sum + line.lineTotal, 0);
   const sourceLabel = detail?.source === "purchase_order"
     ? `Pedido ${erpLabel}`
-    : detail?.source === "purchase_invoice"
-      ? `NF de Entrada ${erpLabel}`
-      : "ERP Flow";
+    : detail?.source === "sales_order"
+      ? `Pedido de Venda ${erpLabel}`
+      : detail?.source === "purchase_invoice"
+        ? `NF de Entrada ${erpLabel}`
+        : detail?.source === "sales_invoice"
+          ? `NF de Saída ${erpLabel}`
+          : "ERP Flow";
 
   return (
     <Dialog open={!!detail} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
