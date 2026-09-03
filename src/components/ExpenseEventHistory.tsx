@@ -23,7 +23,12 @@ import {
   useNfEntradaLinks,
   useContasPagarLinks,
 } from "@/hooks/useRelationsMapDerived";
-import { useSapDocApprovalHistory } from "@/components/SapDocApprovalHistory";
+import {
+  useSapDocApprovalHistory,
+  DEFAULT_PURCHASE_OBJECT_TYPES,
+  DEFAULT_SALES_OBJECT_TYPES,
+} from "@/components/SapDocApprovalHistory";
+import { useSalesRelationsLinks } from "@/hooks/useSalesRelationsLinks";
 import { Button } from "@/components/ui/button";
 
 
@@ -115,6 +120,9 @@ export interface ExpenseEventHistoryExpense {
   sap_integration_last_attempt_at?: string | null;
   company_db?: string | null;
   supplier_code?: string | null;
+  /** "sales" | "purchase" — define a natureza do documento. */
+  doc_type?: string | null;
+  supplier_name?: string | null;
   currency?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -124,9 +132,17 @@ interface Props {
   expense: ExpenseEventHistoryExpense | null | undefined;
   /** Reload marker — muda quando o pedido é editado/aprovado etc. */
   refreshKey?: string | number;
+  /**
+   * Natureza do documento. Quando omitido, é inferido de `expense.doc_type`.
+   * Documentos de venda NUNCA podem herdar vínculos de compra (NF de entrada /
+   * contas a pagar): DocEntry de ORDR e OPOR são independentes no SAP.
+   */
+  flowType?: "compras" | "vendas";
 }
 
-export function ExpenseEventHistory({ expense, refreshKey }: Props) {
+export function ExpenseEventHistory({ expense, refreshKey, flowType }: Props) {
+  const isSales =
+    flowType === "vendas" || (!flowType && (expense?.doc_type || "").toLowerCase() === "sales");
   const expenseId = expense?.id;
   const [log, setLog] = useState<ApprovalLogRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -137,11 +153,21 @@ export function ExpenseEventHistory({ expense, refreshKey }: Props) {
     sapDocNum: expense?.sap_doc_num ?? null,
     companyDb: expense?.company_db ?? null,
     supplierCode: expense?.supplier_code ?? null,
-    enabled: !!expense,
+    enabled: !!expense && !isSales,
   };
   const nfLinks = useNfEntradaLinks(derivedInput);
   const apLinks = useContasPagarLinks(derivedInput);
-  const sapApproval = useSapDocApprovalHistory(expense?.sap_doc_entry ?? null);
+  const salesLinks = useSalesRelationsLinks({
+    expenseId: expense?.id || "",
+    companyDb: expense?.company_db ?? null,
+    sapDocEntry: expense?.sap_doc_entry ?? null,
+    customerName: expense?.supplier_name ?? null,
+    enabled: !!expense && isSales,
+  });
+  const sapApproval = useSapDocApprovalHistory(
+    expense?.sap_doc_entry ?? null,
+    isSales ? [...DEFAULT_SALES_OBJECT_TYPES] : [...DEFAULT_PURCHASE_OBJECT_TYPES],
+  );
 
   useEffect(() => {
     if (!expenseId) {
@@ -262,8 +288,10 @@ export function ExpenseEventHistory({ expense, refreshKey }: Props) {
   }
 
 
-  for (const nf of nfLinks.data || []) {
-    const number = `NF ${nf.numero_nf || "—"}${nf.serie ? `/${nf.serie}` : ""}`;
+  const docNfLinks = isSales ? salesLinks.data || [] : nfLinks.data || [];
+
+  for (const nf of docNfLinks) {
+    const number = `${isSales ? "NF de saída" : "NF"} ${nf.numero_nf || "—"}${nf.serie ? `/${nf.serie}` : ""}`;
     items.push({
       key: `nf-created:${nf.id}`,
       when: nf.created_at,
@@ -297,7 +325,7 @@ export function ExpenseEventHistory({ expense, refreshKey }: Props) {
     }
   }
 
-  for (const ap of apLinks.data?.payables || []) {
+  for (const ap of isSales ? [] : apLinks.data?.payables || []) {
     const label = `Título ${ap.numero_documento || "—"} (${ap.source.toUpperCase()})`;
     if (ap.data_registro) {
       items.push({
@@ -340,6 +368,27 @@ export function ExpenseEventHistory({ expense, refreshKey }: Props) {
         icon: CheckCircle2,
         color: "text-success",
       });
+    }
+  }
+
+  if (isSales) {
+    for (const nf of docNfLinks) {
+      for (const rec of nf.ap_links || []) {
+        items.push({
+          key: `recebimento:${nf.id}:${rec.ap_doc_entry}`,
+          when: rec.payment_date || rec.linked_at,
+          label: `Recebimento${rec.payment_doc_num ? ` #${rec.payment_doc_num}` : ""} em contas a receber`,
+          detail: [
+            rec.ap_total != null ? formatCurrency(rec.ap_total, expense?.currency) : null,
+            rec.status || null,
+            rec.notes || null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          icon: Wallet,
+          color: "text-success",
+        });
+      }
     }
   }
 
@@ -387,7 +436,10 @@ export function ExpenseEventHistory({ expense, refreshKey }: Props) {
 
   items.sort((a, b) => new Date(a.when).getTime() - new Date(b.when).getTime());
 
-  const busy = isLoading || nfLinks.isLoading || apLinks.isLoading || sapApproval.loading;
+  const busy =
+    isLoading ||
+    (isSales ? salesLinks.isLoading : nfLinks.isLoading || apLinks.isLoading) ||
+    sapApproval.loading;
   const sapNoFlow =
     sapApproval.enabled && !sapApproval.loading && !sapApproval.error && sapApproval.requests.length === 0;
 

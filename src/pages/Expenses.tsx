@@ -778,7 +778,7 @@ function ExpenseDetailModal({
 
 
 
-            <ExpenseEventHistory expense={expense} refreshKey={expense.updated_at} />
+            <ExpenseEventHistory expense={expense} refreshKey={expense.updated_at} flowType={isSalesDoc ? "vendas" : "compras"} />
 
             <ExpenseRevisionHistory expenseId={expense.id} refreshKey={expense.updated_at} />
 
