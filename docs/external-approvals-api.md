@@ -63,9 +63,21 @@ Respostas de erro de autenticação:
 > Aprovações originadas diretamente no SAP B1, fora do fluxo do ERP Flow,
 > **não** aparecem nas respostas de `list`, mesmo estando pendentes no SAP.
 
-### 3.1 Listar documentos pendentes
+### 3.1 Listar documentos (`op: "list"`)
 
-Há dois modos:
+Parâmetros aceitos:
+
+| Campo             | Obrig. | Default   | Descrição |
+|-------------------|--------|-----------|-----------|
+| `company_db`      | sim    | —         | Base SAP (ex.: `SBO_ANAGAMING`). |
+| `user_code`       | não    | —         | Se informado, filtra pelas pendências do usuário (exige allowlist). Se omitido, retorna a fila da empresa inteira. |
+| `status`          | não    | `pending` | `pending`, `approved`, `rejected`, `cancelled`, `generated` ou `all`. |
+| `doc_object_type` | não    | —         | Código SAP do objeto (`22` = Pedido de Compra, `18` = NF de Entrada…). |
+| `limit`           | não    | `50`      | Itens por página (máx. `200`). |
+| `offset`          | não    | `0`       | Deslocamento para paginar. |
+
+A resposta traz `limit`, `offset`, `has_more` e `next_offset` — pagine até
+`has_more: false`. Recomenda-se `limit` entre 20 e 50 para telas de painel.
 
 **a) Pendências de UM usuário** (informe `user_code`):
 
@@ -77,7 +89,9 @@ Content-Type: application/json
 {
   "op": "list",
   "company_db": "SBO_EMPRESA_X",
-  "user_code": "joao.silva"
+  "user_code": "joao.silva",
+  "limit": 50,
+  "offset": 0
 }
 ```
 
@@ -86,8 +100,19 @@ Content-Type: application/json
 ```json
 {
   "op": "list",
-  "company_db": "SBO_EMPRESA_X"
+  "company_db": "SBO_EMPRESA_X",
+  "doc_object_type": "22",
+  "status": "pending",
+  "limit": 50,
+  "offset": 0
 }
+```
+
+**c) Finalizados** (aprovados / rejeitados):
+
+```json
+{ "op": "list", "company_db": "SBO_EMPRESA_X", "status": "approved", "limit": 50, "offset": 0 }
+{ "op": "list", "company_db": "SBO_EMPRESA_X", "status": "rejected", "limit": 50, "offset": 0 }
 ```
 
 Nesse modo, cada documento traz `pending_approvers` com os aprovadores atuais
@@ -95,6 +120,7 @@ Nesse modo, cada documento traz `pending_approvers` com os aprovadores atuais
 A allowlist por `user_code` **não** é aplicada — a `X-API-Key` já autoriza a
 leitura no nível da empresa; compartilhe a chave apenas com sistemas de
 confiança.
+
 
 **Response 200** (modo b, `scope: "company"`):
 ```json
