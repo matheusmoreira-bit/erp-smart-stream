@@ -1023,6 +1023,16 @@ export default function SalesNfse() {
 
   const invoiceByExpense = useMemo(() => {
     const map = new Map<string, NfseRow>();
+    // Uma nota cancelada e reemitida deixa dois registros para o mesmo pedido.
+    // Só vale a nota que ainda está ativa no ERP; cancelada/falha é descartada.
+    const rank = (row: NfseRow) => {
+      const entry = Number(row.sap_invoice_doc_entry);
+      const cancelledLocally = row.status === "cancelled" || row.status === "failed";
+      if (cancelledLocally) return 0;
+      if (!Number.isFinite(entry) || entry <= 0) return 1;
+      if (sapInvoices.available) return sapInvoices.entries.has(entry) ? 3 : 0;
+      return 2;
+    };
     for (const row of invoices) {
       // pedidos do ERP Flow são indexados pelo expense_id; pedidos nativos do
       // ERP pelo DocEntry do pedido (chave `erp:<DocEntry>`).
@@ -1033,13 +1043,14 @@ export default function SalesNfse() {
           : null;
       if (!key) continue;
       const current = map.get(key);
-      // prioriza a nota válida mais recente sobre tentativas com falha
-      if (!current || (current.status === "failed" && row.status !== "failed")) {
+      // prioriza a nota ativa no ERP e, em empate, a mais recente (ordem desc)
+      if (!current || rank(row) > rank(current)) {
         map.set(key, row);
       }
     }
     return map;
-  }, [invoices]);
+  }, [invoices, sapInvoices]);
+
 
   /**
    * Situação real da emissão, validada contra o ERP:
