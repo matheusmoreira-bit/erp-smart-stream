@@ -2959,14 +2959,8 @@ export default function ApprovalsPage() {
   const dueToD = dueTo ? new Date(dueTo).getTime() + 86399999 : null;
 
   const preFiltered = userApprovals.filter((a) => {
-    // Type filter (purchase vs sales) — based on docTypeName keyword
-    if (typeFilter !== "all") {
-      const name = (a.docTypeName || "").toLowerCase();
-      const isPurchase = name.includes("compra");
-      const isSales = name.includes("venda");
-      if (typeFilter === "purchase" && !isPurchase) return false;
-      if (typeFilter === "sales" && !isSales) return false;
-    }
+    // Natureza do documento (compra / venda / outro)
+    if (typeFilter !== "all" && docKind(a as never) !== typeFilter) return false;
 
     // Value range
     if (minV !== null && !Number.isNaN(minV) && a.docTotal < minV) return false;
@@ -2997,6 +2991,11 @@ export default function ApprovalsPage() {
       const projs = docProjects(a);
       if (!projs.some((p) => projectFilter.includes(p))) return false;
     }
+
+    // Aprovador atual / Solicitante (multi-seleção sobre as opções em tela)
+    if (approverFilter.length > 0 && !approverFilter.includes((a.currentApprover || "").trim())) return false;
+    if (requesterFilter.length > 0 && !requesterFilter.includes((a.requester || "").trim())) return false;
+
 
     if (originFilter !== "all") {
       const internal = isInternalDoc(a as never);
