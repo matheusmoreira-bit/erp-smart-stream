@@ -51,8 +51,48 @@ async function resolveCaller(req: Request): Promise<{ email?: string; userName?:
 }
 
 /**
+ * Identidades dos titulares que o caller substitui hoje (janela ativa).
+ * Sem isso, um aprovador substituto não enxerga a fila do titular.
+ */
+async function substitutedOfficialIdentities(
+  admin: SupabaseClient,
+  identities: string[],
+): Promise<string[]> {
+  const out = new Set<string>();
+  if (identities.length === 0) return [];
+  try {
+    const nowIso = new Date().toISOString();
+    const { data } = await admin
+      .from("approver_substitutes")
+      .select("official_email, official_name, substitute_email, substitute_name")
+      .is("revoked_at", null)
+      .lte("starts_at", nowIso)
+      .gte("ends_at", nowIso);
+    for (const r of (data || []) as Array<Record<string, string | null>>) {
+      const isMine = identities.some(
+        (ident) =>
+          identityMatches(ident, r.substitute_email) ||
+          personMatches(ident, r.substitute_email) ||
+          identityMatches(ident, r.substitute_name) ||
+          personMatches(ident, r.substitute_name),
+      );
+      if (!isMine) continue;
+      const email = String(r.official_email || "").toLowerCase();
+      if (email) {
+        out.add(email);
+        const prefix = email.split("@")[0];
+        if (prefix) out.add(prefix);
+      }
+      if (r.official_name) out.add(String(r.official_name).toLowerCase());
+    }
+  } catch (_e) { /* substituição é complemento: nunca derruba a listagem */ }
+  return Array.from(out);
+}
+
+/**
  * Confidencialidade: a view devolve TODAS as pendências da empresa. Cada
- * usuário só pode receber o que ele aprova (ou o que ele mesmo solicitou).
+ * usuário só pode receber o que ele aprova (ou o que ele mesmo solicitou),
+ * incluindo o que aprova como substituto de outro titular.
  * Apenas grupos com visão total (`expenses_view_all`/`approvals_view_all`)
  * recebem a lista completa.
  */
@@ -68,7 +108,9 @@ async function scopeRowsToCaller(
   if (await canViewAllDocuments(admin, identities)) return rows;
 
   const aliases = Array.from(await resolveCallerAliases(admin, caller));
-  const all = [...new Set([...identities, ...aliases])];
+  const mine = [...new Set([...identities, ...aliases])];
+  const officials = await substitutedOfficialIdentities(admin, mine);
+  const all = [...new Set([...mine, ...officials])];
   if (all.length === 0) return [];
 
   const matches = (value: unknown) =>
@@ -82,6 +124,7 @@ async function scopeRowsToCaller(
     matches(row["Solicitante"]),
   );
 }
+
 
 Deno.serve(withEdgeMetrics("sap-approvals-hana", async (req, _mctx) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
