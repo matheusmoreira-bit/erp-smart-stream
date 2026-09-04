@@ -248,16 +248,20 @@ Deno.serve(async (req) => {
     const openLines = lines.filter((l) => Number(l?.RemainingOpenQuantity ?? l?.Quantity ?? 0) > 0);
     if (openLines.length === 0) return json({ error: "Pedido não possui linhas em aberto para faturar." }, 400);
 
-    // Datas: a nota deve herdar a data do documento e a competência (TaxDate) do
-    // pedido de venda — antes usávamos a data de hoje, o que jogava a competência
-    // para o mês seguinte quando a emissão ocorria depois do fechamento.
+    // Datas: a nota deve herdar as datas do pedido de venda.
+    // No SAP B1 (BR): DocDate = data de lançamento (e é ela que define a
+    // "Data de Competência"), TaxDate = data do documento. Antes o
+    // lançamento ficava com a data de hoje, jogando a competência para o mês
+    // seguinte. Agora lançamento e documento usam a MESMA data-base do pedido.
     const dOnly = (v: unknown) => (v ? String(v).slice(0, 10) : null);
     const today = new Date().toISOString().slice(0, 10);
     const overrideDocDate = dOnly(body?.doc_date);
     const overrideTaxDate = dOnly(body?.tax_date);
-    const docDate = overrideDocDate || dOnly(order.DocDate) || today;
-    const taxDate = overrideTaxDate || dOnly(order.TaxDate) || docDate;
+    const orderBaseDate = dOnly(order.TaxDate) || dOnly(order.DocDate) || today;
+    const taxDate = overrideTaxDate || orderBaseDate;
+    const docDate = overrideDocDate || taxDate;
     const dueDate = dOnly(order.DocDueDate) || docDate;
+
 
     const invoicePayload: Record<string, unknown> = {
       CardCode: order.CardCode,
