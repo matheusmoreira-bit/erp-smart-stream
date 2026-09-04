@@ -1039,9 +1039,9 @@ function ApprovalDetailModal({
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 sm:gap-3 flex-wrap">
                 <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                  {doc.docTypeName}</span>
-                <DocKindBadge doc={doc} className="ml-1" /><span className="hidden">
+                  {doc.docTypeName}
                 </span>
+                <DocKindBadge doc={doc} />
                 <span className="font-mono text-sm sm:text-base">{docNumberLabel(doc)}</span>
                 <span className="ml-auto text-right">
                   {doc.viewerSegmented && (
