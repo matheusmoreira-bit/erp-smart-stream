@@ -237,7 +237,7 @@ Deno.serve(async (req) => {
     const order = await sapGet(
       baseUrl,
       session.cookies,
-      `Orders(${Number(expense.sap_doc_entry)})?$select=DocEntry,DocNum,CardCode,CardName,DocCurrency,BPL_IDAssignedToInvoice,DocumentStatus,Comments,DocumentLines`,
+      `Orders(${Number(expense.sap_doc_entry)})?$select=DocEntry,DocNum,CardCode,CardName,DocCurrency,DocDate,DocDueDate,TaxDate,BPL_IDAssignedToInvoice,DocumentStatus,Comments,DocumentLines`,
     );
     if (String(order?.DocumentStatus) === "bost_Close") {
       return json({ error: "Pedido já está fechado/faturado no ERP." }, 409);
@@ -248,10 +248,22 @@ Deno.serve(async (req) => {
     const openLines = lines.filter((l) => Number(l?.RemainingOpenQuantity ?? l?.Quantity ?? 0) > 0);
     if (openLines.length === 0) return json({ error: "Pedido não possui linhas em aberto para faturar." }, 400);
 
+    // Datas: a nota deve herdar a data do documento e a competência (TaxDate) do
+    // pedido de venda — antes usávamos a data de hoje, o que jogava a competência
+    // para o mês seguinte quando a emissão ocorria depois do fechamento.
+    const dOnly = (v: unknown) => (v ? String(v).slice(0, 10) : null);
+    const today = new Date().toISOString().slice(0, 10);
+    const overrideDocDate = dOnly(body?.doc_date);
+    const overrideTaxDate = dOnly(body?.tax_date);
+    const docDate = overrideDocDate || dOnly(order.DocDate) || today;
+    const taxDate = overrideTaxDate || dOnly(order.TaxDate) || docDate;
+    const dueDate = dOnly(order.DocDueDate) || docDate;
+
     const invoicePayload: Record<string, unknown> = {
       CardCode: order.CardCode,
-      DocDate: new Date().toISOString().slice(0, 10),
-      DocDueDate: new Date().toISOString().slice(0, 10),
+      DocDate: docDate,
+      TaxDate: taxDate,
+      DocDueDate: dueDate,
       DocCurrency: order.DocCurrency || expense.currency || "BRL",
       Comments: `NFS-e gerada pelo ERP Flow — Pedido ${order.DocNum}`,
       DocumentLines: openLines.map((l) => ({
@@ -264,6 +276,7 @@ Deno.serve(async (req) => {
     if (order.BPL_IDAssignedToInvoice) {
       invoicePayload.BPL_IDAssignedToInvoice = Number(order.BPL_IDAssignedToInvoice);
     }
+
 
     const res = await fetch(`${baseUrl}/Invoices`, {
       method: "POST",
