@@ -3134,7 +3134,7 @@ export default function ApprovalsPage() {
     useLazyList(filtered, {
       initial: 30,
       step: 10,
-      resetDeps: [search, typeFilter, originFilter, minValue, maxValue, createdFrom, createdTo, dueFrom, dueTo, showAll, viewMode, onlyOverdue, sortKey, sortDir, ccFilter.join(","), projectFilter.join(",")],
+      resetDeps: [search, typeFilter, originFilter, minValue, maxValue, createdFrom, createdTo, dueFrom, dueTo, showAll, viewMode, onlyOverdue, sortKey, sortDir, ccFilter.join(","), projectFilter.join(","), approverFilter.join(","), requesterFilter.join(",")],
     });
 
   const handleApprovalAction = async (
@@ -3923,6 +3923,8 @@ export default function ApprovalsPage() {
                     !!dueTo,
                     ccFilter.length > 0,
                     projectFilter.length > 0,
+                    approverFilter.length > 0,
+                    requesterFilter.length > 0,
                   ].filter(Boolean).length;
                   return active > 0 ? (
                     <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">{active}</Badge>
@@ -3933,7 +3935,7 @@ export default function ApprovalsPage() {
             <PopoverContent align="end" className="w-[calc(100vw-2rem)] sm:w-[420px] max-w-[420px] p-4 space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-foreground">Filtros</p>
-                {(typeFilter !== "all" || originFilter !== "all" || minValue || maxValue || createdFrom || createdTo || dueFrom || dueTo || ccFilter.length > 0 || projectFilter.length > 0) && (
+                {(typeFilter !== "all" || originFilter !== "all" || minValue || maxValue || createdFrom || createdTo || dueFrom || dueTo || ccFilter.length > 0 || projectFilter.length > 0 || approverFilter.length > 0 || requesterFilter.length > 0) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -3948,6 +3950,8 @@ export default function ApprovalsPage() {
                       setDueTo("");
                       setCcFilter([]);
                       setProjectFilter([]);
+                      setApproverFilter([]);
+                      setRequesterFilter([]);
                     }}
                     className="h-7 text-xs text-muted-foreground hover:text-foreground gap-1"
                   >
@@ -3982,6 +3986,30 @@ export default function ApprovalsPage() {
                     ariaLabel="Filtrar por projeto"
                   />
                 </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Aprovador atual</Label>
+                  <FilterMultiSelect
+                    options={approverOptions}
+                    selected={approverFilter}
+                    onChange={setApproverFilter}
+                    placeholder="Todos os aprovadores"
+                    searchPlaceholder="Buscar aprovador..."
+                    emptyText="Sem aprovadores nos documentos"
+                    ariaLabel="Filtrar por aprovador atual"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Solicitante</Label>
+                  <FilterMultiSelect
+                    options={requesterOptions}
+                    selected={requesterFilter}
+                    onChange={setRequesterFilter}
+                    placeholder="Todos os solicitantes"
+                    searchPlaceholder="Buscar solicitante..."
+                    emptyText="Sem solicitantes nos documentos"
+                    ariaLabel="Filtrar por solicitante"
+                  />
+                </div>
               </div>
 
 
@@ -3992,6 +4020,7 @@ export default function ApprovalsPage() {
                     ["all", "Todos"],
                     ["purchase", "Compra"],
                     ["sales", "Venda"],
+                    ["other", "Outro"],
                   ] as const).map(([key, lbl]) => (
                     <button
                       key={key}
