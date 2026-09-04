@@ -201,6 +201,55 @@ function docProjects(doc: ApprovalDoc): string[] {
   return Array.from(set);
 }
 
+/** Natureza do documento: compra, venda ou outro tipo (pagamento, etc.). */
+type DocKind = "purchase" | "sales" | "other";
+
+function docKind(doc: { docTypeName?: string; __explain?: { docType?: string } }): DocKind {
+  const internal = doc.__explain?.docType;
+  if (internal === "sales") return "sales";
+  const name = (doc.docTypeName || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (/venda|saida|entrega|cliente|faturamento/.test(name)) return "sales";
+  if (/compra|entrada|fornecedor|mercadoria|despesa|reembolso/.test(name)) return "purchase";
+  if (internal === "purchase") return "purchase";
+  return "other";
+}
+
+const DOC_KIND_LABEL: Record<DocKind, string> = {
+  purchase: "Compra",
+  sales: "Venda",
+  other: "Outro",
+};
+
+const DOC_KIND_CLASS: Record<DocKind, string> = {
+  purchase: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30",
+  sales: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
+  other: "bg-muted text-muted-foreground border-border",
+};
+
+/** Como chamar o parceiro de negócio conforme a natureza do documento. */
+function partnerLabel(doc: { docTypeName?: string; __explain?: { docType?: string } }): string {
+  const kind = docKind(doc);
+  if (kind === "sales") return "Cliente";
+  if (kind === "purchase") return "Fornecedor";
+  return "Parceiro";
+}
+
+/** Selo visual que deixa explícita a natureza do documento. */
+function DocKindBadge({ doc, className = "" }: { doc: { docTypeName?: string; __explain?: { docType?: string } }; className?: string }) {
+  const kind = docKind(doc);
+  return (
+    <span
+      className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full border ${DOC_KIND_CLASS[kind]} ${className}`}
+    >
+      {DOC_KIND_LABEL[kind]}
+    </span>
+  );
+}
+
+
 type ApprovalTransferUserOption = SapSearchOption & { email?: string };
 
 function sortUserOptions(options: ApprovalTransferUserOption[]): ApprovalTransferUserOption[] {
@@ -306,9 +355,12 @@ function ApprovalCard({
             />
           )}
           <div className="min-w-0">
-            <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-              {doc.docTypeName}
-            </span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <DocKindBadge doc={doc} />
+              <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                {doc.docTypeName}
+              </span>
+            </div>
             <h3 className="text-foreground font-semibold mt-2 font-mono">{docNumberLabel(doc)}</h3>
           </div>
         </div>
@@ -989,6 +1041,7 @@ function ApprovalDetailModal({
                 <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
                   {doc.docTypeName}
                 </span>
+                <DocKindBadge doc={doc} />
                 <span className="font-mono text-sm sm:text-base">{docNumberLabel(doc)}</span>
                 <span className="ml-auto text-right">
                   {doc.viewerSegmented && (
@@ -1084,7 +1137,7 @@ function ApprovalDetailModal({
             {/* Basic Info */}
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
-                <p className="text-xs text-muted-foreground">Fornecedor</p>
+                <p className="text-xs text-muted-foreground">{partnerLabel(doc)}</p>
                 <p className="text-foreground font-medium">{doc.cardName}</p>
                 <p className="text-xs text-muted-foreground font-mono">{doc.cardCode}</p>
               </div>
@@ -1680,7 +1733,7 @@ function ApprovalDetailModal({
                     <span className="font-mono">{docNumberLabel(doc)}</span>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Fornecedor</span>
+                    <span className="text-muted-foreground">{partnerLabel(doc as never)}</span>
                     <span className="font-medium text-right break-words">{doc?.cardName || "—"}</span>
                   </div>
                   <div className="flex justify-between gap-3">
@@ -2018,7 +2071,7 @@ function MyRequestDetailModal({ doc, open, onClose }: { doc: MyRequestDoc | null
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3 flex-wrap">
-            <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span>
+            <DocKindBadge doc={doc} /><span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span>
             <span className="font-mono">{docNumberLabel(doc)}</span>
             <StatusBadge status={doc.status} label={doc.statusLabel} />
             <span className="text-2xl font-bold font-mono ml-auto">{formatCurrency(doc.docTotal, doc.currency)}</span>
@@ -2028,7 +2081,7 @@ function MyRequestDetailModal({ doc, open, onClose }: { doc: MyRequestDoc | null
         <div className="space-y-4 mt-2">
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
-              <p className="text-xs text-muted-foreground">Fornecedor</p>
+              <p className="text-xs text-muted-foreground">{partnerLabel(doc)}</p>
               <p className="text-foreground font-medium">{doc.cardName}</p>
               <p className="text-xs text-muted-foreground font-mono">{doc.cardCode}</p>
             </div>
@@ -2123,11 +2176,11 @@ function MyRequestDetailModal({ doc, open, onClose }: { doc: MyRequestDoc | null
 function MyRequestsTab() {
   const { requests, isLoading, error, refresh } = useMyRequests();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | MyRequestDoc["status"]>("all");
+  const [statusFilter, setStatusFilter] = useState<MyRequestDoc["status"][]>([]);
   const [selected, setSelected] = useState<MyRequestDoc | null>(null);
 
   const filtered = requests.filter((r) => {
-    if (statusFilter !== "all" && r.status !== statusFilter) return false;
+    if (statusFilter.length > 0 && !statusFilter.includes(r.status)) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     const has = (v: unknown) => String(v ?? "").toLowerCase().includes(q);
@@ -2142,14 +2195,18 @@ function MyRequestsTab() {
 
 
   const { visibleItems: visibleRequests, hasMore: reqHasMore, loadMore: reqLoadMore, sentinelRef: reqSentinelRef, total: reqTotal, initial: reqInitial } =
-    useLazyList(filtered, { initial: 30, step: 10, resetDeps: [search, statusFilter] });
+    useLazyList(filtered, { initial: 30, step: 10, resetDeps: [search, statusFilter.join(",")] });
 
   const counts = {
     all: requests.length,
     pending: requests.filter((r) => r.status === "pending").length,
     approved: requests.filter((r) => r.status === "approved").length,
     rejected: requests.filter((r) => r.status === "rejected").length,
+    generated: requests.filter((r) => r.status === "generated").length,
   };
+
+  const toggleStatus = (key: MyRequestDoc["status"]) =>
+    setStatusFilter((prev) => (prev.includes(key) ? prev.filter((s) => s !== key) : [...prev, key]));
 
   return (
     <div className="space-y-4">
@@ -2157,24 +2214,35 @@ function MyRequestsTab() {
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar por nº ou código interno, fornecedor, tipo..."
+            placeholder="Buscar por nº ou código interno, parceiro, tipo..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 bg-muted/30 border-border"
           />
         </div>
         <div className="flex items-center gap-1 flex-wrap">
+          <button
+            onClick={() => setStatusFilter([])}
+            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+              statusFilter.length === 0
+                ? "bg-primary/10 text-primary border-primary/30"
+                : "border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {`Todos (${counts.all})`}
+          </button>
           {([
-            ["all", `Todos (${counts.all})`],
             ["pending", `Pendentes (${counts.pending})`],
             ["approved", `Aprovados (${counts.approved})`],
             ["rejected", `Rejeitados (${counts.rejected})`],
+            ["generated", `Gerados (${counts.generated})`],
           ] as const).map(([key, lbl]) => (
             <button
               key={key}
-              onClick={() => setStatusFilter(key as typeof statusFilter)}
+              aria-pressed={statusFilter.includes(key)}
+              onClick={() => toggleStatus(key)}
               className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                statusFilter === key
+                statusFilter.includes(key)
                   ? "bg-primary/10 text-primary border-primary/30"
                   : "border-border text-muted-foreground hover:text-foreground"
               }`}
@@ -2202,7 +2270,7 @@ function MyRequestsTab() {
           <FileText className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
           <p className="text-foreground font-medium">Nenhum pedido encontrado</p>
           <p className="text-sm text-muted-foreground mt-1">
-            {search || statusFilter !== "all" ? "Ajuste os filtros para ver mais resultados." : "Você ainda não criou nenhum pedido."}
+            {search || statusFilter.length > 0 ? "Ajuste os filtros para ver mais resultados." : "Você ainda não criou nenhum pedido."}
           </p>
         </div>
       ) : (
@@ -2213,7 +2281,7 @@ function MyRequestsTab() {
                 <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Tipo</th>
                 <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Nº Doc</th>
                 <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Valor</th>
-                <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Fornecedor</th>
+                <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">{"Parceiro"}</th>
                 <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Modelo</th>
                 <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
                 <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Criado</th>
@@ -2224,7 +2292,7 @@ function MyRequestsTab() {
               {visibleRequests.map((doc) => (
                 <tr key={doc.approvalRequestId} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                   <td className="py-3 px-3">
-                    <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap"><DocKindBadge doc={doc} /><span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span></div>
                   </td>
                   <td className="py-3 px-3 font-mono text-xs text-foreground font-semibold">{docNumberLabel(doc)}</td>
                   <td className="py-3 px-3 text-right font-mono text-foreground font-medium">{formatCurrency(doc.docTotal, doc.currency)}</td>
@@ -2333,7 +2401,9 @@ export default function ApprovalsPage() {
   const [isDelegating, setIsDelegating] = useState(false);
   const [isReprocessingApproval, setIsReprocessingApproval] = useState(false);
   const [isRevokingDelegation, setIsRevokingDelegation] = useState(false);
-  const [typeFilter, setTypeFilter] = useState<"all" | "purchase" | "sales">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | DocKind>("all");
+  const [approverFilter, setApproverFilter] = useState<string[]>([]);
+  const [requesterFilter, setRequesterFilter] = useState<string[]>([]);
   const [originFilter, setOriginFilter] = useState<"all" | "erp" | "internal">("all");
   const [minValue, setMinValue] = useState<string>("");
   const [maxValue, setMaxValue] = useState<string>("");
@@ -2889,14 +2959,8 @@ export default function ApprovalsPage() {
   const dueToD = dueTo ? new Date(dueTo).getTime() + 86399999 : null;
 
   const preFiltered = userApprovals.filter((a) => {
-    // Type filter (purchase vs sales) — based on docTypeName keyword
-    if (typeFilter !== "all") {
-      const name = (a.docTypeName || "").toLowerCase();
-      const isPurchase = name.includes("compra");
-      const isSales = name.includes("venda");
-      if (typeFilter === "purchase" && !isPurchase) return false;
-      if (typeFilter === "sales" && !isSales) return false;
-    }
+    // Natureza do documento (compra / venda / outro)
+    if (typeFilter !== "all" && docKind(a as never) !== typeFilter) return false;
 
     // Value range
     if (minV !== null && !Number.isNaN(minV) && a.docTotal < minV) return false;
@@ -2927,6 +2991,11 @@ export default function ApprovalsPage() {
       const projs = docProjects(a);
       if (!projs.some((p) => projectFilter.includes(p))) return false;
     }
+
+    // Aprovador atual / Solicitante (multi-seleção sobre as opções em tela)
+    if (approverFilter.length > 0 && !approverFilter.includes((a.currentApprover || "").trim())) return false;
+    if (requesterFilter.length > 0 && !requesterFilter.includes((a.requester || "").trim())) return false;
+
 
     if (originFilter !== "all") {
       const internal = isInternalDoc(a as never);
@@ -2965,6 +3034,28 @@ export default function ApprovalsPage() {
     for (const a of userApprovals) for (const p of docProjects(a)) set.add(p);
     return Array.from(set)
       .sort((a, b) => a.localeCompare(b))
+      .map((v) => ({ value: v, label: v }));
+  }, [userApprovals]);
+
+  const approverOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of userApprovals) {
+      const v = (a.currentApprover || "").trim();
+      if (v) set.add(v);
+    }
+    return Array.from(set)
+      .sort((a, b) => a.localeCompare(b, "pt-BR"))
+      .map((v) => ({ value: v, label: v }));
+  }, [userApprovals]);
+
+  const requesterOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of userApprovals) {
+      const v = (a.requester || "").trim();
+      if (v) set.add(v);
+    }
+    return Array.from(set)
+      .sort((a, b) => a.localeCompare(b, "pt-BR"))
       .map((v) => ({ value: v, label: v }));
   }, [userApprovals]);
 
@@ -3043,7 +3134,7 @@ export default function ApprovalsPage() {
     useLazyList(filtered, {
       initial: 30,
       step: 10,
-      resetDeps: [search, typeFilter, originFilter, minValue, maxValue, createdFrom, createdTo, dueFrom, dueTo, showAll, viewMode, onlyOverdue, sortKey, sortDir, ccFilter.join(","), projectFilter.join(",")],
+      resetDeps: [search, typeFilter, originFilter, minValue, maxValue, createdFrom, createdTo, dueFrom, dueTo, showAll, viewMode, onlyOverdue, sortKey, sortDir, ccFilter.join(","), projectFilter.join(","), approverFilter.join(","), requesterFilter.join(",")],
     });
 
   const handleApprovalAction = async (
@@ -3637,6 +3728,7 @@ export default function ApprovalsPage() {
                   { label: "Usuário", value: session?.userName || "—" },
                 ],
                 columns: [
+                  { header: "Natureza", cell: (a: typeof filtered[number]) => DOC_KIND_LABEL[docKind(a as never)] },
                   { header: "Tipo", cell: (a: typeof filtered[number]) => a.docTypeName || "—" },
                   { header: "Doc #", cell: (a: typeof filtered[number]) => docNumberLabel(a as never) },
                   { header: "Parceiro", cell: (a: typeof filtered[number]) => a.cardName },
@@ -3831,6 +3923,8 @@ export default function ApprovalsPage() {
                     !!dueTo,
                     ccFilter.length > 0,
                     projectFilter.length > 0,
+                    approverFilter.length > 0,
+                    requesterFilter.length > 0,
                   ].filter(Boolean).length;
                   return active > 0 ? (
                     <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">{active}</Badge>
@@ -3841,7 +3935,7 @@ export default function ApprovalsPage() {
             <PopoverContent align="end" className="w-[calc(100vw-2rem)] sm:w-[420px] max-w-[420px] p-4 space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-foreground">Filtros</p>
-                {(typeFilter !== "all" || originFilter !== "all" || minValue || maxValue || createdFrom || createdTo || dueFrom || dueTo || ccFilter.length > 0 || projectFilter.length > 0) && (
+                {(typeFilter !== "all" || originFilter !== "all" || minValue || maxValue || createdFrom || createdTo || dueFrom || dueTo || ccFilter.length > 0 || projectFilter.length > 0 || approverFilter.length > 0 || requesterFilter.length > 0) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -3856,6 +3950,8 @@ export default function ApprovalsPage() {
                       setDueTo("");
                       setCcFilter([]);
                       setProjectFilter([]);
+                      setApproverFilter([]);
+                      setRequesterFilter([]);
                     }}
                     className="h-7 text-xs text-muted-foreground hover:text-foreground gap-1"
                   >
@@ -3890,6 +3986,30 @@ export default function ApprovalsPage() {
                     ariaLabel="Filtrar por projeto"
                   />
                 </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Aprovador atual</Label>
+                  <FilterMultiSelect
+                    options={approverOptions}
+                    selected={approverFilter}
+                    onChange={setApproverFilter}
+                    placeholder="Todos os aprovadores"
+                    searchPlaceholder="Buscar aprovador..."
+                    emptyText="Sem aprovadores nos documentos"
+                    ariaLabel="Filtrar por aprovador atual"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Solicitante</Label>
+                  <FilterMultiSelect
+                    options={requesterOptions}
+                    selected={requesterFilter}
+                    onChange={setRequesterFilter}
+                    placeholder="Todos os solicitantes"
+                    searchPlaceholder="Buscar solicitante..."
+                    emptyText="Sem solicitantes nos documentos"
+                    ariaLabel="Filtrar por solicitante"
+                  />
+                </div>
               </div>
 
 
@@ -3900,6 +4020,7 @@ export default function ApprovalsPage() {
                     ["all", "Todos"],
                     ["purchase", "Compra"],
                     ["sales", "Venda"],
+                    ["other", "Outro"],
                   ] as const).map(([key, lbl]) => (
                     <button
                       key={key}
@@ -4120,7 +4241,7 @@ export default function ApprovalsPage() {
                     ["docTypeName", "Tipo", "left"],
                     ["docNum", "Nº Doc", "left"],
                     ["docTotal", "Valor", "right"],
-                    ["cardName", "Fornecedor", "left"],
+                    ["cardName", "Parceiro", "left"],
                     ["currentApprover", "Aprovador", "left"],
                     ["requester", "Solicitante", "left"],
                     ["dueDate", "Vencimento", "left"],
@@ -4196,7 +4317,7 @@ export default function ApprovalsPage() {
                         </td>
                       )}
                       <td className="py-3 px-3">
-                        <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap"><DocKindBadge doc={doc} /><span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span></div>
                       </td>
                       <td className="py-3 px-3 font-mono text-xs text-foreground font-semibold">{docNumberLabel(doc)}</td>
                       <td className="py-3 px-3 text-right font-mono text-foreground font-medium">{formatCurrency(doc.docTotal, doc.currency)}</td>
