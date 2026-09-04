@@ -2401,7 +2401,9 @@ export default function ApprovalsPage() {
   const [isDelegating, setIsDelegating] = useState(false);
   const [isReprocessingApproval, setIsReprocessingApproval] = useState(false);
   const [isRevokingDelegation, setIsRevokingDelegation] = useState(false);
-  const [typeFilter, setTypeFilter] = useState<"all" | "purchase" | "sales">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | DocKind>("all");
+  const [approverFilter, setApproverFilter] = useState<string[]>([]);
+  const [requesterFilter, setRequesterFilter] = useState<string[]>([]);
   const [originFilter, setOriginFilter] = useState<"all" | "erp" | "internal">("all");
   const [minValue, setMinValue] = useState<string>("");
   const [maxValue, setMaxValue] = useState<string>("");
