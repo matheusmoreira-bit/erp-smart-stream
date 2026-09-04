@@ -305,39 +305,74 @@ export async function findPoForNf(
     }
   }
 
+  // Regra de data: a NF só pode pertencer a um PC criado A PARTIR da emissão da
+  // nota. Quando há vários candidatos equivalentes (mesmo fornecedor, mesmo
+  // valor), preferimos sempre o PC posterior à emissão — o mais próximo dela.
+  const emissao = (opts.dataEmissao || "").slice(0, 10) || null;
+  const dateOf = (c: PoCandidate) => (c.docDate || "").slice(0, 10);
+  const isAfterEmission = (c: PoCandidate) => !!emissao && !!dateOf(c) && dateOf(c) >= emissao;
+
+  /** Escolhe o melhor candidato respeitando a regra de data. */
+  function pickByDate(list: PoCandidate[]): { pick: PoCandidate; beforeEmission: boolean } | null {
+    if (!list.length) return null;
+    if (emissao) {
+      const after = list
+        .filter(isAfterEmission)
+        .sort((a, b) => dateOf(a).localeCompare(dateOf(b)) || Number(a.docEntry) - Number(b.docEntry));
+      if (after.length) {
+        const open = after.find((c) => c.status === "bost_Open");
+        return { pick: open ?? after[0], beforeEmission: false };
+      }
+    }
+    const rest = [...list].sort((a, b) => dateOf(b).localeCompare(dateOf(a)) || Number(b.docEntry) - Number(a.docEntry));
+    const open = rest.find((c) => c.status === "bost_Open");
+    return { pick: open ?? rest[0], beforeEmission: !!emissao };
+  }
+
+  const dateNote = (beforeEmission: boolean) =>
+    beforeEmission ? " — atenção: PC anterior à emissão da NF" : emissao ? " — PC posterior à emissão da NF" : "";
 
   // 3.2) Valor exato
   const exact = uniq.filter((c) => Math.abs(c.docTotal - valor) < 0.01);
-  if (exact.length) {
-    const pick = exact.find((c) => c.status === "bost_Open") || exact[0];
+  const exactPick = pickByDate(exact);
+  if (exactPick) {
+    const { pick, beforeEmission } = exactPick;
     return {
       ...pick,
-      confidence: "alta",
-      reason: `valor exato (${pick.docTotal.toFixed(2)})${pick.status === "bost_Close" ? " — PC já fechado no SAP" : ""}`,
+      confidence: beforeEmission ? "media" : "alta",
+      reason: `valor exato (${pick.docTotal.toFixed(2)})${pick.status === "bost_Close" ? " — PC já fechado no SAP" : ""}${dateNote(beforeEmission)}`,
     };
   }
 
   // 3.3) Tolerância de 1% (arredondamentos/frete)
-  const near = uniq
-    .map((c) => ({ c, diff: Math.abs(c.docTotal - valor) }))
-    .filter(({ c, diff }) => c.docTotal > 0 && diff / c.docTotal <= 0.01)
-    .sort((a, b) => a.diff - b.diff);
-  if (near.length) {
-    const pick = near[0].c;
-    return { ...pick, confidence: "media", reason: `valor aproximado (PC ${pick.docTotal.toFixed(2)} × NF ${valor.toFixed(2)})` };
+  const near = uniq.filter((c) => c.docTotal > 0 && Math.abs(c.docTotal - valor) / c.docTotal <= 0.01);
+  const nearPick = pickByDate(near);
+  if (nearPick) {
+    const { pick, beforeEmission } = nearPick;
+    return {
+      ...pick,
+      confidence: beforeEmission ? "baixa" : "media",
+      reason: `valor aproximado (PC ${pick.docTotal.toFixed(2)} × NF ${valor.toFixed(2)})${dateNote(beforeEmission)}`,
+    };
   }
 
-  // 3.4) Fallback: PC aberto mais recente do fornecedor (cardinalidade 1 PC : N NF).
+  // 3.4) Fallback: PC compatível do fornecedor (cardinalidade 1 PC : N NF).
   // Nunca vinculamos quando a NF é maior que o PC (+5% de tolerância): isso indica
   // que a nota pertence a outro pedido do mesmo fornecedor.
   if (opts.allowLooseFallback) {
-    const candidates = uniq.filter((c) => c.docTotal > 0 && valor <= c.docTotal * 1.05);
-    const openPick = candidates.find((c) => !c.isDraft && c.status === "bost_Open") || candidates[0];
-    if (openPick) {
-      return { ...openPick, confidence: "baixa", reason: "fornecedor compatível, PC mais recente (valores divergentes)" };
+    const loose = uniq.filter((c) => c.docTotal > 0 && valor <= c.docTotal * 1.05);
+    const loosePick = pickByDate(loose);
+    if (loosePick) {
+      const { pick, beforeEmission } = loosePick;
+      return {
+        ...pick,
+        confidence: "baixa",
+        reason: `fornecedor compatível, valores divergentes${dateNote(beforeEmission)}`,
+      };
     }
   }
 
 
   return null;
 }
+

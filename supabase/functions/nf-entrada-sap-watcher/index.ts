@@ -290,9 +290,12 @@ Deno.serve(async (req) => {
     let q = sb.from("nf_entrada_imports").select("*");
     q = manualId
       ? q.eq("id", manualId)
-      : q.in("status", ["awaiting_sap", "awaiting_invoice"])
+      // Varredura cobre TODOS os itens ainda não finalizados (não só os que
+      // estão aguardando SAP/NF), para não deixar registro sem verificação.
+      : q.not("status", "in", "(completed,cancelled)")
         .order("created_at", { ascending: true })
         .range(pageOffset, pageOffset + PAGE_SIZE - 1);
+
     const { data: rows, error } = await q;
     if (error) {
       await releaseWatcherLock(sb, "nf-entrada-sap-watcher", "error", error.message);

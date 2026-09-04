@@ -3,11 +3,11 @@
 // sem Pedido de Compra localizado no SAP. Para cada NF elegível invoca a
 // função `nf-entrada-rematch` (que consulta o Service Layer ao vivo).
 //
-// Elegível = status in ('awaiting_erpflow_approval','integration_error')
+// Elegível = qualquer status não finalizado (exceto completed/cancelled)
 //            AND sap_matched_po_doc_entry IS NULL
 //            AND sap_invoice_draft_id IS NULL
 //            AND sap_company_db IS NOT NULL
-//            AND created_at >= now() - interval '60 days'
+
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
@@ -31,16 +31,16 @@ Deno.serve(async (req) => {
   const stats = { candidates: 0, matched: 0, unmatched: 0, errors: 0 };
 
   try {
-    const cutoff = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
     const { data: rows, error } = await supabase
       .from("nf_entrada_imports")
       .select("id")
-      .in("status", ["pending_expense", "awaiting_erpflow_approval", "integration_error"])
+      .not("status", "in", "(completed,cancelled)")
       .is("sap_matched_po_doc_entry", null)
       .is("sap_invoice_draft_id", null)
       .not("sap_company_db", "is", null)
-      .gte("created_at", cutoff)
-      .limit(500);
+      .order("created_at", { ascending: false })
+      .limit(1000);
+
 
     if (error) throw error;
     stats.candidates = rows?.length ?? 0;
