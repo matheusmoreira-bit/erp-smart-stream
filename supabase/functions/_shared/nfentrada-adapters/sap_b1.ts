@@ -156,22 +156,49 @@ export const SapB1NfEntradaAdapter: NfEntradaErpAdapter = {
     const entry = Number(pedidoId);
     if (!Number.isFinite(entry)) return null;
 
-    // Leitura real no ERP: PurchaseInvoices cujas linhas referenciam o PC (BaseType 22).
-    const filter = `DocumentLines/any(l: l/BaseType eq 22 and l/BaseEntry eq ${entry})`;
-    const res = await sapGet(
-      ctx,
-      `/PurchaseInvoices?$select=DocEntry,DocNum,DocTotal,CANCELED&$filter=${encodeURIComponent(filter)}&$top=5`,
-    );
-    const hit = (res?.value || []).find((d: any) => d.CANCELED !== "tYES");
-    if (!hit) return null;
-    return {
-      id: String(hit.DocEntry),
-      numero: hit.DocNum != null ? String(hit.DocNum) : null,
+    const build = (docEntry: number, docNum: unknown, total: unknown): NFEntradaERP => ({
+      id: String(docEntry),
+      numero: docNum != null ? String(docNum) : null,
       tipo: "lancada",
       pedido_id: String(entry),
-      valor_total: hit.DocTotal != null ? Number(hit.DocTotal) : null,
-    };
+      valor_total: total != null ? Number(total) : null,
+    });
+
+    // 1) Cache local (alimentado pelo sync incremental) — barato e sem filtro OData complexo.
+    try {
+      const { data } = await ctx.supabase
+        .from("sap_nf_entrada_cache")
+        .select("doc_entry, doc_num, doc_total, cancelled")
+        .eq("company_db", ctx.company_db)
+        .eq("base_po_doc_entry", entry)
+        .limit(5);
+      const hit = (data || []).find((d: any) => d.cancelled !== "tYES" && d.cancelled !== "Y");
+      if (hit) return build(Number(hit.doc_entry), hit.doc_num, hit.doc_total);
+    } catch { /* cache indisponível: cai para o ERP */ }
+
+    // 2) Fallback no ERP: o Service Layer não aceita lambda `any()` sobre DocumentLines,
+    // então lemos as NFs recentes do fornecedor do PC e conferimos as linhas localmente.
+    let cardCode: string | null = null;
+    try {
+      const po = await sapGet(ctx, `/PurchaseOrders(${entry})?$select=CardCode`);
+      cardCode = po?.CardCode ?? null;
+    } catch { /* segue sem filtro de fornecedor */ }
+
+    const filter = cardCode ? `&$filter=${encodeURIComponent(`CardCode eq '${cardCode.replace(/'/g, "''")}'`)}` : "";
+    const res = await sapGet(
+      ctx,
+      `/PurchaseInvoices?$select=DocEntry,DocNum,DocTotal,Cancelled,DocumentLines${filter}&$orderby=DocEntry desc&$top=100`,
+    );
+    for (const inv of res?.value || []) {
+      if (inv.Cancelled === "tYES") continue;
+      const linked = (Array.isArray(inv.DocumentLines) ? inv.DocumentLines : []).some(
+        (l: any) => Number(l?.BaseType) === 22 && Number(l?.BaseEntry) === entry,
+      );
+      if (linked) return build(Number(inv.DocEntry), inv.DocNum, inv.DocTotal);
+    }
+    return null;
   },
+
 
   async provisionarEsbocoNFEntrada(ctx, payload: ProvisionarEsbocoPayload): Promise<ErpWriteResult> {
     const entry = Number(payload.pedido_id);
