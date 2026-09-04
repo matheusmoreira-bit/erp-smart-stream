@@ -150,13 +150,27 @@ Deno.serve(async (req) => {
     );
     if (!isSapSession) {
       if (!auth.email) return json({ error: "Sessão sem e-mail." }, 401);
-      const { data: allowed, error: accessError } = await supabase.rpc(
-        "is_email_allowed_for_company",
-        { _email: auth.email, _company_db: companyDb },
-      );
-      if (accessError) return json({ error: "Falha ao validar acesso à empresa." }, 500);
-      if (allowed !== true) return json({ error: "Usuário sem acesso a esta empresa." }, 403);
+      // Regra única de acesso à empresa: admin entra em qualquer base;
+      // os demais dependem da allowlist da empresa.
+      let allowedAccess = false;
+      if (auth.id) {
+        const { data: isAdmin } = await supabase.rpc("has_role", {
+          _user_id: auth.id,
+          _role: "admin",
+        });
+        allowedAccess = isAdmin === true;
+      }
+      if (!allowedAccess) {
+        const { data: allowed, error: accessError } = await supabase.rpc(
+          "is_email_allowed_for_company",
+          { _email: auth.email, _company_db: companyDb },
+        );
+        if (accessError) return json({ error: "Falha ao validar acesso à empresa." }, 500);
+        allowedAccess = allowed === true;
+      }
+      if (!allowedAccess) return json({ error: "Usuário sem acesso a esta empresa." }, 403);
     }
+
 
     const config = await loadCredentials(supabase, companyDb);
     if (!config) return json({ error: "Credenciais MasterTax ausentes para esta empresa" }, 400);
