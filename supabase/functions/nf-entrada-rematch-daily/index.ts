@@ -3,11 +3,11 @@
 // sem Pedido de Compra localizado no SAP. Para cada NF elegível invoca a
 // função `nf-entrada-rematch` (que consulta o Service Layer ao vivo).
 //
-// Elegível = status in ('awaiting_erpflow_approval','integration_error')
+// Elegível = qualquer status não finalizado (exceto completed/cancelled)
 //            AND sap_matched_po_doc_entry IS NULL
 //            AND sap_invoice_draft_id IS NULL
 //            AND sap_company_db IS NOT NULL
-//            AND created_at >= now() - interval '60 days'
+
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
