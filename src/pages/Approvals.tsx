@@ -355,9 +355,12 @@ function ApprovalCard({
             />
           )}
           <div className="min-w-0">
-            <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-              {doc.docTypeName}
-            </span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <DocKindBadge doc={doc} />
+              <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                {doc.docTypeName}
+              </span>
+            </div>
             <h3 className="text-foreground font-semibold mt-2 font-mono">{docNumberLabel(doc)}</h3>
           </div>
         </div>
