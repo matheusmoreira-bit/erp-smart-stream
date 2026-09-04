@@ -2270,7 +2270,7 @@ function MyRequestsTab() {
           <FileText className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
           <p className="text-foreground font-medium">Nenhum pedido encontrado</p>
           <p className="text-sm text-muted-foreground mt-1">
-            {search || statusFilter !== "all" ? "Ajuste os filtros para ver mais resultados." : "Você ainda não criou nenhum pedido."}
+            {search || statusFilter.length > 0 ? "Ajuste os filtros para ver mais resultados." : "Você ainda não criou nenhum pedido."}
           </p>
         </div>
       ) : (
