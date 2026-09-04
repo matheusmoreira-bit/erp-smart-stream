@@ -31,16 +31,16 @@ Deno.serve(async (req) => {
   const stats = { candidates: 0, matched: 0, unmatched: 0, errors: 0 };
 
   try {
-    const cutoff = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
     const { data: rows, error } = await supabase
       .from("nf_entrada_imports")
       .select("id")
-      .in("status", ["pending_expense", "awaiting_erpflow_approval", "integration_error"])
+      .not("status", "in", "(completed,cancelled)")
       .is("sap_matched_po_doc_entry", null)
       .is("sap_invoice_draft_id", null)
       .not("sap_company_db", "is", null)
-      .gte("created_at", cutoff)
-      .limit(500);
+      .order("created_at", { ascending: false })
+      .limit(1000);
+
 
     if (error) throw error;
     stats.candidates = rows?.length ?? 0;
