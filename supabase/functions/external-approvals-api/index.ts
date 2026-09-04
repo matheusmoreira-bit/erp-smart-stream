@@ -704,10 +704,10 @@ Deno.serve(async (req) => {
     }
 
     const cfg = await getCompanyConfig(companyDB);
-    const session = await sapLogin(cfg);
 
-    try {
+    return await withSession(companyDB, cfg, async (session) => {
       const userKey = userCode ? await getUserKey(session, userCode) : null;
+
 
       if (op === "list") {
         const { documents, hasMore } = await listApprovals(session, userKey, userCode, {
