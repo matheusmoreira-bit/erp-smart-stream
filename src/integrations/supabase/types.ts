@@ -124,6 +124,376 @@ export type Database = {
           },
         ]
       }
+      accounts_payable_bank_accounts: {
+        Row: {
+          account_digit: string
+          account_number: string
+          active: boolean
+          agency: string
+          agency_account_digit: string
+          agency_digit: string
+          agreement_code: string
+          bank_code: string
+          company_db: string
+          created_at: string
+          created_by: string | null
+          id: string
+          legal_name: string
+          next_file_sequence: number
+          sap_transfer_account: string
+          tax_id: string
+          updated_at: string
+        }
+        Insert: {
+          account_digit: string
+          account_number: string
+          active?: boolean
+          agency: string
+          agency_account_digit?: string
+          agency_digit?: string
+          agreement_code: string
+          bank_code?: string
+          company_db: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          legal_name: string
+          next_file_sequence?: number
+          sap_transfer_account: string
+          tax_id: string
+          updated_at?: string
+        }
+        Update: {
+          account_digit?: string
+          account_number?: string
+          active?: boolean
+          agency?: string
+          agency_account_digit?: string
+          agency_digit?: string
+          agreement_code?: string
+          bank_code?: string
+          company_db?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          legal_name?: string
+          next_file_sequence?: number
+          sap_transfer_account?: string
+          tax_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      accounts_payable_batch_items: {
+        Row: {
+          amount: number
+          bank_protocol: string | null
+          barcode: string | null
+          batch_id: string
+          company_db: string
+          company_reference: string
+          created_at: string
+          currency: string
+          due_date: string
+          id: string
+          idempotency_key: string
+          installment_id: number
+          paid_amount: number | null
+          paid_date: string | null
+          payment_metadata: Json
+          payment_method: string
+          return_occurrences: string[]
+          sap_doc_entry: number
+          sap_doc_num: number | null
+          sap_error: string | null
+          sap_payment_doc_entry: number | null
+          sap_payment_doc_num: number | null
+          scheduled_date: string
+          status: string
+          supplier_code: string
+          supplier_name: string
+          supplier_tax_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          bank_protocol?: string | null
+          barcode?: string | null
+          batch_id: string
+          company_db: string
+          company_reference: string
+          created_at?: string
+          currency?: string
+          due_date: string
+          id?: string
+          idempotency_key: string
+          installment_id?: number
+          paid_amount?: number | null
+          paid_date?: string | null
+          payment_metadata?: Json
+          payment_method?: string
+          return_occurrences?: string[]
+          sap_doc_entry: number
+          sap_doc_num?: number | null
+          sap_error?: string | null
+          sap_payment_doc_entry?: number | null
+          sap_payment_doc_num?: number | null
+          scheduled_date: string
+          status?: string
+          supplier_code: string
+          supplier_name: string
+          supplier_tax_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          bank_protocol?: string | null
+          barcode?: string | null
+          batch_id?: string
+          company_db?: string
+          company_reference?: string
+          created_at?: string
+          currency?: string
+          due_date?: string
+          id?: string
+          idempotency_key?: string
+          installment_id?: number
+          paid_amount?: number | null
+          paid_date?: string | null
+          payment_metadata?: Json
+          payment_method?: string
+          return_occurrences?: string[]
+          sap_doc_entry?: number
+          sap_doc_num?: number | null
+          sap_error?: string | null
+          sap_payment_doc_entry?: number | null
+          sap_payment_doc_num?: number | null
+          scheduled_date?: string
+          status?: string
+          supplier_code?: string
+          supplier_name?: string
+          supplier_tax_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_payable_batch_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "accounts_payable_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      accounts_payable_batches: {
+        Row: {
+          bank_account_id: string
+          company_db: string
+          content: string | null
+          content_sha256: string
+          created_at: string
+          error_message: string | null
+          file_sequence: number
+          filename: string
+          generated_at: string
+          generated_by: string | null
+          id: string
+          payment_date: string
+          processed_at: string | null
+          return_filename: string | null
+          return_imported_at: string | null
+          return_imported_by: string | null
+          return_sha256: string | null
+          status: string
+          title_count: number
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          bank_account_id: string
+          company_db: string
+          content?: string | null
+          content_sha256: string
+          created_at?: string
+          error_message?: string | null
+          file_sequence: number
+          filename: string
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          payment_date: string
+          processed_at?: string | null
+          return_filename?: string | null
+          return_imported_at?: string | null
+          return_imported_by?: string | null
+          return_sha256?: string | null
+          status?: string
+          title_count?: number
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          bank_account_id?: string
+          company_db?: string
+          content?: string | null
+          content_sha256?: string
+          created_at?: string
+          error_message?: string | null
+          file_sequence?: number
+          filename?: string
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          payment_date?: string
+          processed_at?: string | null
+          return_filename?: string | null
+          return_imported_at?: string | null
+          return_imported_by?: string | null
+          return_sha256?: string | null
+          status?: string
+          title_count?: number
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_payable_batches_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts_payable_bank_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      accounts_payable_return_events: {
+        Row: {
+          batch_id: string | null
+          company_db: string
+          created_at: string
+          id: string
+          item_id: string | null
+          line_number: number
+          occurrence_codes: string[]
+          payload: Json
+          processing_status: string
+          return_sha256: string
+          segment: string
+        }
+        Insert: {
+          batch_id?: string | null
+          company_db: string
+          created_at?: string
+          id?: string
+          item_id?: string | null
+          line_number: number
+          occurrence_codes?: string[]
+          payload?: Json
+          processing_status?: string
+          return_sha256: string
+          segment: string
+        }
+        Update: {
+          batch_id?: string | null
+          company_db?: string
+          created_at?: string
+          id?: string
+          item_id?: string | null
+          line_number?: number
+          occurrence_codes?: string[]
+          payload?: Json
+          processing_status?: string
+          return_sha256?: string
+          segment?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_payable_return_events_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "accounts_payable_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounts_payable_return_events_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "accounts_payable_batch_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      accounts_payable_supplier_payment_profiles: {
+        Row: {
+          account_digit: string | null
+          account_number: string | null
+          account_type: string | null
+          bank_code: string | null
+          beneficiary_name: string
+          beneficiary_tax_id: string
+          branch: string | null
+          branch_digit: string | null
+          company_db: string
+          created_at: string
+          created_by: string | null
+          id: string
+          metadata: Json
+          payment_method: string
+          pix_key: string | null
+          pix_key_type: string | null
+          supplier_code: string
+          supplier_name: string | null
+          supplier_tax_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          account_digit?: string | null
+          account_number?: string | null
+          account_type?: string | null
+          bank_code?: string | null
+          beneficiary_name: string
+          beneficiary_tax_id: string
+          branch?: string | null
+          branch_digit?: string | null
+          company_db: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          metadata?: Json
+          payment_method: string
+          pix_key?: string | null
+          pix_key_type?: string | null
+          supplier_code: string
+          supplier_name?: string | null
+          supplier_tax_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          account_digit?: string | null
+          account_number?: string | null
+          account_type?: string | null
+          bank_code?: string | null
+          beneficiary_name?: string
+          beneficiary_tax_id?: string
+          branch?: string | null
+          branch_digit?: string | null
+          company_db?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          metadata?: Json
+          payment_method?: string
+          pix_key?: string | null
+          pix_key_type?: string | null
+          supplier_code?: string
+          supplier_name?: string | null
+          supplier_tax_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       advance_payment_attachments: {
         Row: {
           advance_id: string
@@ -3540,6 +3910,10 @@ export type Database = {
           nfse_split_mode: string
           origin: string
           original_approver: string | null
+          payment_boleto_barcode: string | null
+          payment_boleto_digitable_line: string | null
+          payment_metadata: Json
+          payment_method: string | null
           payment_terms_code: string | null
           payment_terms_name: string | null
           project: string | null
@@ -3586,6 +3960,10 @@ export type Database = {
           nfse_split_mode?: string
           origin?: string
           original_approver?: string | null
+          payment_boleto_barcode?: string | null
+          payment_boleto_digitable_line?: string | null
+          payment_metadata?: Json
+          payment_method?: string | null
           payment_terms_code?: string | null
           payment_terms_name?: string | null
           project?: string | null
@@ -3632,6 +4010,10 @@ export type Database = {
           nfse_split_mode?: string
           origin?: string
           original_approver?: string | null
+          payment_boleto_barcode?: string | null
+          payment_boleto_digitable_line?: string | null
+          payment_metadata?: Json
+          payment_method?: string | null
           payment_terms_code?: string | null
           payment_terms_name?: string | null
           project?: string | null
@@ -8370,6 +8752,45 @@ export type Database = {
           reason: string
         }[]
       }
+      claim_accounts_payable_item: {
+        Args: { p_item_id: string }
+        Returns: {
+          amount: number
+          bank_protocol: string | null
+          barcode: string | null
+          batch_id: string
+          company_db: string
+          company_reference: string
+          created_at: string
+          currency: string
+          due_date: string
+          id: string
+          idempotency_key: string
+          installment_id: number
+          paid_amount: number | null
+          paid_date: string | null
+          payment_metadata: Json
+          payment_method: string
+          return_occurrences: string[]
+          sap_doc_entry: number
+          sap_doc_num: number | null
+          sap_error: string | null
+          sap_payment_doc_entry: number | null
+          sap_payment_doc_num: number | null
+          scheduled_date: string
+          status: string
+          supplier_code: string
+          supplier_name: string
+          supplier_tax_id: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "accounts_payable_batch_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       close_access_review_campaign: {
         Args: { _campaign_id: string }
         Returns: undefined
@@ -8838,6 +9259,13 @@ export type Database = {
         Returns: undefined
       }
       require_idp_binding_enabled: { Args: never; Returns: boolean }
+      reserve_accounts_payable_file_sequence: {
+        Args: { p_company_db: string }
+        Returns: {
+          bank_account_id: string
+          file_sequence: number
+        }[]
+      }
       sap_user_has_module: {
         Args: { _module_key: string; _sap_username: string }
         Returns: boolean
