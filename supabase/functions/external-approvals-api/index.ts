@@ -201,6 +201,47 @@ async function sapLogout(s: SapSession) {
   }).catch(() => {});
 }
 
+// Cache de sessão SAP por empresa (a sessão do Service Layer dura 30 min).
+// Evita pagar o custo do login a cada request do painel externo.
+const SESSION_TTL_MS = 20 * 60 * 1000;
+const sessionCache = new Map<string, { session: SapSession; expiresAt: number }>();
+
+async function getSession(
+  companyDB: string,
+  cfg: { baseUrl: string; username: string; password: string; sapCompanyDb: string },
+  forceNew = false,
+): Promise<SapSession> {
+  const cached = sessionCache.get(companyDB);
+  if (!forceNew && cached && cached.expiresAt > Date.now()) return cached.session;
+  if (cached) sessionCache.delete(companyDB);
+  const session = await sapLogin(cfg);
+  sessionCache.set(companyDB, { session, expiresAt: Date.now() + SESSION_TTL_MS });
+  return session;
+}
+
+function isSessionError(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return /\(401\)|\(403\)|Invalid session|session.*expired/i.test(msg);
+}
+
+/** Executa a operação reaproveitando a sessão em cache; refaz login se ela expirou. */
+async function withSession<T>(
+  companyDB: string,
+  cfg: { baseUrl: string; username: string; password: string; sapCompanyDb: string },
+  fn: (s: SapSession) => Promise<T>,
+): Promise<T> {
+  const session = await getSession(companyDB, cfg);
+  try {
+    return await fn(session);
+  } catch (e) {
+    if (!isSessionError(e)) throw e;
+    sessionCache.delete(companyDB);
+    const fresh = await getSession(companyDB, cfg, true);
+    return await fn(fresh);
+  }
+}
+
+
 async function sapGet(s: SapSession, endpoint: string): Promise<unknown> {
   const cookies = `B1SESSION=${s.sessionId}${s.routeId ? `; ROUTEID=${s.routeId}` : ""}`;
   const resp = await fetch(`${s.baseUrl}/${endpoint}`, {
