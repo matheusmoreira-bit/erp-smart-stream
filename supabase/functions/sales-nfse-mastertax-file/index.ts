@@ -124,6 +124,7 @@ Deno.serve(async (req) => {
 
   try {
     const auth = await requireUserOrSapSession(req) as {
+      id?: string;
       email: string | null;
       source?: "sap_session";
       companyDB?: string;
