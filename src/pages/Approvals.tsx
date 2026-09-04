@@ -201,6 +201,55 @@ function docProjects(doc: ApprovalDoc): string[] {
   return Array.from(set);
 }
 
+/** Natureza do documento: compra, venda ou outro tipo (pagamento, etc.). */
+type DocKind = "purchase" | "sales" | "other";
+
+function docKind(doc: { docTypeName?: string; __explain?: { docType?: string } }): DocKind {
+  const internal = doc.__explain?.docType;
+  if (internal === "sales") return "sales";
+  const name = (doc.docTypeName || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (/venda|saida|entrega|cliente|faturamento/.test(name)) return "sales";
+  if (/compra|entrada|fornecedor|mercadoria|despesa|reembolso/.test(name)) return "purchase";
+  if (internal === "purchase") return "purchase";
+  return "other";
+}
+
+const DOC_KIND_LABEL: Record<DocKind, string> = {
+  purchase: "Compra",
+  sales: "Venda",
+  other: "Outro",
+};
+
+const DOC_KIND_CLASS: Record<DocKind, string> = {
+  purchase: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30",
+  sales: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
+  other: "bg-muted text-muted-foreground border-border",
+};
+
+/** Como chamar o parceiro de negócio conforme a natureza do documento. */
+function partnerLabel(doc: { docTypeName?: string; __explain?: { docType?: string } }): string {
+  const kind = docKind(doc);
+  if (kind === "sales") return "Cliente";
+  if (kind === "purchase") return "Fornecedor";
+  return "Parceiro";
+}
+
+/** Selo visual que deixa explícita a natureza do documento. */
+function DocKindBadge({ doc, className = "" }: { doc: { docTypeName?: string; __explain?: { docType?: string } }; className?: string }) {
+  const kind = docKind(doc);
+  return (
+    <span
+      className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full border ${DOC_KIND_CLASS[kind]} ${className}`}
+    >
+      {DOC_KIND_LABEL[kind]}
+    </span>
+  );
+}
+
+
 type ApprovalTransferUserOption = SapSearchOption & { email?: string };
 
 function sortUserOptions(options: ApprovalTransferUserOption[]): ApprovalTransferUserOption[] {
