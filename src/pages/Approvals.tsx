@@ -2176,11 +2176,11 @@ function MyRequestDetailModal({ doc, open, onClose }: { doc: MyRequestDoc | null
 function MyRequestsTab() {
   const { requests, isLoading, error, refresh } = useMyRequests();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | MyRequestDoc["status"]>("all");
+  const [statusFilter, setStatusFilter] = useState<MyRequestDoc["status"][]>([]);
   const [selected, setSelected] = useState<MyRequestDoc | null>(null);
 
   const filtered = requests.filter((r) => {
-    if (statusFilter !== "all" && r.status !== statusFilter) return false;
+    if (statusFilter.length > 0 && !statusFilter.includes(r.status)) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     const has = (v: unknown) => String(v ?? "").toLowerCase().includes(q);
