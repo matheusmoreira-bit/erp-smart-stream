@@ -2195,14 +2195,18 @@ function MyRequestsTab() {
 
 
   const { visibleItems: visibleRequests, hasMore: reqHasMore, loadMore: reqLoadMore, sentinelRef: reqSentinelRef, total: reqTotal, initial: reqInitial } =
-    useLazyList(filtered, { initial: 30, step: 10, resetDeps: [search, statusFilter] });
+    useLazyList(filtered, { initial: 30, step: 10, resetDeps: [search, statusFilter.join(",")] });
 
   const counts = {
     all: requests.length,
     pending: requests.filter((r) => r.status === "pending").length,
     approved: requests.filter((r) => r.status === "approved").length,
     rejected: requests.filter((r) => r.status === "rejected").length,
+    generated: requests.filter((r) => r.status === "generated").length,
   };
+
+  const toggleStatus = (key: MyRequestDoc["status"]) =>
+    setStatusFilter((prev) => (prev.includes(key) ? prev.filter((s) => s !== key) : [...prev, key]));
 
   return (
     <div className="space-y-4">
@@ -2210,24 +2214,35 @@ function MyRequestsTab() {
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar por nº ou código interno, fornecedor, tipo..."
+            placeholder="Buscar por nº ou código interno, parceiro, tipo..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 bg-muted/30 border-border"
           />
         </div>
         <div className="flex items-center gap-1 flex-wrap">
+          <button
+            onClick={() => setStatusFilter([])}
+            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+              statusFilter.length === 0
+                ? "bg-primary/10 text-primary border-primary/30"
+                : "border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {`Todos (${counts.all})`}
+          </button>
           {([
-            ["all", `Todos (${counts.all})`],
             ["pending", `Pendentes (${counts.pending})`],
             ["approved", `Aprovados (${counts.approved})`],
             ["rejected", `Rejeitados (${counts.rejected})`],
+            ["generated", `Gerados (${counts.generated})`],
           ] as const).map(([key, lbl]) => (
             <button
               key={key}
-              onClick={() => setStatusFilter(key as typeof statusFilter)}
+              aria-pressed={statusFilter.includes(key)}
+              onClick={() => toggleStatus(key)}
               className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                statusFilter === key
+                statusFilter.includes(key)
                   ? "bg-primary/10 text-primary border-primary/30"
                   : "border-border text-muted-foreground hover:text-foreground"
               }`}
