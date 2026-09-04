@@ -770,9 +770,8 @@ Deno.serve(async (req) => {
         step,
         decision: op,
       });
-    } finally {
-      await sapLogout(session);
-    }
+    });
+
   } catch (e) {
     console.error("external-approvals-api error:", e);
     return json(500, { error: e instanceof Error ? e.message : "Erro interno" });
