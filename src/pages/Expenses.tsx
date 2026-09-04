@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useModuleAccess } from "@/hooks/usePermissions";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
 import { useMyCapabilities } from "@/hooks/useMyCapabilities";
+import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
 import { useDirectorateScope } from "@/hooks/useDirectorateScope";
 import { identityMatches } from "@/lib/permission-group-utils";
 
@@ -118,6 +119,7 @@ import {
   type ExpenseStatus,
 } from "@/hooks/useExpenses";
 import { CreateExpenseModal, type ExpenseDraftHydration } from "@/components/CreateExpenseModal";
+import { UberExpenseModal } from "@/components/UberExpenseModal";
 import { EditExpenseModal } from "@/components/EditExpenseModal";
 import { DraftsPopover } from "@/components/DraftsPopover";
 import { useDocumentDrafts } from "@/hooks/useDocumentDrafts";
@@ -1248,6 +1250,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   }, [expenses]);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [showUberExpense, setShowUberExpense] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<ExpenseDraftHydration | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
   const [nfseByOrder, setNfseByOrder] = useState<Map<string, SalesNfseEmissionInfo>>(new Map());
@@ -1290,7 +1293,14 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   // Admin vê tudo por padrão; demais usuários só veem o que criaram ou aprovam.
   // Padrão do filtro "Ver todos" é uma opção DO GRUPO (view_all_default_on).
   const { has: hasCapability } = useMyCapabilities();
+  const { groups: myPermissionGroups, isPrivileged: isPermissionPrivileged } = useMyPermissionGroups();
   const showAllDefault = hasCapability("view_all_default_on");
+  const canCreateUberExpense = !isSales && (
+    isAdmin ||
+    isPermissionPrivileged ||
+    hasCapability("uber_expense_create") ||
+    myPermissionGroups.some((group) => /facilities|facility|admin|administrativo/i.test(group))
+  );
   const [showAll, setShowAll] = usePersistedState<boolean>(filterKey("showAll"), showAllDefault);
   useEffect(() => { if (!isAdmin) setShowAll(false); }, [isAdmin, setShowAll]);
 
@@ -2458,6 +2468,16 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 </>
               );
             })()}
+            {canCreateUberExpense && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowUberExpense(true)}
+                className="gap-1.5 w-full sm:w-auto justify-center"
+              >
+                <Plus className="w-4 h-4" aria-hidden="true" /> <span className="truncate">Despesa Uber</span>
+              </Button>
+            )}
             <Button
               size="sm"
               onClick={() => setShowCreate(true)}
@@ -3071,6 +3091,13 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         onDraftSaved={() => { void refreshDrafts(); }}
       />
 
+      <UberExpenseModal
+        open={showUberExpense}
+        onClose={() => setShowUberExpense(false)}
+        onCreate={handleCreate}
+        sapSession={session}
+        onCreated={() => { void refresh(); void refreshDrafts(); }}
+      />
 
       <RelationsMap
         open={!!relationsMapExpense}

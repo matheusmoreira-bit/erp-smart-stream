@@ -58,12 +58,17 @@ function LocalAuthGate({ children }: { children: React.ReactNode }) {
       if (current) await supabase.auth.signOut();
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       if (!cancelled) {
-        setError(signInError ? "Falha ao iniciar a sessão técnica local." : null);
+        setError(
+          signInError
+            ? `Falha ao iniciar a sessão técnica local: ${signInError.message}`
+            : null,
+        );
         setChecking(false);
       }
-    })().catch(() => {
+    })().catch((cause) => {
       if (!cancelled) {
-        setError("Falha ao conectar ao serviço de autenticação local.");
+        const detail = cause instanceof Error ? cause.message : String(cause);
+        setError(`Falha ao conectar ao serviço de autenticação local: ${detail}`);
         setChecking(false);
       }
     });

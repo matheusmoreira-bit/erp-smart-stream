@@ -6,13 +6,13 @@ Passo a passo para rodar o projeto na sua máquina, entender as variáveis de am
 
 ## 1. Pré-requisitos
 
-| Ferramenta | Versão mínima | Observação |
-|---|---|---|
-| **Node.js** | 20.x LTS | Necessário mesmo usando Bun (algumas ferramentas compilam via Node). |
-| **Bun** | 1.1+ | Gerenciador de pacotes e runner padrão do projeto (`bun.lock` versionado). |
-| **Git** | 2.40+ | Clone e histórico. |
-| **Docker Desktop** *(opcional)* | 24+ | Só necessário se for rodar `supabase start` local. Não é obrigatório — o projeto usa **Lovable Cloud** por padrão. |
-| **Editor** | VS Code recomendado | Extensões sugeridas: ESLint, Tailwind CSS IntelliSense, Deno (para Edge Functions). |
+| Ferramenta                      | Versão mínima       | Observação                                                                                                         |
+| ------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Node.js**                     | 20.x LTS            | Necessário mesmo usando Bun (algumas ferramentas compilam via Node).                                               |
+| **Bun**                         | 1.1+                | Gerenciador de pacotes e runner padrão do projeto (`bun.lock` versionado).                                         |
+| **Git**                         | 2.40+               | Clone e histórico.                                                                                                 |
+| **Docker Desktop** _(opcional)_ | 24+                 | Só necessário se for rodar `supabase start` local. Não é obrigatório — o projeto usa **Lovable Cloud** por padrão. |
+| **Editor**                      | VS Code recomendado | Extensões sugeridas: ESLint, Tailwind CSS IntelliSense, Deno (para Edge Functions).                                |
 
 Verifique:
 
@@ -67,16 +67,16 @@ Para inspecionar/adicionar segredos, use os canais oficiais:
 
 Segredos comuns esperados pelo projeto (referência rápida — a lista canônica está em `docs/api-edge-functions.md`):
 
-| Segredo | Onde é usado |
-|---|---|
-| `LOVABLE_API_KEY` | Todas as functions que chamam Lovable AI Gateway (`ai-assistant`, `report-ai-chat`, `supplier-ai-extract`, `audit-console-analyze-doc`, `process-expense-doc`). |
-| `PAGCORP_CLIENT_ID` / `PAGCORP_CLIENT_SECRET` / `PAGCORP_AES_KEY` | `pagcorp-*` |
-| `OMIE_APP_KEY` / `OMIE_APP_SECRET` (por empresa em `system_credentials`) | `omie-proxy` |
-| `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | `send-smtp-email`, `process-email-queue` |
-| `WHATSAPP_TOKEN` / `WHATSAPP_PHONE_ID` | `whatsapp-*` |
-| `GDRIVE_SERVICE_ACCOUNT_JSON` | `backup-to-gdrive` |
-| `JUMPCLOUD_API_KEY` | `jumpcloud-proxy`, `idp-mapping` |
-| `MASTERTAX_*` | `mastertax-pull`, `mastertax-test` |
+| Segredo                                                                  | Onde é usado                                                                                                                                                    |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LOVABLE_API_KEY`                                                        | Todas as functions que chamam Lovable AI Gateway (`ai-assistant`, `report-ai-chat`, `supplier-ai-extract`, `audit-console-analyze-doc`, `process-expense-doc`). |
+| `PAGCORP_CLIENT_ID` / `PAGCORP_CLIENT_SECRET` / `PAGCORP_AES_KEY`        | `pagcorp-*`                                                                                                                                                     |
+| `OMIE_APP_KEY` / `OMIE_APP_SECRET` (por empresa em `system_credentials`) | `omie-proxy`                                                                                                                                                    |
+| `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM`                    | `send-smtp-email`, `process-email-queue`                                                                                                                        |
+| `WHATSAPP_TOKEN` / `WHATSAPP_PHONE_ID`                                   | `whatsapp-*`                                                                                                                                                    |
+| `GDRIVE_SERVICE_ACCOUNT_JSON`                                            | `backup-to-gdrive`                                                                                                                                              |
+| `JUMPCLOUD_API_KEY`                                                      | `jumpcloud-proxy`, `idp-mapping`                                                                                                                                |
+| `MASTERTAX_*`                                                            | `mastertax-pull`, `mastertax-test`                                                                                                                              |
 
 > Rodando localmente contra Lovable Cloud gerenciado, você **não precisa** configurar esses segredos na sua máquina — as functions rodam remotamente. O que sua máquina faz é apenas servir o SPA em `localhost:8080` e chamar as functions já deployadas.
 
@@ -86,17 +86,36 @@ Segredos comuns esperados pelo projeto (referência rápida — a lista canônic
 
 Todos os scripts abaixo estão em `package.json`.
 
-| Comando | O que faz |
-|---|---|
-| `bun run dev` | Sobe o Vite em `http://localhost:8080` com HMR. Modo padrão de desenvolvimento. |
-| `bun run build` | Build de produção em `dist/`. |
-| `bun run build:dev` | Build com modo `development` (source maps, sem minify agressivo). |
-| `bun run preview` | Serve o `dist/` para conferir o bundle final localmente. |
-| `bun run lint` | Roda ESLint em todo o projeto. |
-| `bun run test` | Roda a suíte Vitest uma vez (unit tests em `src/**/*.test.ts`). |
-| `bun run test:watch` | Vitest em modo watch. |
+| Comando                   | O que faz                                                                                                   |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `npm run local:configure` | Gera o `.env.local` para usar o backend Docker e entrar sem Google como `matheus.moreira@anagaming.com.br`. |
+| `bun run dev`             | Sobe o Vite em `http://localhost:8080` com HMR. Modo padrão de desenvolvimento.                             |
+| `bun run build`           | Build de produção em `dist/`.                                                                               |
+| `bun run build:dev`       | Build com modo `development` (source maps, sem minify agressivo).                                           |
+| `bun run preview`         | Serve o `dist/` para conferir o bundle final localmente.                                                    |
+| `bun run lint`            | Roda ESLint em todo o projeto.                                                                              |
+| `bun run test`            | Roda a suíte Vitest uma vez (unit tests em `src/**/*.test.ts`).                                             |
+| `bun run test:watch`      | Vitest em modo watch.                                                                                       |
 
-### 4.1 Rodar Edge Functions localmente (opcional)
+### 4.1 Autenticação no ambiente Docker local
+
+O ambiente local não usa o OAuth real do Google. A aplicação abre uma sessão
+válida no Supabase local com o usuário
+`matheus.moreira@anagaming.com.br`, preservando RLS, grupos e permissões.
+
+Depois de criar ou restaurar `docker/.env.local`, execute:
+
+```bash
+npm run local:configure
+```
+
+O comando gera o arquivo raiz `.env.development.local`, que é ignorado pelo Git
+e tem precedência sobre o `.env` versionado apenas no modo de desenvolvimento.
+Assim, `git pull` não mistura a configuração local com a de produção e um build
+de produção não recebe credenciais locais. Reinicie o Vite depois de gerar o
+arquivo.
+
+### 4.2 Rodar Edge Functions localmente (opcional)
 
 Só necessário para depurar uma function específica sem redeploy. Requer Docker + Supabase CLI.
 
@@ -156,9 +175,12 @@ Checklist visual:
 Com o dev server rodando e logado, no DevTools → Console:
 
 ```js
-const { data, error } = await window.__supabase.functions.invoke("cnpj-lookup", {
-  body: { cnpj: "00000000000191" }
-});
+const { data, error } = await window.__supabase.functions.invoke(
+  "cnpj-lookup",
+  {
+    body: { cnpj: "00000000000191" },
+  },
+);
 console.log(data, error);
 ```
 
@@ -177,16 +199,16 @@ Se os quatro passos passam sem erro no console, o setup está saudável.
 
 ## 6. Troubleshooting
 
-| Sintoma | Causa provável | Correção |
-|---|---|---|
-| Tela branca após `bun run build && bun run preview` | `.env` ausente ou `VITE_SUPABASE_*` vazias no momento do build. | Restaure o `.env` (não hardcode) e refaça o build. |
-| `bun install` falha em `@lovable.dev/cloud-auth-js` | Registry privado sem token de build. | Verifique **Workspace Settings → Build Secrets** (`NPM_TOKEN`). |
-| 401 em todas as chamadas `/rest/v1/…` | Anon key desatualizada. | Reconecte Lovable Cloud; o `.env` será reescrito. |
-| Console mostra `permission denied for table X` | Usuário sem role `admin` mas tentando abrir tela restrita. | Peça a um admin para adicionar linha em `user_roles` com `role='admin'`. |
-| Edge Function retorna 500 com `LOVABLE_API_KEY missing` | Segredo não configurado no backend. | Peça ao agente (ou admin do projeto) para criar via `add_secret`/`ai_gateway--create`. |
-| `bun run test` falha em `report-pdf.test.ts` com erro de fonte | Cache do vitest. | `rm -rf node_modules/.vite node_modules/.vitest && bun install`. |
-| HMR não atualiza | Porta 8080 ocupada. | `lsof -i :8080` e mate o processo; ou rode `PORT=5173 bun run dev`. |
-| `supabase functions serve` erra `Docker not running` | Docker Desktop parado. | Ligue o Docker. Etapa é opcional — pule se não for depurar function local. |
+| Sintoma                                                        | Causa provável                                                  | Correção                                                                               |
+| -------------------------------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Tela branca após `bun run build && bun run preview`            | `.env` ausente ou `VITE_SUPABASE_*` vazias no momento do build. | Restaure o `.env` (não hardcode) e refaça o build.                                     |
+| `bun install` falha em `@lovable.dev/cloud-auth-js`            | Registry privado sem token de build.                            | Verifique **Workspace Settings → Build Secrets** (`NPM_TOKEN`).                        |
+| 401 em todas as chamadas `/rest/v1/…`                          | Anon key desatualizada.                                         | Reconecte Lovable Cloud; o `.env` será reescrito.                                      |
+| Console mostra `permission denied for table X`                 | Usuário sem role `admin` mas tentando abrir tela restrita.      | Peça a um admin para adicionar linha em `user_roles` com `role='admin'`.               |
+| Edge Function retorna 500 com `LOVABLE_API_KEY missing`        | Segredo não configurado no backend.                             | Peça ao agente (ou admin do projeto) para criar via `add_secret`/`ai_gateway--create`. |
+| `bun run test` falha em `report-pdf.test.ts` com erro de fonte | Cache do vitest.                                                | `rm -rf node_modules/.vite node_modules/.vitest && bun install`.                       |
+| HMR não atualiza                                               | Porta 8080 ocupada.                                             | `lsof -i :8080` e mate o processo; ou rode `PORT=5173 bun run dev`.                    |
+| `supabase functions serve` erra `Docker not running`           | Docker Desktop parado.                                          | Ligue o Docker. Etapa é opcional — pule se não for depurar function local.             |
 
 ---
 

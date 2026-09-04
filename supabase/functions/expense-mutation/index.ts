@@ -162,7 +162,32 @@ function withoutUnsupportedExpenseColumns(updates: Record<string, unknown>) {
   // A revisão continua registrada no log/auditoria, sem bloquear a edição.
   delete safeUpdates.revision_number;
   delete safeUpdates.revision_note;
+  delete safeUpdates.payment_method;
+  delete safeUpdates.payment_boleto_barcode;
+  delete safeUpdates.payment_boleto_digitable_line;
+  delete safeUpdates.payment_metadata;
   return safeUpdates;
+}
+
+function isMissingColumnError(error: unknown): boolean {
+  const text = error instanceof Error ? error.message : String((error as any)?.message || error || "");
+  return /schema cache|Could not find the .* column|column .* does not exist/i.test(text);
+}
+
+function digits(value: unknown): string {
+  return String(value ?? "").replace(/\D+/g, "");
+}
+
+function boletoBarcodeFrom(value: unknown): string {
+  const clean = digits(value);
+  if (clean.length === 44) return clean;
+  if (clean.length === 47) {
+    return `${clean.slice(0, 4)}${clean.slice(32, 33)}${clean.slice(33, 47)}${clean.slice(4, 9)}${clean.slice(10, 20)}${clean.slice(21, 31)}`;
+  }
+  if (clean.length === 48) {
+    return `${clean.slice(0, 11)}${clean.slice(12, 23)}${clean.slice(24, 35)}${clean.slice(36, 47)}`;
+  }
+  return clean;
 }
 
 async function updateExpenseWithItems(
@@ -452,7 +477,8 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   const dueDate = input.due_date ? String(input.due_date).trim() : "";
   if (!dueDate) return json(400, { error: "Data de vencimento é obrigatória" });
   const docType = String(input.doc_type || "purchase").toLowerCase();
-  if (docType !== "sales" && Number(input.attachment_count || 0) < 1) {
+  const isUberExpense = origin === "uber";
+  if (!isUberExpense && docType !== "sales" && Number(input.attachment_count || 0) < 1) {
     return json(400, { error: "Anexo obrigatório: documentos devem ser criados com ao menos 1 anexo." });
   }
   const itemValidationError = await validateActiveSapItems(admin, companyDb, items, docType, { liveSap: false });
@@ -624,6 +650,26 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
       const s = name == null ? "" : String(name).trim();
       return s.length > 0 && s.length <= 255 ? s : null;
     })(),
+    payment_method: (() => {
+      const method = String((input as { payment_method?: unknown }).payment_method || "").toLowerCase();
+      return ["boleto", "pix", "ted", "unknown"].includes(method) ? method : null;
+    })(),
+    payment_boleto_barcode: (() => {
+      const value = boletoBarcodeFrom(
+        (input as { payment_boleto_barcode?: unknown }).payment_boleto_barcode ||
+        (input as { payment_boleto_digitable_line?: unknown }).payment_boleto_digitable_line ||
+        "",
+      );
+      return value.length === 44 ? value : null;
+    })(),
+    payment_boleto_digitable_line: (() => {
+      const value = digits((input as { payment_boleto_digitable_line?: unknown }).payment_boleto_digitable_line);
+      return value.length >= 44 ? value.slice(0, 80) : null;
+    })(),
+    payment_metadata: (() => {
+      const metadata = (input as { payment_metadata?: unknown }).payment_metadata;
+      return metadata && typeof metadata === "object" && !Array.isArray(metadata) ? metadata : {};
+    })(),
     rateio_type: input.rateio_type || null,
     nfse_split_mode:
       (input as { nfse_split_mode?: string }).nfse_split_mode === "per_brand" ? "per_brand" : "unified",
@@ -635,11 +681,20 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     current_level_order: autoApprovedByRule ? 0 : (resolvedLevel || 1),
   };
 
-  const { data: expense, error: expErr } = await admin
+  let { data: expense, error: expErr } = await admin
     .from("expenses")
     .insert(insertPayload as any)
     .select()
     .single();
+  if (expErr && isMissingColumnError(expErr)) {
+    const retry = await admin
+      .from("expenses")
+      .insert(withoutUnsupportedExpenseColumns(insertPayload) as any)
+      .select()
+      .single();
+    expense = retry.data;
+    expErr = retry.error;
+  }
   if (expErr) return json(500, { error: `Falha ao criar despesa: ${expErr.message}` });
 
   const expenseId = (expense as any).id as string;

@@ -24,6 +24,7 @@ import {
   ClipboardList,
   type LucideIcon,
   TrendingUp,
+  Landmark,
   LayoutGrid,
 } from "lucide-react";
 import { useSap } from "@/contexts/SapContext";
@@ -211,6 +212,15 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-emerald-500/20 to-emerald-500/5",
     moduleKey: "financial_review",
   },
+  accounts_payable: {
+    title: "Contas a Pagar",
+    description: "Gere remessas CNAB 240 do Sicoob e processe retornos para baixar títulos no SAP.",
+    icon: Landmark,
+    path: "/financeiro/contas-a-pagar",
+    color: "text-cyan-400",
+    bgGlow: "from-cyan-500/20 to-cyan-500/5",
+    moduleKey: "financial_review",
+  },
   advance_payments: {
     title: "Adiantamentos",
     description: "Crie pedidos de adiantamento a fornecedor com aprovação e integração automática no SAP.",
@@ -272,7 +282,7 @@ const moduleGroups: { title: string; keys: string[] }[] = (
     },
     {
       title: "Financeiro & Fiscal",
-      keys: ["advance_payments", "financial_review", "cashflow_forecast", "nf_entrada"],
+      keys: ["advance_payments", "accounts_payable", "financial_review", "cashflow_forecast", "nf_entrada"],
     },
     {
       title: "Análise",

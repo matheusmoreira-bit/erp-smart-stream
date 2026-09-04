@@ -79,6 +79,61 @@ export interface LoadCredsOpts {
   requireHana?: boolean;
 }
 
+function envKeyForCompany(prefix: string, companyDb: string): string {
+  return `${prefix}_${companyDb.replace(/[^A-Za-z0-9]/g, "_").toUpperCase()}`;
+}
+
+function getCompanyEnv(prefix: string, companyDb: string): string {
+  return (
+    Deno.env.get(envKeyForCompany(prefix, companyDb)) ||
+    Deno.env.get(prefix) ||
+    ""
+  ).trim();
+}
+
+function shouldUseLocalSapFallback(companyDb: string): boolean {
+  if (Deno.env.get("LOCAL_SAP_CREDENTIALS_FALLBACK") !== "true") return false;
+  const allowedCompanies = (Deno.env.get("LOCAL_SAP_COMPANY_DBS") || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return allowedCompanies.length === 0 || allowedCompanies.includes(companyDb);
+}
+
+function isDisabledSapCredential(kv: Record<string, string>): boolean {
+  const serviceUrl = (kv.service_layer_url || "").trim().toLowerCase();
+  const password = (kv.password || "").trim().toLowerCase();
+  return serviceUrl.includes("sap-disabled.local") || password === "standalone-disabled";
+}
+
+function loadLocalSapCredsFromEnv(companyDb: string, opts: LoadCredsOpts): Record<string, string> | null {
+  if (!shouldUseLocalSapFallback(companyDb)) return null;
+
+  const serviceLayerUrl =
+    getCompanyEnv("LOCAL_SAP_SERVICE_LAYER_URL", companyDb) ||
+    getCompanyEnv("SAP_DEFAULT_BASE_URL", companyDb);
+  const username =
+    getCompanyEnv("LOCAL_SAP_APIUSER_USERNAME", companyDb) ||
+    getCompanyEnv("SAP_FALLBACK_ADMIN_USERNAME", companyDb) ||
+    "Apiuser";
+  const password =
+    getCompanyEnv("LOCAL_SAP_APIUSER_PASSWORD", companyDb) ||
+    getCompanyEnv("SAP_FALLBACK_ADMIN_PASSWORD", companyDb);
+  const useHanaDb = getCompanyEnv("LOCAL_SAP_USE_HANA_DB", companyDb) || "false";
+
+  if (!serviceLayerUrl || !username || !password) return null;
+  if (opts.requireApiuser && username.trim().toLowerCase() !== "apiuser") return null;
+  if (opts.requireHana && useHanaDb === "false") return null;
+
+  return {
+    company_db: companyDb,
+    service_layer_url: serviceLayerUrl,
+    username,
+    password,
+    use_hana_db: useHanaDb,
+  };
+}
+
 export async function loadSapCreds(
   sb: Sb,
   companyDb: string,
@@ -94,7 +149,9 @@ export async function loadSapCreds(
   for (const r of (data || []) as Array<{ credential_key: string; credential_value: string }>) {
     kv[r.credential_key] = r.credential_value ?? "";
   }
-  if (!kv.service_layer_url || !kv.username || !kv.password) return null;
+  if (!kv.service_layer_url || !kv.username || !kv.password || isDisabledSapCredential(kv)) {
+    return loadLocalSapCredsFromEnv(companyDb, opts);
+  }
   if (opts.requireApiuser && (kv.username || "").trim().toLowerCase() !== "apiuser") return null;
   if (opts.requireHana && kv.use_hana_db === "false") return null;
   return kv;

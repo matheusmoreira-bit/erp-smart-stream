@@ -32,6 +32,7 @@ import RegistrationRequests from "./pages/RegistrationRequests.tsx";
 import Intercompany from "./pages/Intercompany.tsx";
 import FinancialReview from "./pages/FinancialReview.tsx";
 import CashflowForecast from "./pages/CashflowForecast.tsx";
+import AccountsPayable from "./pages/AccountsPayable.tsx";
 import AdvancePayments from "./pages/AdvancePayments.tsx";
 import NfEntrada from "./pages/NfEntrada.tsx";
 
@@ -214,6 +215,7 @@ const App = () => (
               <Route path="/financeiro/adiantamentos" element={protect("financial_review", <AdvancePayments />)} />
               <Route path="/financeiro/reconciliacao" element={protect("financial_review", <FinancialReview />)} />
               <Route path="/financeiro/previsao-caixa" element={protect("financial_review", <CashflowForecast />)} />
+              <Route path="/financeiro/contas-a-pagar" element={protect("financial_review", <AccountsPayable />)} />
               <Route path="/financeiro/nf-entrada" element={protect("nf_entrada", <NfEntrada />)} />
 
               {/* Notificações */}

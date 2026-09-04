@@ -9,6 +9,11 @@ interface CredentialMeta {
   company_db: string | null;
 }
 
+interface CredentialMutationResult {
+  ok: boolean;
+  error?: string;
+}
+
 export function useCredentials() {
   const [credentials, setCredentials] = useState<CredentialMeta[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -48,7 +53,7 @@ export function useCredentials() {
     }
   }, [credentialsFetch]);
 
-  const saveCredentials = useCallback(async (systemName: string, creds: { key: string; value: string }[], companyDb?: string) => {
+  const saveCredentials = useCallback(async (systemName: string, creds: { key: string; value: string }[], companyDb?: string): Promise<CredentialMutationResult> => {
     setIsLoading(true);
     setError(null);
     try {
@@ -66,16 +71,17 @@ export function useCredentials() {
       const { logAuditAction } = await import("@/hooks/useAuditLog");
       await logAuditAction({ action: "save_credentials", entity_type: "system_credentials", entity_id: systemName, details: { companyDb, keys: creds.map(c => c.key) } });
 
-      return true;
+      return { ok: true };
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro ao salvar credenciais");
-      return false;
+      const message = e instanceof Error ? e.message : "Erro ao salvar credenciais";
+      setError(message);
+      return { ok: false, error: message };
     } finally {
       setIsLoading(false);
     }
   }, [credentialsFetch, fetchCredentials]);
 
-  const deleteCredentials = useCallback(async (systemName: string, companyDb?: string) => {
+  const deleteCredentials = useCallback(async (systemName: string, companyDb?: string): Promise<CredentialMutationResult> => {
     setIsLoading(true);
     setError(null);
     try {
@@ -90,10 +96,11 @@ export function useCredentials() {
       const { logAuditAction } = await import("@/hooks/useAuditLog");
       await logAuditAction({ action: "delete_credentials", entity_type: "system_credentials", entity_id: systemName, details: { companyDb } });
 
-      return true;
+      return { ok: true };
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro ao remover credenciais");
-      return false;
+      const message = e instanceof Error ? e.message : "Erro ao remover credenciais";
+      setError(message);
+      return { ok: false, error: message };
     } finally {
       setIsLoading(false);
     }

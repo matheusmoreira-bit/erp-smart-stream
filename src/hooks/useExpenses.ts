@@ -150,7 +150,7 @@ export type ExpenseStatus =
   | "pagamento"
   | "finalizado";
 
-export type ExpenseOrigin = "manual" | "pagcorp";
+export type ExpenseOrigin = "manual" | "pagcorp" | "uber";
 
 export interface ExpenseItem {
   id?: string;
@@ -236,6 +236,10 @@ export interface CreateExpenseInput {
   due_date?: string;
   payment_terms_code?: string;
   payment_terms_name?: string;
+  payment_method?: "boleto" | "pix" | "ted" | "unknown";
+  payment_boleto_barcode?: string | null;
+  payment_boleto_digitable_line?: string | null;
+  payment_metadata?: Record<string, unknown> | null;
   rateio_type?: RateioType | null;
   /** Vendas: emitir NFS-e unificada ou uma nota por marca/projeto. */
   nfse_split_mode?: "unified" | "per_brand";
@@ -687,7 +691,8 @@ export function useExpenses(
       const totalAmount = input.items.reduce((sum, item) => sum + item.line_total, 0);
       const origin: ExpenseOrigin = input.origin || "manual";
       const effectiveDocType = input.doc_type || docType;
-      if (isAttachmentRequiredForDocument(effectiveDocType) && (!input.files || input.files.length === 0)) {
+      const isUberExpense = origin === "uber";
+      if (!isUberExpense && isAttachmentRequiredForDocument(effectiveDocType) && (!input.files || input.files.length === 0)) {
         throw new Error("Anexo obrigatório: documentos devem ser criados com ao menos 1 anexo.");
       }
 
@@ -899,6 +904,10 @@ export function useExpenses(
           due_date: input.due_date || null,
           payment_terms_code: input.payment_terms_code || null,
           payment_terms_name: input.payment_terms_name || null,
+          payment_method: input.payment_method || null,
+          payment_boleto_barcode: input.payment_boleto_barcode || null,
+          payment_boleto_digitable_line: input.payment_boleto_digitable_line || null,
+          payment_metadata: input.payment_metadata || null,
           rateio_type: input.rateio_type || null,
           nfse_split_mode: input.nfse_split_mode || "unified",
           sales_usage: input.sales_usage || null,

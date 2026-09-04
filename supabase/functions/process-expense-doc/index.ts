@@ -401,6 +401,10 @@ Analise os documentos enviados e extraia as seguintes informações em formato J
   "currency": "ISO 4217 do documento — 'BRL', 'USD', 'EUR', 'GBP', etc. Use o que efetivamente aparece no documento (símbolo $, R$, €, £, ou texto explícito).",
   "document_date": "YYYY-MM-DD (data de emissão do documento)",
   "due_date": "YYYY-MM-DD (data de vencimento explícita no documento; se não houver certeza, use null — NUNCA estime/calcule)",
+  "payment_method": "boleto | pix | ted | unknown",
+  "boleto_barcode": "Código de barras do boleto com exatamente 44 dígitos, apenas números. null se não for boleto ou se não aparecer.",
+  "boleto_digitable_line": "Linha digitável do boleto, apenas números, normalmente 47 ou 48 dígitos. null se não aparecer.",
+  "pix_key": "Chave PIX do fornecedor/beneficiário se aparecer no documento. null caso contrário.",
   "document_number": "Número do documento/NF/Invoice #",
   "items": [
     {
@@ -437,6 +441,9 @@ Regras IMPORTANTES:
 - Extraia o CLIENTE (destinatário) separadamente do FORNECEDOR (emitente).
 - "document_date" é a data de emissão da nota/documento.
 - "due_date" é a data de vencimento e só deve ser preenchida quando aparecer explicitamente no documento (boleto, "vencimento", "due date", "pagar até"). Se não houver certeza, devolva null. NUNCA calcule/estime prazos (ex.: document_date + 30 dias).
+- "payment_method": use "boleto" quando houver boleto ou linha digitável/código de barras; "pix" quando houver QR Code, copia-e-cola ou chave PIX; "ted" quando houver dados bancários para transferência sem boleto/PIX; "unknown" quando não houver dados suficientes.
+- Para boleto, extraia "boleto_barcode" somente quando o código de barras de 44 dígitos aparecer explicitamente. Se aparecer apenas a linha digitável, preencha "boleto_digitable_line" com os dígitos disponíveis e deixe "boleto_barcode" null.
+- Nunca invente linha digitável, código de barras ou chave PIX.
 - IMPORTANTE: Os campos supplier_email, supplier_phone1, supplier_phone2, supplier_address, supplier_country devem se referir SEMPRE ao EMISSOR (fornecedor), nunca ao destinatário/cliente.
 - Para supplier_address: extraia somente do bloco do EMITENTE.
 - supplier_address.zip: BR = apenas 8 dígitos; internacional = formato original (pode ser alfanumérico).

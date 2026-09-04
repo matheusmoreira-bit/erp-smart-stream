@@ -235,6 +235,12 @@ export function CreateExpenseModal({
   const [aiWarning, setAiWarning] = useState<string | null>(null);
   const [suggestedSupplierName, setSuggestedSupplierName] = useState<string | undefined>(undefined);
   const [aiSupplierData, setAiSupplierData] = useState<SupplierFormPrefill | null>(null);
+  const [paymentInstrument, setPaymentInstrument] = useState<{
+    method: "boleto" | "pix" | "ted" | "unknown";
+    boletoBarcode?: string | null;
+    boletoDigitableLine?: string | null;
+    pixKey?: string | null;
+  } | null>(null);
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [supplierRequestOpen, setSupplierRequestOpen] = useState(false);
   const [supplierDetailsOpen, setSupplierDetailsOpen] = useState(false);
@@ -1238,6 +1244,8 @@ export function CreateExpenseModal({
     if (doc.document_date) setDocDate(doc.document_date);
     if (doc.due_date) setDueDate(doc.due_date);
     if (doc.remarks) setRemarks(doc.remarks);
+    const detectedPaymentInstrument = docs.map((item) => paymentInstrumentOf(item)).find(Boolean);
+    setPaymentInstrument(detectedPaymentInstrument || null);
     const costCenterValue = (doc.cost_center_confidence ?? 0) > 0.95 ? (doc.cost_center_hint || "") : "";
     const projectValue = (doc.project_confidence ?? 0) > 0.95 ? (doc.project_hint || "") : "";
 
@@ -1306,6 +1314,36 @@ export function CreateExpenseModal({
   const isPaymentInstrument = (doc: any): boolean =>
     PAYMENT_KINDS.has(String(doc?.document_kind || "").toLowerCase());
 
+  const boletoBarcodeFrom = (value: unknown): string => {
+    const clean = String(value ?? "").replace(/\D+/g, "");
+    if (clean.length === 44) return clean;
+    if (clean.length === 47) {
+      return `${clean.slice(0, 4)}${clean.slice(32, 33)}${clean.slice(33, 47)}${clean.slice(4, 9)}${clean.slice(10, 20)}${clean.slice(21, 31)}`;
+    }
+    if (clean.length === 48) {
+      return `${clean.slice(0, 11)}${clean.slice(12, 23)}${clean.slice(24, 35)}${clean.slice(36, 47)}`;
+    }
+    return clean;
+  };
+
+  const paymentInstrumentOf = (doc: any): typeof paymentInstrument => {
+    const barcode = boletoBarcodeFrom(doc?.boleto_barcode || doc?.boleto_digitable_line || "");
+    const digitableLine = String(doc?.boleto_digitable_line || "").replace(/\D+/g, "");
+    const method = String(doc?.payment_method || "").toLowerCase();
+    if (barcode.length === 44 || digitableLine.length >= 44 || method === "boleto" || String(doc?.document_kind || "").toLowerCase() === "boleto") {
+      return {
+        method: "boleto",
+        boletoBarcode: barcode.length === 44 ? barcode : null,
+        boletoDigitableLine: digitableLine || null,
+      };
+    }
+    if (method === "pix" || doc?.pix_key) {
+      return { method: "pix", pixKey: doc?.pix_key || null };
+    }
+    if (method === "ted") return { method: "ted" };
+    return null;
+  };
+
   const docTotalOf = (doc: any): number => {
     const t = Number(doc?.total_amount);
     if (Number.isFinite(t) && t > 0) return t;
@@ -1322,6 +1360,16 @@ export function CreateExpenseModal({
     if (!base[0]?.due_date) {
       const companionDue = docs.find((d) => d.companion && d.extracted?.due_date)?.extracted?.due_date;
       if (companionDue) base[0] = { ...base[0], due_date: companionDue };
+    }
+    const instrument = docs.map((d) => paymentInstrumentOf(d.extracted)).find(Boolean);
+    if (instrument) {
+      base[0] = {
+        ...base[0],
+        payment_method: instrument.method,
+        boleto_barcode: instrument.boletoBarcode || base[0]?.boleto_barcode || null,
+        boleto_digitable_line: instrument.boletoDigitableLine || base[0]?.boleto_digitable_line || null,
+        pix_key: instrument.pixKey || base[0]?.pix_key || null,
+      };
     }
     return base;
   };
@@ -1353,6 +1401,7 @@ export function CreateExpenseModal({
     setAiConfidence(null);
     setAiWarning(null);
     setSupplierPicker(null);
+    setPaymentInstrument(null);
     // Limpa o histórico da fila anterior — o retry começa "do zero" e vai
     // reconstruir o queueHistory quando a IA voltar com novos grupos.
     setQueueHistory([]);
@@ -2371,6 +2420,10 @@ export function CreateExpenseModal({
         due_date: dueDate || undefined,
         payment_terms_code: !isSales ? paymentTerms?.code || undefined : undefined,
         payment_terms_name: !isSales ? paymentTerms?.name || undefined : undefined,
+        payment_method: !isSales ? paymentInstrument?.method : undefined,
+        payment_boleto_barcode: !isSales ? paymentInstrument?.boletoBarcode || undefined : undefined,
+        payment_boleto_digitable_line: !isSales ? paymentInstrument?.boletoDigitableLine || undefined : undefined,
+        payment_metadata: !isSales && paymentInstrument ? { pix_key: paymentInstrument.pixKey || null, source: "expense_document_ai" } : undefined,
         rateio_type: !isSales ? rateioType : undefined,
         nfse_split_mode: isSales ? nfseSplitMode : undefined,
         sales_usage: isSales ? salesUsage?.code || undefined : undefined,

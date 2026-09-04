@@ -100,3 +100,6 @@ verify_jwt = false
 
 [functions.expense-tracking-api]
 verify_jwt = false
+
+[functions.accounts-payable-cnab]
+verify_jwt = false

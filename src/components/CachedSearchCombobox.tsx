@@ -58,14 +58,15 @@ export function CachedSearchCombobox({
   const inputWrapperRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const appliedSuggestionRef = useRef<string | null>(null);
+  const hasResolvedValue = !!value?.code;
 
   useEffect(() => {
-    if (suggestedQuery && suggestedQuery !== appliedSuggestionRef.current && !value) {
+    if (suggestedQuery && suggestedQuery !== appliedSuggestionRef.current && !hasResolvedValue) {
       appliedSuggestionRef.current = suggestedQuery;
       setQuery(suggestedQuery);
       setIsOpen(true);
     }
-  }, [suggestedQuery, value]);
+  }, [suggestedQuery, hasResolvedValue]);
 
   useEffect(() => {
     const handler = (e: globalThis.MouseEvent) => {
@@ -152,7 +153,7 @@ export function CachedSearchCombobox({
   };
 
   const displayValue = value
-    ? `${value.name} — ${value.code}${value.extra ? ` (${onlyDigits(value.extra).length >= 11 ? formatCnpjCpf(value.extra) : value.extra})` : ""}`
+    ? `${[value.name, value.code].filter(Boolean).join(" — ")}${value.extra ? ` (${onlyDigits(value.extra).length >= 11 ? formatCnpjCpf(value.extra) : value.extra})` : ""}`
     : "";
 
   const showResults = isOpen && filtered.length > 0 && dropdownPosition;
@@ -172,7 +173,7 @@ export function CachedSearchCombobox({
         {label && <label className="mb-1 block text-xs text-muted-foreground">{label}</label>}
 
         <div ref={inputWrapperRef} className="relative min-w-0 max-w-full">
-          {value ? (
+          {hasResolvedValue ? (
             <CheckCircle2 className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-green-500" />
           ) : required ? (
             <AlertTriangle
@@ -184,7 +185,7 @@ export function CachedSearchCombobox({
           )}
 
           <Input
-            value={value ? displayValue : query}
+            value={hasResolvedValue ? displayValue : query || displayValue}
             onChange={(e) => handleInputChange(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && isOpen && filtered.length > 0) {
@@ -195,17 +196,17 @@ export function CachedSearchCombobox({
               if (e.key === "Escape") setIsOpen(false);
             }}
             onFocus={() => {
-              if (!value) setIsOpen(true);
+              if (!hasResolvedValue) setIsOpen(true);
             }}
             placeholder={isLoading ? "Carregando..." : placeholder}
             className={`h-9 min-w-0 truncate pl-8 pr-8 text-sm ${
-              value
+              hasResolvedValue
                 ? "border-green-500/50 bg-green-500/5"
                 : required
                   ? "border-amber-500/50 bg-amber-500/5"
                   : ""
             }`}
-            readOnly={!!value}
+            readOnly={hasResolvedValue}
           />
 
 

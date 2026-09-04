@@ -13,7 +13,7 @@
 //   • Exponibiliza `crossCompanyLookup` para consultar public.suppliers em
 //     TODAS as empresas — usado no empty state para dizer "existe na Empresa X".
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSapCachedList, invalidateSapCache } from "@/hooks/useSapCachedList";
 import { useSap } from "@/contexts/SapContext";
@@ -59,6 +59,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
 
   const { session } = useSap();
   const isOmie = session?.erpType?.toLowerCase() === "omie";
+  const realtimeTopicRef = useRef(`suppliers-live-${Math.random().toString(36).slice(2)}`);
 
   const [omieOptions, setOmieOptions] = useState<EnrichedSupplierOption[]>([]);
   const [omieLoading, setOmieLoading] = useState(false);
@@ -306,7 +307,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
   useEffect(() => {
     if (!companyDb) return;
     const channel = supabase
-      .channel(`suppliers-live-${companyDb}`)
+      .channel(`${realtimeTopicRef.current}-${companyDb}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "suppliers", filter: `company_db=eq.${companyDb}` },
