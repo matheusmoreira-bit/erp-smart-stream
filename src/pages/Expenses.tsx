@@ -2302,9 +2302,10 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     { value: "pendente_aprovacao", label: "Pendente" },
     { value: "aprovado", label: "Aprovado" },
     { value: "pc_lancado", label: isSales ? "PV Lançado" : "PC Lançado" },
-    { value: "nf_entrada", label: "NF de Entrada" },
-    { value: "pagamento", label: "Pago Parcialmente" },
-    { value: "finalizado", label: "Baixado/Pago" },
+    { value: "nf_entrada", label: isSales ? "NF de Saída" : "NF de Entrada" },
+    { value: "pagamento", label: isSales ? "Recebido Parcialmente" : "Pago Parcialmente" },
+    { value: "finalizado", label: isSales ? "Baixado/Recebido" : "Baixado/Pago" },
+
   ];
 
   // Refs para gerenciamento de foco no toggle de filtros mobile.
