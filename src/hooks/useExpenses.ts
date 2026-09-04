@@ -150,7 +150,7 @@ export type ExpenseStatus =
   | "pagamento"
   | "finalizado";
 
-export type ExpenseOrigin = "manual" | "pagcorp";
+export type ExpenseOrigin = "manual" | "pagcorp" | "uber";
 
 export interface ExpenseItem {
   id?: string;
@@ -689,7 +689,8 @@ export function useExpenses(
       const totalAmount = input.items.reduce((sum, item) => sum + item.line_total, 0);
       const origin: ExpenseOrigin = input.origin || "manual";
       const effectiveDocType = input.doc_type || docType;
-      if (isAttachmentRequiredForDocument(effectiveDocType) && (!input.files || input.files.length === 0)) {
+      const isUberExpense = origin === "uber";
+      if (!isUberExpense && isAttachmentRequiredForDocument(effectiveDocType) && (!input.files || input.files.length === 0)) {
         throw new Error("Anexo obrigatório: documentos devem ser criados com ao menos 1 anexo.");
       }
 

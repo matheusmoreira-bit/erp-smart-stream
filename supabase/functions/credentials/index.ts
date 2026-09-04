@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
-import { AuthError, requireAdminOrSapAdmin, requireAdminOrSapSessionHeaders, authErrorResponse } from "../_shared/auth.ts";
+import { AuthError, requireAdminOrSapModule, requireAdminOrSapSessionHeaders, authErrorResponse } from "../_shared/auth.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 const corsHeaders = {
@@ -27,11 +27,13 @@ Deno.serve(async (req) => {
     let companyDb = url.searchParams.get("company_db");
     const includeKeys = url.searchParams.get("keys");
     const metadataOnlyGet = req.method === "GET" && !includeKeys;
-    const caller = metadataOnlyGet ? await requireAdminOrSapSessionHeaders(req) : await requireAdminOrSapAdmin(req);
+    const caller = metadataOnlyGet
+      ? await requireAdminOrSapSessionHeaders(req)
+      : await requireAdminOrSapModule(req, "credentials");
     const callerCompanyDb = typeof (caller as { companyDB?: unknown }).companyDB === "string"
       ? (caller as { companyDB: string }).companyDB
       : null;
-    if (metadataOnlyGet && callerCompanyDb) {
+    if (callerCompanyDb) {
       if (companyDb && companyDb !== callerCompanyDb) {
         throw new AuthError("Acesso negado para esta empresa", 403);
       }
@@ -64,6 +66,10 @@ Deno.serve(async (req) => {
         credentials: { key: string; value: string }[];
         company_db?: string;
       };
+      const targetCompanyDb = company_db || companyDb || null;
+      if (callerCompanyDb && targetCompanyDb !== callerCompanyDb) {
+        throw new AuthError("Acesso negado para esta empresa", 403);
+      }
 
       if (!system_name || typeof system_name !== "string" || system_name.length > 100) {
         return new Response(JSON.stringify({ error: "system_name inválido" }), {
@@ -92,7 +98,7 @@ Deno.serve(async (req) => {
         const { error } = await adminClient
           .from("system_credentials")
           .upsert(
-            { system_name, credential_key: cred.key, credential_value: cred.value, company_db: company_db || null },
+            { system_name, credential_key: cred.key, credential_value: cred.value, company_db: targetCompanyDb },
             { onConflict: "system_name,credential_key,company_db" },
           );
         if (error) throw error;
@@ -106,13 +112,17 @@ Deno.serve(async (req) => {
     if (req.method === "DELETE") {
       const body = await req.json();
       const { system_name, company_db } = body as { system_name: string; company_db?: string };
+      const targetCompanyDb = company_db || companyDb || null;
+      if (callerCompanyDb && targetCompanyDb !== callerCompanyDb) {
+        throw new AuthError("Acesso negado para esta empresa", 403);
+      }
       if (!system_name) {
         return new Response(JSON.stringify({ error: "system_name é obrigatório" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       let q = adminClient.from("system_credentials").delete().eq("system_name", system_name);
-      q = company_db ? q.eq("company_db", company_db) : q.is("company_db", null);
+      q = targetCompanyDb ? q.eq("company_db", targetCompanyDb) : q.is("company_db", null);
       const { error } = await q;
       if (error) throw error;
       return new Response(JSON.stringify({ success: true }), {

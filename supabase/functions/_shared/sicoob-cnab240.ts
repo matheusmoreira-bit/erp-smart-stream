@@ -144,12 +144,52 @@ function registrationType(taxId: string | null | undefined): string {
   return length <= 11 ? "1" : "2";
 }
 
+function accountAgency(account: SicoobBankAccount): string {
+  const agency = onlyDigits(account.agency);
+  const agencyDigit = onlyDigits(account.agencyDigit).slice(0, 1);
+  if (agency.length <= 4 && agencyDigit) return `${agency}${agencyDigit}`;
+  return agency;
+}
+
+function accountAgencyCheckDigit(account: SicoobBankAccount): string {
+  const agency = onlyDigits(account.agency);
+  const agencyDigit = onlyDigits(account.agencyDigit).slice(0, 1);
+  if (agency.length <= 4 && agencyDigit) return String(account.agencyAccountDigit || "0").slice(0, 1);
+  return String(account.agencyDigit || account.agencyAccountDigit || "").slice(0, 1);
+}
+
+function pixInitiationForm(title: SicoobPaymentTitle): string {
+  const type = ascii(title.pixKeyType).toLowerCase();
+  const key = String(title.pixKey || "").trim();
+  const keyDigits = onlyDigits(key);
+
+  if (type.includes("phone") || type.includes("telefone") || type.includes("celular")) return "01";
+  if (type.includes("email") || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(key.toLowerCase())) return "02";
+  if (type.includes("cpf") || type.includes("cnpj") || keyDigits.length === 11 || keyDigits.length === 14) return "03";
+  if (type.includes("random") || type.includes("aleat") || type.includes("evp")) return "04";
+  if (type.includes("banc")) return "05";
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key)) return "04";
+  return "03";
+}
+
+function pixSegmentBInfo(title: SicoobPaymentTitle): string {
+  const form = pixInitiationForm(title);
+  if (form === "03") return onlyDigits(title.pixKey);
+  return title.pixKey || "";
+}
+
 function assertAccount(account: SicoobBankAccount) {
   if (onlyDigits(account.taxId).length !== 11 && onlyDigits(account.taxId).length !== 14) {
     throw new Error("CPF/CNPJ da empresa deve ter 11 ou 14 dígitos.");
   }
   if (!account.legalName.trim() || !account.agreementCode.trim() || !onlyDigits(account.agency) || !onlyDigits(account.accountNumber)) {
     throw new Error("Configuração bancária incompleta para gerar o CNAB.");
+  }
+  if (accountAgency(account).length !== 5 || !accountAgencyCheckDigit(account)) {
+    throw new Error("Agência Sicoob deve ter 4 dígitos e DV, ou 5 dígitos completos, para gerar o CNAB.");
+  }
+  if (!onlyDigits(account.accountDigit)) {
+    throw new Error("Dígito verificador da conta Sicoob é obrigatório para gerar o CNAB.");
   }
 }
 
@@ -179,8 +219,8 @@ function accountFields(record: string[], account: SicoobBankAccount) {
   put(record, 18, 18, registrationType(account.taxId), "numeric");
   put(record, 19, 32, account.taxId, "numeric");
   put(record, 33, 52, account.agreementCode);
-  put(record, 53, 57, account.agency, "numeric");
-  put(record, 58, 58, account.agencyDigit || "");
+  put(record, 53, 57, accountAgency(account), "numeric");
+  put(record, 58, 58, accountAgencyCheckDigit(account));
   put(record, 59, 70, account.accountNumber, "numeric");
   put(record, 71, 71, account.accountDigit, "numeric");
   put(record, 72, 72, account.agencyAccountDigit || "");
@@ -257,15 +297,17 @@ function segmentA(title: SicoobPaymentTitle, lot: number, sequence: number): str
   put(r, 18, 20, title.paymentMethod === "pix" ? "009" : "018", "numeric");
   put(r, 21, 23, title.bankCode || "", "numeric");
   put(r, 24, 28, title.branch || "", "numeric");
-  put(r, 29, 29, title.branchDigit || "");
+  put(r, 29, 29, title.branchDigit || "0", "numeric");
   put(r, 30, 41, title.accountNumber || "", "numeric");
-  put(r, 42, 42, title.accountDigit || "");
+  put(r, 42, 42, title.accountDigit || "0", "numeric");
   put(r, 44, 73, title.supplierName);
   put(r, 74, 93, title.companyReference);
   put(r, 94, 101, dateToCnab(title.paymentDate), "numeric");
   put(r, 102, 104, "BRL");
   put(r, 105, 119, 0, "numeric");
   put(r, 120, 134, amountToCnab(title.amount, 15), "numeric");
+  put(r, 155, 162, 0, "numeric");
+  put(r, 163, 177, 0, "numeric");
   put(r, 178, 217, title.paymentMethod === "pix" ? `PIX ${title.pixKeyType || ""}` : "TED");
   put(r, 230, 230, "0", "numeric");
   return finish(r);
@@ -274,10 +316,19 @@ function segmentA(title: SicoobPaymentTitle, lot: number, sequence: number): str
 function segmentB(title: SicoobPaymentTitle, lot: number, sequence: number): string {
   const r = blankRecord();
   movementFields(r, lot, sequence, "B");
+  if (title.paymentMethod === "pix") put(r, 15, 17, pixInitiationForm(title), "numeric");
   put(r, 18, 18, registrationType(title.supplierTaxId), "numeric");
   put(r, 19, 32, title.supplierTaxId || "", "numeric");
-  put(r, 33, 62, title.supplierName);
-  put(r, 128, 232, title.paymentMethod === "pix" ? `${title.pixKeyType || ""}:${title.pixKey || ""}` : title.companyReference);
+  if (title.paymentMethod === "pix") {
+    put(r, 128, 232, pixSegmentBInfo(title));
+  } else {
+    put(r, 128, 135, 0, "numeric");
+    put(r, 136, 150, 0, "numeric");
+    put(r, 151, 165, 0, "numeric");
+    put(r, 166, 180, 0, "numeric");
+    put(r, 181, 195, 0, "numeric");
+    put(r, 196, 210, 0, "numeric");
+  }
   return finish(r);
 }
 

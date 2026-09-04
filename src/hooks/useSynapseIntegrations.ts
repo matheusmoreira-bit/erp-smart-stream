@@ -151,6 +151,31 @@ export function useSynapseIntegrations(companyDB?: string) {
       } as any);
     }
 
+    // Ensure Uber Trips integration
+    const { data: uberData } = await supabase
+      .from("synapse_integrations")
+      .select("id")
+      .eq("integration_key", "uber_trips")
+      .eq("company_db", companyDb)
+      .maybeSingle();
+
+    if (!uberData) {
+      const integration: SynapseIntegrationInsert = {
+        integration_key: "uber_trips",
+        display_name: "Uber - viagens",
+        description:
+          "Busca viagens do Uber pela API/webhook configurada da empresa e monta despesas rateadas por centro de custo.",
+        is_active: false,
+        interval_minutes: 1440,
+        parameters: {
+          url: "",
+          "x-api-key": "",
+        },
+        company_db: companyDb,
+      };
+      await supabase.from("synapse_integrations").insert(integration);
+    }
+
     // Ensure Purchase Order Notifications integration
     const { data: ponData } = await supabase
       .from("synapse_integrations")
@@ -273,6 +298,7 @@ export function useSynapseIntegrations(companyDB?: string) {
         sap_document_link_watcher: "sap-document-link-watcher",
         jumpcloud_attributes_sync: "jumpcloud-attributes-sync",
         okta_attributes_sync: "okta-attributes-sync",
+        uber_trips: "uber-trips",
       };
       const functionName = edgeFunctionMap[integrationKey] || "synapse-jc-sync";
 

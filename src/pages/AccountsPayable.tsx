@@ -6,6 +6,7 @@ import {
   CalendarDays,
   CreditCard,
   Download,
+  Eye,
   FileCheck2,
   FileUp,
   Landmark,
@@ -109,9 +110,20 @@ interface SupplierPaymentForm {
 
 interface BatchItem {
   id: string;
+  supplier_code?: string | null;
   supplier_name: string;
+  supplier_tax_id?: string | null;
+  sap_doc_entry?: number | null;
   sap_doc_num: number;
+  installment_id?: number | null;
+  due_date?: string | null;
+  scheduled_date?: string | null;
   amount: number;
+  currency?: string | null;
+  barcode?: string | null;
+  payment_method?: PaymentMethod | null;
+  payment_metadata?: Record<string, unknown> | null;
+  company_reference?: string | null;
   status: string;
   sap_payment_doc_num?: number | null;
   sap_error?: string | null;
@@ -126,6 +138,7 @@ interface Batch {
   total_amount: number;
   status: string;
   generated_at: string;
+  content_sha256?: string | null;
   return_filename?: string | null;
   error_message?: string | null;
   accounts_payable_batch_items?: BatchItem[];
@@ -204,7 +217,24 @@ const dateTime = (value?: string | null) => {
   return Number.isNaN(parsed.getTime()) ? "-" : parsed.toLocaleString("pt-BR");
 };
 
+function downloadTextFile(filename: string, content: string) {
+  const blob = new Blob([content], { type: "text/plain;charset=windows-1252" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 const today = () => new Date().toISOString().slice(0, 10);
+const daysAgo = (days: number) => {
+  const value = new Date();
+  value.setDate(value.getDate() - days);
+  return value.toISOString().slice(0, 10);
+};
+const defaultDueFrom = () => daysAgo(10);
+const defaultDueTo = today;
 
 const batchStatus: Record<string, string> = {
   generated: "Remessa gerada",
@@ -288,8 +318,8 @@ export default function AccountsPayable() {
   const [titlePaymentMethods, setTitlePaymentMethods] = useState<Record<string, RemittancePaymentMethod>>({});
   const [query, setQuery] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("");
-  const [dueFrom, setDueFrom] = useState("");
-  const [dueTo, setDueTo] = useState("");
+  const [dueFrom, setDueFrom] = useState(defaultDueFrom);
+  const [dueTo, setDueTo] = useState(defaultDueTo);
   const [paymentFrom, setPaymentFrom] = useState("");
   const [paymentTo, setPaymentTo] = useState("");
   const [amountFrom, setAmountFrom] = useState("");
@@ -299,6 +329,8 @@ export default function AccountsPayable() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null);
+  const [downloadingBatchId, setDownloadingBatchId] = useState<string | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
   const [config, setConfig] = useState<BankConfig>(emptyConfig);
   const [savingConfig, setSavingConfig] = useState(false);
@@ -338,7 +370,10 @@ export default function AccountsPayable() {
     setLoading(true);
     try {
       const [openResult, batchResult, configResult] = await Promise.allSettled([
-        call<{ titles: OpenTitle[] }>("list_open"),
+        call<{ titles: OpenTitle[] }>("list_open", {
+          due_from: dueFrom || undefined,
+          due_to: dueTo || undefined,
+        }),
         call<{ batches: Batch[] }>("list_batches"),
         call<{ config: BankConfig | null }>("get_config"),
       ]);
@@ -371,7 +406,7 @@ export default function AccountsPayable() {
     } finally {
       setLoading(false);
     }
-  }, [call, companyDb]);
+  }, [call, companyDb, dueFrom, dueTo]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -446,17 +481,19 @@ export default function AccountsPayable() {
   );
   const canGenerate = selectedTitles.length > 0 && selectedMissingMethod.length === 0 && selectedMissingBarcode.length === 0 && selectedMissingTedData.length === 0 && selectedMissingPixData.length === 0;
 
-  const activeFilterCount = useMemo(() => [
-    query,
-    supplierFilter,
-    dueFrom,
-    dueTo,
-    paymentFrom,
-    paymentTo,
-    amountFrom,
-    amountTo,
-    paymentMethod !== "all" ? paymentMethod : "",
-  ].filter(Boolean).length, [amountFrom, amountTo, dueFrom, dueTo, paymentFrom, paymentMethod, paymentTo, query, supplierFilter]);
+  const activeFilterCount = useMemo(() => {
+    const dueFilterChanged = dueFrom !== defaultDueFrom() || dueTo !== defaultDueTo();
+    return [
+      query,
+      supplierFilter,
+      dueFilterChanged ? "due" : "",
+      paymentFrom,
+      paymentTo,
+      amountFrom,
+      amountTo,
+      paymentMethod !== "all" ? paymentMethod : "",
+    ].filter(Boolean).length;
+  }, [amountFrom, amountTo, dueFrom, dueTo, paymentFrom, paymentMethod, paymentTo, query, supplierFilter]);
 
   function toggleTitle(key: string, checked: boolean) {
     setSelected((current) => {
@@ -575,13 +612,7 @@ export default function AccountsPayable() {
           supplier_tax_id: title.supplier_tax_id,
         })),
       });
-      const blob = new Blob([result.content], { type: "text/plain;charset=windows-1252" });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = result.filename;
-      anchor.click();
-      URL.revokeObjectURL(url);
+      downloadTextFile(result.filename, result.content);
       setSelected(new Set());
       toast.success(`${result.title_count} título(s) incluído(s) na remessa.`);
       await load();
@@ -589,6 +620,21 @@ export default function AccountsPayable() {
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function downloadBatch(batch: Batch) {
+    setDownloadingBatchId(batch.id);
+    try {
+      const result = await call<{ filename: string; content: string; regenerated?: boolean }>("download_batch", {
+        batch_id: batch.id,
+      });
+      downloadTextFile(result.filename || batch.filename, result.content);
+      toast.success(result.regenerated ? "Arquivo reconstruído e baixado." : "Arquivo baixado.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setDownloadingBatchId(null);
     }
   }
 
@@ -650,6 +696,8 @@ export default function AccountsPayable() {
       unmatched: matches.filter((item) => !item.item).length,
     };
   }, [returnPreview]);
+
+  const selectedBatchItems = selectedBatch?.accounts_payable_batch_items || [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -785,8 +833,8 @@ export default function AccountsPayable() {
                     onClick={() => {
                       setQuery("");
                       setSupplierFilter("");
-                      setDueFrom("");
-                      setDueTo("");
+                      setDueFrom(defaultDueFrom());
+                      setDueTo(defaultDueTo());
                       setPaymentFrom("");
                       setPaymentTo("");
                       setAmountFrom("");
@@ -950,8 +998,8 @@ export default function AccountsPayable() {
 
           <TabsContent value="batches">
             <div className="overflow-x-auto rounded-md border border-border">
-              <Table className="min-w-[900px]">
-                <TableHeader><TableRow><TableHead>Arquivo</TableHead><TableHead>Gerado em</TableHead><TableHead>Pagamento</TableHead><TableHead>Títulos</TableHead><TableHead className="text-right">Total</TableHead><TableHead>Status</TableHead><TableHead>Retorno</TableHead></TableRow></TableHeader>
+              <Table className="min-w-[980px]">
+                <TableHeader><TableRow><TableHead>Arquivo</TableHead><TableHead>Gerado em</TableHead><TableHead>Pagamento</TableHead><TableHead>Títulos</TableHead><TableHead className="text-right">Total</TableHead><TableHead>Status</TableHead><TableHead>Retorno</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {batches.map((batch) => (
                     <TableRow key={batch.id}>
@@ -965,9 +1013,21 @@ export default function AccountsPayable() {
                         <p className="text-sm">{batch.return_filename || "-"}</p>
                         {!!batch.accounts_payable_batch_items?.length && <p className="text-xs text-muted-foreground">{batch.accounts_payable_batch_items.map((item) => itemStatus[item.status] || item.status).join(" · ")}</p>}
                       </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setSelectedBatch(batch)}>
+                            <Eye className="h-4 w-4" />
+                            Detalhes
+                          </Button>
+                          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void downloadBatch(batch)} disabled={downloadingBatchId === batch.id}>
+                            {downloadingBatchId === batch.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                            Arquivo
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
-                  {!loading && batches.length === 0 && <TableRow><TableCell colSpan={7} className="h-32 text-center text-muted-foreground">Nenhum lote gerado.</TableCell></TableRow>}
+                  {!loading && batches.length === 0 && <TableRow><TableCell colSpan={8} className="h-32 text-center text-muted-foreground">Nenhum lote gerado.</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </div>
@@ -1018,6 +1078,72 @@ export default function AccountsPayable() {
           </TabsContent>
         </Tabs>
       </main>
+
+      <Dialog open={!!selectedBatch} onOpenChange={(open) => { if (!open) setSelectedBatch(null); }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileCheck2 className="h-5 w-5" />
+              Detalhes do lote CNAB
+            </DialogTitle>
+            <DialogDescription>
+              {selectedBatch?.filename || "-"} · {selectedBatch ? date(selectedBatch.payment_date) : "-"} · {money(selectedBatch?.total_amount)}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 sm:grid-cols-4">
+            <div className="border-l-2 border-cyan-500 px-3"><p className="text-xs text-muted-foreground">NSA</p><p className="text-lg font-semibold">{selectedBatch?.file_sequence || "-"}</p></div>
+            <div className="border-l-2 border-emerald-500 px-3"><p className="text-xs text-muted-foreground">Títulos</p><p className="text-lg font-semibold">{selectedBatch?.title_count || 0}</p></div>
+            <div className="border-l-2 border-amber-500 px-3"><p className="text-xs text-muted-foreground">Gerado em</p><p className="text-sm font-medium">{dateTime(selectedBatch?.generated_at)}</p></div>
+            <div className="border-l-2 border-muted-foreground px-3"><p className="text-xs text-muted-foreground">Status</p><p className="text-sm font-medium">{selectedBatch ? batchStatus[selectedBatch.status] || selectedBatch.status : "-"}</p></div>
+          </div>
+          <div className="overflow-x-auto rounded-md border border-border">
+            <Table className="min-w-[950px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>NF SAP</TableHead>
+                  <TableHead>Fornecedor</TableHead>
+                  <TableHead>Forma</TableHead>
+                  <TableHead>Vencimento</TableHead>
+                  <TableHead>Pagamento</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Retorno / SAP</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {selectedBatchItems.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-mono text-sm">#{item.sap_doc_num}{Number(item.installment_id || 0) > 0 ? ` / ${item.installment_id}` : ""}</TableCell>
+                    <TableCell>
+                      <p className="max-w-[240px] truncate font-medium">{item.supplier_name}</p>
+                      <p className="text-xs text-muted-foreground">{item.supplier_code || item.supplier_tax_id || "-"}</p>
+                    </TableCell>
+                    <TableCell>{paymentMethodLabels[asRemittancePaymentMethod(item.payment_method)]}</TableCell>
+                    <TableCell>{date(item.due_date)}</TableCell>
+                    <TableCell>{date(item.scheduled_date || selectedBatch?.payment_date)}</TableCell>
+                    <TableCell className="text-right font-semibold">{money(item.amount, item.currency || "BRL")}</TableCell>
+                    <TableCell><Badge variant={statusVariant(item.status)}>{itemStatus[item.status] || item.status}</Badge></TableCell>
+                    <TableCell>
+                      <p className="font-mono text-xs">{item.company_reference || "-"}</p>
+                      <p className="text-xs text-muted-foreground">{item.sap_payment_doc_num ? `Baixa SAP #${item.sap_payment_doc_num}` : item.sap_error || "-"}</p>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {selectedBatchItems.length === 0 && <TableRow><TableCell colSpan={8} className="h-24 text-center text-muted-foreground">Nenhum título registrado neste lote.</TableCell></TableRow>}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
+            {selectedBatch && (
+              <Button variant="outline" className="gap-2" onClick={() => void downloadBatch(selectedBatch)} disabled={downloadingBatchId === selectedBatch.id}>
+                {downloadingBatchId === selectedBatch.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                Baixar arquivo
+              </Button>
+            )}
+            <Button onClick={() => setSelectedBatch(null)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={supplierPaymentOpen} onOpenChange={setSupplierPaymentOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">

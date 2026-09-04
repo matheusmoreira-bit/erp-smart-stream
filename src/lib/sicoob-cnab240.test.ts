@@ -97,6 +97,74 @@ describe("Sicoob CNAB 240", () => {
     expect(result.records[7].slice(13, 14)).toBe("B");
   });
 
+  it("não grava Seu Número em campos numéricos do Segmento B para TED", () => {
+    const companyReference = "AP111882E0E1754D388E";
+    const result = generateSicoobCnab240({
+      account,
+      fileSequence: 13,
+      titles: [
+        {
+          ...title,
+          id: "ted-strict-validator",
+          paymentMethod: "ted",
+          barcode: null,
+          companyReference,
+          bankCode: "341",
+          branch: "03130",
+          accountNumber: "000000068228",
+          accountDigit: "3",
+          supplierTaxId: "35.428.766/0001-56",
+        },
+      ],
+    });
+
+    expect(result.records[2].slice(73, 93)).toBe(companyReference);
+    expect(result.records[3].slice(127, 135)).toBe("00000000");
+    expect(result.records[3].slice(135, 150)).toBe("000000000000000");
+    expect(result.records[3].slice(150, 210)).toBe("0".repeat(60));
+    expect(result.records[3]).not.toContain("AP111882");
+  });
+
+  it("preenche campos estruturantes exigidos pelo validador Sicoob para PIX", () => {
+    const result = generateSicoobCnab240({
+      account: {
+        legalName: "ANA GAMING BRASIL SA",
+        taxId: "55.933.850/0001-34",
+        agreementCode: "60",
+        agency: "0316",
+        agencyDigit: "1",
+        agencyAccountDigit: "0",
+        accountNumber: "000000064238",
+        accountDigit: "0",
+      },
+      fileSequence: 12,
+      generatedAt: new Date("2026-09-02T19:24:00Z"),
+      titles: [
+        {
+          ...title,
+          id: "pix-cnpj",
+          paymentMethod: "pix",
+          barcode: null,
+          companyReference: "APPIX",
+          supplierTaxId: "58.622.567/0001-80",
+          pixKeyType: "cnpj",
+          pixKey: "58622567000180",
+        },
+      ],
+    });
+
+    expect(result.records[0].slice(52, 57)).toBe("03161");
+    expect(result.records[0].slice(57, 58)).toBe("0");
+    expect(result.records[1].slice(52, 57)).toBe("03161");
+    expect(result.records[1].slice(57, 58)).toBe("0");
+    expect(result.records[2].slice(41, 42)).toBe("0");
+    expect(result.records[2].slice(154, 162)).toBe("00000000");
+    expect(result.records[2].slice(162, 177)).toBe("000000000000000");
+    expect(result.records[3].slice(14, 17)).toBe("003");
+    expect(result.records[3].slice(32, 62)).toBe(" ".repeat(30));
+    expect(result.records[3].slice(127, 226).trim()).toBe("58622567000180");
+  });
+
   it("interpreta somente ocorrência 00 como pagamento efetivado", () => {
     const generated = generateSicoobCnab240({ account, fileSequence: 9, titles: [title] });
     const returnRecords = generated.records.map((record, index) => {

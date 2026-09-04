@@ -1,5 +1,5 @@
 /**
- * Sincroniza views financeiras do HanaAPI com a planilha atual.
+ * Sincroniza dados financeiros do HanaAPI e do ERP Flow com a planilha atual.
  *
  * Instalacao:
  * 1. Abra Extensoes > Apps Script na planilha de destino.
@@ -23,8 +23,12 @@ const HANA_FINANCE_SYNC = Object.freeze({
   MAX_RUNTIME_MS: 5 * 60 * 1000,
   WRITE_CHUNK_SIZE: 10000,
   HANA_API_URL: "http://201.48.79.205:8001",
-  MIDDLEWARE_SECRET: "INFORME_O_SAP_MIDDLEWARE_SECRET",
+  DYNAMIC_TOKEN_SECRET: "8f3c7b2a9e1d4f6a5b8c0e3d2f1a6c5b9d0e7f4a2b1c6d5e8f9a0b3c2d1e4f7a",
   SESSION_ID: "67aefea7-fa97-4674-bb8e-34a257669613-6422",
+  ERP_FLOW_APPROVALS_API_URL:
+    "https://ryxlofwbyhkqcvzavbwn.supabase.co/functions/v1/external-approvals-api",
+  ERP_FLOW_APPROVALS_API_KEY:
+    "erpf_apr_be4c5771c526628677be4e04696680505b917e60782b6bc5b9351af4323df17a",
 });
 
 function onOpen() {
@@ -82,7 +86,7 @@ function consultarOpenGamingEmAberto() {
 function atualizarConsulta_(companyDb, viewName) {
   validarEmpresa_(companyDb);
   validarView_(viewName);
-  validarCredenciais_();
+  validarCredenciais_(viewName);
   const ui = SpreadsheetApp.getUi();
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = spreadsheet.getActiveSheet();
@@ -101,7 +105,7 @@ function atualizarConsulta_(companyDb, viewName) {
   let escritaIniciada = false;
   try {
     spreadsheet.toast("Consultando " + viewName + "...", companyDb, 20);
-    const rows = buscarViewCompleta_(companyDb, viewName, startedAt);
+    const rows = buscarDadosConsulta_(companyDb, viewName, startedAt);
     escritaIniciada = true;
     spreadsheet.toast("Atualizando a aba atual...", companyDb, 20);
     atualizarAba_(sheet, rows, companyDb, viewName);
@@ -128,6 +132,157 @@ function atualizarConsulta_(companyDb, viewName) {
   }
 }
 
+function buscarDadosConsulta_(companyDb, viewName, startedAt) {
+  const hanaRows = buscarViewCompleta_(companyDb, viewName, startedAt);
+  if (viewName !== HANA_FINANCE_SYNC.VIEWS.OPEN_ORDERS) return hanaRows;
+
+  const openOrders = hanaRows
+    .filter(ehStatusPedidoPendente_)
+    .map(function(row) {
+      return Object.assign({ Origem: "HanaAPI" }, row);
+    });
+  const approvalOrders = buscarPedidosEmAprovacao_(companyDb);
+  return mesclarPedidosEmAberto_(openOrders, approvalOrders)
+    .filter(ehStatusPedidoPendente_);
+}
+
+function ehStatusPedidoPendente_(row) {
+  const status = String(row && row.Status || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+  return status === "pendente" || status === "pendente de aprovacao";
+}
+
+function mesclarPedidosEmAberto_(openOrders, approvalOrders) {
+  const byKey = Object.create(null);
+  const order = [];
+
+  function addOrMerge(row, preferIncoming) {
+    const key = chavePedido_(row);
+    if (!key) {
+      order.push(row);
+      return;
+    }
+    if (!byKey[key]) {
+      byKey[key] = row;
+      order.push(row);
+      return;
+    }
+
+    const current = byKey[key];
+    const primary = preferIncoming ? row : current;
+    const secondary = preferIncoming ? current : row;
+    const merged = Object.assign({}, secondary, primary);
+    Object.keys(secondary).forEach(function(field) {
+      if (merged[field] === "" || merged[field] === null || merged[field] === undefined) {
+        merged[field] = secondary[field];
+      }
+    });
+    if (
+      /^\d+$/.test(String(merged.Autor || "").trim()) &&
+      !/^\d+$/.test(String(secondary.Autor || "").trim())
+    ) {
+      merged.Autor = secondary.Autor;
+    }
+    const index = order.indexOf(current);
+    if (index >= 0) order[index] = merged;
+    byKey[key] = merged;
+  }
+
+  openOrders.forEach(function(row) { addOrMerge(row, false); });
+  approvalOrders.forEach(function(row) { addOrMerge(row, true); });
+  return order;
+}
+
+function chavePedido_(row) {
+  const draftEntry = String(row["Nº de esboço de documento"] || "").trim();
+  if (draftEntry) return "draft:" + draftEntry;
+  const docNum = String(row["Nº documento"] || "").trim();
+  return docNum ? "doc:" + docNum : "";
+}
+
+function buscarPedidosEmAprovacao_(companyDb) {
+  const response = UrlFetchApp.fetch(HANA_FINANCE_SYNC.ERP_FLOW_APPROVALS_API_URL, {
+    method: "post",
+    contentType: "application/json",
+    headers: {
+      "X-API-Key": HANA_FINANCE_SYNC.ERP_FLOW_APPROVALS_API_KEY,
+      Accept: "application/json",
+    },
+    payload: JSON.stringify({
+      op: "list",
+      company_db: companyDb,
+      doc_object_type: "22",
+    }),
+    followRedirects: true,
+    muteHttpExceptions: true,
+  });
+  validarHttp_(response, "ERP Flow - pedidos em aprovacao de " + companyDb);
+
+  let payload;
+  try {
+    payload = JSON.parse(response.getContentText() || "{}");
+  } catch (error) {
+    throw new Error("ERP Flow retornou JSON invalido: " + mensagemErro_(error));
+  }
+  if (!payload || !Array.isArray(payload.documents)) {
+    throw new Error("Formato de resposta inesperado da API de aprovacoes do ERP Flow.");
+  }
+
+  return payload.documents
+    .filter(function(document) {
+      return String(document.doc_object_type || "") === "22";
+    })
+    .map(normalizarPedidoEmAprovacao_);
+}
+
+function normalizarPedidoEmAprovacao_(document) {
+  const pendingApprovers = Array.isArray(document.pending_approvers)
+    ? document.pending_approvers
+    : [];
+  return {
+    Origem: "ERP Flow - Em aprovacao",
+    "Tipo de documento": document.doc_type_name || "Pedido de Compra",
+    "Nº documento": document.doc_num || "",
+    "Nº de esboço de documento": document.doc_entry || "",
+    Autor: document.originator_name || document.originator_user_code || document.originator_id || "",
+    Status: "Pendente de aprovacao",
+    "Observações": document.remarks || "",
+    "Data do documento": document.doc_date || "",
+    "Data de criação": document.creation_date || "",
+    "Data de atualização": document.update_date || "",
+    "Data de vencimento": document.due_date || "",
+    "Data de pagamento": document.payment_date || "",
+    "Nome do PN": document.card_name || "",
+    "Código PN": document.card_code || "",
+    "Total do documento (MC)": numeroOuVazio_(document.doc_total),
+    Moeda: document.currency || "BRL",
+    "Centro de custo": document.cost_center || "",
+    "Centros de custo": listaParaTexto_(document.cost_centers),
+    Departamento: document.department || "",
+    Departamentos: listaParaTexto_(document.departments),
+    Projeto: document.project || "",
+    Projetos: listaParaTexto_(document.projects),
+    "ID da solicitação de aprovação": document.approval_request_id || "",
+    "Etapa atual": document.step || "",
+    "Aprovadores pendentes": pendingApprovers.map(function(approver) {
+      const name = approver.user_name || approver.user_code || approver.email || approver.user_id || "";
+      return name + (approver.step ? " (etapa " + approver.step + ")" : "");
+    }).join(", "),
+  };
+}
+
+function listaParaTexto_(value) {
+  return Array.isArray(value) ? value.join(", ") : (value || "");
+}
+
+function numeroOuVazio_(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : "";
+}
+
 function buscarViewCompleta_(schema, viewName, startedAt) {
   const allRows = [];
   let offset = 0;
@@ -140,15 +295,17 @@ function buscarViewCompleta_(schema, viewName, startedAt) {
       );
     }
 
-    const query = "?limit=" + HANA_FINANCE_SYNC.PAGE_SIZE + "&offset=" + offset;
-    const objectName = encodeURIComponent(schema) + "." + encodeURIComponent(viewName);
+    const query = "?schema=" + encodeURIComponent(schema) +
+      "&limit=" + HANA_FINANCE_SYNC.PAGE_SIZE + "&offset=" + offset;
     const url = removerBarraFinal_(HANA_FINANCE_SYNC.HANA_API_URL) +
-      "/data/" + objectName + query;
+      "/data/" + encodeURIComponent(viewName) + query;
     const response = UrlFetchApp.fetch(url, {
       method: "get",
       headers: {
-        dynamictoken: gerarDynamicToken_(HANA_FINANCE_SYNC.MIDDLEWARE_SECRET),
-        sessionid: HANA_FINANCE_SYNC.SESSION_ID,
+        Authorization: "Bearer " + gerarDynamicToken_(
+          HANA_FINANCE_SYNC.DYNAMIC_TOKEN_SECRET,
+        ),
+        "X-SAP-Session-ID": HANA_FINANCE_SYNC.SESSION_ID,
         Accept: "application/json",
       },
       followRedirects: true,
@@ -309,12 +466,19 @@ function validarView_(viewName) {
   }
 }
 
-function validarCredenciais_() {
+function validarCredenciais_(viewName) {
   if (
-    !HANA_FINANCE_SYNC.MIDDLEWARE_SECRET ||
-    HANA_FINANCE_SYNC.MIDDLEWARE_SECRET === "INFORME_O_SAP_MIDDLEWARE_SECRET"
+    !HANA_FINANCE_SYNC.DYNAMIC_TOKEN_SECRET ||
+    !HANA_FINANCE_SYNC.SESSION_ID
   ) {
-    throw new Error("Defina MIDDLEWARE_SECRET no bloco HANA_FINANCE_SYNC.");
+    throw new Error("Credenciais do HanaAPI ausentes no bloco HANA_FINANCE_SYNC.");
+  }
+  if (
+    viewName === HANA_FINANCE_SYNC.VIEWS.OPEN_ORDERS &&
+    (!HANA_FINANCE_SYNC.ERP_FLOW_APPROVALS_API_URL ||
+      !HANA_FINANCE_SYNC.ERP_FLOW_APPROVALS_API_KEY)
+  ) {
+    throw new Error("Credenciais da API de aprovacoes do ERP Flow ausentes.");
   }
 }
 

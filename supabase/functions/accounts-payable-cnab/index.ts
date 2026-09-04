@@ -157,8 +157,26 @@ function day(value: unknown): string {
   return String(value ?? "").slice(0, 10);
 }
 
+function isoDayOffset(days: number): string {
+  const value = new Date();
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function requestDate(value: unknown): string | null {
+  const text = day(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
+}
+
 function roundMoney(value: unknown): number {
   return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+function normalizeCurrency(value: unknown): string {
+  const text = String(value ?? "").trim().toUpperCase();
+  if (!text || text === "R$" || text === "RS" || text === "REAL" || text === "REAIS") return "BRL";
+  if (text === "BRL") return "BRL";
+  return /^[A-Z]{3}$/.test(text) ? text : "BRL";
 }
 
 function uniqueStrings(values: unknown[]): string[] {
@@ -171,6 +189,29 @@ function firstText(...values: unknown[]): string | null {
     if (text) return text;
   }
   return null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function collectionRows(value: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(value)) return value.filter(isRecord);
+  if (!isRecord(value)) return [];
+  for (const key of ["value", "results"]) {
+    const nested = value[key];
+    if (Array.isArray(nested)) return nested.filter(isRecord);
+  }
+  for (const [key, nested] of Object.entries(value)) {
+    if (key.includes("/") && Array.isArray(nested)) return nested.filter(isRecord);
+  }
+  return [];
+}
+
+function businessPartnerRow(value: Record<string, unknown> | null | undefined): Record<string, unknown> | null {
+  if (!value) return null;
+  if (firstText(value.CardCode, value.CardName)) return value;
+  return collectionRows(value)[0] || value;
 }
 
 function isMissingColumn(error: unknown): boolean {
@@ -206,7 +247,22 @@ function normalizeSapPaymentMethod(value: unknown): PaymentMethod | null {
   return null;
 }
 
-function normalizePixKeyType(value: unknown): string | null {
+function inferPixKeyTypeFromKey(value: unknown): string | null {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  const textLower = text.toLowerCase();
+  const cleanDigits = digits(text);
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text)) return "random";
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(textLower)) return "email";
+  if (cleanDigits.length === 14) return "cnpj";
+  if (cleanDigits.length === 11) return "cpf";
+  if (cleanDigits.length >= 10 && cleanDigits.length <= 13 && /^[+()\d\s-]+$/.test(text)) return "phone";
+  return null;
+}
+
+function normalizePixKeyType(value: unknown, pixKey?: unknown): string | null {
+  const inferred = inferPixKeyTypeFromKey(pixKey);
+  if (inferred) return inferred;
   const text = String(value ?? "").trim().toLowerCase();
   if (!text) return null;
   if (text === "1" || text.includes("telefone") || text.includes("phone") || text.includes("celular")) return "phone";
@@ -230,16 +286,17 @@ function isMissingSupplierProfileStorage(error: unknown): boolean {
 }
 
 function collectPixKeys(row: Record<string, unknown> | null | undefined): string[] {
-  if (!row) return [];
+  const bp = businessPartnerRow(row);
+  if (!bp) return [];
   const found: string[] = [];
-  for (const [key, value] of Object.entries(row)) {
+  for (const [key, value] of Object.entries(bp)) {
     if (/pix/i.test(key) && !/(tipo|type)/i.test(key)) {
       const text = firstText(value);
       if (text) found.push(text);
     }
   }
-  const accounts = Array.isArray(row.BPBankAccounts) ? row.BPBankAccounts : [];
-  for (const account of accounts as Array<Record<string, unknown>>) {
+  const accounts = collectionRows(bp.BPBankAccounts);
+  for (const account of accounts) {
     for (const [key, value] of Object.entries(account)) {
       if (/pix/i.test(key) && !/(tipo|type)/i.test(key)) {
         const text = firstText(value);
@@ -251,20 +308,20 @@ function collectPixKeys(row: Record<string, unknown> | null | undefined): string
 }
 
 function fiscalTaxIdFromBp(row: Record<string, unknown> | null | undefined, fallbackPixKey?: unknown): string | null {
+  const bp = businessPartnerRow(row);
   const direct = digits(
     firstText(
-      row?.FederalTaxID,
-      row?.UnifiedFederalTaxID,
-      row?.VatRegistrationNumber,
-      row?.TaxId0,
-      row?.TaxId4,
+      bp?.FederalTaxID,
+      bp?.UnifiedFederalTaxID,
+      bp?.VatRegistrationNumber,
+      bp?.U_FGR_TAXID0,
+      bp?.TaxId0,
+      bp?.TaxId4,
     ),
   );
   if (direct.length === 11 || direct.length === 14) return direct;
 
-  const fiscalRows = Array.isArray(row?.BPFiscalTaxIDCollection)
-    ? row?.BPFiscalTaxIDCollection as Array<Record<string, unknown>>
-    : [];
+  const fiscalRows = collectionRows(bp?.BPFiscalTaxIDCollection);
   for (const fiscalRow of fiscalRows) {
     for (const [key, value] of Object.entries(fiscalRow)) {
       if (!/^TaxId\d+$/i.test(key)) continue;
@@ -278,21 +335,22 @@ function fiscalTaxIdFromBp(row: Record<string, unknown> | null | undefined, fall
 }
 
 function bankAccountSummary(row: Record<string, unknown> | null | undefined): string | null {
-  const accounts = Array.isArray(row?.BPBankAccounts) ? row?.BPBankAccounts as Array<Record<string, unknown>> : [];
-  const defaultBank = firstText(row?.DefaultBankCode, row?.BankCode);
-  const defaultBranch = firstText(row?.DefaultBranch, row?.Branch, row?.HouseBankBranch);
-  const defaultAccount = firstText(row?.DefaultAccount, row?.AccountNo, row?.HouseBankAccount);
+  const bp = businessPartnerRow(row);
+  const accounts = collectionRows(bp?.BPBankAccounts);
+  const defaultBank = firstText(bp?.DefaultBankCode, bp?.BankCode, bp?.BankCode2, bp?.HouseBank);
+  const defaultBranch = firstText(bp?.DefaultBranch, bp?.Branch, bp?.BankBranch, bp?.HouseBankBranch);
+  const defaultAccount = firstText(bp?.DefaultAccount, bp?.AccountNo, bp?.AccountNumber, bp?.HouseBankAccount);
   const account = accounts.find((item) => {
-    const accountBank = firstText(item.BankCode, item.BankName, item.BankKey);
-    const accountNumber = firstText(item.AccountNo, item.Account, item.IBAN);
+    const accountBank = firstText(item.BankCode, item.BankCode2, item.BankKey, item.BankName);
+    const accountNumber = firstText(item.AccountNo, item.AccountNumber, item.Account, item.IBAN);
     if (defaultBank && accountBank && accountBank !== defaultBank) return false;
     if (defaultAccount && accountNumber && accountNumber !== defaultAccount) return false;
     return Boolean(defaultBank || defaultAccount);
   }) || accounts.find((item) => String(item.Default || item.IsDefault || "").toLowerCase() === "tyes") || accounts[0];
-  const bank = firstText(account?.BankCode, account?.BankName, account?.BankKey, defaultBank);
-  const branch = firstText(account?.Branch, account?.BranchCode, defaultBranch);
-  const number = firstText(account?.AccountNo, account?.Account, account?.IBAN, defaultAccount);
-  const digit = firstText(account?.ControlKey, account?.AccountDigit, account?.CheckDigit);
+  const bank = firstText(account?.BankCode, account?.BankCode2, account?.BankKey, account?.BankName, defaultBank);
+  const branch = firstText(account?.Branch, account?.BankBranch, account?.BranchCode, defaultBranch);
+  const number = firstText(account?.AccountNo, account?.AccountNumber, account?.Account, account?.IBAN, defaultAccount);
+  const digit = firstText(account?.ControlKey, account?.AccountCheckDigit, account?.AccountDigit, account?.CheckDigit);
   const accountText = number ? `${number}${digit ? `-${digit}` : ""}` : null;
   const parts = [bank ? `Banco ${bank}` : null, branch ? `Ag. ${branch}` : null, accountText ? `Conta ${accountText}` : null].filter(Boolean);
   return parts.length ? parts.join(" · ") : null;
@@ -350,11 +408,12 @@ function paymentProfileFromStored(row: SupplierPaymentProfileRow | null): Paymen
 }
 
 function inferPaymentProfile(bp: Record<string, unknown> | null, hidden: Partial<PaymentProfile> | null, stored: SupplierPaymentProfileRow | null = null): PaymentProfile {
-  const bank = firstBankAccountDetails(bp);
-  const defaultBeneficiaryName = firstText(bp?.CardName);
-  const sapDefaultMethod = normalizeSapPaymentMethod(bp?.PeymentMethodCode || bp?.PaymentMethodCode || bp?.DefaultPaymentMethod);
+  const row = businessPartnerRow(bp);
+  const bank = firstBankAccountDetails(row);
+  const defaultBeneficiaryName = firstText(row?.CardName);
+  const sapDefaultMethod = normalizeSapPaymentMethod(row?.PeymentMethodCode || row?.PaymentMethodCode || row?.DefaultPaymentMethod);
   const boletoBarcode = boletoBarcodeFrom(hidden?.boleto_barcode || hidden?.boleto_digitable_line);
-  const pixKey = bank.pix_key || collectPixKeys(bp)[0] || null;
+  const pixKey = bank.pix_key || collectPixKeys(row)[0] || null;
   const defaultBeneficiaryTaxId = fiscalTaxIdFromBp(bp, pixKey);
   if (boletoBarcode.length === 44) {
     return {
@@ -394,14 +453,14 @@ function inferPaymentProfile(bp: Record<string, unknown> | null, hidden: Partial
       account_number: bank.account_number || null,
       account_digit: bank.account_digit || null,
       account_type: bank.account_type || null,
-      pix_key_type: bank.pix_key_type || normalizePixKeyType(bp?.U_TipoChavePix) || null,
+      pix_key_type: bank.pix_key_type || normalizePixKeyType(row?.U_TipoChavePix, pixKey) || null,
       pix_key: pixKey,
-      bank_account_summary: bankAccountSummary(bp),
+      bank_account_summary: bankAccountSummary(row),
       payment_data_source: "Dados do fornecedor",
     };
   }
 
-  const bankSummary = bankAccountSummary(bp);
+  const bankSummary = bankAccountSummary(row);
   if (bankSummary) {
     return {
       payment_method: "ted",
@@ -476,7 +535,7 @@ function installmentTitles(invoice: SapInvoice, paymentProfile?: PaymentProfile)
     document_date: day(invoice.DocDate),
     due_date: part.due,
     open_amount: Math.min(part.open, invoiceOpen || part.open),
-    currency: invoice.DocCurrency || "BRL",
+    currency: normalizeCurrency(invoice.DocCurrency),
     description: String(invoice.Comments || "").slice(0, 200),
     cost_centers: costCenters,
     projects,
@@ -590,28 +649,30 @@ async function getBusinessPartner(baseUrl: string, cookie: string, cardCode: str
 }
 
 function firstBankAccountDetails(bp: Record<string, unknown> | null): Record<string, string> {
-  const accounts = Array.isArray(bp?.BPBankAccounts) ? bp?.BPBankAccounts as Array<Record<string, unknown>> : [];
-  const defaultBank = firstText(bp?.DefaultBankCode, bp?.BankCode);
-  const defaultBranch = firstText(bp?.DefaultBranch, bp?.Branch, bp?.HouseBankBranch);
-  const defaultAccount = firstText(bp?.DefaultAccount, bp?.AccountNo, bp?.HouseBankAccount);
+  const row = businessPartnerRow(bp);
+  const accounts = collectionRows(row?.BPBankAccounts);
+  const defaultBank = firstText(row?.DefaultBankCode, row?.BankCode, row?.BankCode2, row?.HouseBank);
+  const defaultBranch = firstText(row?.DefaultBranch, row?.Branch, row?.BankBranch, row?.HouseBankBranch);
+  const defaultAccount = firstText(row?.DefaultAccount, row?.AccountNo, row?.AccountNumber, row?.HouseBankAccount);
   const account = accounts.find((item) => {
-    const accountBank = firstText(item.BankCode, item.BankName, item.BankKey);
-    const accountBranch = firstText(item.Branch, item.BranchCode);
-    const accountNumber = firstText(item.AccountNo, item.Account, item.IBAN);
+    const accountBank = firstText(item.BankCode, item.BankCode2, item.BankKey, item.BankName);
+    const accountBranch = firstText(item.Branch, item.BankBranch, item.BranchCode);
+    const accountNumber = firstText(item.AccountNo, item.AccountNumber, item.Account, item.IBAN);
     if (defaultBank && accountBank && accountBank !== defaultBank) return false;
     if (defaultBranch && accountBranch && accountBranch !== defaultBranch) return false;
     if (defaultAccount && accountNumber && accountNumber !== defaultAccount) return false;
     return Boolean(defaultBank || defaultBranch || defaultAccount);
   }) || accounts.find((item) => String(item.Default || item.IsDefault || "").toLowerCase() === "tyes") || accounts[0] || {};
+  const pixKey = firstText(account.U_ChavePix, account.PixKey, row?.U_ChavePix, row?.PixKey) || "";
   return {
-    bank_code: firstText(account.BankCode, defaultBank) || "",
-    branch: firstText(account.Branch, account.BranchCode, defaultBranch) || "",
-    branch_digit: firstText(account.BranchDigit) || "",
-    account_number: firstText(account.AccountNo, account.Account, account.IBAN, defaultAccount) || "",
-    account_digit: firstText(account.ControlKey, account.AccountDigit, account.CheckDigit) || "",
+    bank_code: firstText(account.BankCode, account.BankCode2, account.BankKey, defaultBank) || "",
+    branch: firstText(account.Branch, account.BankBranch, account.BranchCode, defaultBranch) || "",
+    branch_digit: firstText(account.AgencyControlKey, account.BranchDigit) || "",
+    account_number: firstText(account.AccountNo, account.AccountNumber, account.Account, account.IBAN, defaultAccount) || "",
+    account_digit: firstText(account.ControlKey, account.AccountCheckDigit, account.AccountDigit, account.CheckDigit) || "",
     account_type: normalizeAccountType(account.U_TipoConta || account.AccountType) || "",
-    pix_key_type: normalizePixKeyType(account.U_TipoChavePix || bp?.U_TipoChavePix) || "",
-    pix_key: firstText(account.U_ChavePix, bp?.U_ChavePix) || "",
+    pix_key_type: normalizePixKeyType(account.U_TipoChavePix || row?.U_TipoChavePix, pixKey) || "",
+    pix_key: pixKey,
   };
 }
 
@@ -643,19 +704,20 @@ function supplierPaymentResponse(
   bp: Record<string, unknown> | null,
   stored: SupplierPaymentProfileRow | null,
 ) {
-  const bank = firstBankAccountDetails(bp);
-  const pixKeys = collectPixKeys(bp);
+  const row = businessPartnerRow(bp);
+  const bank = firstBankAccountDetails(row);
+  const pixKeys = collectPixKeys(row);
   const pixKey = bank.pix_key || pixKeys[0] || "";
-  const bpTaxId = fiscalTaxIdFromBp(bp, pixKey) || "";
+  const bpTaxId = fiscalTaxIdFromBp(row, pixKey) || "";
   const supplierTaxId = digits(stored?.supplier_tax_id) || bpTaxId;
   const beneficiaryTaxId = digits(stored?.beneficiary_tax_id) || supplierTaxId;
-  const sapDefaultMethod = normalizeSapPaymentMethod(bp?.PeymentMethodCode || bp?.PaymentMethodCode || bp?.DefaultPaymentMethod);
+  const sapDefaultMethod = normalizeSapPaymentMethod(row?.PeymentMethodCode || row?.PaymentMethodCode || row?.DefaultPaymentMethod);
   return {
     supplier_code: supplierCode,
-    supplier_name: stored?.supplier_name || firstText(bp?.CardName) || "",
+    supplier_name: stored?.supplier_name || firstText(row?.CardName) || "",
     supplier_tax_id: supplierTaxId,
     method: stored?.payment_method || sapDefaultMethod || (pixKeys[0] ? "pix" : bank.bank_code || bank.account_number ? "ted" : "ted"),
-    beneficiary_name: stored?.beneficiary_name || firstText(bp?.CardName) || "",
+    beneficiary_name: stored?.beneficiary_name || firstText(row?.CardName) || "",
     beneficiary_tax_id: beneficiaryTaxId,
     bank_code: stored?.bank_code || bank.bank_code,
     branch: stored?.branch || bank.branch,
@@ -781,14 +843,15 @@ async function saveSupplierPaymentProfile(admin: AdminClient, companyDb: string,
 
   return await withSap(admin, companyDb, req, async (baseUrl, cookie) => {
     const bp = await getBusinessPartner(baseUrl, cookie, supplierCode);
+    const bpRow = businessPartnerRow(bp);
     const oldStored = await loadStoredSupplierPaymentProfile(admin, companyDb, supplierCode);
-    const oldProfile = supplierPaymentResponse(supplierCode, bp, oldStored);
-    payload.supplier_name = payload.supplier_name || firstText(bp?.CardName) || null;
-    payload.supplier_tax_id = payload.supplier_tax_id || fiscalTaxIdFromBp(bp, payload.pix_key) || null;
+    const oldProfile = supplierPaymentResponse(supplierCode, bpRow, oldStored);
+    payload.supplier_name = payload.supplier_name || firstText(bpRow?.CardName) || null;
+    payload.supplier_tax_id = payload.supplier_tax_id || fiscalTaxIdFromBp(bpRow, payload.pix_key) || null;
 
     let sapPatch: { patched: boolean; fields: string[] } = { patched: false, fields: [] };
     try {
-      sapPatch = await patchSapSupplierPayment(baseUrl, cookie, supplierCode, method, payload, bp);
+      sapPatch = await patchSapSupplierPayment(baseUrl, cookie, supplierCode, method, payload, bpRow);
     } catch (error) {
       console.warn("[accounts-payable-cnab] supplier SAP payment patch failed", supplierCode, message(error));
     }
@@ -802,12 +865,12 @@ async function saveSupplierPaymentProfile(admin: AdminClient, companyDb: string,
 
     await auditSupplierPaymentProfile(admin, companyDb, supplierCode, actor, {
       previous: oldProfile,
-      next: supplierPaymentResponse(supplierCode, bp, data as SupplierPaymentProfileRow),
+      next: supplierPaymentResponse(supplierCode, bpRow, data as SupplierPaymentProfileRow),
       sap_patch: sapPatch,
       source: "accounts_payable_screen",
     });
 
-    return { profile: supplierPaymentResponse(supplierCode, bp, data as SupplierPaymentProfileRow), sap_patch: sapPatch };
+    return { profile: supplierPaymentResponse(supplierCode, bpRow, data as SupplierPaymentProfileRow), sap_patch: sapPatch };
   });
 }
 
@@ -838,11 +901,24 @@ async function loadExpensePaymentProfile(admin: AdminClient, companyDb: string, 
   }
 }
 
-async function listOpenInvoices(admin: AdminClient, companyDb: string, baseUrl: string, cookie: string): Promise<OpenTitle[]> {
+async function listOpenInvoices(
+  admin: AdminClient,
+  companyDb: string,
+  baseUrl: string,
+  cookie: string,
+  filters: { dueFrom?: string | null; dueTo?: string | null } = {},
+): Promise<OpenTitle[]> {
   const titles: OpenTitle[] = [];
   const bpCache = new Map<string, Record<string, unknown> | null>();
   const supplierProfileCache = new Map<string, SupplierPaymentProfileRow | null>();
-  const filter = "DocumentStatus eq 'bost_Open' and Cancelled eq 'tNO'";
+  const dueFrom = requestDate(filters.dueFrom) || isoDayOffset(-10);
+  const dueTo = requestDate(filters.dueTo) || isoDayOffset(0);
+  const filter = [
+    "DocumentStatus eq 'bost_Open'",
+    "Cancelled eq 'tNO'",
+    `DocDueDate ge '${dueFrom}'`,
+    `DocDueDate le '${dueTo}'`,
+  ].join(" and ");
   let next: string | null = `PurchaseInvoices?$select=${encodeURIComponent(INVOICE_SELECT)}&$filter=${encodeURIComponent(filter)}&$orderby=DocDueDate asc`;
   let pages = 0;
   while (next && pages < 50) {
@@ -876,8 +952,11 @@ async function listOpenInvoices(admin: AdminClient, companyDb: string, baseUrl: 
 
 const ACTIVE_REMITTANCE_STATUSES = ["remitted", "scheduled", "paid", "sap_processing", "sap_error"];
 
-async function listAvailableTitles(admin: AdminClient, companyDb: string, req: Request): Promise<OpenTitle[]> {
-  const openTitles = await withSap(admin, companyDb, req, (baseUrl, cookie) => listOpenInvoices(admin, companyDb, baseUrl, cookie));
+async function listAvailableTitles(admin: AdminClient, companyDb: string, req: Request, body: Record<string, unknown>): Promise<OpenTitle[]> {
+  const openTitles = await withSap(admin, companyDb, req, (baseUrl, cookie) => listOpenInvoices(admin, companyDb, baseUrl, cookie, {
+    dueFrom: body.due_from,
+    dueTo: body.due_to,
+  }));
   const { data, error } = await admin
     .from("accounts_payable_batch_items")
     .select("sap_doc_entry, installment_id")
@@ -1017,7 +1096,8 @@ async function generateBatch(admin: AdminClient, companyDb: string, body: Record
       if (!current || current.open_amount + 0.005 < amount) {
         throw new Error(`NF ${invoice.DocNum}: saldo atual insuficiente para a remessa.`);
       }
-      if ((invoice.DocCurrency || "BRL") !== "BRL") throw new Error(`NF ${invoice.DocNum}: CNAB disponível inicialmente apenas para títulos em BRL.`);
+      const invoiceCurrency = normalizeCurrency(invoice.DocCurrency);
+      if (invoiceCurrency !== "BRL") throw new Error(`NF ${invoice.DocNum}: CNAB disponível inicialmente apenas para títulos em BRL.`);
       const id = crypto.randomUUID();
       validated.push({
         id,
@@ -1064,7 +1144,7 @@ async function generateBatch(admin: AdminClient, companyDb: string, body: Record
     const contentHash = await sha256(remittance.content);
     const filename = `PAG_${paymentDate.replace(/-/g, "")}_${String(reserved.sequence).padStart(6, "0")}.REM`;
     const batchId = crypto.randomUUID();
-    const { error: batchError } = await admin.from("accounts_payable_batches").insert({
+    const batchPayload = {
       id: batchId,
       company_db: companyDb,
       bank_account_id: reserved.bankAccountId,
@@ -1073,9 +1153,16 @@ async function generateBatch(admin: AdminClient, companyDb: string, body: Record
       payment_date: paymentDate,
       title_count: validated.length,
       total_amount: remittance.totalAmount,
+      content: remittance.content,
       content_sha256: contentHash,
       generated_by: actor,
-    });
+    };
+    let { error: batchError } = await admin.from("accounts_payable_batches").insert(batchPayload);
+    if (batchError && isMissingColumn(batchError)) {
+      const safePayload = { ...batchPayload };
+      delete (safePayload as Record<string, unknown>).content;
+      ({ error: batchError } = await admin.from("accounts_payable_batches").insert(safePayload));
+    }
     if (batchError) throw new Error(`Falha ao registrar remessa: ${message(batchError)}`);
 
     const rows = validated.map((title) => ({
@@ -1092,7 +1179,7 @@ async function generateBatch(admin: AdminClient, companyDb: string, body: Record
       scheduled_date: paymentDate,
       amount: title.amount,
       currency: title.currency,
-      barcode: title.barcode,
+      barcode: title.payment_method === "boleto" ? title.barcode : null,
       payment_method: title.payment_method,
       payment_metadata: {
         beneficiary_name: title.beneficiary_name,
@@ -1122,7 +1209,7 @@ async function generateBatch(admin: AdminClient, companyDb: string, body: Record
 async function listBatches(admin: AdminClient, companyDb: string) {
   const { data: batches, error } = await admin
     .from("accounts_payable_batches")
-    .select("*")
+    .select("id, company_db, bank_account_id, file_sequence, filename, payment_date, title_count, total_amount, status, content_sha256, return_filename, return_sha256, generated_by, generated_at, processed_at, error_message, created_at, updated_at")
     .eq("company_db", companyDb)
     .order("generated_at", { ascending: false })
     .limit(100);
@@ -1148,6 +1235,64 @@ async function listBatches(admin: AdminClient, companyDb: string) {
     ...batch,
     accounts_payable_batch_items: byBatch.get(batch.id) || [],
   }));
+}
+
+function batchItemTitle(item: Record<string, unknown>, paymentDate: string): SicoobPaymentTitle {
+  const metadata = isRecord(item.payment_metadata) ? item.payment_metadata : {};
+  const method = normalizeRemittancePaymentMethod(item.payment_method || (item.barcode ? "boleto" : "ted"));
+  if (method === "unknown") throw new Error(`Título ${item.sap_doc_num || item.company_reference}: forma de pagamento ausente.`);
+  return {
+    id: String(item.id || crypto.randomUUID()),
+    paymentMethod: method,
+    barcode: method === "boleto" ? String(item.barcode || "") : null,
+    supplierName: String(metadata.beneficiary_name || item.supplier_name || ""),
+    supplierTaxId: firstText(metadata.beneficiary_tax_id, item.supplier_tax_id),
+    dueDate: day(item.due_date),
+    paymentDate,
+    amount: roundMoney(item.amount),
+    companyReference: String(item.company_reference || ""),
+    bankCode: firstText(metadata.bank_code),
+    branch: firstText(metadata.branch),
+    branchDigit: firstText(metadata.branch_digit),
+    accountNumber: firstText(metadata.account_number),
+    accountDigit: firstText(metadata.account_digit),
+    accountType: firstText(metadata.account_type),
+    pixKeyType: firstText(metadata.pix_key_type),
+    pixKey: firstText(metadata.pix_key),
+  };
+}
+
+async function downloadBatch(admin: AdminClient, companyDb: string, body: Record<string, unknown>) {
+  const batchId = String(body.batch_id || "").trim();
+  if (!batchId) throw new Error("batch_id é obrigatório.");
+  const { data: batch, error } = await admin
+    .from("accounts_payable_batches")
+    .select("*")
+    .eq("company_db", companyDb)
+    .eq("id", batchId)
+    .maybeSingle();
+  if (error) throw new Error(`Lote: ${message(error)}`);
+  if (!batch) throw new Error("Lote não encontrado.");
+  if (String(batch.content || "")) return { filename: batch.filename, content: batch.content, regenerated: false };
+
+  const config = await loadBankConfig(admin, companyDb);
+  if (!config || config.active === false) throw new Error("Configure uma conta Sicoob ativa antes de reconstruir a remessa.");
+  const { data: items, error: itemsError } = await admin
+    .from("accounts_payable_batch_items")
+    .select("*")
+    .eq("company_db", companyDb)
+    .eq("batch_id", batchId)
+    .order("created_at", { ascending: true });
+  if (itemsError) throw new Error(`Itens do lote: ${message(itemsError)}`);
+  const titles = (items || []).map((item: Record<string, unknown>) => batchItemTitle(item, day(batch.payment_date)));
+  if (!titles.length) throw new Error("Lote sem títulos para reconstrução.");
+  const remittance = generateSicoobCnab240({
+    account: bankAccount(config),
+    fileSequence: Number(batch.file_sequence),
+    generatedAt: new Date(String(batch.generated_at || Date.now())),
+    titles,
+  });
+  return { filename: batch.filename, content: remittance.content, regenerated: true };
 }
 
 async function matchReturn(admin: AdminClient, companyDb: string, parsedTitles: SicoobReturnTitle[]) {
@@ -1342,9 +1487,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (action === "save_config") return json({ config: await saveBankConfig(admin, companyDb, body, actor) });
     if (action === "get_supplier_payment_profile") return json(await getSupplierPaymentProfile(admin, companyDb, body, req));
     if (action === "save_supplier_payment_profile") return json(await saveSupplierPaymentProfile(admin, companyDb, body, actor, req));
-    if (action === "list_open") return json({ titles: await listAvailableTitles(admin, companyDb, req) });
+    if (action === "list_open") return json({ titles: await listAvailableTitles(admin, companyDb, req, body) });
     if (action === "generate") return json(await generateBatch(admin, companyDb, body, actor, req));
     if (action === "list_batches") return json({ batches: await listBatches(admin, companyDb) });
+    if (action === "download_batch") return json(await downloadBatch(admin, companyDb, body));
     if (action === "preview_return") return json(await previewReturn(admin, companyDb, String(body.content || "")));
     if (action === "process_return") return json(await processReturn(admin, companyDb, String(body.content || ""), String(body.filename || ""), actor, req));
     return json({ error: "Ação inválida." }, 400);

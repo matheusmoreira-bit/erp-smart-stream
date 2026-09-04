@@ -16,6 +16,23 @@ ALTER TABLE public.accounts_payable_batch_items
 
 DO $$
 BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'accounts_payable_batch_items_barcode_check'
+      AND conrelid = 'public.accounts_payable_batch_items'::regclass
+  ) THEN
+    ALTER TABLE public.accounts_payable_batch_items
+      DROP CONSTRAINT accounts_payable_batch_items_barcode_check;
+  END IF;
+
+  ALTER TABLE public.accounts_payable_batch_items
+    ADD CONSTRAINT accounts_payable_batch_items_barcode_check
+    CHECK (
+      (payment_method = 'boleto' AND barcode ~ '^\d{44}$')
+      OR (payment_method <> 'boleto' AND (barcode IS NULL OR barcode = ''))
+    );
+
   IF NOT EXISTS (
     SELECT 1
     FROM pg_constraint

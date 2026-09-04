@@ -476,7 +476,8 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   const dueDate = input.due_date ? String(input.due_date).trim() : "";
   if (!dueDate) return json(400, { error: "Data de vencimento é obrigatória" });
   const docType = String(input.doc_type || "purchase").toLowerCase();
-  if (docType !== "sales" && Number(input.attachment_count || 0) < 1) {
+  const isUberExpense = origin === "uber";
+  if (!isUberExpense && docType !== "sales" && Number(input.attachment_count || 0) < 1) {
     return json(400, { error: "Anexo obrigatório: documentos devem ser criados com ao menos 1 anexo." });
   }
   const itemValidationError = await validateActiveSapItems(admin, companyDb, items, docType, { liveSap: false });
