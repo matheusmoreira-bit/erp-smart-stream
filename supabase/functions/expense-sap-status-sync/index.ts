@@ -14,6 +14,7 @@ import {
 
 interface ExpenseRow {
   id: string;
+  doc_type?: string | null;
   company_db: string;
   sap_doc_entry: number | null;
   status: string;
@@ -126,7 +127,7 @@ Deno.serve(async (req) => {
     // pelas NFs e pelos pagamentos conhecidos no cache SAP.
     let query = sb
       .from("expenses")
-      .select("id, company_db, sap_doc_entry, status, supplier_name, total_amount, sap_sync_attempts, sap_purchase_order_status")
+      .select("id, doc_type, company_db, sap_doc_entry, status, supplier_name, total_amount, sap_sync_attempts, sap_purchase_order_status")
       .not("sap_doc_entry", "is", null)
       .in("status", ["aprovado", "pc_lancado", "nf_entrada", "pagamento", "finalizado"])
       .order("sap_status_last_check_at", { ascending: true, nullsFirst: true })
@@ -215,7 +216,159 @@ Deno.serve(async (req) => {
       results.push({ id: row.id, docEntry, poStatus, expenseStatus: newExpenseStatus, source } as typeof results[number] & { source?: string });
     };
 
-    for (const [companyDb, list] of byCompany) {
+
+    // ---- Pedidos de venda -------------------------------------------------
+    // A cadeia de venda é Orders → Invoices (NF de Saída) → IncomingPayments.
+    // Buscar PurchaseOrders com o DocEntry de um pedido de venda é errado
+    // (ORDR e OPOR têm numeração independente) e deixava a venda travada em
+    // "PV Lançado", bloqueando emissão de NFSe e baixa.
+    const syncSalesRows = async (companyDb: string, rows: ExpenseRow[]) => {
+      let cookie = "";
+      let baseUrl = "";
+      try {
+        const creds = await loadCreds(sb, companyDb);
+        baseUrl = buildBaseUrl(creds.service_layer_url);
+        cookie = await sapLogin(baseUrl, creds.company_db || companyDb, creds.username, creds.password);
+      } catch (e) {
+        const msg = (e as Error).message;
+        for (const row of rows) {
+          const info = await recordFailure(row, `SAP login: ${msg}`);
+          results.push({ id: row.id, error: msg, attempts: info.attempts, nextRetryAt: info.nextRetryAt });
+        }
+        return;
+      }
+
+      const get = async (path: string) => {
+        const r = await fetch(`${baseUrl}/${path}`, { headers: { Cookie: cookie } });
+        if (r.status === 404) return null;
+        if (!r.ok) throw new Error(`${path.split("?")[0]} ${r.status}: ${(await r.text()).slice(0, 200)}`);
+        return await r.json();
+      };
+
+      try {
+        for (const row of rows) {
+          const docEntry = Number(row.sap_doc_entry);
+          try {
+            const order = await get(
+              `Orders(${docEntry})?$select=DocEntry,DocNum,DocumentStatus,Cancelled,CardCode`,
+            );
+            const now = new Date().toISOString();
+            if (!order) {
+              await sb.from("expenses").update({
+                sap_purchase_order_status: "not_found",
+                sap_status_last_check_at: now,
+                sap_integration_error: null,
+                sap_sync_state: "ok",
+                sap_sync_attempts: 0,
+                sap_sync_next_retry_at: null,
+              }).eq("id", row.id);
+              results.push({ id: row.id, docEntry, poStatus: "not_found" });
+              continue;
+            }
+
+            // NFs de saída geradas a partir do pedido (BaseType 17 = Orders).
+            const cardCode = String(order.CardCode || "").replace(/'/g, "''");
+            const filter = cardCode ? `&$filter=${encodeURIComponent(`CardCode eq '${cardCode}'`)}` : "";
+            const invList = await get(
+              `Invoices?$select=DocEntry,DocNum,DocTotal,PaidToDate,Cancelled,DocumentLines${filter}&$orderby=DocEntry desc&$top=100`,
+            );
+            const invoices: SapInvoiceLifecycle[] = [];
+            const linked: Array<{ docEntry: number; docNum: number | null; total: number; paid: number; cancelled: string | null }> = [];
+            for (const inv of (invList?.value || []) as Array<Record<string, unknown>>) {
+              const lines = (inv.DocumentLines || []) as Array<Record<string, unknown>>;
+              const matches = lines.some(
+                (l) => Number(l.BaseType) === 17 && Number(l.BaseEntry) === docEntry,
+              );
+              if (!matches) continue;
+              invoices.push({
+                docTotal: Number(inv.DocTotal) || 0,
+                paidToDate: Number(inv.PaidToDate) || 0,
+                cancelled: (inv.Cancelled as string) ?? null,
+              });
+              linked.push({
+                docEntry: Number(inv.DocEntry),
+                docNum: inv.DocNum != null ? Number(inv.DocNum) : null,
+                total: Number(inv.DocTotal) || 0,
+                paid: Number(inv.PaidToDate) || 0,
+                cancelled: (inv.Cancelled as string) ?? null,
+              });
+            }
+
+            // Mantém o vínculo do lado do Flow para o mapa de relações,
+            // emissão de NFSe e baixa de recebimento.
+            for (const inv of linked) {
+              if (inv.cancelled === "tYES") continue;
+              const patch: Record<string, unknown> = {
+                company_db: companyDb,
+                expense_id: row.id,
+                sap_order_doc_entry: docEntry,
+                sap_invoice_doc_entry: inv.docEntry,
+                sap_invoice_doc_num: inv.docNum,
+                total_amount: inv.total,
+                paid_amount: inv.paid,
+                status: inv.paid > 0 ? "settled" : "issued",
+                last_error: null,
+              };
+              const { data: existing } = await sb
+                .from("sales_order_invoices")
+                .select("id, status, nfse_number")
+                .eq("company_db", companyDb)
+                .eq("sap_invoice_doc_entry", inv.docEntry)
+                .maybeSingle();
+              if (existing?.id) {
+                // Não rebaixa um status fiscal já conhecido (authorized).
+                if ((existing as { status?: string }).status === "authorized" && inv.paid <= 0) delete patch.status;
+                await sb.from("sales_order_invoices").update(patch).eq("id", (existing as { id: string }).id);
+              } else {
+                await sb.from("sales_order_invoices").insert(patch);
+              }
+            }
+
+            const derived = deriveExpenseLifecycleStatus({
+              currentStatus: row.status,
+              expenseTotal: row.total_amount,
+              poDocumentStatus: order.DocumentStatus ?? null,
+              poCancelled: order.Cancelled ?? null,
+              invoices,
+            });
+            const cancelled = order.Cancelled === "tYES";
+            const poStatus = cancelled ? "cancelled" : order.DocumentStatus === "bost_Close" ? "closed" : "open";
+            const patch: Record<string, unknown> = {
+              sap_purchase_order_status: poStatus,
+              sap_status_last_check_at: now,
+              sap_integration_error: null,
+              sap_sync_state: "ok",
+              sap_sync_attempts: 0,
+              sap_sync_next_retry_at: null,
+            };
+            let newExpenseStatus: string | undefined;
+            if (derived !== row.status) {
+              patch.status = derived;
+              newExpenseStatus = derived;
+              patch.sap_integration_last_attempt_at = now;
+            }
+            await sb.from("expenses").update(patch).eq("id", row.id);
+            results.push({ id: row.id, docEntry, poStatus, expenseStatus: newExpenseStatus });
+          } catch (e) {
+            const msg = (e as Error).message;
+            const info = await recordFailure(row, msg);
+            results.push({ id: row.id, docEntry, error: msg, attempts: info.attempts, nextRetryAt: info.nextRetryAt });
+          }
+        }
+      } finally {
+        await fetch(`${baseUrl}/Logout`, { method: "POST", headers: { Cookie: cookie } }).catch(() => {});
+      }
+    };
+
+    for (const [companyDb, allRows] of byCompany) {
+      const salesRows = allRows.filter((r) => r.doc_type === "sales");
+      const list = allRows.filter((r) => r.doc_type !== "sales");
+
+      if (salesRows.length) {
+        await syncSalesRows(companyDb, salesRows);
+      }
+      if (list.length === 0) continue;
+
       // 1) Cache-first: tenta resolver via sap_purchase_order_cache para evitar login SAP.
       const docEntries = list
         .map((r) => Number(r.sap_doc_entry))

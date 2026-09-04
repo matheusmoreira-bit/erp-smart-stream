@@ -6978,10 +6978,16 @@ export type Database = {
           created_by_email: string | null
           currency: string
           expense_id: string | null
+          fiscal_authorized_at: string | null
+          fiscal_doc_key: string | null
           id: string
           last_error: string | null
           nfse_number: string | null
+          paid_amount: number | null
+          paid_at: string | null
           rps_number: string | null
+          sap_incoming_payment_doc_entry: number | null
+          sap_incoming_payment_doc_num: number | null
           sap_invoice_doc_entry: number | null
           sap_invoice_doc_num: number | null
           sap_order_doc_entry: number | null
@@ -6998,10 +7004,16 @@ export type Database = {
           created_by_email?: string | null
           currency?: string
           expense_id?: string | null
+          fiscal_authorized_at?: string | null
+          fiscal_doc_key?: string | null
           id?: string
           last_error?: string | null
           nfse_number?: string | null
+          paid_amount?: number | null
+          paid_at?: string | null
           rps_number?: string | null
+          sap_incoming_payment_doc_entry?: number | null
+          sap_incoming_payment_doc_num?: number | null
           sap_invoice_doc_entry?: number | null
           sap_invoice_doc_num?: number | null
           sap_order_doc_entry?: number | null
@@ -7018,10 +7030,16 @@ export type Database = {
           created_by_email?: string | null
           currency?: string
           expense_id?: string | null
+          fiscal_authorized_at?: string | null
+          fiscal_doc_key?: string | null
           id?: string
           last_error?: string | null
           nfse_number?: string | null
+          paid_amount?: number | null
+          paid_at?: string | null
           rps_number?: string | null
+          sap_incoming_payment_doc_entry?: number | null
+          sap_incoming_payment_doc_num?: number | null
           sap_invoice_doc_entry?: number | null
           sap_invoice_doc_num?: number | null
           sap_order_doc_entry?: number | null
