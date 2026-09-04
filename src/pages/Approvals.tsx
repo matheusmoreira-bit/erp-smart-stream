@@ -1039,7 +1039,8 @@ function ApprovalDetailModal({
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 sm:gap-3 flex-wrap">
                 <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                  {doc.docTypeName}
+                  {doc.docTypeName}</span>
+                <DocKindBadge doc={doc} className="ml-1" /><span className="hidden">
                 </span>
                 <span className="font-mono text-sm sm:text-base">{docNumberLabel(doc)}</span>
                 <span className="ml-auto text-right">
@@ -1136,7 +1137,7 @@ function ApprovalDetailModal({
             {/* Basic Info */}
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
-                <p className="text-xs text-muted-foreground">Fornecedor</p>
+                <p className="text-xs text-muted-foreground">{partnerLabel(doc)}</p>
                 <p className="text-foreground font-medium">{doc.cardName}</p>
                 <p className="text-xs text-muted-foreground font-mono">{doc.cardCode}</p>
               </div>
@@ -1732,7 +1733,7 @@ function ApprovalDetailModal({
                     <span className="font-mono">{docNumberLabel(doc)}</span>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Fornecedor</span>
+                    <span className="text-muted-foreground">{partnerLabel(doc as never)}</span>
                     <span className="font-medium text-right break-words">{doc?.cardName || "—"}</span>
                   </div>
                   <div className="flex justify-between gap-3">
@@ -2070,7 +2071,7 @@ function MyRequestDetailModal({ doc, open, onClose }: { doc: MyRequestDoc | null
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3 flex-wrap">
-            <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span>
+            <DocKindBadge doc={doc} /><span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span>
             <span className="font-mono">{docNumberLabel(doc)}</span>
             <StatusBadge status={doc.status} label={doc.statusLabel} />
             <span className="text-2xl font-bold font-mono ml-auto">{formatCurrency(doc.docTotal, doc.currency)}</span>
@@ -2080,7 +2081,7 @@ function MyRequestDetailModal({ doc, open, onClose }: { doc: MyRequestDoc | null
         <div className="space-y-4 mt-2">
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
-              <p className="text-xs text-muted-foreground">Fornecedor</p>
+              <p className="text-xs text-muted-foreground">{partnerLabel(doc)}</p>
               <p className="text-foreground font-medium">{doc.cardName}</p>
               <p className="text-xs text-muted-foreground font-mono">{doc.cardCode}</p>
             </div>
@@ -2265,7 +2266,7 @@ function MyRequestsTab() {
                 <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Tipo</th>
                 <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Nº Doc</th>
                 <th className="text-right py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Valor</th>
-                <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Fornecedor</th>
+                <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">{"Parceiro"}</th>
                 <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Modelo</th>
                 <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
                 <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Criado</th>
@@ -2276,7 +2277,7 @@ function MyRequestsTab() {
               {visibleRequests.map((doc) => (
                 <tr key={doc.approvalRequestId} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                   <td className="py-3 px-3">
-                    <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap"><DocKindBadge doc={doc} /><span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span></div>
                   </td>
                   <td className="py-3 px-3 font-mono text-xs text-foreground font-semibold">{docNumberLabel(doc)}</td>
                   <td className="py-3 px-3 text-right font-mono text-foreground font-medium">{formatCurrency(doc.docTotal, doc.currency)}</td>
@@ -3689,6 +3690,7 @@ export default function ApprovalsPage() {
                   { label: "Usuário", value: session?.userName || "—" },
                 ],
                 columns: [
+                  { header: "Natureza", cell: (a: typeof filtered[number]) => DOC_KIND_LABEL[docKind(a as never)] },
                   { header: "Tipo", cell: (a: typeof filtered[number]) => a.docTypeName || "—" },
                   { header: "Doc #", cell: (a: typeof filtered[number]) => docNumberLabel(a as never) },
                   { header: "Parceiro", cell: (a: typeof filtered[number]) => a.cardName },
@@ -4172,7 +4174,7 @@ export default function ApprovalsPage() {
                     ["docTypeName", "Tipo", "left"],
                     ["docNum", "Nº Doc", "left"],
                     ["docTotal", "Valor", "right"],
-                    ["cardName", "Fornecedor", "left"],
+                    ["cardName", "Parceiro", "left"],
                     ["currentApprover", "Aprovador", "left"],
                     ["requester", "Solicitante", "left"],
                     ["dueDate", "Vencimento", "left"],
@@ -4248,7 +4250,7 @@ export default function ApprovalsPage() {
                         </td>
                       )}
                       <td className="py-3 px-3">
-                        <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap"><DocKindBadge doc={doc} /><span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span></div>
                       </td>
                       <td className="py-3 px-3 font-mono text-xs text-foreground font-semibold">{docNumberLabel(doc)}</td>
                       <td className="py-3 px-3 text-right font-mono text-foreground font-medium">{formatCurrency(doc.docTotal, doc.currency)}</td>
