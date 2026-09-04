@@ -148,8 +148,18 @@ Deno.serve(async (req) => {
         else updated += 1;
       }
 
+      const { data: lookup, error: fnErr } = await supabase.functions.invoke("sap-nfse-lookup", {
+        body: { company_db: companyDb, doc_entries: docEntries },
+      });
+      if (fnErr) throw new Error(`Consulta fiscal falhou: ${fnErr.message}`);
+
+      const map = (lookup?.map || {}) as Record<string, {
+        nfse?: string | null; rps?: string | null; key?: string | null; status?: string | null; authorized_at?: string | null;
+      }>;
 
       for (const row of rows || []) {
+        const entry = Number(row.sap_invoice_doc_entry);
+        if (cancelledEntries.has(entry)) continue;
         const info = map[String(row.sap_invoice_doc_entry)];
         if (!info) continue;
         const nfse = info.nfse ? String(info.nfse) : null;
@@ -166,6 +176,7 @@ Deno.serve(async (req) => {
           .eq("id", row.id);
         updated += 1;
       }
+
       return json({ updated });
     }
 
