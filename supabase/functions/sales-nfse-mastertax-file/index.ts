@@ -173,7 +173,12 @@ Deno.serve(async (req) => {
 
 
     const config = await loadCredentials(supabase, companyDb);
-    if (!config) return json({ error: "Credenciais MasterTax ausentes para esta empresa" }, 400);
+    if (!config) {
+      return json({
+        error: "MasterTax não configurada para esta empresa.",
+        code: "MASTER_TAX_NOT_CONFIGURED",
+      }, 404);
+    }
 
     const masterTaxId = await findMasterTaxId(config.credentials, config.empresaIds, accessKey);
     if (!masterTaxId) {

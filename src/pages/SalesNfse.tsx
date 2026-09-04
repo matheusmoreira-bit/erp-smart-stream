@@ -821,9 +821,16 @@ export default function SalesNfse() {
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || result?.error) {
-          if (result?.code === "MASTER_TAX_NFSE_NOT_FOUND") {
+          if (
+            result?.code === "MASTER_TAX_NFSE_NOT_FOUND" ||
+            result?.code === "MASTER_TAX_NOT_CONFIGURED"
+          ) {
             const portalUrl = buildNfsePublicConsultationUrl(accessKey);
-            toast.info("NFS-e ainda não capturada pela MasterTax. Abrindo a consulta oficial.");
+            toast.info(
+              result?.code === "MASTER_TAX_NOT_CONFIGURED"
+                ? "MasterTax não configurada para esta empresa. Abrindo a consulta oficial."
+                : "NFS-e ainda não capturada pela MasterTax. Abrindo a consulta oficial.",
+            );
             if (portalUrl) window.open(portalUrl, "_blank", "noopener,noreferrer");
             return;
           }
