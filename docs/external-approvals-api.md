@@ -63,9 +63,21 @@ Respostas de erro de autenticação:
 > Aprovações originadas diretamente no SAP B1, fora do fluxo do ERP Flow,
 > **não** aparecem nas respostas de `list`, mesmo estando pendentes no SAP.
 
-### 3.1 Listar documentos pendentes
+### 3.1 Listar documentos (`op: "list"`)
 
-Há dois modos:
+Parâmetros aceitos:
+
+| Campo             | Obrig. | Default   | Descrição |
+|-------------------|--------|-----------|-----------|
+| `company_db`      | sim    | —         | Base SAP (ex.: `SBO_ANAGAMING`). |
+| `user_code`       | não    | —         | Se informado, filtra pelas pendências do usuário (exige allowlist). Se omitido, retorna a fila da empresa inteira. |
+| `status`          | não    | `pending` | `pending`, `approved`, `rejected`, `cancelled`, `generated` ou `all`. |
+| `doc_object_type` | não    | —         | Código SAP do objeto (`22` = Pedido de Compra, `18` = NF de Entrada…). |
+| `limit`           | não    | `50`      | Itens por página (máx. `200`). |
+| `offset`          | não    | `0`       | Deslocamento para paginar. |
+
+A resposta traz `limit`, `offset`, `has_more` e `next_offset` — pagine até
+`has_more: false`. Recomenda-se `limit` entre 20 e 50 para telas de painel.
 
 **a) Pendências de UM usuário** (informe `user_code`):
 
@@ -77,7 +89,9 @@ Content-Type: application/json
 {
   "op": "list",
   "company_db": "SBO_EMPRESA_X",
-  "user_code": "joao.silva"
+  "user_code": "joao.silva",
+  "limit": 50,
+  "offset": 0
 }
 ```
 
@@ -86,8 +100,19 @@ Content-Type: application/json
 ```json
 {
   "op": "list",
-  "company_db": "SBO_EMPRESA_X"
+  "company_db": "SBO_EMPRESA_X",
+  "doc_object_type": "22",
+  "status": "pending",
+  "limit": 50,
+  "offset": 0
 }
+```
+
+**c) Finalizados** (aprovados / rejeitados):
+
+```json
+{ "op": "list", "company_db": "SBO_EMPRESA_X", "status": "approved", "limit": 50, "offset": 0 }
+{ "op": "list", "company_db": "SBO_EMPRESA_X", "status": "rejected", "limit": 50, "offset": 0 }
 ```
 
 Nesse modo, cada documento traz `pending_approvers` com os aprovadores atuais
@@ -96,17 +121,26 @@ A allowlist por `user_code` **não** é aplicada — a `X-API-Key` já autoriza 
 leitura no nível da empresa; compartilhe a chave apenas com sistemas de
 confiança.
 
+
 **Response 200** (modo b, `scope: "company"`):
 ```json
 {
   "company_db": "SBO_EMPRESA_X",
   "user_code": null,
   "scope": "company",
+  "status": "pending",
+  "doc_object_type": "22",
+  "limit": 50,
+  "offset": 0,
+  "has_more": true,
+  "next_offset": 50,
   "count": 2,
   "documents": [
     {
       "approval_request_id": 1287,
       "step": 1,
+      "status": "arsPending",
+      "status_label": "Pendente",
       "doc_object_type": "22",
       "doc_type_name": "Pedido de Compra",
       "doc_entry": 9912,
@@ -133,10 +167,53 @@ No modo (a), a resposta traz `scope: "user"`, `user_code` preenchido e cada
 item já vem filtrado pelas pendências do próprio usuário (sem `pending_approvers`).
 
 Campos importantes:
-- `approval_request_id` — usar nas chamadas `approve` / `reject`.
+- `approval_request_id` — usar nas chamadas `detail` / `approve` / `reject`.
 - `step` — passo de aprovação; no modo empresa, use o `step` do aprovador dentro de `pending_approvers`.
 - `doc_object_type` — código SAP do objeto (22 = Pedido de Compra, 18 = NF de Entrada, etc.).
 - `doc_total` / `currency` — valor e moeda do documento original (Draft).
+- `status` / `status_label` — situação da solicitação no SAP.
+
+### 3.1.1 Detalhe de uma solicitação (`op: "detail"`)
+
+Retorna o documento e a trilha completa de aprovação — quem decidiu, em que
+etapa, quando e com qual observação, além de `pending_approvers`
+(o "parado com quem").
+
+```json
+{ "op": "detail", "company_db": "SBO_EMPRESA_X", "approval_request_id": 1287 }
+```
+
+**Response 200** (resumo):
+```json
+{
+  "approval_request_id": 1287,
+  "status": "arsPending",
+  "status_label": "Pendente",
+  "doc_type_name": "Pedido de Compra",
+  "doc_num": 411420,
+  "doc_total": 12500.00,
+  "originator_user_code": "ana.souza",
+  "current_step": 2,
+  "pending_approvers": [{ "user_id": 118, "user_code": "maria.santos", "step": 2 }],
+  "approval_trail": [
+    {
+      "step": 1,
+      "user_code": "joao.silva",
+      "status": "ardApproved",
+      "status_label": "Aprovado",
+      "decided_at": "2026-05-23T09:10:00Z",
+      "remarks": "OK"
+    }
+  ],
+  "stages": [
+    { "step": 2, "stage_code": 75, "user_code": "maria.santos", "status": "ardPending", "status_label": "Pendente" }
+  ]
+}
+```
+
+`user_code` é opcional em `detail`; quando informado, passa pela allowlist.
+
+
 
 ### 3.2 Aprovar
 
@@ -303,9 +380,13 @@ for doc in pend["documents"]:
 
 ## 7. Observações operacionais
 
-- A função faz **login → operação → logout** no SAP a cada chamada. Para
-  cargas pesadas (>100 docs/min por usuário), considere expor um cache no
-  consumidor.
+- A sessão do SAP é **reaproveitada em cache** (até 20 min) por empresa; o
+  login só é refeito quando a sessão expira. A primeira chamada após um
+  período ocioso é mais lenta (login), as seguintes são bem mais rápidas.
+- Use sempre `limit` (20–50) e pagine com `offset`/`next_offset`. Consultas
+  sem limite em bases grandes podem estourar o tempo de resposta.
+- A allowlist por `user_code` é gerenciada no ERP Flow; usuários fora dela
+  recebem `403`. O `user_code` precisa existir também no SAP da empresa.
 - O PATCH é feito usando as credenciais admin configuradas; a decisão é
   registrada em nome do `user_code` informado (via `UserID` interno do SAP).
 - Códigos de status SAP errados (`ardApproved`, `ardNotApproved`,

@@ -3,9 +3,12 @@
 //
 // Auth: header `X-API-Key: <EXTERNAL_APPROVALS_API_KEY>`
 // Routes (POST /functions/v1/external-approvals-api):
-//   { "op": "list",    "company_db": "...", "user_code": "..." }
+//   { "op": "list",    "company_db": "...", "user_code": "...", "status": "pending|approved|rejected|cancelled|generated|all",
+//     "doc_object_type": "22", "limit": 50, "offset": 0 }
+//   { "op": "detail",  "company_db": "...", "approval_request_id": 123 }
 //   { "op": "approve", "company_db": "...", "user_code": "...", "approval_request_id": 123, "step": 1, "remarks": "ok" }
 //   { "op": "reject",  "company_db": "...", "user_code": "...", "approval_request_id": 123, "step": 1, "remarks": "no" }
+
 //
 // Notes:
 // - `user_code` is the SAP UserCode (same identifier used in SAP B1 for both requester and approver).
@@ -198,6 +201,47 @@ async function sapLogout(s: SapSession) {
   }).catch(() => {});
 }
 
+// Cache de sessão SAP por empresa (a sessão do Service Layer dura 30 min).
+// Evita pagar o custo do login a cada request do painel externo.
+const SESSION_TTL_MS = 20 * 60 * 1000;
+const sessionCache = new Map<string, { session: SapSession; expiresAt: number }>();
+
+async function getSession(
+  companyDB: string,
+  cfg: { baseUrl: string; username: string; password: string; sapCompanyDb: string },
+  forceNew = false,
+): Promise<SapSession> {
+  const cached = sessionCache.get(companyDB);
+  if (!forceNew && cached && cached.expiresAt > Date.now()) return cached.session;
+  if (cached) sessionCache.delete(companyDB);
+  const session = await sapLogin(cfg);
+  sessionCache.set(companyDB, { session, expiresAt: Date.now() + SESSION_TTL_MS });
+  return session;
+}
+
+function isSessionError(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return /\(401\)|\(403\)|Invalid session|session.*expired/i.test(msg);
+}
+
+/** Executa a operação reaproveitando a sessão em cache; refaz login se ela expirou. */
+async function withSession<T>(
+  companyDB: string,
+  cfg: { baseUrl: string; username: string; password: string; sapCompanyDb: string },
+  fn: (s: SapSession) => Promise<T>,
+): Promise<T> {
+  const session = await getSession(companyDB, cfg);
+  try {
+    return await fn(session);
+  } catch (e) {
+    if (!isSessionError(e)) throw e;
+    sessionCache.delete(companyDB);
+    const fresh = await getSession(companyDB, cfg, true);
+    return await fn(fresh);
+  }
+}
+
+
 async function sapGet(s: SapSession, endpoint: string): Promise<unknown> {
   const cookies = `B1SESSION=${s.sessionId}${s.routeId ? `; ROUTEID=${s.routeId}` : ""}`;
   const resp = await fetch(`${s.baseUrl}/${endpoint}`, {
@@ -246,21 +290,33 @@ async function fetchDraftBrief(s: SapSession, draftEntry: number): Promise<SLDra
   }
 }
 
-async function fetchAllUsersMap(s: SapSession): Promise<Map<number, string>> {
+/** Resolve UserCode apenas dos IDs necessários (bem mais rápido que varrer Users). */
+async function fetchUsersMap(s: SapSession, ids: number[]): Promise<Map<number, string>> {
   const map = new Map<number, string>();
-  try {
-    const data = (await sapGet(
-      s,
-      `Users?$select=InternalKey,UserCode&$top=2000`,
-    )) as { value?: Array<{ InternalKey?: number; UserCode?: string }> };
-    for (const u of data?.value || []) {
-      if (u.InternalKey != null) map.set(Number(u.InternalKey), String(u.UserCode || ""));
+  const unique = Array.from(new Set(ids.filter((id) => Number.isFinite(id) && id > 0)));
+  await mapLimit(unique, 8, async (id) => {
+    try {
+      const u = (await sapGet(s, `Users(${id})?$select=InternalKey,UserCode`)) as {
+        InternalKey?: number;
+        UserCode?: string;
+      };
+      if (u?.InternalKey != null) map.set(Number(u.InternalKey), String(u.UserCode || ""));
+    } catch {
+      // usuário inexistente/sem acesso — mantém código vazio
     }
-  } catch (e) {
-    console.warn("fetchAllUsersMap falhou:", e);
-  }
+  });
   return map;
 }
+
+/** IDs de usuário referenciados por uma solicitação (decisões + linhas + originador). */
+function userIdsFromRequest(r: SLApprovalRequest): number[] {
+  const ids: number[] = [];
+  if (r.OriginatorID) ids.push(Number(r.OriginatorID));
+  for (const d of r.ApprovalRequestDecisions || []) if (d.UserID) ids.push(Number(d.UserID));
+  for (const l of r.ApprovalRequestLines || []) if (l.UserID) ids.push(Number(l.UserID));
+  return ids;
+}
+
 
 function pendingApproversFromRequest(
   r: SLApprovalRequest,
@@ -289,49 +345,123 @@ function pendingApproversFromRequest(
   return out;
 }
 
+const STATUS_FILTERS: Record<string, string | null> = {
+  pending: "Status eq 'arsPending'",
+  approved: "Status eq 'arsApproved'",
+  rejected: "(Status eq 'arsWasNotApproved' or Status eq 'arsNotApproved')",
+  cancelled: "Status eq 'arsCancelled'",
+  generated: "Status eq 'arsGenerated'",
+  all: null,
+};
+
+const REQUEST_STATUS_LABEL: Record<string, string> = {
+  arsPending: "Pendente",
+  arsApproved: "Aprovado",
+  arsWasNotApproved: "Rejeitado",
+  arsNotApproved: "Rejeitado",
+  arsCancelled: "Cancelado",
+  arsGenerated: "Gerado",
+};
+
+const DECISION_STATUS_LABEL: Record<string, string> = {
+  ardApproved: "Aprovado",
+  ardNotApproved: "Rejeitado",
+  ardWasNotApproved: "Rejeitado",
+  ardPending: "Pendente",
+  asPending: "Pendente",
+  asWithoutDecision: "Sem decisão",
+};
+
+/** Executa promessas com concorrência limitada (evita estourar o Service Layer). */
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let i = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (i < items.length) {
+      const idx = i++;
+      out[idx] = await fn(items[idx]);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
 /**
- * Lista aprovações pendentes da empresa.
- * - Se `userKey` for `null` → lista TODAS as aprovações pendentes da empresa
- *   (`arsPending`) e anexa `pending_approvers` (aprovadores atuais + step).
- * - Se `userKey` for informado → filtra apenas os documentos onde o usuário
- *   tem pendência.
+ * Lista aprovações da empresa com paginação e filtros.
  *
- * Não filtra mais por "origem ERP Flow": aprovações criadas diretamente no
- * SAP B1 (ou por outros integradores) também aparecem, para dar visão
- * completa da fila do aprovador.
+ * - `userKey === null` → todas as solicitações da empresa (com `pending_approvers`).
+ * - `userKey` informado → apenas documentos em que o usuário tem pendência
+ *   (para status ≠ pending, documentos em que ele participou da decisão).
+ *
+ * Opções: `status` (pending|approved|rejected|cancelled|generated|all),
+ * `docObjectType` (código SAP do objeto), `limit` e `offset`.
  */
-async function listPending(
+async function listApprovals(
   s: SapSession,
   userKey: number | null,
   userCode: string,
+  opts: { status: string; docObjectType: string; limit: number; offset: number },
 ) {
+  const filters: string[] = [];
+  const statusFilter = STATUS_FILTERS[opts.status];
+  if (statusFilter) filters.push(statusFilter);
+  if (opts.docObjectType) filters.push(`ObjectType eq '${opts.docObjectType.replace(/'/g, "''")}'`);
+  const filterQs = filters.length ? `$filter=${encodeURIComponent(filters.join(" and "))}&` : "";
+
+  // Sem user_code, a paginação é resolvida direto no SAP.
+  // Com user_code, o filtro é pós-consulta: buscamos uma janela maior e paginamos aqui.
+  const serverPaged = userKey == null;
+  const fetchTop = serverPaged ? opts.limit + 1 : Math.min(opts.offset + opts.limit * 5 + 50, 400);
+  const skipQs = serverPaged && opts.offset > 0 ? `$skip=${opts.offset}&` : "";
+
   const data = (await sapGet(
     s,
-    `ApprovalRequests?$filter=Status eq 'arsPending'&$orderby=CreationDate desc&$top=200`,
+    `ApprovalRequests?${filterQs}${skipQs}$orderby=CreationDate desc&$top=${fetchTop}`,
   )) as { value?: SLApprovalRequest[] };
-  const raw = data?.value || [];
+  let raw = data?.value || [];
 
-  const usersMap = userKey == null ? await fetchAllUsersMap(s) : new Map<number, string>();
+  const hasMoreServer = serverPaged && raw.length > opts.limit;
+  if (serverPaged) raw = raw.slice(0, opts.limit);
+
+  
+
+  // Pré-filtra por usuário antes de buscar drafts (o custo está nos drafts).
+  const stepByCode = new Map<number, number>();
+  if (userKey != null) {
+    raw = raw.filter((r) => {
+      const myLine = (r.ApprovalRequestLines || []).find((l) => Number(l.UserID) === userKey);
+      const myDecision = (r.ApprovalRequestDecisions || []).find((d) => Number(d.UserID) === userKey);
+      if (opts.status === "pending") {
+        const pendingLine = myLine && (myLine.Status === "asPending" || myLine.Status === "ardPending" || !myLine.Status);
+        const pendingDecision = myDecision && (myDecision.Status === "ardPending" || myDecision.Status === "asWithoutDecision" || !myDecision.Status);
+        if (!pendingLine && !pendingDecision) return false;
+      } else if (!myLine && !myDecision) {
+        return false;
+      }
+      stepByCode.set(Number(r.Code || 0), Number((myDecision?.ApprovalRequestStep ?? myLine?.ApprovalRequestStep) || 1));
+      return true;
+    });
+    raw = raw.slice(opts.offset, opts.offset + opts.limit + 1);
+  }
+  const hasMoreLocal = userKey != null && raw.length > opts.limit;
+  if (userKey != null) raw = raw.slice(0, opts.limit);
+
+  const usersMap = userKey == null
+    ? await fetchUsersMap(s, raw.flatMap(userIdsFromRequest))
+    : new Map<number, string>();
+
+  const drafts = await mapLimit(raw, 6, async (r) => {
+    const draftEntry = Number(r.DraftEntry || 0);
+    return draftEntry ? await fetchDraftBrief(s, draftEntry) : null;
+  });
+
 
   const result: Array<Record<string, unknown>> = [];
-  for (const r of raw) {
+  raw.forEach((r, idx) => {
     const draftEntry = Number(r.DraftEntry || 0);
-
-    let myStep: number | null = null;
-    if (userKey != null) {
-      const myLine = (r.ApprovalRequestLines || []).find(
-        (l) => Number(l.UserID) === userKey && (l.Status === "asPending" || l.Status === "ardPending" || !l.Status),
-      );
-      const myPendingDecision = (r.ApprovalRequestDecisions || []).find(
-        (d) => Number(d.UserID) === userKey && (d.Status === "ardPending" || d.Status === "asWithoutDecision" || !d.Status),
-      );
-      if (!myLine && !myPendingDecision) continue;
-      myStep = Number((myPendingDecision?.ApprovalRequestStep ?? myLine?.ApprovalRequestStep) || 1);
-    }
-
-    const draft = draftEntry ? await fetchDraftBrief(s, draftEntry) : null;
+    const draft = drafts[idx];
     // Documento cancelado/encerrado no SAP não é mais pendência de aprovação.
-    if (draft && (draft.Cancelled === "tYES" || draft.DocumentStatus === "bost_Close")) continue;
+    if (opts.status === "pending" && draft && (draft.Cancelled === "tYES" || draft.DocumentStatus === "bost_Close")) return;
     const objCode = String(r.ObjectType || "");
     const pendingApprovers = userKey == null ? pendingApproversFromRequest(r, usersMap) : undefined;
 
@@ -346,7 +476,9 @@ async function listPending(
 
     result.push({
       approval_request_id: Number(r.Code || 0),
-      step: myStep ?? (pendingApprovers?.[0]?.step ?? 1),
+      step: stepByCode.get(Number(r.Code || 0)) ?? (pendingApprovers?.[0]?.step ?? 1),
+      status: r.Status || "",
+      status_label: REQUEST_STATUS_LABEL[r.Status || ""] || r.Status || "",
       doc_object_type: objCode,
       doc_type_name: OBJECT_CODE_TO_NAME[objCode] || `Documento (${objCode})`,
       doc_entry: draftEntry || Number(draft?.DocEntry || 0),
@@ -372,9 +504,72 @@ async function listPending(
       approver_user_code: userKey != null ? userCode : "",
       ...(pendingApprovers ? { pending_approvers: pendingApprovers } : {}),
     });
-  }
-  return result;
+  });
+  return { documents: result, hasMore: hasMoreServer || hasMoreLocal };
 }
+
+/**
+ * Detalhe de uma solicitação: dados do documento + trilha completa de
+ * aprovação (quem, etapa, status, data e observação) — o "parado com quem".
+ */
+async function getApprovalDetail(s: SapSession, approvalRequestId: number) {
+  const r = (await sapGet(s, `ApprovalRequests(${approvalRequestId})`)) as SLApprovalRequest;
+  if (!r || !r.Code) throw new Error(`Solicitação ${approvalRequestId} não encontrada`);
+
+  const usersMap = await fetchUsersMap(s, userIdsFromRequest(r));
+  const draftEntry = Number(r.DraftEntry || 0);
+  const draft = draftEntry ? await fetchDraftBrief(s, draftEntry) : null;
+  const objCode = String(r.ObjectType || "");
+
+  const decisions = (r.ApprovalRequestDecisions || []).slice().sort(
+    (a, b) => Number(a.ApprovalRequestStep || 0) - Number(b.ApprovalRequestStep || 0),
+  );
+  const trail = decisions.map((d) => ({
+    step: Number(d.ApprovalRequestStep || 0),
+    user_id: Number(d.UserID || 0),
+    user_code: usersMap.get(Number(d.UserID || 0)) || "",
+    status: d.Status || "",
+    status_label: DECISION_STATUS_LABEL[d.Status || ""] || d.Status || "",
+    decided_at: d.UpdateDate || "",
+    created_at: d.CreateDate || "",
+    remarks: d.Remarks || "",
+  }));
+  const stages = (r.ApprovalRequestLines || []).map((l) => ({
+    step: Number(l.ApprovalRequestStep || 0),
+    stage_code: l.StageCode ?? null,
+    user_id: Number(l.UserID || 0),
+    user_code: usersMap.get(Number(l.UserID || 0)) || "",
+    status: l.Status || "",
+    status_label: DECISION_STATUS_LABEL[l.Status || ""] || l.Status || "",
+  }));
+  const pendingApprovers = pendingApproversFromRequest(r, usersMap);
+
+  return {
+    approval_request_id: Number(r.Code || 0),
+    status: r.Status || "",
+    status_label: REQUEST_STATUS_LABEL[r.Status || ""] || r.Status || "",
+    doc_object_type: objCode,
+    doc_type_name: OBJECT_CODE_TO_NAME[objCode] || `Documento (${objCode})`,
+    doc_entry: draftEntry || Number(draft?.DocEntry || 0),
+    doc_num: Number(draft?.DocNum || 0),
+    doc_total: Number(draft?.DocTotal || 0),
+    currency: draft?.DocCurrency || "BRL",
+    card_code: draft?.CardCode || "",
+    card_name: draft?.CardName || "",
+    remarks: r.RemarksFromOriginator || draft?.Comments || "",
+    creation_date: r.CreationDate || "",
+    update_date: r.UpdateDate || "",
+    due_date: draft?.DocDueDate || "",
+    doc_date: draft?.DocDate || "",
+    originator_id: r.OriginatorID || null,
+    originator_user_code: usersMap.get(Number(r.OriginatorID || 0)) || "",
+    current_step: pendingApprovers[0]?.step ?? null,
+    pending_approvers: pendingApprovers,
+    approval_trail: trail,
+    stages,
+  };
+}
+
 
 
 
@@ -453,15 +648,32 @@ Deno.serve(async (req) => {
     const companyDB = COMPANY_DB_ALIASES[rawCompanyDB.toUpperCase()] || rawCompanyDB;
     const userCode = String(body.user_code || "").trim();
 
-    if (!op || !["list", "approve", "reject"].includes(op)) {
-      return json(400, { error: "op deve ser 'list', 'approve' ou 'reject'" });
+    if (!op || !["list", "detail", "approve", "reject"].includes(op)) {
+      return json(400, { error: "op deve ser 'list', 'detail', 'approve' ou 'reject'" });
     }
     if (!companyDB) return json(400, { error: "company_db é obrigatório" });
-    // user_code é opcional apenas para op=list (retorna todas as pendências da empresa).
+    // user_code é opcional para op=list/detail (a API key já autoriza no nível da empresa).
     // approve/reject continuam exigindo user_code (a decisão é registrada em nome dele).
-    if (op !== "list" && !userCode) {
+    if (!["list", "detail"].includes(op) && !userCode) {
       return json(400, { error: "user_code é obrigatório para approve/reject" });
     }
+
+    // Paginação e filtros do op=list
+    const statusParam = String(body.status || "pending").toLowerCase();
+    if (!Object.keys(STATUS_FILTERS).includes(statusParam)) {
+      return json(400, { error: `status inválido. Use: ${Object.keys(STATUS_FILTERS).join(", ")}` });
+    }
+    const docObjectType = String(body.doc_object_type ?? "").trim();
+    if (docObjectType && !/^\d+$/.test(docObjectType)) {
+      return json(400, { error: "doc_object_type deve ser numérico (ex.: '22')" });
+    }
+    const rawLimit = Number(body.limit ?? 50);
+    const rawOffset = Number(body.offset ?? 0);
+    if (!Number.isFinite(rawLimit) || rawLimit <= 0) return json(400, { error: "limit inválido" });
+    if (!Number.isFinite(rawOffset) || rawOffset < 0) return json(400, { error: "offset inválido" });
+    const limit = Math.min(Math.floor(rawLimit), 200);
+    const offset = Math.floor(rawOffset);
+
 
     const admin = sb();
 
@@ -492,13 +704,18 @@ Deno.serve(async (req) => {
     }
 
     const cfg = await getCompanyConfig(companyDB);
-    const session = await sapLogin(cfg);
 
-    try {
+    return await withSession(companyDB, cfg, async (session) => {
       const userKey = userCode ? await getUserKey(session, userCode) : null;
 
+
       if (op === "list") {
-        const docs = await listPending(session, userKey, userCode);
+        const { documents, hasMore } = await listApprovals(session, userKey, userCode, {
+          status: statusParam,
+          docObjectType,
+          limit,
+          offset,
+        });
         if (userCode) {
           await admin.rpc("register_external_api_success", { _company_db: companyDB, _user_code: userCode });
         }
@@ -506,8 +723,14 @@ Deno.serve(async (req) => {
           company_db: companyDB,
           user_code: userCode || null,
           scope: userCode ? "user" : "company",
-          count: docs.length,
-          documents: docs,
+          status: statusParam,
+          doc_object_type: docObjectType || null,
+          limit,
+          offset,
+          has_more: hasMore,
+          next_offset: hasMore ? offset + limit : null,
+          count: documents.length,
+          documents,
         });
       }
 
@@ -517,6 +740,15 @@ Deno.serve(async (req) => {
       if (!Number.isFinite(approvalRequestId) || approvalRequestId <= 0) {
         return json(400, { error: "approval_request_id é obrigatório (número)" });
       }
+
+      if (op === "detail") {
+        const detail = await getApprovalDetail(session, approvalRequestId);
+        if (userCode) {
+          await admin.rpc("register_external_api_success", { _company_db: companyDB, _user_code: userCode });
+        }
+        return json(200, { company_db: companyDB, ...detail });
+      }
+
 
       try {
         await decideApproval(session, approvalRequestId, userKey, step, op as "approve" | "reject", remarks);
@@ -538,9 +770,8 @@ Deno.serve(async (req) => {
         step,
         decision: op,
       });
-    } finally {
-      await sapLogout(session);
-    }
+    });
+
   } catch (e) {
     console.error("external-approvals-api error:", e);
     return json(500, { error: e instanceof Error ? e.message : "Erro interno" });
