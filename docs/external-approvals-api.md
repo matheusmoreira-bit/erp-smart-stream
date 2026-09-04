@@ -380,9 +380,13 @@ for doc in pend["documents"]:
 
 ## 7. Observações operacionais
 
-- A função faz **login → operação → logout** no SAP a cada chamada. Para
-  cargas pesadas (>100 docs/min por usuário), considere expor um cache no
-  consumidor.
+- A sessão do SAP é **reaproveitada em cache** (até 20 min) por empresa; o
+  login só é refeito quando a sessão expira. A primeira chamada após um
+  período ocioso é mais lenta (login), as seguintes são bem mais rápidas.
+- Use sempre `limit` (20–50) e pagine com `offset`/`next_offset`. Consultas
+  sem limite em bases grandes podem estourar o tempo de resposta.
+- A allowlist por `user_code` é gerenciada no ERP Flow; usuários fora dela
+  recebem `403`. O `user_code` precisa existir também no SAP da empresa.
 - O PATCH é feito usando as credenciais admin configuradas; a decisão é
   registrada em nome do `user_code` informado (via `UserID` interno do SAP).
 - Códigos de status SAP errados (`ardApproved`, `ardNotApproved`,
