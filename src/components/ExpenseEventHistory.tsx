@@ -271,9 +271,11 @@ export function ExpenseEventHistory({ expense, refreshKey, flowType }: Props) {
   }
 
   if (expense?.sap_doc_num || expense?.sap_doc_entry) {
+    // A data exibida deve refletir a criação/atualização do documento,
+    // nunca a última tentativa de sincronização de status.
     addFallback(
       "integrated",
-      expense?.sap_integration_last_attempt_at || updatedAt,
+      updatedAt || createdAt,
       undefined,
       expense?.sap_doc_num ? `Nº SAP ${expense.sap_doc_num}` : undefined,
     );
