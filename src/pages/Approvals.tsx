@@ -3037,6 +3037,28 @@ export default function ApprovalsPage() {
       .map((v) => ({ value: v, label: v }));
   }, [userApprovals]);
 
+  const approverOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of userApprovals) {
+      const v = (a.currentApprover || "").trim();
+      if (v) set.add(v);
+    }
+    return Array.from(set)
+      .sort((a, b) => a.localeCompare(b, "pt-BR"))
+      .map((v) => ({ value: v, label: v }));
+  }, [userApprovals]);
+
+  const requesterOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of userApprovals) {
+      const v = (a.requester || "").trim();
+      if (v) set.add(v);
+    }
+    return Array.from(set)
+      .sort((a, b) => a.localeCompare(b, "pt-BR"))
+      .map((v) => ({ value: v, label: v }));
+  }, [userApprovals]);
+
   const overdueCount = preFiltered.filter((a) => getDueStatus(a.dueDate) === "overdue").length;
   const dueWarningCount = preFiltered.filter((a) => getDueStatus(a.dueDate) === "warning").length;
 
