@@ -112,16 +112,43 @@ Deno.serve(async (req) => {
         .filter((n) => Number.isFinite(n));
       if (docEntries.length === 0) return json({ updated: 0 });
 
-      const { data: lookup, error: fnErr } = await supabase.functions.invoke("sap-nfse-lookup", {
-        body: { company_db: companyDb, doc_entries: docEntries },
-      });
-      if (fnErr) throw new Error(`Consulta fiscal falhou: ${fnErr.message}`);
-
-      const map = (lookup?.map || {}) as Record<string, {
-        nfse?: string | null; rps?: string | null; key?: string | null; status?: string | null; authorized_at?: string | null;
-      }>;
+      /* Notas canceladas no ERP (ex.: reemissão com data correta) precisam
+         deixar de ser a nota "válida" do pedido — senão a tela mostra o
+         número da nota antiga. */
+      const cancelledEntries = new Set<number>();
+      try {
+        const creds = await loadCreds(supabase, companyDb);
+        const baseUrl = buildBaseUrl(creds.service_layer_url);
+        const session = await sapLogin(baseUrl, creds.username, creds.password, creds.company_db || companyDb);
+        for (let i = 0; i < docEntries.length; i += 40) {
+          const chunk = docEntries.slice(i, i + 40);
+          const filter = chunk.map((e) => `DocEntry eq ${e}`).join(" or ");
+          const res = await sapGet(
+            baseUrl,
+            session.cookies,
+            `Invoices?$select=DocEntry,Cancelled&$filter=${encodeURIComponent(filter)}`,
+          );
+          for (const nf of (res?.value || []) as Array<{ DocEntry: number; Cancelled?: string }>) {
+            if (nf?.Cancelled === "tYES") cancelledEntries.add(Number(nf.DocEntry));
+          }
+        }
+      } catch (e) {
+        console.error("sales-nfse-emit sync-status cancel check", (e as Error).message);
+      }
 
       let updated = 0;
+      for (const entry of cancelledEntries) {
+        const { error: cancelErr } = await supabase
+          .from("sales_order_invoices")
+          .update({ status: "cancelled" })
+          .eq("company_db", companyDb)
+          .eq("sap_invoice_doc_entry", entry)
+          .neq("status", "cancelled");
+        if (cancelErr) console.error("sales-nfse-emit cancel update", cancelErr.message);
+        else updated += 1;
+      }
+
+
       for (const row of rows || []) {
         const info = map[String(row.sap_invoice_doc_entry)];
         if (!info) continue;
