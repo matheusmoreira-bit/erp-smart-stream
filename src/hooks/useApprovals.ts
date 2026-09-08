@@ -5,6 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { displayUserName } from "@/lib/user-display";
 import { isImpersonating } from "@/lib/impersonation";
 import { recordCircuitFailure, recordCircuitSuccess } from "@/lib/sap-circuit-breaker";
+import { isTechnicalError, notifyTechnicalError } from "@/lib/tech-error";
+
 
 
 
@@ -679,6 +681,15 @@ export function useApprovals() {
     if (errPayload?.error) {
       throw new Error(errPayload.error);
     }
+    // HANA indisponível: mantém a lista já exibida (cache) em vez de esvaziar.
+    if ((data as { hanaUnavailable?: boolean } | null)?.hanaUnavailable) {
+      void notifyTechnicalError(
+        (data as { detail?: string }).detail || "HANA indisponível",
+        "Aprovações (HanaAPI)",
+      );
+      return null;
+    }
+
     const payload = data as
       | Array<{ schema?: string; data?: HanaApprovalViewRow[] }>
       | { schema?: string; data?: HanaApprovalViewRow[] }
@@ -762,16 +773,20 @@ export function useApprovals() {
       if (!skipCache) writeApprovalsCache(session as SapSession, docs).catch((e) => console.warn("approvals cache write failed:", e));
 
     } catch (e) {
-      console.error("Error fetching approvals:", e);
       const msg = e instanceof Error ? e.message : "Erro ao buscar aprovações";
       const transient = /Failed to send a request|Failed to fetch|network|timeout/i.test(msg);
       if (transient) recordCircuitFailure(session.companyDB, msg);
-      // Com cache, o erro é informativo e não bloqueia nem esvazia a listagem.
-      if (hasData && transient) {
+      // Erro técnico (Edge Function/HANA/rede) fica oculto para o usuário
+      // comum: só administradores recebem o detalhe, em toast.
+      if (isTechnicalError(msg)) {
+        void notifyTechnicalError(msg, "Aprovações");
+        setError(null);
+      } else if (hasData && transient) {
         setError("SAP indisponível no momento. Exibindo aprovações armazenadas; a atualização será retomada automaticamente.");
       } else {
         setError(transient ? "Não foi possível atualizar as aprovações agora. Tente novamente em instantes." : msg);
       }
+
     } finally {
 
       setIsLoading(false);
