@@ -463,7 +463,9 @@ export function RelationsMap({ open, onClose, expense, title, flowType = "compra
     decidedAt?: string | null;
     remarks?: string | null;
     stageName?: string | null;
-    source: "rule" | "sap";
+    /** Rótulo da trilha (rateio/reembolso) a que este nível pertence. */
+    track?: string | null;
+    source: "rule" | "sap" | "segment";
   };
 
   const approverRows: ChainRow[] = useMemo(() => {
