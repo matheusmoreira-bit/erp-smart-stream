@@ -10,11 +10,19 @@ import { useSapCachedList, invalidateSapCache } from "@/hooks/useSapCachedList";
  * criação de pedidos de compra/venda, etc.).
  */
 function invalidateBusinessPartnerCaches(companyDb?: string | null) {
-  const keys = ["suppliers_active_v2", "customers_active_v2"];
+  const keys = [
+    "suppliers_active_v2",
+    "customers_active_v2",
+    "suppliers_active_v7",
+    "customers_active_v7",
+    "suppliers_hana_v1",
+    "customers_hana_v1",
+  ];
   if (companyDb) keys.push(`suppliers:${companyDb}`);
   // fire-and-forget — não bloqueia o fluxo do usuário
   void invalidateSapCache(keys, companyDb || undefined);
 }
+
 
 export interface Supplier {
   id: string;
