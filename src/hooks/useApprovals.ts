@@ -5,6 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { displayUserName } from "@/lib/user-display";
 import { isImpersonating } from "@/lib/impersonation";
 import { recordCircuitFailure, recordCircuitSuccess } from "@/lib/sap-circuit-breaker";
+import { isTechnicalError, notifyTechnicalError } from "@/lib/tech-error";
+
 
 
 
