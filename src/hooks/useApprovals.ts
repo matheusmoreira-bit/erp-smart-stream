@@ -681,6 +681,15 @@ export function useApprovals() {
     if (errPayload?.error) {
       throw new Error(errPayload.error);
     }
+    // HANA indisponível: mantém a lista já exibida (cache) em vez de esvaziar.
+    if ((data as { hanaUnavailable?: boolean } | null)?.hanaUnavailable) {
+      void notifyTechnicalError(
+        (data as { detail?: string }).detail || "HANA indisponível",
+        "Aprovações (HanaAPI)",
+      );
+      return null;
+    }
+
     const payload = data as
       | Array<{ schema?: string; data?: HanaApprovalViewRow[] }>
       | { schema?: string; data?: HanaApprovalViewRow[] }
