@@ -62,3 +62,72 @@ export async function purgeSapListCache(
   }
 }
 
+
+// ---------------------------------------------------------------------------
+// Cache perene de cadastros: upsert linha a linha
+// ---------------------------------------------------------------------------
+// Cadastros mestres são incrementais em cada base. As gravações no `sap_cache`
+// não substituem a lista inteira: mesclam as linhas novas sobre as já
+// armazenadas (chave natural do cadastro), preservando o que não veio na
+// resposta atual do ERP.
+
+const IDENTITY_FIELDS = [
+  "CardCode", "ItemCode", "CenterCode", "PrjCode", "UserCode",
+  "Code", "AbsEntry", "GroupCode", "code", "id",
+];
+
+export function cacheRowIdentity(row: unknown): string | null {
+  if (!row || typeof row !== "object") return null;
+  const r = row as Record<string, unknown>;
+  for (const f of IDENTITY_FIELDS) {
+    const v = r[f];
+    if (v !== undefined && v !== null && String(v).trim() !== "") return `${f}:${String(v)}`;
+  }
+  return null;
+}
+
+export function mergeCacheRows(existing: unknown[], incoming: unknown[]): unknown[] {
+  if (!Array.isArray(existing) || existing.length === 0) return incoming;
+  if (!Array.isArray(incoming) || incoming.length === 0) return existing;
+  const byId = new Map<string, unknown>();
+  const noId: unknown[] = [];
+  for (const row of existing) {
+    const id = cacheRowIdentity(row);
+    if (id) byId.set(id, row); else noId.push(row);
+  }
+  let anyIncomingId = false;
+  for (const row of incoming) {
+    const id = cacheRowIdentity(row);
+    if (id) { anyIncomingId = true; byId.set(id, row); }
+  }
+  if (!anyIncomingId) return incoming;
+  return [...byId.values(), ...noId];
+}
+
+/** Upsert com merge das linhas já armazenadas (cache perene de cadastros). */
+export async function upsertSapCacheMerged(
+  sb: Sb,
+  cacheKey: string,
+  companyDb: string,
+  rows: unknown[],
+  expiresAt: string,
+): Promise<void> {
+  let merged = rows;
+  try {
+    const { data } = await sb
+      .from("sap_cache")
+      .select("data")
+      .eq("cache_key", cacheKey)
+      .eq("company_db", companyDb)
+      .maybeSingle();
+    const previous = (data?.data as unknown[]) || [];
+    merged = mergeCacheRows(previous, rows);
+  } catch (e) {
+    console.warn(`upsertSapCacheMerged(${cacheKey}) merge falhou:`, (e as Error).message);
+  }
+  const { error } = await sb.from("sap_cache").upsert(
+    { cache_key: cacheKey, company_db: companyDb, data: merged, expires_at: expiresAt },
+    { onConflict: "cache_key,company_db" },
+  );
+  if (error) throw new Error(`Upsert sap_cache (${cacheKey}): ${error.message}`);
+}
