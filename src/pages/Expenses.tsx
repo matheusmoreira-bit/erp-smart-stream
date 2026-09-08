@@ -497,7 +497,7 @@ function ExpenseDetailModal({
 
 
               <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Fornecedor</p>
+                <p className="text-xs text-muted-foreground">{isSalesDoc ? "Cliente" : "Fornecedor"}</p>
                 <p className="text-foreground font-medium">{expense.supplier_name}</p>
                 {expense.supplier_code && <p className="text-xs text-muted-foreground font-mono">{expense.supplier_code}</p>}
               </div>
@@ -2405,7 +2405,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   { label: "Total", value: new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalValue) },
                 ],
                 columns: [
-                  { header: "Fornecedor/Cliente", cell: (r: typeof filtered[number]) => r.exp.supplier_name },
+                  { header: isSales ? "Cliente" : "Fornecedor", cell: (r: typeof filtered[number]) => r.exp.supplier_name },
                   { header: "Status", cell: (r: typeof filtered[number]) => statusLabel(r.exp.status) },
                   { header: "Solicitante", cell: (r: typeof filtered[number]) => r.exp.requester_name || "—" },
                   { header: "Aprovador atual", cell: (r: typeof filtered[number]) => (isPendingApproval(r.exp.status) ? (r.exp.current_approver || "—") : "—") },
@@ -2793,7 +2793,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   header={
                     <>
                       <SortableCell label="Status" k="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                      <SortableCell label="Fornecedor" k="supplier" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableCell label={isSales ? "Cliente" : "Fornecedor"} k="supplier" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       <SortableCell label="Solicitante" k="requester" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       <SortableCell label="Criado" k="created" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       <SortableCell label="Doc" k="doc" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -2809,7 +2809,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                   <thead className="bg-muted/40 text-muted-foreground">
                     <tr className="text-left">
                       <SortableTh label="Status" k="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                      <SortableTh label="Fornecedor" k="supplier" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableTh label={isSales ? "Cliente" : "Fornecedor"} k="supplier" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       <SortableTh label="Solicitante" k="requester" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       <SortableTh label="Criado" k="created" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       <SortableTh label="Doc" k="doc" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />

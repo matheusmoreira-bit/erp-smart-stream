@@ -297,6 +297,12 @@ export { STATUS_LABELS, STATUS_COLORS };
  * Rótulo de status sensível ao tipo de documento.
  * Compras usam "PC" (Pedido de Compra); vendas usam "PV" (Pedido de Venda).
  */
+const SALES_STATUS_LABELS: Partial<Record<ExpenseStatus, string>> = {
+  nf_entrada: "NF de Saída",
+  pagamento: "Recebido Parcialmente",
+  finalizado: "Baixado/Recebido",
+};
+
 export function getStatusLabel(
   status: string,
   isSales = false,
@@ -306,6 +312,10 @@ export function getStatusLabel(
     const documentLabel = isSales ? "PV" : "PC";
     const erpLabel = !erpType || erpType === "sap" ? "SAP" : getErpShortLabel(erpType);
     return `${documentLabel} Lançado no ${erpLabel}`;
+  }
+  if (isSales) {
+    const salesLabel = SALES_STATUS_LABELS[status as ExpenseStatus];
+    if (salesLabel) return salesLabel;
   }
   const label = STATUS_LABELS[status as ExpenseStatus] ?? status;
   return isSales ? label.replace(/\bPC\b/g, "PV") : label;
