@@ -393,16 +393,10 @@ export function useSapCachedList({
           PurchaseItem: "tYES",
           ItemType: item.kind === "service" ? "itService" : "itItems",
         }));
-        const activeRows = filterActiveRows(endpoint, rows, cacheKey);
+        let activeRows = filterActiveRows(endpoint, rows, cacheKey);
         if (activeRows.length > 0) {
-          const expiresAt = new Date(Date.now() + getCacheTtlMs(cacheKey)).toISOString();
-          markSelfCacheWrite(cacheKey, companyDB);
-          await supabase.from("sap_cache").upsert({
-            cache_key: cacheKey,
-            company_db: companyDB,
-            data: activeRows as any,
-            expires_at: expiresAt,
-          }, { onConflict: "cache_key,company_db" });
+          const stored = await persistCacheRows(cacheKey, companyDB, activeRows, { replace: forceRefresh });
+          activeRows = filterActiveRows(endpoint, stored, cacheKey);
         }
         setOptions(activeRows.map(mapRowRef.current));
         setIsStale(false);
@@ -417,20 +411,13 @@ export function useSapCachedList({
       ) {
         const categoryType = cacheKey.includes("revenue") ? "R" : "D";
         const categories = await omieListarCategorias(companyDB, { type: categoryType, forceRefresh });
-        const rows = categories.map((category) => ({
+        let rows: any[] = categories.map((category) => ({
           CenterCode: category.codigo,
           CenterName: category.descricao || category.descricao_padrao || category.codigo,
           Active: "tYES",
         }));
         if (rows.length > 0) {
-          const expiresAt = new Date(Date.now() + getCacheTtlMs(cacheKey)).toISOString();
-          markSelfCacheWrite(cacheKey, companyDB);
-          await supabase.from("sap_cache").upsert({
-            cache_key: cacheKey,
-            company_db: companyDB,
-            data: rows as any,
-            expires_at: expiresAt,
-          }, { onConflict: "cache_key,company_db" });
+          rows = await persistCacheRows(cacheKey, companyDB, rows, { replace: forceRefresh });
         }
         setOptions(rows.map(mapRowRef.current));
         setIsStale(false);
