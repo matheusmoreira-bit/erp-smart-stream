@@ -207,8 +207,17 @@ Deno.serve(withEdgeMetrics("sap-approvals-hana", async (req, _mctx) => {
           JSON.stringify({ error: "Sessão SAP inválida ou expirada. Faça login novamente.", code: "SAP_SESSION_EXPIRED" }),
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
+      // HANA fora do ar (rede/rota/timeout) não é erro do usuário: devolve
+      // lista vazia com sinalização para o cliente cair no cache/Service Layer.
+      if (/No route to host|tcp connect|error sending request|timed out|timeout|todos os IPs|aborted/i.test(msg)) {
+        console.log(`[sap-approvals-hana] HANA indisponível (companyDb=${companyDb}): ${msg.slice(0, 160)}`);
+        return new Response(
+          JSON.stringify({ schema, data: [], hanaUnavailable: true, detail: msg.slice(0, 240) }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
       throw e;
     }
+
   } catch (e) {
     const msg = (e as Error).message || "";
     // Login técnico recusado pelo SAP (credencial da empresa inválida/expirada)
