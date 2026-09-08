@@ -247,13 +247,16 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
       $select: "CardCode,CardName,AliasName,FederalTaxID,UnifiedFederalTaxID,U_FGR_TaxId0,Currency,Frozen",
       $filter: `CardType eq '${cardType}'`,
     },
-    // Ativa o fallback via Service Layer assim que sabemos que o HANA não tem
-    // dados para esta empresa. Quando já sabemos disso pelo cache em memória,
-    // a lista começa a carregar em paralelo, sem esperar o round-trip do HANA.
+    // Fallback via Service Layer roda EM PARALELO ao HANA sempre que ainda não
+    // temos uma lista HANA fresca em memória. Assim, se o servidor HANA estiver
+    // fora do ar (ou lento), o combobox continua sendo preenchido pelo Service
+    // Layer sem que o usuário fique esperando o timeout do HANA.
     enabled:
       !isOmie &&
+      !!companyDb &&
       (hanaOptions === null || hanaOptions.length === 0) &&
-      (hanaLoaded || hanaMemory.get(`${hanaCacheKey}:${companyDb}`)?.rows.length === 0),
+      !hanaFreshInMemory,
+
 
     mapRow: (row: any) => {
       const rawTax =
