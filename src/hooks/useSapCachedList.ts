@@ -6,6 +6,7 @@ import { assertCircuitClosed, recordCircuitFailure, recordCircuitSuccess } from 
 import { useSap } from "@/contexts/SapContext";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { omieListarCategorias, omieListarProdutosServicos } from "@/lib/omie-client";
+import { mergeCacheRows } from "@/lib/sap-cache-merge";
 
 const DEFAULT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
 // Chaves com atualização mais frequente (dados que mudam com frequência no ERP)
@@ -36,6 +37,47 @@ const CACHE_TTL_OVERRIDES: Record<string, number> = {
 };
 
 const getCacheTtlMs = (key: string) => CACHE_TTL_OVERRIDES[key] ?? DEFAULT_CACHE_TTL_MS;
+
+/**
+ * Grava a lista no cache perene de cadastros (`sap_cache`).
+ *
+ * Por padrão faz UPSERT linha a linha (merge por chave natural do cadastro):
+ * registros novos entram, os já conhecidos são atualizados e os que não vieram
+ * na resposta são preservados. Assim uma leitura parcial/lenta do ERP nunca
+ * "encolhe" a lista. Em `replace` (resync completo pedido pelo usuário) a
+ * resposta do ERP substitui o conteúdo armazenado.
+ *
+ * Retorna as linhas que ficaram armazenadas.
+ */
+async function persistCacheRows(
+  cacheKey: string,
+  companyDB: string,
+  rows: any[],
+  opts?: { replace?: boolean },
+): Promise<any[]> {
+  let merged = rows;
+  if (!opts?.replace) {
+    try {
+      const { data: current } = await supabase
+        .from("sap_cache")
+        .select("data")
+        .eq("cache_key", cacheKey)
+        .eq("company_db", companyDB)
+        .maybeSingle();
+      const previous = (current?.data as any[]) || [];
+      merged = mergeCacheRows(previous, rows) as any[];
+    } catch (e) {
+      console.warn(`[sap_cache/${cacheKey}] merge falhou, gravando resposta do ERP`, e);
+    }
+  }
+  const expiresAt = new Date(Date.now() + getCacheTtlMs(cacheKey)).toISOString();
+  markSelfCacheWrite(cacheKey, companyDB);
+  await supabase.from("sap_cache").upsert(
+    { cache_key: cacheKey, company_db: companyDB, data: merged as any, expires_at: expiresAt },
+    { onConflict: "cache_key,company_db" },
+  );
+  return merged;
+}
 
 // -----------------------------------------------------------------------------
 // Cache invalidation bus
