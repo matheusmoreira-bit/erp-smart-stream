@@ -249,7 +249,9 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     cacheKey,
     endpoint: "BusinessPartners",
     params: {
-      $select: "CardCode,CardName,AliasName,FederalTaxID,UnifiedFederalTaxID,U_FGR_TaxId0,Currency,Frozen",
+      // Não incluir campos customizados (U_FGR_*) aqui: bases que não possuem
+      // o campo rejeitam a consulta inteira com HTTP 400 e a lista fica vazia.
+      $select: "CardCode,CardName,AliasName,FederalTaxID,UnifiedFederalTaxID,Currency,Frozen",
       $filter: `CardType eq '${cardType}'`,
     },
     // Fallback via Service Layer roda EM PARALELO ao HANA sempre que ainda não
