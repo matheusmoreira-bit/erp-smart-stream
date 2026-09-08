@@ -41,6 +41,8 @@ type ChainRow = {
   rejected?: boolean;
   decidedAt?: string | null;
   remarks?: string | null;
+  /** Rótulo da trilha (rateio/reembolso) a que este nível pertence. */
+  track?: string | null;
 };
 
 export type RelationsFlowType = "compras" | "pagcorp" | "vendas";
