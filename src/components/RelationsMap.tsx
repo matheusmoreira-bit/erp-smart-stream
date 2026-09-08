@@ -477,6 +477,68 @@ export function RelationsMap({ open, onClose, expense, title, flowType = "compra
     const isRejectedDoc = expense.status === "rejeitado" || expense.status === "cancelado";
     const isFinalized = !stillPending && !isRejectedDoc; // aprovado/integrado
 
+    // Documentos rateados / com regra paralela: cada trilha tem a sua própria
+    // cadeia. Mostramos TODAS as trilhas, nível a nível, com o status de cada
+    // aprovador — e não apenas o nó mais alto da cadeia principal.
+    if (segments.length > 0) {
+      const rows: ChainRow[] = [];
+      segments.forEach((seg) => {
+        const trackLabel =
+          seg.segment_key === "__reembolso__"
+            ? "Reembolso"
+            : [seg.cost_center, seg.project].filter(Boolean).join(" · ") || "Sem centro de custo";
+        const rawChain = Array.isArray(seg.chain)
+          ? (seg.chain as SegmentChainLevel[])
+          : typeof seg.chain === "string"
+            ? (() => {
+                try {
+                  const parsed = JSON.parse(seg.chain as string);
+                  return Array.isArray(parsed) ? (parsed as SegmentChainLevel[]) : [];
+                } catch {
+                  return [] as SegmentChainLevel[];
+                }
+              })()
+            : [];
+        const segStatus = String(seg.status || "").toLowerCase();
+        const currentLevel = Number(seg.current_level) || 1;
+        const decidedBy = String(seg.decided_by || "").toLowerCase();
+        const chain = rawChain.length > 0
+          ? rawChain
+          : seg.current_approver
+            ? [{ level_order: currentLevel, approver_name: seg.current_approver, approver_email: seg.current_approver_email }]
+            : [];
+        chain.forEach((lv) => {
+          const name = String(lv.approver_name || lv.approver_email || "—");
+          const level = Number(lv.level_order) || 1;
+          const nameKey = name.toLowerCase();
+          const approvedHere =
+            segStatus === "aprovado" ||
+            isFinalized ||
+            level < currentLevel ||
+            approvedNames.has(nameKey);
+          const rejectedHere =
+            segStatus === "rejeitado" &&
+            (decidedBy === nameKey || decidedBy === String(lv.approver_email || "").toLowerCase());
+          rows.push({
+            level_order: level,
+            approver_name: name,
+            approver_email: lv.approver_email || null,
+            done: approvedHere && !rejectedHere,
+            rejected: rejectedHere,
+            isCurrent:
+              segStatus === "pendente" &&
+              !approvedHere &&
+              level === currentLevel,
+            decidedAt: segStatus !== "pendente" ? seg.decided_at : null,
+            remarks: rejectedHere ? seg.resolution_note : null,
+            track: seg.rule_name ? `${trackLabel} · ${seg.rule_name}` : trackLabel,
+            source: "segment" as const,
+          });
+        });
+      });
+      if (rows.length > 0) return rows;
+    }
+
     if (levels.length > 0) {
       return levels.map((lv) => {
         const doneByLog = approvedNames.has(lv.approver_name.toLowerCase());
