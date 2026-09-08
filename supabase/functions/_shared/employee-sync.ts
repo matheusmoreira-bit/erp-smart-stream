@@ -367,8 +367,11 @@ export function buildSapPayload(
     U_JC_LastSync: now,
     U_JC_LastHash: opts.hash,
   };
-  if (opts.departmentCode) payload.Department = Number(opts.departmentCode) || opts.departmentCode;
-  if (opts.branchCode) payload.Branch = Number(opts.branchCode) || opts.branchCode;
+  if (opts.isNewEmployee) {
+    if (opts.departmentCode) payload.Department = Number(opts.departmentCode) || opts.departmentCode;
+    if (opts.branchCode) payload.Branch = Number(opts.branchCode) || opts.branchCode;
+  }
+
   // strip nulls -> Service Layer aceita null, mas evita zerar valores existentes por engano
   for (const k of Object.keys(payload)) if (payload[k] === null || payload[k] === undefined) delete payload[k];
   return payload;
