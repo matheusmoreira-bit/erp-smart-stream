@@ -8610,6 +8610,36 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_flow_approval_alerts: {
+        Row: {
+          approver_code: string
+          company_db: string
+          expense_id: string
+          id: string
+          payload: Json
+          sent_at: string
+          whatsapp_to: string
+        }
+        Insert: {
+          approver_code: string
+          company_db: string
+          expense_id: string
+          id?: string
+          payload?: Json
+          sent_at?: string
+          whatsapp_to: string
+        }
+        Update: {
+          approver_code?: string
+          company_db?: string
+          expense_id?: string
+          id?: string
+          payload?: Json
+          sent_at?: string
+          whatsapp_to?: string
+        }
+        Relationships: []
+      }
       whatsapp_login_alerts: {
         Row: {
           company_db: string
