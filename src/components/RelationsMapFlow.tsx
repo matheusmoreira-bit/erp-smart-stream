@@ -488,7 +488,7 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
         data: {
           tone: isApproverBottleneck ? "warn" : "blue",
           icon: ShieldCheck,
-          kind: `Nível ${r.level_order}`,
+          kind: r.track ? `Nível ${r.level_order} · ${r.track}` : `Nível ${r.level_order}`,
           identifier: r.approver_name,
           who: r.approver_email || undefined,
           when: r.decidedAt || null,
