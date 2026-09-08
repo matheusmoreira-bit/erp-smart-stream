@@ -628,16 +628,25 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
           filters,
         });
       } catch (e) {
-        if (isAbortError(e)) {
-          return new Response(JSON.stringify({ data: [], fromCache: false, hanaDisabled: true, timedOut: true }), {
-            status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+        const msg = (e as Error).message || "";
+        // Servidor HANA inacessível/lento: não é erro do app — devolvemos vazio
+        // para que o cliente use o fallback (Service Layer) sem tela em branco.
+        if (
+          isAbortError(e) ||
+          /No route to host|tcp connect error|timeout ap[oó]s|todos os IPs|error sending request/i.test(msg)
+        ) {
+          console.warn("HANA indisponível:", msg.slice(0, 200));
+          return new Response(
+            JSON.stringify({ data: [], fromCache: false, hanaDisabled: true, hanaUnavailable: true, timedOut: isAbortError(e) }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
         }
-        console.error("HANA view query error:", (e as Error).message);
-        return new Response(JSON.stringify({ error: (e as Error).message }), {
+        console.error("HANA view query error:", msg);
+        return new Response(JSON.stringify({ error: msg }), {
           status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
 
       if (rows.length > 0) setCache(cacheKey, rows);
 
