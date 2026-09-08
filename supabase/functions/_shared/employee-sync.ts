@@ -335,8 +335,19 @@ export async function hashEmployee(
 
 export function buildSapPayload(
   e: NormalizedEmployee,
-  opts: { departmentCode?: string | null; branchCode?: string | null; hash: string },
+  opts: {
+    departmentCode?: string | null;
+    branchCode?: string | null;
+    hash: string;
+    /**
+     * Só é permitido definir departamento/filial na CRIAÇÃO do funcionário.
+     * Nenhuma sincronização pode trocar o departamento (grupo) de um usuário
+     * que já existe no SAP — decisão de negócio, mudança é só manual.
+     */
+    isNewEmployee?: boolean;
+  },
 ): Record<string, unknown> {
+
   const status = e.suspended ? "SUSPENDED" : e.active ? "ACTIVE" : "INACTIVE";
   const now = new Date().toISOString();
   const payload: Record<string, unknown> = {
