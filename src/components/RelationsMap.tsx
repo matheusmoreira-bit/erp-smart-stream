@@ -76,6 +76,29 @@ interface RuleLevelRow {
   approver_email: string | null;
 }
 
+interface SegmentChainLevel {
+  level_order?: number;
+  approver_name?: string | null;
+  approver_email?: string | null;
+}
+
+interface SegmentRow {
+  id: string;
+  segment_key: string;
+  cost_center: string | null;
+  project: string | null;
+  amount: number | string | null;
+  status: string;
+  current_level: number | null;
+  current_approver: string | null;
+  current_approver_email: string | null;
+  rule_name: string | null;
+  chain: unknown;
+  decided_by: string | null;
+  decided_at: string | null;
+  resolution_note: string | null;
+}
+
 interface SapHistoryRow {
   id: string;
   approver_name: string | null;
