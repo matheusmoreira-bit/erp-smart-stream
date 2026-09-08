@@ -221,10 +221,14 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
         }
       } catch (e) {
         console.warn("[useMergedSupplierOptions] HANA suppliers indisponível, usando Service Layer.", e);
+        // Memoriza a indisponibilidade para não pagar o timeout do HANA a cada
+        // abertura do formulário enquanto o servidor estiver fora do ar.
+        hanaMemory.set(memKey, { rows: [], at: Date.now() });
         if (!cancelled && !servedFromCache) setHanaOptions(null);
       } finally {
         if (!cancelled) setHanaLoaded(true);
       }
+
     })();
     return () => { cancelled = true; };
 
