@@ -8,6 +8,8 @@
 - Segregação de função só via CAPACIDADE do grupo (permission_group_modules) — nunca por nome de grupo nem flag no usuário.
 - Auto-aprovação: solicitante nunca aprova o próprio documento — nível dele é escalado e botões ficam ocultos (inclusive admin).
 - Identidade = usuário SAP (1 nome, N e-mails). Permissões/alçadas gravam a chave canônica (`canonicalUserKey`), nunca e-mail cru.
+- Nenhuma rotina automática troca grupo de usuário (SAP ou ERP Flow). Mudança de grupo é sempre manual, por administrador.
+
 
 ## Memories
 - [Auto-aprovação](mem://features/auto-aprovacao.md) — Regra de escalonamento quando o solicitante também é aprovador.

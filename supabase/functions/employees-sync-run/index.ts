@@ -173,7 +173,11 @@ Deno.serve(async (req) => {
         departmentCode: deptCode,
         branchCode: config.default_branch_code,
         hash,
+        // Departamento/filial só na criação: nenhuma sincronização troca o
+        // grupo de um usuário já existente no SAP.
+        isNewEmployee: !existing,
       });
+
 
       try {
         if (!existing) {

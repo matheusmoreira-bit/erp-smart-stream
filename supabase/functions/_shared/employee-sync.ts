@@ -335,8 +335,19 @@ export async function hashEmployee(
 
 export function buildSapPayload(
   e: NormalizedEmployee,
-  opts: { departmentCode?: string | null; branchCode?: string | null; hash: string },
+  opts: {
+    departmentCode?: string | null;
+    branchCode?: string | null;
+    hash: string;
+    /**
+     * Só é permitido definir departamento/filial na CRIAÇÃO do funcionário.
+     * Nenhuma sincronização pode trocar o departamento (grupo) de um usuário
+     * que já existe no SAP — decisão de negócio, mudança é só manual.
+     */
+    isNewEmployee?: boolean;
+  },
 ): Record<string, unknown> {
+
   const status = e.suspended ? "SUSPENDED" : e.active ? "ACTIVE" : "INACTIVE";
   const now = new Date().toISOString();
   const payload: Record<string, unknown> = {
@@ -356,8 +367,11 @@ export function buildSapPayload(
     U_JC_LastSync: now,
     U_JC_LastHash: opts.hash,
   };
-  if (opts.departmentCode) payload.Department = Number(opts.departmentCode) || opts.departmentCode;
-  if (opts.branchCode) payload.Branch = Number(opts.branchCode) || opts.branchCode;
+  if (opts.isNewEmployee) {
+    if (opts.departmentCode) payload.Department = Number(opts.departmentCode) || opts.departmentCode;
+    if (opts.branchCode) payload.Branch = Number(opts.branchCode) || opts.branchCode;
+  }
+
   // strip nulls -> Service Layer aceita null, mas evita zerar valores existentes por engano
   for (const k of Object.keys(payload)) if (payload[k] === null || payload[k] === undefined) delete payload[k];
   return payload;
