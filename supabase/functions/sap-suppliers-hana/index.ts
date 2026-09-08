@@ -271,8 +271,17 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: "Sessão SAP inválida ou expirada. Faça login novamente.", code: "SAP_SESSION_EXPIRED", detail: msg.slice(0, 240) }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+    // Servidor HANA fora do ar / inacessível: não é erro do app — o cliente
+    // cai para o Service Layer. Devolvemos 200 com o marcador conhecido.
+    if (/No route to host|tcp connect error|timeout ap[oó]s|todos os IPs|error sending request/i.test(msg)) {
+      return new Response(
+        JSON.stringify({ error: "hana_unavailable", message: msg.slice(0, 240) }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
     return new Response(JSON.stringify({ error: msg }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
   }
 
 });

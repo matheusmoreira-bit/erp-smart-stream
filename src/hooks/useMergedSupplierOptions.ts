@@ -221,15 +221,24 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
         }
       } catch (e) {
         console.warn("[useMergedSupplierOptions] HANA suppliers indisponível, usando Service Layer.", e);
+        // Memoriza a indisponibilidade para não pagar o timeout do HANA a cada
+        // abertura do formulário enquanto o servidor estiver fora do ar.
+        hanaMemory.set(memKey, { rows: [], at: Date.now() });
         if (!cancelled && !servedFromCache) setHanaOptions(null);
       } finally {
         if (!cancelled) setHanaLoaded(true);
       }
+
     })();
     return () => { cancelled = true; };
 
   }, [companyDb, isSales, isOmie, hanaReloadTick, hanaCacheKey]);
 
+  // Já temos uma lista HANA recente em memória? Então não há motivo para
+  // disparar o Service Layer em paralelo.
+  const hanaMem = companyDb ? hanaMemory.get(`${hanaCacheKey}:${companyDb}`) : undefined;
+  const hanaFreshInMemory =
+    !!hanaMem && hanaMem.rows.length > 0 && Date.now() - hanaMem.at < HANA_TTL_MS;
 
 
   const {
@@ -243,13 +252,16 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
       $select: "CardCode,CardName,AliasName,FederalTaxID,UnifiedFederalTaxID,U_FGR_TaxId0,Currency,Frozen",
       $filter: `CardType eq '${cardType}'`,
     },
-    // Ativa o fallback via Service Layer assim que sabemos que o HANA não tem
-    // dados para esta empresa. Quando já sabemos disso pelo cache em memória,
-    // a lista começa a carregar em paralelo, sem esperar o round-trip do HANA.
+    // Fallback via Service Layer roda EM PARALELO ao HANA sempre que ainda não
+    // temos uma lista HANA fresca em memória. Assim, se o servidor HANA estiver
+    // fora do ar (ou lento), o combobox continua sendo preenchido pelo Service
+    // Layer sem que o usuário fique esperando o timeout do HANA.
     enabled:
       !isOmie &&
+      !!companyDb &&
       (hanaOptions === null || hanaOptions.length === 0) &&
-      (hanaLoaded || hanaMemory.get(`${hanaCacheKey}:${companyDb}`)?.rows.length === 0),
+      !hanaFreshInMemory,
+
 
     mapRow: (row: any) => {
       const rawTax =
@@ -435,7 +447,13 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
 
   return {
     options: merged,
-    isLoading: isOmie ? omieLoading : sapLoading || (!hanaLoaded && !!companyDb),
+    // Assim que qualquer fonte (HANA, Service Layer ou base local) devolver
+    // linhas, paramos de exibir "carregando" — mesmo que a outra ainda esteja
+    // pendente/indisponível.
+    isLoading: isOmie
+      ? omieLoading
+      : merged.length === 0 && (sapLoading || (!hanaLoaded && !!companyDb)),
+
     reload: () => {
       if (isOmie) {
         setOmieReloadTick((tick) => tick + 1);
