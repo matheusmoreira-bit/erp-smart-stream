@@ -174,6 +174,10 @@ Deno.serve(async (req) => {
       ),
     );
 
+    // Agrupa por aprovador para enviar UMA mensagem consolidada por pessoa.
+    interface Bucket { code: string; phone: string; items: Array<{ ex: ExpenseRow; name: string }> }
+    const buckets = new Map<string, Bucket>();
+
     for (const ex of (expenses || []) as ExpenseRow[]) {
       const approversRaw = (ex.current_approver || "")
         .split("/")
@@ -202,56 +206,59 @@ Deno.serve(async (req) => {
           skipped.push({ expense_id: ex.id, approver: code, reason: "sem telefone" });
           continue;
         }
-        const dedupKey = `${ex.company_db}|${ex.id}|${code}`;
-        if (alreadySent.has(dedupKey)) {
+        if (alreadySent.has(`${ex.company_db}|${ex.id}|${code}`)) {
           skipped.push({ expense_id: ex.id, approver: code, reason: "já avisado nas últimas 24h" });
           continue;
         }
+        const bucket = buckets.get(code) || { code, phone, items: [] };
+        bucket.items.push({ ex, name: approverName });
+        buckets.set(code, bucket);
+      }
+    }
 
+    for (const bucket of buckets.values()) {
+      const lines = bucket.items.slice(0, 15).map(({ ex }) => {
         const dias = Math.max(0, Math.floor((Date.now() - new Date(ex.created_at).getTime()) / 86_400_000));
-        const tipo = ex.doc_type === "sales" ? "Pedido de Venda" : "Pedido de Compra";
-        const docRef = ex.sap_doc_num ? `#${ex.sap_doc_num}` : "(ainda não integrado)";
-        const link = `${ERP_FLOW_URL}/aprovacoes?tab=pending&doc=${ex.id}`;
-        const msg =
-          `🔔 Aprovação Pendente\n` +
-          `Empresa: ${companyNames.get(ex.company_db) || ex.company_db}\n` +
-          `Documento: ${tipo} ${docRef}\n` +
-          `Parceiro: ${ex.supplier_name || "—"}\n` +
-          `Solicitante: ${ex.requester_name || "—"}\n` +
-          `Valor: ${money(ex.total_amount, ex.currency)}\n` +
-          `Dias em aberto: ${dias}\n\n` +
-          `Aprovar no ERP Flow:\n${link}`;
+        const tipo = ex.doc_type === "sales" ? "Venda" : "Compra";
+        const docRef = ex.sap_doc_num ? `#${ex.sap_doc_num}` : "s/ nº";
+        return `• ${tipo} ${docRef} · ${companyNames.get(ex.company_db) || ex.company_db}\n  ${ex.supplier_name || "—"} · ${money(ex.total_amount, ex.currency)} · ${dias}d`;
+      });
+      const extra = bucket.items.length > 15 ? `\n… e mais ${bucket.items.length - 15} documento(s).` : "";
+      const msg =
+        `🔔 *Aprovações pendentes no ERP Flow*\n` +
+        `Você tem ${bucket.items.length} documento(s) aguardando sua aprovação:\n\n` +
+        lines.join("\n") + extra +
+        `\n\nAprovar: ${ERP_FLOW_URL}/aprovacoes?tab=pending`;
 
-        if (dryRun) {
-          sent.push({ expense_id: ex.id, approver: code, phone, dry_run: true });
-          alreadySent.add(dedupKey);
-          continue;
-        }
+      if (dryRun) {
+        sent.push({ approver: bucket.code, phone: bucket.phone, docs: bucket.items.length, dry_run: true });
+        continue;
+      }
 
-        const res = await sendWhatsApp(phone, msg);
-        if (!res.ok) {
-          skipped.push({ expense_id: ex.id, approver: code, reason: `falha WhatsApp ${res.status}` });
-          continue;
-        }
-        alreadySent.add(dedupKey);
-        await sb.from("whatsapp_flow_approval_alerts").insert({
+      const res = await sendWhatsApp(bucket.phone, msg);
+      if (!res.ok) {
+        skipped.push({ approver: bucket.code, reason: `falha WhatsApp ${res.status}`, docs: bucket.items.length });
+        continue;
+      }
+      await sb.from("whatsapp_flow_approval_alerts").insert(
+        bucket.items.map(({ ex, name }) => ({
           company_db: ex.company_db,
           expense_id: ex.id,
-          approver_code: code,
-          whatsapp_to: phone,
+          approver_code: bucket.code,
+          whatsapp_to: bucket.phone,
           payload: {
-            approver_name: approverName,
+            approver_name: name,
             supplier: ex.supplier_name,
             requester: ex.requester_name,
             amount: ex.total_amount,
             currency: ex.currency,
             doc_type: ex.doc_type,
             sap_doc_num: ex.sap_doc_num,
-            link,
+            digest: true,
           },
-        });
-        sent.push({ expense_id: ex.id, approver: code, phone });
-      }
+        })),
+      );
+      sent.push({ approver: bucket.code, phone: bucket.phone, docs: bucket.items.length });
     }
 
     await sb.from("notification_send_runs").insert({
