@@ -313,26 +313,42 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     void fetchLocal();
   }, [fetchLocal]);
 
-  // 3) Realtime: qualquer mudança em suppliers da empresa recarrega a lista
-  //    local e invalida o cache SAP (para pegar o BP recém-criado no ciclo
-  //    seguinte de reload).
+  // 3) Realtime: qualquer mudança em suppliers da empresa (ou no cache de
+  //    listas do SAP, inclusive quando outra aba/edge function o invalida)
+  //    recarrega imediatamente a lista — o fornecedor recém-criado aparece
+  //    sem o usuário precisar buscar de novo.
   useEffect(() => {
     if (!companyDb) return;
+    const refreshAll = () => {
+      hanaMemory.delete(`${hanaCacheKey}:${companyDb}`);
+      void fetchLocal();
+      setHanaReloadTick((t) => t + 1);
+      void reloadSap?.();
+    };
     const channel = supabase
       .channel(`${realtimeTopicRef.current}-${companyDb}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "suppliers", filter: `company_db=eq.${companyDb}` },
         () => {
-          void fetchLocal();
           void invalidateSapCache([cacheKey, hanaCacheKey], companyDb);
+          refreshAll();
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "sap_cache", filter: `company_db=eq.${companyDb}` },
+        (payload: any) => {
+          const key = (payload?.new ?? payload?.old)?.cache_key;
+          if (key === hanaCacheKey) refreshAll();
         },
       )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [companyDb, cacheKey, hanaCacheKey, fetchLocal]);
+  }, [companyDb, cacheKey, hanaCacheKey, fetchLocal, reloadSap]);
+
 
   // 4) Merge: SAP como source of truth quando `synced`; sobrepõe com locais
   //    não-sincronizados (novos, com erro, ou pendentes).
