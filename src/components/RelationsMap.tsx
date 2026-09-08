@@ -367,7 +367,7 @@ export function RelationsMap({ open, onClose, expense, title, flowType = "compra
     let cancelled = false;
     (async () => {
       setIsLoading(true);
-      const [logRes, levelsRes, sapRes] = await Promise.all([
+      const [logRes, levelsRes, sapRes, segRes] = await Promise.all([
         supabase
           .from("expense_approval_log")
           .select("*")
