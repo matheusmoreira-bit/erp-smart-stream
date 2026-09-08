@@ -503,21 +503,10 @@ export function useSapCachedList({
       rows = filterActiveRows(endpoint, rows, cacheKey);
 
 
-      // 4. Only cache non-empty results
+      // 4. Cache perene: upsert das linhas novas sobre as já armazenadas.
       if (rows.length > 0) {
-        const expiresAt = new Date(Date.now() + getCacheTtlMs(cacheKey)).toISOString();
-        markSelfCacheWrite(cacheKey, companyDB);
-        await supabase
-          .from("sap_cache")
-          .upsert(
-            {
-              cache_key: cacheKey,
-              company_db: companyDB,
-              data: rows as any,
-              expires_at: expiresAt,
-            },
-            { onConflict: "cache_key,company_db" }
-          );
+        const stored = await persistCacheRows(cacheKey, companyDB, rows, { replace: forceRefresh });
+        rows = filterActiveRows(endpoint, stored, cacheKey);
       }
       lastLoadedAtRef.current = Date.now();
 
