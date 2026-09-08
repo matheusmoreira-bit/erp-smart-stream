@@ -71,8 +71,9 @@ function subscribe(cacheKey: string, companyDb: string | null | undefined, cb: L
 }
 
 /**
- * Invalidate one or more SAP cached lists: deletes the persisted rows in
- * `sap_cache` and forces every mounted `useSapCachedList` with a matching
+ * Invalidate one or more SAP cached lists: marks the persisted rows in
+ * `sap_cache` as expired (the data itself is kept — o cache de cadastros é
+ * perene) and forces every mounted `useSapCachedList` with a matching
  * cacheKey/companyDb to refetch from SAP.
  */
 export async function invalidateSapCache(
@@ -80,17 +81,21 @@ export async function invalidateSapCache(
   companyDb?: string | null,
 ) {
   const keys = Array.isArray(cacheKeys) ? cacheKeys : [cacheKeys];
-  // Best-effort DB cleanup — errors here shouldn't block the UI signal.
+  // Best-effort DB update — errors here shouldn't block the UI signal.
   try {
-    let q = supabase.from("sap_cache").delete().in("cache_key", keys);
+    let q = supabase
+      .from("sap_cache")
+      .update({ expires_at: new Date(Date.now() - 1000).toISOString() })
+      .in("cache_key", keys);
     if (companyDb) q = q.eq("company_db", companyDb);
     await q;
   } catch (e) {
-    console.warn("invalidateSapCache: failed to purge sap_cache rows", e);
+    console.warn("invalidateSapCache: failed to expire sap_cache rows", e);
   }
   // Fire in-memory listeners so mounted hooks reload immediately.
   for (const k of keys) notifyKey(k, companyDb, "hard");
 }
+
 
 /** Dispara os listeners montados de uma cacheKey (escopo por companyDb). */
 function notifyKey(cacheKey: string, companyDb: string | null | undefined, mode: InvalidationMode) {
