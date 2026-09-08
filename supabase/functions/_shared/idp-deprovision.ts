@@ -92,15 +92,13 @@ export async function deprovisionUser(admin: any, target: DeprovisionTarget): Pr
     if (error) throw new Error(error.message);
   });
 
-  // ── 2. Grupos de permissão (acessos e visibilidade) ─────────────────────
-  await step("user_group_assignments", async () => {
-    const { data } = await admin.from("user_group_assignments").select("id, sap_email");
-    const ids = (data || []).filter((r: any) => sameUser(r.sap_email, res.userKey)).map((r: any) => r.id);
-    if (!ids.length) return;
-    const { error } = await admin.from("user_group_assignments").delete().in("id", ids);
-    if (error) throw new Error(error.message);
-    res.groupsRevoked = ids.length;
-  });
+  // ── 2. Grupos de permissão ──────────────────────────────────────────────
+  // DESATIVADO por decisão de negócio: nenhuma rotina automática pode
+  // remover/trocar grupos de permissão. O acesso já é cortado pelo passo 1
+  // (vínculo de identidade marcado como desprovisionado). A troca de grupo,
+  // quando necessária, é feita manualmente por um administrador.
+  res.errors.push("user_group_assignments: alteração automática de grupos desativada (somente manual)");
+
 
   // ── 3. Substituições vigentes (como titular e como substituto) ──────────
   await step("approver_substitutes", async () => {
