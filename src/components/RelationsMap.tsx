@@ -388,11 +388,19 @@ export function RelationsMap({ open, onClose, expense, title, flowType = "compra
               .eq("doc_entry", expense.sap_doc_entry)
               .order("step", { ascending: true })
           : Promise.resolve({ data: [] as SapHistoryRow[] }),
+        supabase
+          .from("expense_approval_segments")
+          .select(
+            "id, segment_key, cost_center, project, amount, status, current_level, current_approver, current_approver_email, rule_name, chain, decided_by, decided_at, resolution_note",
+          )
+          .eq("expense_id", expense.id)
+          .order("created_at", { ascending: true }),
       ]);
       if (cancelled) return;
       setLog((logRes as SupabaseListResult<ApprovalLogRow>).data || []);
       setLevels((levelsRes as SupabaseListResult<RuleLevelRow>).data || []);
       setSapHistory((sapRes as SupabaseListResult<SapHistoryRow>).data || []);
+      setSegments((segRes as SupabaseListResult<SegmentRow>).data || []);
       setIsLoading(false);
     })();
     return () => {
