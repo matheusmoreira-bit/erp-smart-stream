@@ -221,6 +221,7 @@ export function RelationsMap({ open, onClose, expense, title, flowType = "compra
   const [log, setLog] = useState<ApprovalLogRow[]>([]);
   const [levels, setLevels] = useState<RuleLevelRow[]>([]);
   const [sapHistory, setSapHistory] = useState<SapHistoryRow[]>([]);
+  const [segments, setSegments] = useState<SegmentRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [detailStage, setDetailStage] = useState<StageKey | null>(null);
   const [lineDetail, setLineDetail] = useState<RelationCardDetail | null>(null);
