@@ -6,6 +6,7 @@ import { assertCircuitClosed, recordCircuitFailure, recordCircuitSuccess } from 
 import { useSap } from "@/contexts/SapContext";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { omieListarCategorias, omieListarProdutosServicos } from "@/lib/omie-client";
+import { mergeCacheRows } from "@/lib/sap-cache-merge";
 
 const DEFAULT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
 // Chaves com atualização mais frequente (dados que mudam com frequência no ERP)
@@ -36,6 +37,47 @@ const CACHE_TTL_OVERRIDES: Record<string, number> = {
 };
 
 const getCacheTtlMs = (key: string) => CACHE_TTL_OVERRIDES[key] ?? DEFAULT_CACHE_TTL_MS;
+
+/**
+ * Grava a lista no cache perene de cadastros (`sap_cache`).
+ *
+ * Por padrão faz UPSERT linha a linha (merge por chave natural do cadastro):
+ * registros novos entram, os já conhecidos são atualizados e os que não vieram
+ * na resposta são preservados. Assim uma leitura parcial/lenta do ERP nunca
+ * "encolhe" a lista. Em `replace` (resync completo pedido pelo usuário) a
+ * resposta do ERP substitui o conteúdo armazenado.
+ *
+ * Retorna as linhas que ficaram armazenadas.
+ */
+async function persistCacheRows(
+  cacheKey: string,
+  companyDB: string,
+  rows: any[],
+  opts?: { replace?: boolean },
+): Promise<any[]> {
+  let merged = rows;
+  if (!opts?.replace) {
+    try {
+      const { data: current } = await supabase
+        .from("sap_cache")
+        .select("data")
+        .eq("cache_key", cacheKey)
+        .eq("company_db", companyDB)
+        .maybeSingle();
+      const previous = (current?.data as any[]) || [];
+      merged = mergeCacheRows(previous, rows) as any[];
+    } catch (e) {
+      console.warn(`[sap_cache/${cacheKey}] merge falhou, gravando resposta do ERP`, e);
+    }
+  }
+  const expiresAt = new Date(Date.now() + getCacheTtlMs(cacheKey)).toISOString();
+  markSelfCacheWrite(cacheKey, companyDB);
+  await supabase.from("sap_cache").upsert(
+    { cache_key: cacheKey, company_db: companyDB, data: merged as any, expires_at: expiresAt },
+    { onConflict: "cache_key,company_db" },
+  );
+  return merged;
+}
 
 // -----------------------------------------------------------------------------
 // Cache invalidation bus
@@ -71,8 +113,9 @@ function subscribe(cacheKey: string, companyDb: string | null | undefined, cb: L
 }
 
 /**
- * Invalidate one or more SAP cached lists: deletes the persisted rows in
- * `sap_cache` and forces every mounted `useSapCachedList` with a matching
+ * Invalidate one or more SAP cached lists: marks the persisted rows in
+ * `sap_cache` as expired (the data itself is kept — o cache de cadastros é
+ * perene) and forces every mounted `useSapCachedList` with a matching
  * cacheKey/companyDb to refetch from SAP.
  */
 export async function invalidateSapCache(
@@ -80,17 +123,21 @@ export async function invalidateSapCache(
   companyDb?: string | null,
 ) {
   const keys = Array.isArray(cacheKeys) ? cacheKeys : [cacheKeys];
-  // Best-effort DB cleanup — errors here shouldn't block the UI signal.
+  // Best-effort DB update — errors here shouldn't block the UI signal.
   try {
-    let q = supabase.from("sap_cache").delete().in("cache_key", keys);
+    let q = supabase
+      .from("sap_cache")
+      .update({ expires_at: new Date(Date.now() - 1000).toISOString() })
+      .in("cache_key", keys);
     if (companyDb) q = q.eq("company_db", companyDb);
     await q;
   } catch (e) {
-    console.warn("invalidateSapCache: failed to purge sap_cache rows", e);
+    console.warn("invalidateSapCache: failed to expire sap_cache rows", e);
   }
   // Fire in-memory listeners so mounted hooks reload immediately.
   for (const k of keys) notifyKey(k, companyDb, "hard");
 }
+
 
 /** Dispara os listeners montados de uma cacheKey (escopo por companyDb). */
 function notifyKey(cacheKey: string, companyDb: string | null | undefined, mode: InvalidationMode) {
@@ -346,16 +393,10 @@ export function useSapCachedList({
           PurchaseItem: "tYES",
           ItemType: item.kind === "service" ? "itService" : "itItems",
         }));
-        const activeRows = filterActiveRows(endpoint, rows, cacheKey);
+        let activeRows = filterActiveRows(endpoint, rows, cacheKey);
         if (activeRows.length > 0) {
-          const expiresAt = new Date(Date.now() + getCacheTtlMs(cacheKey)).toISOString();
-          markSelfCacheWrite(cacheKey, companyDB);
-          await supabase.from("sap_cache").upsert({
-            cache_key: cacheKey,
-            company_db: companyDB,
-            data: activeRows as any,
-            expires_at: expiresAt,
-          }, { onConflict: "cache_key,company_db" });
+          const stored = await persistCacheRows(cacheKey, companyDB, activeRows, { replace: forceRefresh });
+          activeRows = filterActiveRows(endpoint, stored, cacheKey);
         }
         setOptions(activeRows.map(mapRowRef.current));
         setIsStale(false);
@@ -370,20 +411,13 @@ export function useSapCachedList({
       ) {
         const categoryType = cacheKey.includes("revenue") ? "R" : "D";
         const categories = await omieListarCategorias(companyDB, { type: categoryType, forceRefresh });
-        const rows = categories.map((category) => ({
+        let rows: any[] = categories.map((category) => ({
           CenterCode: category.codigo,
           CenterName: category.descricao || category.descricao_padrao || category.codigo,
           Active: "tYES",
         }));
         if (rows.length > 0) {
-          const expiresAt = new Date(Date.now() + getCacheTtlMs(cacheKey)).toISOString();
-          markSelfCacheWrite(cacheKey, companyDB);
-          await supabase.from("sap_cache").upsert({
-            cache_key: cacheKey,
-            company_db: companyDB,
-            data: rows as any,
-            expires_at: expiresAt,
-          }, { onConflict: "cache_key,company_db" });
+          rows = await persistCacheRows(cacheKey, companyDB, rows, { replace: forceRefresh });
         }
         setOptions(rows.map(mapRowRef.current));
         setIsStale(false);
@@ -469,21 +503,10 @@ export function useSapCachedList({
       rows = filterActiveRows(endpoint, rows, cacheKey);
 
 
-      // 4. Only cache non-empty results
+      // 4. Cache perene: upsert das linhas novas sobre as já armazenadas.
       if (rows.length > 0) {
-        const expiresAt = new Date(Date.now() + getCacheTtlMs(cacheKey)).toISOString();
-        markSelfCacheWrite(cacheKey, companyDB);
-        await supabase
-          .from("sap_cache")
-          .upsert(
-            {
-              cache_key: cacheKey,
-              company_db: companyDB,
-              data: rows as any,
-              expires_at: expiresAt,
-            },
-            { onConflict: "cache_key,company_db" }
-          );
+        const stored = await persistCacheRows(cacheKey, companyDB, rows, { replace: forceRefresh });
+        rows = filterActiveRows(endpoint, stored, cacheKey);
       }
       lastLoadedAtRef.current = Date.now();
 

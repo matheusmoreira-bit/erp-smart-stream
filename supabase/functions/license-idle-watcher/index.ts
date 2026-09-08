@@ -278,7 +278,10 @@ Deno.serve(async (req) => {
         // 1. Limpa cache de usuários e recarrega lista fresca (HanaAPI V2 quando disponível, fallback SL)
         let freshUsers: Array<{ UserCode: string; UserName?: string; Locked?: string }> = [];
         try {
-          await sb.from("sap_cache").delete().eq("cache_key", "users").eq("company_db", co.company_db);
+          // Cache de cadastros é perene: apenas marca como vencido.
+          await sb.from("sap_cache").update({ expires_at: new Date(Date.now() - 1000).toISOString() })
+            .eq("cache_key", "users").eq("company_db", co.company_db);
+
           const usersResp = await listSapUsersHybrid({
             sb, companyDb: co.company_db, baseUrl, sapSession: session, database: dbName,
           });
