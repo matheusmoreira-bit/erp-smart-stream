@@ -4,6 +4,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
+import { upsertSapCacheMerged } from "../_shared/sap-list-cache.ts";
 
 const TTL_MS = 12 * 60 * 60 * 1000;
 const PAGE_SIZE = 20;
@@ -118,13 +119,10 @@ Deno.serve(async (req) => {
             results.push({ companyDb, status: "skipped", reason: "nenhuma forma de pagamento retornada" });
             continue;
           }
-          const { error } = await sb.from("sap_cache").upsert({
-            cache_key: "payment_terms_v1",
-            company_db: companyDb,
-            data: rows,
-            expires_at: new Date(Date.now() + TTL_MS).toISOString(),
-          }, { onConflict: "cache_key,company_db" });
-          if (error) throw new Error(`Upsert sap_cache: ${error.message}`);
+          await upsertSapCacheMerged(
+            sb, "payment_terms_v1", companyDb, rows,
+            new Date(Date.now() + TTL_MS).toISOString(),
+          );
           results.push({ companyDb, status: "success", count: rows.length });
         } finally {
           await logout(baseUrl, cookie);

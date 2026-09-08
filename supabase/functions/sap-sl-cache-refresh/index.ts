@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { upsertSapCacheMerged } from "../_shared/sap-list-cache.ts";
 
 const TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -102,13 +103,15 @@ async function refreshCompany(
 
 
     const expiresAt = new Date(Date.now() + TTL_MS).toISOString();
-    const rows = [
-      { cache_key: "sl_users", company_db: appCompanyDb, data: users, expires_at: expiresAt },
-      { cache_key: "sl_templates", company_db: appCompanyDb, data: templates, expires_at: expiresAt },
-      { cache_key: "sl_stages", company_db: appCompanyDb, data: stages, expires_at: expiresAt },
+    // Cadastros (usuários, templates, estágios) usam cache perene com upsert
+    // linha a linha; o mapa de aprovadores por estágio é substituído inteiro.
+    await upsertSapCacheMerged(sb, "sl_users", appCompanyDb, users, expiresAt);
+    await upsertSapCacheMerged(sb, "sl_templates", appCompanyDb, templates, expiresAt);
+    await upsertSapCacheMerged(sb, "sl_stages", appCompanyDb, stages, expiresAt);
+    const { error } = await sb.from("sap_cache").upsert(
       { cache_key: "sl_stage_approvers", company_db: appCompanyDb, data: stageApprovers, expires_at: expiresAt },
-    ];
-    const { error } = await sb.from("sap_cache").upsert(rows, { onConflict: "cache_key,company_db" });
+      { onConflict: "cache_key,company_db" },
+    );
     if (error) throw new Error(`Upsert sap_cache: ${error.message}`);
 
     return { users: users.length, templates: templates.length, stages: stages.length };
