@@ -447,7 +447,13 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
 
   return {
     options: merged,
-    isLoading: isOmie ? omieLoading : sapLoading || (!hanaLoaded && !!companyDb),
+    // Assim que qualquer fonte (HANA, Service Layer ou base local) devolver
+    // linhas, paramos de exibir "carregando" — mesmo que a outra ainda esteja
+    // pendente/indisponível.
+    isLoading: isOmie
+      ? omieLoading
+      : merged.length === 0 && (sapLoading || (!hanaLoaded && !!companyDb)),
+
     reload: () => {
       if (isOmie) {
         setOmieReloadTick((tick) => tick + 1);
