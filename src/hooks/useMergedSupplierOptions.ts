@@ -234,6 +234,11 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
 
   }, [companyDb, isSales, isOmie, hanaReloadTick, hanaCacheKey]);
 
+  // Já temos uma lista HANA recente em memória? Então não há motivo para
+  // disparar o Service Layer em paralelo.
+  const hanaMem = companyDb ? hanaMemory.get(`${hanaCacheKey}:${companyDb}`) : undefined;
+  const hanaFreshInMemory =
+    !!hanaMem && hanaMem.rows.length > 0 && Date.now() - hanaMem.at < HANA_TTL_MS;
 
 
   const {
