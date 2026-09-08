@@ -41,8 +41,9 @@ export function sapCacheKeysFor(family: SapCacheFamily, companyDb: string): stri
 }
 
 /**
- * Apaga as linhas de cache da família informada para a base. Best-effort:
- * nunca lança — falhar aqui não pode derrubar a operação de negócio.
+ * Marca o cache da família informada como vencido (revalidação imediata pelas
+ * telas abertas), SEM apagar os dados: o cache de cadastros é perene e só é
+ * atualizado por upsert. Best-effort: nunca lança.
  */
 export async function purgeSapListCache(
   sb: Sb,
@@ -53,10 +54,11 @@ export async function purgeSapListCache(
   try {
     await sb
       .from("sap_cache")
-      .delete()
+      .update({ expires_at: new Date(Date.now() - 1000).toISOString() })
       .eq("company_db", companyDb)
       .in("cache_key", sapCacheKeysFor(family, companyDb));
   } catch (e) {
     console.warn(`purgeSapListCache(${family}) falhou:`, (e as Error).message);
   }
 }
+
