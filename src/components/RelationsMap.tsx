@@ -76,6 +76,29 @@ interface RuleLevelRow {
   approver_email: string | null;
 }
 
+interface SegmentChainLevel {
+  level_order?: number;
+  approver_name?: string | null;
+  approver_email?: string | null;
+}
+
+interface SegmentRow {
+  id: string;
+  segment_key: string;
+  cost_center: string | null;
+  project: string | null;
+  amount: number | string | null;
+  status: string;
+  current_level: number | null;
+  current_approver: string | null;
+  current_approver_email: string | null;
+  rule_name: string | null;
+  chain: unknown;
+  decided_by: string | null;
+  decided_at: string | null;
+  resolution_note: string | null;
+}
+
 interface SapHistoryRow {
   id: string;
   approver_name: string | null;
@@ -198,6 +221,7 @@ export function RelationsMap({ open, onClose, expense, title, flowType = "compra
   const [log, setLog] = useState<ApprovalLogRow[]>([]);
   const [levels, setLevels] = useState<RuleLevelRow[]>([]);
   const [sapHistory, setSapHistory] = useState<SapHistoryRow[]>([]);
+  const [segments, setSegments] = useState<SegmentRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [detailStage, setDetailStage] = useState<StageKey | null>(null);
   const [lineDetail, setLineDetail] = useState<RelationCardDetail | null>(null);
@@ -343,7 +367,7 @@ export function RelationsMap({ open, onClose, expense, title, flowType = "compra
     let cancelled = false;
     (async () => {
       setIsLoading(true);
-      const [logRes, levelsRes, sapRes] = await Promise.all([
+      const [logRes, levelsRes, sapRes, segRes] = await Promise.all([
         supabase
           .from("expense_approval_log")
           .select("*")
@@ -364,11 +388,19 @@ export function RelationsMap({ open, onClose, expense, title, flowType = "compra
               .eq("doc_entry", expense.sap_doc_entry)
               .order("step", { ascending: true })
           : Promise.resolve({ data: [] as SapHistoryRow[] }),
+        supabase
+          .from("expense_approval_segments")
+          .select(
+            "id, segment_key, cost_center, project, amount, status, current_level, current_approver, current_approver_email, rule_name, chain, decided_by, decided_at, resolution_note",
+          )
+          .eq("expense_id", expense.id)
+          .order("created_at", { ascending: true }),
       ]);
       if (cancelled) return;
       setLog((logRes as SupabaseListResult<ApprovalLogRow>).data || []);
       setLevels((levelsRes as SupabaseListResult<RuleLevelRow>).data || []);
       setSapHistory((sapRes as SupabaseListResult<SapHistoryRow>).data || []);
+      setSegments((segRes as SupabaseListResult<SegmentRow>).data || []);
       setIsLoading(false);
     })();
     return () => {
@@ -431,7 +463,9 @@ export function RelationsMap({ open, onClose, expense, title, flowType = "compra
     decidedAt?: string | null;
     remarks?: string | null;
     stageName?: string | null;
-    source: "rule" | "sap";
+    /** Rótulo da trilha (rateio/reembolso) a que este nível pertence. */
+    track?: string | null;
+    source: "rule" | "sap" | "segment";
   };
 
   const approverRows: ChainRow[] = useMemo(() => {
@@ -442,6 +476,68 @@ export function RelationsMap({ open, onClose, expense, title, flowType = "compra
     const stillPending = isPendingApproval(expense.status);
     const isRejectedDoc = expense.status === "rejeitado" || expense.status === "cancelado";
     const isFinalized = !stillPending && !isRejectedDoc; // aprovado/integrado
+
+    // Documentos rateados / com regra paralela: cada trilha tem a sua própria
+    // cadeia. Mostramos TODAS as trilhas, nível a nível, com o status de cada
+    // aprovador — e não apenas o nó mais alto da cadeia principal.
+    if (segments.length > 0) {
+      const rows: ChainRow[] = [];
+      segments.forEach((seg) => {
+        const trackLabel =
+          seg.segment_key === "__reembolso__"
+            ? "Reembolso"
+            : [seg.cost_center, seg.project].filter(Boolean).join(" · ") || "Sem centro de custo";
+        const rawChain = Array.isArray(seg.chain)
+          ? (seg.chain as SegmentChainLevel[])
+          : typeof seg.chain === "string"
+            ? (() => {
+                try {
+                  const parsed = JSON.parse(seg.chain as string);
+                  return Array.isArray(parsed) ? (parsed as SegmentChainLevel[]) : [];
+                } catch {
+                  return [] as SegmentChainLevel[];
+                }
+              })()
+            : [];
+        const segStatus = String(seg.status || "").toLowerCase();
+        const currentLevel = Number(seg.current_level) || 1;
+        const decidedBy = String(seg.decided_by || "").toLowerCase();
+        const chain = rawChain.length > 0
+          ? rawChain
+          : seg.current_approver
+            ? [{ level_order: currentLevel, approver_name: seg.current_approver, approver_email: seg.current_approver_email }]
+            : [];
+        chain.forEach((lv) => {
+          const name = String(lv.approver_name || lv.approver_email || "—");
+          const level = Number(lv.level_order) || 1;
+          const nameKey = name.toLowerCase();
+          const approvedHere =
+            segStatus === "aprovado" ||
+            isFinalized ||
+            level < currentLevel ||
+            approvedNames.has(nameKey);
+          const rejectedHere =
+            segStatus === "rejeitado" &&
+            (decidedBy === nameKey || decidedBy === String(lv.approver_email || "").toLowerCase());
+          rows.push({
+            level_order: level,
+            approver_name: name,
+            approver_email: lv.approver_email || null,
+            done: approvedHere && !rejectedHere,
+            rejected: rejectedHere,
+            isCurrent:
+              segStatus === "pendente" &&
+              !approvedHere &&
+              level === currentLevel,
+            decidedAt: segStatus !== "pendente" ? seg.decided_at : null,
+            remarks: rejectedHere ? seg.resolution_note : null,
+            track: seg.rule_name ? `${trackLabel} · ${seg.rule_name}` : trackLabel,
+            source: "segment" as const,
+          });
+        });
+      });
+      if (rows.length > 0) return rows;
+    }
 
     if (levels.length > 0) {
       return levels.map((lv) => {
@@ -504,7 +600,7 @@ export function RelationsMap({ open, onClose, expense, title, flowType = "compra
       }
     }
     return rows;
-  }, [levels, approvedNames, expense, sapHistory]);
+  }, [levels, approvedNames, expense, sapHistory, segments]);
 
 
   const currentApproverRow = approverRows.find((r) => r.isCurrent);
