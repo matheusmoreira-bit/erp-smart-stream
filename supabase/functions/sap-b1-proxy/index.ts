@@ -524,7 +524,16 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
         }
 
         if (!sapResp.ok) {
-          console.error("SAP queryAll error:", sapResp.status, await sapResp.text());
+          const errText = await sapResp.text().catch(() => "");
+          if (
+            sapResp.status === 400 && !dropSelect && params && (params as any)["$select"] &&
+            /Property '[^']+' of '[^']+'\s*is invalid/i.test(errText)
+          ) {
+            console.warn("SAP queryAll: $select inválido nesta base, refazendo sem $select.");
+            dropSelect = true;
+            continue; // repete a mesma página sem o $select
+          }
+          console.error("SAP queryAll error:", sapResp.status, errText);
           break;
         }
 
