@@ -600,7 +600,7 @@ export function RelationsMap({ open, onClose, expense, title, flowType = "compra
       }
     }
     return rows;
-  }, [levels, approvedNames, expense, sapHistory]);
+  }, [levels, approvedNames, expense, sapHistory, segments]);
 
 
   const currentApproverRow = approverRows.find((r) => r.isCurrent);
