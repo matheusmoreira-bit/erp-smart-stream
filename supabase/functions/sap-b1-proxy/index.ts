@@ -464,6 +464,11 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
       const deadline = Date.now() + 140_000; // hard wall-clock budget < proxy idle 150s
       const HARD_CAP = 50_000;
 
+      // Algumas bases não possuem os campos customizados pedidos no $select
+      // (ex.: U_FGR_TAXID0). O SAP rejeita a consulta inteira com HTTP 400;
+      // nesse caso repetimos a página sem o $select (o $filter é preservado).
+      let dropSelect = false;
+
       while (hasMore) {
         if (Date.now() > deadline) {
           console.warn(`SAP queryAll: deadline reached, returning ${allResults.length} partial results.`);
@@ -473,6 +478,7 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
         if (params) {
           for (const [key, value] of Object.entries(params)) {
             if (value !== undefined && value !== null && key !== "$skip" && key !== "$top") {
+              if (dropSelect && key === "$select") continue;
               queryParams.set(key, String(value));
             }
           }
