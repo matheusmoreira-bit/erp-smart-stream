@@ -13,6 +13,7 @@ import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
 import { isNativeErpExpenseOrigin } from "../_shared/expense-origin.ts";
 import { listManualExpenseCancellations } from "../_shared/expense-integration-cancel.ts";
+import { EMERGENCY_ALERT_PHONE } from "../_shared/attachment-emergency.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -83,15 +84,19 @@ Deno.serve(async (req) => {
   const admin = createClient(supabaseUrl, serviceKey);
 
   const startedAt = new Date();
-  const cutoff = new Date(Date.now() - RETRY_COOLDOWN_MINUTES * 60_000).toISOString();
-
-  // Permite forçar o reprocessamento de um documento específico.
+  // Permite forçar o reprocessamento de um documento específico e reduzir o
+  // intervalo mínimo entre tentativas (mutirão de reprocessamento).
   let targetId: string | null = null;
+  let cooldownMinutes = RETRY_COOLDOWN_MINUTES;
   try {
     const body = await req.json().catch(() => ({}));
     const raw = (body as any)?.expense_id;
     if (typeof raw === "string" && /^[0-9a-f-]{36}$/i.test(raw)) targetId = raw;
+    const cd = Number((body as any)?.cooldown_minutes);
+    if (Number.isFinite(cd) && cd >= 0 && cd <= RETRY_COOLDOWN_MINUTES) cooldownMinutes = cd;
   } catch { /* sem body */ }
+
+  const cutoff = new Date(Date.now() - cooldownMinutes * 60_000).toISOString();
 
   const SELECT_COLS =
     "id, company_db, doc_type, supplier_name, supplier_code, requester_name, requester_email, total_amount, currency, sap_integration_last_attempt_at, sap_integration_error, origin";
@@ -106,6 +111,8 @@ Deno.serve(async (req) => {
       .eq("status", "aprovado")
       .eq("doc_type", "purchase")
       .is("sap_doc_entry", null)
+      .not("company_db", "ilike", "tst%")
+      .not("company_db", "ilike", "%TESTE%")
       .or("sap_purchase_order_status.is.null,sap_purchase_order_status.neq.success")
       .or(`sap_integration_last_attempt_at.is.null,sap_integration_last_attempt_at.lt.${cutoff}`)
       .order("sap_integration_last_attempt_at", { ascending: true, nullsFirst: true })
@@ -211,19 +218,25 @@ Deno.serve(async (req) => {
         .limit(1);
       const recentlyNotified = Array.isArray(recent) && recent.length > 0;
 
-      if (!recentlyNotified && adminPhone) {
+      // Além do admin, o plantão de contingência também recebe as falhas.
+      const notifyTargets = Array.from(new Set([adminPhone, EMERGENCY_ALERT_PHONE].filter(Boolean)));
+
+      if (!recentlyNotified && notifyTargets.length > 0) {
         const amount = formatCurrency(Number(exp.total_amount || 0), exp.currency || "BRL");
         const link = `https://erp-flow.cactuscorporation.com/compras?doc=${exp.id}`;
         const msg =
           `⚠️ *Falha na integração ao SAP*\n\n` +
           `Empresa: ${exp.company_db}\n` +
+          `Documento: ${exp.id}\n` +
           `Fornecedor: ${exp.supplier_name || "-"} (${exp.supplier_code || "-"})\n` +
           `Solicitante: ${exp.requester_name || "-"}\n` +
           `Valor: ${amount}\n\n` +
           `Erro: ${errMsg.slice(0, 300)}\n\n` +
           `Abrir: ${link}`;
-        const send = await sendWhatsApp(adminPhone, msg);
-        notified = !!send.ok;
+        for (const to of notifyTargets) {
+          const send = await sendWhatsApp(to, msg);
+          if (send.ok) notified = true;
+        }
 
         // Registra a notificação (mesmo se falhou, para não flood-notificar).
         try {
