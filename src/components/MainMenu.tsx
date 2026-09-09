@@ -354,11 +354,15 @@ function ModuleCardItem({
   index,
   hasAccess,
   targetPath,
+  color,
+  bgGlow,
 }: {
   mod: ModuleCard;
   index: number;
   hasAccess: boolean;
   targetPath: string;
+  color?: string;
+  bgGlow?: string;
 }) {
   const navigate = useNavigate();
   const Icon = mod.icon;
@@ -380,13 +384,14 @@ function ModuleCardItem({
       }`}
     >
       {/* Glow background */}
-      <div className={`absolute inset-0 bg-gradient-to-br ${mod.bgGlow} opacity-0 group-hover:opacity-100 transition-opacity`} />
+      <div className={`absolute inset-0 bg-gradient-to-br ${bgGlow ?? mod.bgGlow} opacity-0 group-hover:opacity-100 transition-opacity`} />
 
       <div className="relative z-10">
         <div className="flex items-start justify-between mb-3 sm:mb-4">
-          <div className={`p-2.5 sm:p-3 rounded-xl bg-card border border-border ${mod.color}`}>
+          <div className={`p-2.5 sm:p-3 rounded-xl bg-card border border-border ${color ?? mod.color}`}>
             <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
+
           {!hasAccess ? (
             <Lock className="w-4 h-4 text-muted-foreground" />
           ) : (
