@@ -3775,12 +3775,15 @@ export function CreateExpenseModal({
       lineLabel={splitLineIndex !== null ? `Item ${splitLineIndex + 1}` : undefined}
       onConfirm={(split) => {
         if (splitLineIndex === null) return;
+        const idx = splitLineIndex;
         setItems((prev) => {
           const updated = [...prev];
-          updated[splitLineIndex] = { ...updated[splitLineIndex], projectSplit: split };
+          updated[idx] = { ...updated[idx], projectSplit: split };
           return updated;
         });
+        maybeTriggerCcAlertForSplit(idx, items[idx]?.sapCostCenter || null, split);
       }}
+
     />
 
     <CcProjectAlertDialog
