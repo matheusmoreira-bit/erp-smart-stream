@@ -704,7 +704,7 @@ export default function Admin() {
       </AlertDialog>
       {/* Header — mobile first */}
       <header className="border-b border-border sticky top-0 z-40 bg-background/95 backdrop-blur">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-2 px-3 sm:px-6 py-3">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 px-3 sm:px-6 py-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="p-1 rounded-lg bg-[hsl(var(--cactus-amber))]/10 border border-[hsl(var(--cactus-amber))]/20 shrink-0">
               <img src={cactusLogo.url} alt="Cactus" className="w-7 h-7 object-contain" />
@@ -741,7 +741,7 @@ export default function Admin() {
         </div>
 
         {/* Desktop nav */}
-        <div className="hidden md:block max-w-6xl mx-auto px-6 pb-3">
+        <div className="hidden md:block max-w-7xl mx-auto px-6 pb-3">
           <div className="flex items-center gap-3">
             <nav className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border/60">
               {BACKOFFICE_PRIMARY_NAV.map((t) => {
@@ -806,7 +806,7 @@ export default function Admin() {
 
       </header>
 
-      <main className="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-24 md:pb-8">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-24 md:pb-8">
 
 
         {activeTab === "companies" && (

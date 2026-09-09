@@ -120,7 +120,7 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
     <div className="min-h-screen bg-background">
       <PageTitle title={pageTitle} />
       <header className="border-b border-border px-4 sm:px-6 py-3 sm:py-4 sticky top-0 z-20 bg-background/95 backdrop-blur">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-2">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground shrink-0 h-10 w-10 flex items-center justify-center -ml-2" aria-label="Voltar">
               <ArrowLeft className="w-5 h-5" />
@@ -142,7 +142,7 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
 
         <div className="flex items-center gap-2 mb-4">
           <div className="relative flex-1 max-w-md">

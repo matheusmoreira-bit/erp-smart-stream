@@ -264,7 +264,7 @@ export default function IdpSyncPage() {
     <div className="min-h-screen bg-background">
       <PageTitle title="Sincronização IdP" />
       <header className="border-b border-border px-6 py-6">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <Button variant="ghost" size="icon" aria-label="Voltar" onClick={() => navigate("/usuarios/lista")}>
               <ArrowLeft className="w-5 h-5" />
@@ -326,7 +326,7 @@ export default function IdpSyncPage() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-6 space-y-4">
+      <main className="max-w-7xl mx-auto px-6 py-6 space-y-4">
         <div className="flex w-fit gap-1 rounded-lg border border-border bg-muted/50 p-1" role="tablist" aria-label="Provedor de identidade">
           {(Object.keys(IDP_PROVIDERS) as IdpProvider[]).map((idpProvider) => (
             <button

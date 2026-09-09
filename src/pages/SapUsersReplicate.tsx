@@ -257,7 +257,7 @@ export default function SapUsersReplicate() {
         backTo="/usuarios/sap"
       />
 
-      <main className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+      <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
         <div className="glass-card p-5 space-y-5">
           <div>
             <Label className="text-sm font-medium">Bases de origem (uma ou mais — consolidadas)</Label>

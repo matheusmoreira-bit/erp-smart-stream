@@ -454,7 +454,7 @@ export function MainMenu() {
 
       {/* Content */}
       <main className="flex-1 px-4 sm:px-6 py-6 sm:py-12 pb-24 md:pb-12">
-        <div className="max-w-6xl mx-auto w-full">
+        <div className="max-w-7xl mx-auto w-full">
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-6 sm:mb-10">
             <h2 className="text-2xl sm:text-3xl font-bold text-foreground">Módulos</h2>
             <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">Selecione um módulo para começar</p>

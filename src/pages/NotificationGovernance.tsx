@@ -286,7 +286,7 @@ export default function NotificationGovernancePage() {
     <div className="min-h-screen bg-background">
       <PageTitle title="Regras de notificação" />
       <header className="border-b border-border px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center gap-4">
+        <div className="max-w-7xl mx-auto flex items-center gap-4">
           <button
             onClick={() => navigate("/notificacoes")}
             className="p-2 rounded-lg hover:bg-muted transition-colors"
@@ -311,7 +311,7 @@ export default function NotificationGovernancePage() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-6 space-y-6">
+      <main className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         {capLoading ? (
           <div className="glass-card p-8 text-center text-muted-foreground">Carregando…</div>
         ) : !isPrivileged ? (

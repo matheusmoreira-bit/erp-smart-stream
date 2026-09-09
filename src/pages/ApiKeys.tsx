@@ -190,7 +190,7 @@ export default function ApiKeys() {
         }
       />
 
-      <main className="max-w-6xl mx-auto px-3 sm:px-6 py-6 space-y-6">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-6 space-y-6">
         <div className="grid gap-4 sm:grid-cols-3">
           <Card>
             <CardHeader className="pb-2">
