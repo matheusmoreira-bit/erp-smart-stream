@@ -1170,6 +1170,11 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     const isPatchMode = !!expense.sap_doc_entry
       && (body.patch_document === true || String((expense as any).status || "") === "aprovado");
 
+    // Contingência 09/09/2026 — documento integrado sem anexo por falha no ERP.
+    let emergencyWithoutAttachment = false;
+    let emergencyAttachmentError = "";
+
+
     const ensureAttachmentEntryUploaded = async (): Promise<number> => {
       const existingAttachmentEntry = Number(expense.sap_attachment_entry || 0);
       if (existingAttachmentEntry > 0) {
