@@ -11,6 +11,14 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+type AdvanceApplicationInput = {
+  advanceId?: string | null;
+  sapDocEntry: number;
+  sapDocNum?: number | null;
+  amount: number;
+  source?: "flow" | "sap";
+};
+
 type BaixaInput = {
   companyDb: string;
   cardCode: string;
@@ -29,7 +37,10 @@ type BaixaInput = {
     invoiceType?: "invoice" | "journal_entry";
     invoiceDocLine?: number | null;
   }>;
+  /** Adiantamentos já baixados aplicados nesta baixa (abatimento do valor da NF). */
+  adiantamentos?: AdvanceApplicationInput[];
 };
+
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -94,6 +105,16 @@ function validateInput(input: BaixaInput, sessionCompanyDb: string): string | nu
     if (!Number.isFinite(Number(item.invoiceDocEntry)) || Number(item.invoiceDocEntry) <= 0) return "NF inválida no rateio.";
     if (!Number.isFinite(Number(item.valorBaixado)) || Number(item.valorBaixado) <= 0) return "Valor do rateio inválido.";
   }
+  const advances = Array.isArray(input.adiantamentos) ? input.adiantamentos : [];
+  let totalAdvances = 0;
+  for (const adv of advances) {
+    if (!Number.isFinite(Number(adv.sapDocEntry)) || Number(adv.sapDocEntry) <= 0) return "Adiantamento inválido.";
+    if (!Number.isFinite(Number(adv.amount)) || Number(adv.amount) <= 0) return "Valor do adiantamento inválido.";
+    totalAdvances += Number(adv.amount);
+  }
+  if (totalAdvances > Number(input.valorTotal) + 0.01) {
+    return "A soma dos adiantamentos aplicados excede o valor da baixa.";
+  }
   return null;
 }
 
@@ -101,28 +122,47 @@ function buildIncomingPayment(
   baixa: Record<string, unknown>,
   itens: Array<Record<string, unknown>>,
   bplId: number,
+  advances: Array<{ doc_entry: number; amount: number }> = [],
 ) {
   const excedente = Number(baixa.valor_juros_multa || 0);
+  const totalAdvances = advances.reduce((s, a) => s + Number(a.amount || 0), 0);
+  const bankSum = +(Number(baixa.valor_total) - totalAdvances).toFixed(2);
+
+  const paymentInvoices: Array<Record<string, unknown>> = itens.map((it) => {
+    const type = String(it.invoice_type || "invoice");
+    const isJE = type === "journal_entry";
+    const entry: Record<string, unknown> = {
+      DocEntry: Number(it.invoice_doc_entry),
+      SumApplied: Number(it.valor_baixado),
+      InvoiceType: isJE ? "it_JournalEntry" : "it_Invoice",
+    };
+    if (isJE) entry.DocLine = Number(it.invoice_doc_line || 0);
+    return entry;
+  });
+
+  // Adiantamentos já baixados entram como aplicação negativa (it_DownPayment),
+  // abatendo parte do valor das NFs — o restante é recebido em banco.
+  for (const adv of advances) {
+    paymentInvoices.push({
+      DocEntry: Number(adv.doc_entry),
+      SumApplied: -Math.abs(Number(adv.amount)),
+      InvoiceType: "it_DownPayment",
+    });
+  }
+
   const payload: Record<string, unknown> = {
     DocType: "rCustomer",
     CardCode: baixa.card_code,
     DocDate: baixa.data_recebimento,
-    TransferDate: baixa.data_recebimento,
-    TransferAccount: baixa.conta_contabil_codigo,
-    TransferSum: Number(baixa.valor_total),
     BPLID: bplId,
-    PaymentInvoices: itens.map((it) => {
-      const type = String(it.invoice_type || "invoice");
-      const isJE = type === "journal_entry";
-      const entry: Record<string, unknown> = {
-        DocEntry: Number(it.invoice_doc_entry),
-        SumApplied: Number(it.valor_baixado),
-        InvoiceType: isJE ? "it_JournalEntry" : "it_Invoice",
-      };
-      if (isJE) entry.DocLine = Number(it.invoice_doc_line || 0);
-      return entry;
-    }),
+    PaymentInvoices: paymentInvoices,
   };
+
+  if (bankSum > 0.005) {
+    payload.TransferDate = baixa.data_recebimento;
+    payload.TransferAccount = baixa.conta_contabil_codigo;
+    payload.TransferSum = bankSum;
+  }
 
   if (excedente > 0 && baixa.conta_juros_multa_codigo) {
     payload.PaymentAccounts = [{
@@ -132,6 +172,7 @@ function buildIncomingPayment(
   }
   return payload;
 }
+
 
 async function resolveDefaultBranchId(companyDb: string): Promise<number> {
   const sb = adminClient();
@@ -193,6 +234,19 @@ async function syncExistingBaixa(baixaId: string, headers: ReturnType<typeof par
     return json(200, { ok: false, baixaId, errorMessage: msg });
   }
 
+  // Adiantamentos já baixados aplicados nesta baixa (abatimento).
+  const { data: appRows } = await sb
+    .from("advance_invoice_applications")
+    .select("sap_advance_doc_entry,amount")
+    .eq("baixa_id", baixaId);
+  const advanceMap = new Map<number, number>();
+  for (const row of (appRows || []) as Array<{ sap_advance_doc_entry: number | null; amount: number }>) {
+    const entry = Number(row.sap_advance_doc_entry);
+    if (!Number.isFinite(entry) || entry <= 0) continue;
+    advanceMap.set(entry, (advanceMap.get(entry) || 0) + Number(row.amount || 0));
+  }
+  const advances = [...advanceMap.entries()].map(([doc_entry, amount]) => ({ doc_entry, amount }));
+
   const baseUrl = await getSapBaseUrl(headers.companyDB);
   const cookie = `B1SESSION=${headers.sapSession}${headers.routeId ? `; ROUTEID=${headers.routeId}` : ""}`;
 
@@ -208,8 +262,9 @@ async function syncExistingBaixa(baixaId: string, headers: ReturnType<typeof par
   const sapResp = await fetch(`${baseUrl}/IncomingPayments`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Cookie: cookie },
-    body: JSON.stringify(buildIncomingPayment(baixa as Record<string, unknown>, itens as Array<Record<string, unknown>>, bplId)),
+    body: JSON.stringify(buildIncomingPayment(baixa as Record<string, unknown>, itens as Array<Record<string, unknown>>, bplId, advances)),
   });
+
   const text = await sapResp.text();
   let payload: unknown = null;
   try { payload = text ? JSON.parse(text) : null; } catch { payload = text; }
@@ -251,6 +306,121 @@ async function syncExistingBaixa(baixaId: string, headers: ReturnType<typeof par
 
   return json(200, { ok: true, baixaId, sapDocEntry });
 }
+
+/**
+ * Lista adiantamentos de cliente já baixados (reconciliados) disponíveis para
+ * abater NFs: os criados no ERP Flow e os criados diretamente no SAP.
+ */
+async function listCustomerAdvances(
+  cardCode: string,
+  headers: NonNullable<ReturnType<typeof parseSapHeaders>>,
+  companyDb: string,
+) {
+  const sb = adminClient();
+
+  const { data: applied } = await sb
+    .from("advance_invoice_applications")
+    .select("sap_advance_doc_entry,amount")
+    .eq("company_db", companyDb)
+    .eq("card_code", cardCode);
+  const appliedMap = new Map<number, number>();
+  for (const row of (applied || []) as Array<{ sap_advance_doc_entry: number | null; amount: number }>) {
+    const entry = Number(row.sap_advance_doc_entry);
+    if (!Number.isFinite(entry) || entry <= 0) continue;
+    appliedMap.set(entry, (appliedMap.get(entry) || 0) + Number(row.amount || 0));
+  }
+
+  const { data: flowRows } = await sb
+    .from("advance_payments")
+    .select("id,sap_doc_entry,sap_doc_num,amount,currency,reconciliation_date,reconciled_at,remarks")
+    .eq("company_db", companyDb)
+    .eq("advance_type", "customer")
+    .eq("supplier_card_code", cardCode)
+    .not("sap_doc_entry", "is", null)
+    .not("reconciled_at", "is", null);
+
+  type AdvanceOption = {
+    advanceId: string | null;
+    source: "flow" | "sap";
+    sapDocEntry: number;
+    sapDocNum: number | null;
+    date: string | null;
+    currency: string;
+    total: number;
+    applied: number;
+    available: number;
+    remarks: string | null;
+  };
+
+  const options: AdvanceOption[] = [];
+  const seen = new Set<number>();
+  for (const r of (flowRows || []) as Array<Record<string, unknown>>) {
+    const entry = Number(r.sap_doc_entry);
+    if (!Number.isFinite(entry) || entry <= 0) continue;
+    const total = Number(r.amount || 0);
+    const used = appliedMap.get(entry) || 0;
+    seen.add(entry);
+    options.push({
+      advanceId: String(r.id),
+      source: "flow",
+      sapDocEntry: entry,
+      sapDocNum: r.sap_doc_num != null ? Number(r.sap_doc_num) : null,
+      date: (r.reconciliation_date as string) || (r.reconciled_at as string) || null,
+      currency: String(r.currency || "BRL"),
+      total,
+      applied: used,
+      available: +(total - used).toFixed(2),
+      remarks: (r.remarks as string) || null,
+    });
+  }
+
+  // Adiantamentos criados direto no SAP (já pagos pelo cliente).
+  let sapError: string | null = null;
+  try {
+    const baseUrl = await getSapBaseUrl(companyDb);
+    const cookie = `B1SESSION=${headers.sapSession}${headers.routeId ? `; ROUTEID=${headers.routeId}` : ""}`;
+    const filter = encodeURIComponent(`CardCode eq '${cardCode.replace(/'/g, "''")}'`);
+    const url = `${baseUrl}/DownPayments?$filter=${filter}&$select=DocEntry,DocNum,DocDate,DocTotal,PaidToDate,DocCurrency,DocumentStatus,Cancelled&$orderby=DocEntry desc&$top=50`;
+    const r = await fetch(url, { headers: { Cookie: cookie, Prefer: "odata.maxpagesize=50" } });
+    if (r.ok) {
+      const j = await r.json().catch(() => null) as { value?: Array<Record<string, unknown>> } | null;
+      for (const d of j?.value || []) {
+        const entry = Number(d.DocEntry);
+        if (!Number.isFinite(entry) || entry <= 0 || seen.has(entry)) continue;
+        if (String(d.Cancelled || "tNO") === "tYES") continue;
+        const paid = Number(d.PaidToDate || 0);
+        if (paid <= 0) continue; // só adiantamentos já baixados
+        const used = appliedMap.get(entry) || 0;
+        const available = +(paid - used).toFixed(2);
+        if (available <= 0.005) continue;
+        options.push({
+          advanceId: null,
+          source: "sap",
+          sapDocEntry: entry,
+          sapDocNum: d.DocNum != null ? Number(d.DocNum) : null,
+          date: typeof d.DocDate === "string" ? d.DocDate.slice(0, 10) : null,
+          currency: String(d.DocCurrency || "BRL"),
+          total: Number(d.DocTotal || paid),
+          applied: used,
+          available,
+          remarks: null,
+        });
+      }
+    } else {
+      sapError = extractSapError(await r.json().catch(() => null), `SAP recusou a consulta de adiantamentos (${r.status}).`);
+    }
+  } catch (e) {
+    sapError = (e as Error).message;
+  }
+
+  return json(200, {
+    ok: true,
+    advances: options.filter((o) => o.available > 0.005),
+    sapError,
+  });
+}
+
+
 
 Deno.serve(withEdgeMetrics("baixa-recebimento", async (req, _mctx) => {
   const foreignOrigin = rejectForeignOrigin(req);
@@ -336,8 +506,57 @@ Deno.serve(withEdgeMetrics("baixa-recebimento", async (req, _mctx) => {
         return json(500, { ok: false, baixaId, errorMessage: itemErr.message });
       }
 
+      // Vínculo N:N entre adiantamentos já baixados e as NFs desta baixa.
+      const advancesInput = (input.adiantamentos || []).filter((a) => Number(a.amount) > 0);
+      if (advancesInput.length > 0) {
+        const remaining = input.itens.map((it) => ({
+          docEntry: Number(it.invoiceDocEntry),
+          docNum: it.invoiceDocNum != null ? String(it.invoiceDocNum) : null,
+          left: Number(it.valorBaixado),
+        }));
+        const appRows: Array<Record<string, unknown>> = [];
+        for (const adv of advancesInput) {
+          let toAllocate = Number(adv.amount);
+          for (const inv of remaining) {
+            if (toAllocate <= 0.005) break;
+            if (inv.left <= 0.005) continue;
+            const use = Math.min(inv.left, toAllocate);
+            inv.left = +(inv.left - use).toFixed(2);
+            toAllocate = +(toAllocate - use).toFixed(2);
+            appRows.push({
+              company_db: sap.companyDB,
+              card_code: input.cardCode.trim(),
+              advance_id: adv.advanceId || null,
+              advance_source: adv.source === "sap" ? "sap" : "flow",
+              sap_advance_doc_entry: Number(adv.sapDocEntry),
+              sap_advance_doc_num: adv.sapDocNum != null ? Number(adv.sapDocNum) : null,
+              invoice_doc_entry: inv.docEntry,
+              invoice_doc_num: inv.docNum,
+              baixa_id: baixaId,
+              amount: use,
+              created_by: criadoPor,
+            });
+          }
+        }
+        if (appRows.length > 0) {
+          const { error: appErr } = await sb.from("advance_invoice_applications").insert(appRows);
+          if (appErr) {
+            await sb.from("baixas_recebimento").update({ status: "erro", sap_error_message: appErr.message }).eq("id", baixaId);
+            return json(500, { ok: false, baixaId, errorMessage: appErr.message });
+          }
+        }
+      }
+
       return await syncExistingBaixa(baixaId, headers);
     }
+
+    if (action === "listCustomerAdvances") {
+      const cardCode = String(body.cardCode || "").trim();
+      if (!cardCode) return json(400, { ok: false, errorMessage: "Cliente obrigatório." });
+      return await listCustomerAdvances(cardCode, headers, sap.companyDB);
+    }
+
+
 
     return json(400, { ok: false, errorMessage: "Ação inválida." });
   } catch (e) {

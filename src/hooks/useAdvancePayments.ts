@@ -78,11 +78,19 @@ export interface AdvancePayment {
   sap_doc_num?: number | null;
   sap_integration_error?: string | null;
   sap_integrated_at?: string | null;
+  /** Reconciliação (LCM) — recebimento em banco do adiantamento. */
+  reconciliation_date?: string | null;
+  reconciliation_account_code?: string | null;
+  reconciliation_account_name?: string | null;
+  reconciled_at?: string | null;
+  reconciliation_error?: string | null;
+  sap_incoming_payment_doc_entry?: number | null;
   created_at: string;
   updated_at: string;
   attachments?: AdvanceAttachment[];
   items?: AdvanceItem[];
 }
+
 
 export interface CreateAdvanceInput {
   company_db: string;
@@ -180,7 +188,11 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
       const uid = userData?.user?.id;
       if (!uid) throw new Error("Usuário não autenticado.");
 
-      const status: AdvanceStatus = input.submit ? "pending" : "draft";
+      // Adiantamento de cliente não passa por aprovação: ao enviar, já integra ao ERP.
+      const type = input.advance_type || advanceType;
+      const isCustomer = type === "customer";
+      const status: AdvanceStatus = input.submit ? (isCustomer ? "integrating" : "pending") : "draft";
+
 
       const items = input.items || [];
       if (!items.length) throw new Error("Adicione ao menos um item.");
@@ -252,8 +264,23 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
         }
       }
 
+      // Cliente: integra imediatamente, sem etapa de aprovação.
+      if (isCustomer && input.submit) {
+        try {
+          await callAdvanceToSap(row.id);
+        } catch (e) {
+          await (supabase as any)
+            .from("advance_payments")
+            .update({ status: "failed", sap_integration_error: e instanceof Error ? e.message : String(e) })
+            .eq("id", row.id);
+          await fetchAll();
+          throw e;
+        }
+      }
+
       await fetchAll();
       return row as AdvancePayment;
+
     },
     [session, fetchAll, advanceType],
   );
@@ -326,6 +353,27 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
     },
     [fetchAll],
   );
+  /** Reconcilia (LCM) o adiantamento informando a conta bancária de recebimento. */
+  const reconcile = useCallback(
+    async (
+      id: string,
+      params: { data_recebimento: string; conta_codigo: string; conta_nome?: string | null },
+    ) => {
+      const res = await sapFunctionFetch("advance-reconcile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ advance_id: id, ...params }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.errorMessage || data?.error || `Falha ao reconciliar (${res.status})`);
+      }
+      await fetchAll();
+      return data as { sapDocEntry?: number | null };
+    },
+    [fetchAll],
+  );
 
-  return { items, loading, error, refresh: fetchAll, create, approve, reject, retry, remove };
+  return { items, loading, error, refresh: fetchAll, create, approve, reject, retry, remove, reconcile };
+
 }

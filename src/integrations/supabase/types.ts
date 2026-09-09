@@ -494,6 +494,75 @@ export type Database = {
         }
         Relationships: []
       }
+      advance_invoice_applications: {
+        Row: {
+          advance_id: string | null
+          advance_source: string
+          amount: number
+          baixa_id: string | null
+          card_code: string
+          company_db: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          invoice_doc_entry: number
+          invoice_doc_num: string | null
+          sap_advance_doc_entry: number | null
+          sap_advance_doc_num: number | null
+          updated_at: string
+        }
+        Insert: {
+          advance_id?: string | null
+          advance_source?: string
+          amount: number
+          baixa_id?: string | null
+          card_code: string
+          company_db: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          invoice_doc_entry: number
+          invoice_doc_num?: string | null
+          sap_advance_doc_entry?: number | null
+          sap_advance_doc_num?: number | null
+          updated_at?: string
+        }
+        Update: {
+          advance_id?: string | null
+          advance_source?: string
+          amount?: number
+          baixa_id?: string | null
+          card_code?: string
+          company_db?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          invoice_doc_entry?: number
+          invoice_doc_num?: string | null
+          sap_advance_doc_entry?: number | null
+          sap_advance_doc_num?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advance_invoice_applications_advance_id_fkey"
+            columns: ["advance_id"]
+            isOneToOne: false
+            referencedRelation: "advance_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "advance_invoice_applications_baixa_id_fkey"
+            columns: ["baixa_id"]
+            isOneToOne: false
+            referencedRelation: "baixas_recebimento"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       advance_payment_attachments: {
         Row: {
           advance_id: string
@@ -600,6 +669,12 @@ export type Database = {
           current_approval_level: number
           due_date: string | null
           id: string
+          reconciled_at: string | null
+          reconciled_by: string | null
+          reconciliation_account_code: string | null
+          reconciliation_account_name: string | null
+          reconciliation_date: string | null
+          reconciliation_error: string | null
           rejection_reason: string | null
           remarks: string | null
           requester_email: string | null
@@ -607,6 +682,7 @@ export type Database = {
           requester_name: string | null
           sap_doc_entry: number | null
           sap_doc_num: number | null
+          sap_incoming_payment_doc_entry: number | null
           sap_integrated_at: string | null
           sap_integration_error: string | null
           sap_integration_locked_at: string | null
@@ -629,6 +705,12 @@ export type Database = {
           current_approval_level?: number
           due_date?: string | null
           id?: string
+          reconciled_at?: string | null
+          reconciled_by?: string | null
+          reconciliation_account_code?: string | null
+          reconciliation_account_name?: string | null
+          reconciliation_date?: string | null
+          reconciliation_error?: string | null
           rejection_reason?: string | null
           remarks?: string | null
           requester_email?: string | null
@@ -636,6 +718,7 @@ export type Database = {
           requester_name?: string | null
           sap_doc_entry?: number | null
           sap_doc_num?: number | null
+          sap_incoming_payment_doc_entry?: number | null
           sap_integrated_at?: string | null
           sap_integration_error?: string | null
           sap_integration_locked_at?: string | null
@@ -658,6 +741,12 @@ export type Database = {
           current_approval_level?: number
           due_date?: string | null
           id?: string
+          reconciled_at?: string | null
+          reconciled_by?: string | null
+          reconciliation_account_code?: string | null
+          reconciliation_account_name?: string | null
+          reconciliation_date?: string | null
+          reconciliation_error?: string | null
           rejection_reason?: string | null
           remarks?: string | null
           requester_email?: string | null
@@ -665,6 +754,7 @@ export type Database = {
           requester_name?: string | null
           sap_doc_entry?: number | null
           sap_doc_num?: number | null
+          sap_incoming_payment_doc_entry?: number | null
           sap_integrated_at?: string | null
           sap_integration_error?: string | null
           sap_integration_locked_at?: string | null

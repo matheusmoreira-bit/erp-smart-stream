@@ -16,9 +16,15 @@ import { toast } from "sonner";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
-import { createBaixaRecebimentoAndSync } from "@/lib/baixa-recebimento-sync";
+import {
+  createBaixaRecebimentoAndSync,
+  listCustomerAdvances,
+  type AvailableCustomerAdvance,
+} from "@/lib/baixa-recebimento-sync";
 import { useSap } from "@/contexts/SapContext";
 import { DateInputBR } from "@/components/DateInputBR";
+import { Checkbox } from "@/components/ui/checkbox";
+
 
 export interface BaixaInvoiceRow {
   docEntry: number;
@@ -84,6 +90,12 @@ export function BaixaRecebimentoDialog({
   const [submitting, setSubmitting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
+  // Adiantamentos do cliente já baixados (ERP Flow ou criados direto no ERP)
+  const [advances, setAdvances] = useState<AvailableCustomerAdvance[]>([]);
+  const [advLoading, setAdvLoading] = useState(false);
+  const [advError, setAdvError] = useState<string | null>(null);
+  const [advSel, setAdvSel] = useState<Record<number, string>>({});
+
   // Chave estável para rateio: combina tipo + docEntry + docLine.
   // NFs (invoice) e Saldos Iniciais (journal_entry) podem compartilhar DocEntry, então
   // precisamos de uma chave composta para evitar colisão.
@@ -104,7 +116,34 @@ export function BaixaRecebimentoDialog({
     }
     setRateio(initial);
     setConfirmOpen(false);
+    setAdvSel({});
   }, [open, saldoTotal, invoices, today]);
+
+  useEffect(() => {
+    if (!open || !cardCode) return;
+    let cancelled = false;
+    setAdvLoading(true);
+    setAdvError(null);
+    listCustomerAdvances(cardCode)
+      .then((res) => {
+        if (cancelled) return;
+        setAdvances(res.advances);
+        setAdvError(res.sapError);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setAdvances([]);
+          setAdvError((e as Error).message);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAdvLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, cardCode]);
+
 
   const accountsCache = useSapCachedList({
     cacheKey: "chart_of_accounts_active",
@@ -160,6 +199,20 @@ export function BaixaRecebimentoDialog({
   );
   const diffSoma = +(valorRecebido - somaRateio).toFixed(2);
 
+  // Adiantamentos aplicados nesta baixa (abatem o valor recebido em banco)
+  const advSelected = useMemo(
+    () =>
+      advances
+        .map((a) => ({ adv: a, amount: parseAmount(advSel[a.sapDocEntry] || "0") }))
+        .filter((x) => x.amount > 0),
+    [advances, advSel],
+  );
+  const totalAdiantamentos = useMemo(
+    () => +advSelected.reduce((s, x) => s + x.amount, 0).toFixed(2),
+    [advSelected],
+  );
+  const valorEmBanco = +(valorRecebido - totalAdiantamentos).toFixed(2);
+
   /* ── Validações ─────────────────────────────────────── */
   const validationErrors: string[] = [];
   if (!dataRecebimento) validationErrors.push("Informe a data de recebimento.");
@@ -177,6 +230,17 @@ export function BaixaRecebimentoDialog({
       "Há valor a baixar acima do saldo de uma ou mais NFs — selecione a conta de juros/multa.",
     );
   }
+  for (const { adv, amount } of advSelected) {
+    if (amount > adv.available + 0.01) {
+      validationErrors.push(
+        `Adiantamento #${adv.sapDocNum ?? adv.sapDocEntry}: valor acima do saldo disponível (${fmt(adv.available, adv.currency)}).`,
+      );
+    }
+  }
+  if (totalAdiantamentos > valorRecebido + 0.01) {
+    validationErrors.push("A soma dos adiantamentos aplicados excede o valor da baixa.");
+  }
+
 
   /* ── Submit ─────────────────────────────────────────── */
   async function handleConfirmar() {
@@ -215,7 +279,15 @@ export function BaixaRecebimentoDialog({
         valorTotal: valorRecebido,
         valorJurosMulta: excedente,
         itens: itensPayload,
+        adiantamentos: advSelected.map(({ adv, amount }) => ({
+          advanceId: adv.advanceId,
+          sapDocEntry: adv.sapDocEntry,
+          sapDocNum: adv.sapDocNum,
+          amount,
+          source: adv.source,
+        })),
       });
+
 
       if (!ok) {
         toast.error(`Baixa salva localmente, mas SAP recusou: ${errorMessage}`);
@@ -306,7 +378,75 @@ export function BaixaRecebimentoDialog({
             )}
           </div>
 
+          {/* Adiantamentos do cliente já baixados */}
+          {(advLoading || advances.length > 0 || advError) && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Adiantamentos disponíveis
+                </p>
+                {advLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
+              </div>
+              {advError && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mb-1 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" /> {advError}
+                </p>
+              )}
+              {advances.length > 0 && (
+                <div className="rounded-lg border border-border divide-y divide-border/40">
+                  {advances.map((adv) => {
+                    const txt = advSel[adv.sapDocEntry] || "";
+                    const checked = parseAmount(txt) > 0;
+                    return (
+                      <div key={adv.sapDocEntry} className="flex items-center gap-2 p-2 text-xs">
+                        <Checkbox
+                          checked={checked}
+                          aria-label={`Aplicar adiantamento ${adv.sapDocNum ?? adv.sapDocEntry}`}
+                          onCheckedChange={(v) =>
+                            setAdvSel((prev) => ({
+                              ...prev,
+                              [adv.sapDocEntry]: v ? adv.available.toFixed(2).replace(".", ",") : "",
+                            }))
+                          }
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-mono truncate">
+                            ADT #{adv.sapDocNum ?? adv.sapDocEntry}
+                            <Badge variant="outline" className="ml-2 text-[9px] py-0 px-1">
+                              {adv.source === "sap" ? "ERP" : "Flow"}
+                            </Badge>
+                          </p>
+                          <p className="text-muted-foreground">
+                            {adv.date || "—"} · Disponível{" "}
+                            <span className="font-mono">{fmt(adv.available, adv.currency)}</span>
+                          </p>
+                        </div>
+                        <Input
+                          inputMode="decimal"
+                          className="h-8 w-32 text-right font-mono"
+                          value={txt}
+                          placeholder="0,00"
+                          onChange={(e) =>
+                            setAdvSel((prev) => ({ ...prev, [adv.sapDocEntry]: e.target.value }))
+                          }
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {totalAdiantamentos > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Abatido por adiantamento:{" "}
+                  <span className="font-mono text-foreground">{fmt(totalAdiantamentos, currency)}</span> · Em banco:{" "}
+                  <span className="font-mono text-foreground">{fmt(valorEmBanco, currency)}</span>
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Rateio */}
+
           <div>
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">

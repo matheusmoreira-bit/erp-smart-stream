@@ -3,14 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
 import { useAdvancePayments, ADVANCE_STATUS_LABELS, ADVANCE_STATUS_COLORS, type AdvancePayment, type AdvanceType } from "@/hooks/useAdvancePayments";
 import { CreateAdvanceModal } from "@/components/CreateAdvanceModal";
+import { AdvanceReconcileDialog } from "@/components/AdvanceReconcileDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Plus, RefreshCw, Search, Loader2, CheckCircle2, XCircle, RotateCw, Trash2, Link2 } from "lucide-react";
+import { ArrowLeft, Plus, RefreshCw, Search, Loader2, CheckCircle2, XCircle, RotateCw, Trash2, Link2, Wallet } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { toast } from "sonner";
 import { PageTitle } from "@/components/PageTitle";
 import { copyDocLink, readDocParam } from "@/lib/doc-deep-link";
+
 
 function fmtCurrency(v: number, ccy: string = "BRL") {
   const code = /^[A-Z]{3}$/.test(ccy) ? ccy : "BRL";
@@ -28,16 +30,18 @@ function fmtDate(s?: string | null) {
 export default function AdvancePayments({ advanceType = "supplier" }: { advanceType?: AdvanceType } = {}) {
   const navigate = useNavigate();
   const { session } = useSap();
-  const { items, loading, error, refresh, approve, reject, retry, remove } = useAdvancePayments(advanceType);
+  const { items, loading, error, refresh, approve, reject, retry, remove, reconcile } = useAdvancePayments(advanceType);
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [reconcileTarget, setReconcileTarget] = useState<AdvancePayment | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const deepLinkHandledRef = useRef(false);
   const isCustomerAdvance = advanceType === "customer";
   const partnerLabel = isCustomerAdvance ? "cliente" : "fornecedor";
   const pageTitle = isCustomerAdvance ? "Adiantamentos a Cliente" : "Adiantamentos a Fornecedor";
+
 
   useEffect(() => {
     if (deepLinkHandledRef.current) return;
@@ -193,7 +197,25 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
                     {(a.sap_doc_num || a.sap_doc_entry) && (
                       <span className="text-xs text-success">SAP: #{a.sap_doc_num || a.sap_doc_entry}</span>
                     )}
+                    {isCustomerAdvance && a.reconciled_at && (
+                      <span className="text-xs text-success">
+                        Reconciliado em {fmtDate(a.reconciliation_date || a.reconciled_at)}
+                        {a.reconciliation_account_code ? ` · ${a.reconciliation_account_code}` : ""}
+                        {a.sap_incoming_payment_doc_entry ? ` · Recebimento #${a.sap_incoming_payment_doc_entry}` : ""}
+                      </span>
+                    )}
+                    {isCustomerAdvance && !a.reconciled_at && a.status === "integrated" && (
+                      <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 dark:text-amber-400">
+                        Aguardando reconciliação
+                      </Badge>
+                    )}
                   </div>
+                  {isCustomerAdvance && a.reconciliation_error && (
+                    <p className="text-xs text-destructive mt-2 break-words">
+                      Erro na reconciliação: {a.reconciliation_error}
+                    </p>
+                  )}
+
                   {a.remarks && <p className="text-xs text-muted-foreground mt-2 break-words">{a.remarks}</p>}
                   {a.sap_integration_error && (
                     <p className="text-xs text-destructive mt-2 break-words">Erro SAP: {a.sap_integration_error}</p>
@@ -217,7 +239,7 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
                   >
                     <Link2 className="w-4 h-4" />
                   </Button>
-                  {a.status === "pending" && (
+                  {!isCustomerAdvance && a.status === "pending" && (
                     <>
                       <Button size="icon" variant="outline" onClick={() => handleApprove(a)} disabled={busyId === a.id} aria-label="Aprovar" className="h-10 w-10 sm:h-9 sm:w-9">
                         {busyId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
@@ -227,6 +249,17 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
                       </Button>
                     </>
                   )}
+                  {isCustomerAdvance && a.status === "integrated" && !a.reconciled_at && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setReconcileTarget(a)}
+                      className="h-10 sm:h-9 gap-1.5"
+                    >
+                      <Wallet className="w-4 h-4" /> Reconciliar
+                    </Button>
+                  )}
+
                   {a.status === "failed" && (
                     <Button size="icon" variant="outline" onClick={() => handleRetry(a)} disabled={busyId === a.id} aria-label="Reintegrar" className="h-10 w-10 sm:h-9 sm:w-9">
                       {busyId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4" />}
@@ -246,6 +279,25 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
       </main>
 
       <CreateAdvanceModal open={createOpen} onClose={() => setCreateOpen(false)} advanceType={advanceType} />
+
+      <AdvanceReconcileDialog
+        open={!!reconcileTarget}
+        advance={reconcileTarget}
+        onClose={() => setReconcileTarget(null)}
+        onConfirm={async (params) => {
+          if (!reconcileTarget) return;
+          try {
+            const res = await reconcile(reconcileTarget.id, params);
+            toast.success(
+              `Adiantamento reconciliado${res?.sapDocEntry ? ` · Recebimento #${res.sapDocEntry}` : ""}.`,
+            );
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Falha ao reconciliar");
+            throw e;
+          }
+        }}
+      />
+
     </div>
   );
 }
