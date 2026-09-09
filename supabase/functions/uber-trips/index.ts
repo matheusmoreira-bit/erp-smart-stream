@@ -336,11 +336,12 @@ function indexMappings(rows: UserMapping[]) {
   return { byEmail, byName, byEmployeeId };
 }
 
-async function saveUserMappings(
+async function upsertUserMappings(
   admin: ReturnType<typeof createClient>,
   companyDb: string,
   rows: SaveUserMappingInput[],
-) {
+  origin: "manual" | "okta",
+): Promise<{ saved: number; error?: string }> {
   const now = new Date().toISOString();
   const payload = rows
     .map((row) => ({
@@ -351,18 +352,29 @@ async function saveUserMappings(
       employee_email: clean(row.employee_email).toLowerCase() || null,
       cost_center_code: clean(row.cost_center_code),
       cost_center_label: clean(row.cost_center_label) || clean(row.cost_center_code),
+      origin,
       updated_at: now,
     }))
     .filter((row) => row.employee_key && row.employee_name && row.cost_center_code);
 
-  if (!payload.length) return json(400, { error: "Nenhum mapeamento Uber válido para salvar." });
+  if (!payload.length) return { saved: 0 };
 
   const { error } = await admin
     .from("uber_user_mappings")
     .upsert(payload, { onConflict: "company_db,source,employee_key" });
-  if (error) return json(500, { error: `Falha ao salvar mapeamento Uber: ${error.message}` });
+  if (error) return { saved: 0, error: error.message };
+  return { saved: payload.length };
+}
 
-  return json(200, { ok: true, saved: payload.length });
+async function saveUserMappings(
+  admin: ReturnType<typeof createClient>,
+  companyDb: string,
+  rows: SaveUserMappingInput[],
+) {
+  const result = await upsertUserMappings(admin, companyDb, rows, "manual");
+  if (result.error) return json(500, { error: `Falha ao salvar mapeamento Uber: ${result.error}` });
+  if (!result.saved) return json(400, { error: "Nenhum mapeamento Uber válido para salvar." });
+  return json(200, { ok: true, saved: result.saved });
 }
 
 async function saveProjectDefaults(
