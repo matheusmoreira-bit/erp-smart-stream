@@ -3764,11 +3764,35 @@ export function CreateExpenseModal({
       </DialogContent>
     </Dialog>
 
+    <ProjectSplitDialog
+      open={splitLineIndex !== null}
+      onClose={() => setSplitLineIndex(null)}
+      total={splitLineIndex !== null ? Number(items[splitLineIndex]?.line_total) || 0 : 0}
+      currency={currency || "BRL"}
+      projectOptions={
+        splitLineIndex !== null
+          ? projectOptionsForCc(items[splitLineIndex]?.sapCostCenter?.code ?? items[splitLineIndex]?.cost_center)
+          : []
+      }
+      projectsLoading={projectsLoading}
+      value={splitLineIndex !== null ? items[splitLineIndex]?.projectSplit || null : null}
+      lineLabel={splitLineIndex !== null ? `Item ${splitLineIndex + 1}` : undefined}
+      onConfirm={(split) => {
+        if (splitLineIndex === null) return;
+        setItems((prev) => {
+          const updated = [...prev];
+          updated[splitLineIndex] = { ...updated[splitLineIndex], projectSplit: split };
+          return updated;
+        });
+      }}
+    />
+
     <CcProjectAlertDialog
       info={ccAlert}
       onConfirm={handleCcAlertConfirm}
       onChange={handleCcAlertChange}
     />
+
 
     <AlertDialog open={!!dupConfirm} onOpenChange={(v) => { if (!v) setDupConfirm(null); }}>
       <AlertDialogContent className="z-[60]" overlayClassName="z-[60] bg-black/40">
