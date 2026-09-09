@@ -1176,7 +1176,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         attachmentStatus = "success";
         console.log(`Reaproveitando anexo já enviado ao SAP — AbsoluteEntry=${existingAttachmentEntry}`);
         // Também em edição/reintegração: reforça "Copiar para documento de destino".
-        await ensureCopyToTargetDocument(sapBaseUrl, cookies, existingAttachmentEntry);
+        await ensureCopyToTargetDocument(sapBaseUrl, sapCookies, existingAttachmentEntry);
         return existingAttachmentEntry;
       }
 
