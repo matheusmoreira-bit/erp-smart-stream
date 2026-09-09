@@ -7,7 +7,18 @@
 // Aqui centralizamos: descobre as linhas reais, aplica o PATCH, confere o
 // resultado e tenta variações/por linha enquanto houver linha pendente.
 
-type Lines = Array<{ Line?: number; CopyToTargetDocument?: string; CopyToTargetDoc?: string }>;
+type Line = {
+  Line?: number;
+  SourcePath?: string;
+  FileName?: string;
+  FileExtension?: string;
+  AttachmentDate?: string;
+  UserID?: number;
+  Override?: string;
+  CopyToTargetDocument?: string;
+  CopyToTargetDoc?: string;
+};
+type Lines = Line[];
 
 const FIELD_VARIANTS = ["CopyToTargetDocument", "CopyToTargetDoc"] as const;
 
@@ -29,19 +40,37 @@ async function fetchLines(baseUrl: string, cookies: string, absoluteEntry: numbe
   }
 }
 
+/**
+ * O Service Layer ignora silenciosamente um PATCH que traga apenas
+ * `{ Line, CopyToTargetDocument }`: a linha precisa vir identificada pelos
+ * campos de origem do arquivo. Por isso reenviamos a linha completa.
+ */
+function buildLinePayload(known: Lines | null, lineNumber: number, field: string): Record<string, unknown> {
+  const source = known?.find((l) => Number(l?.Line) === lineNumber);
+  const payload: Record<string, unknown> = { Line: lineNumber, [field]: "tYES" };
+  if (source) {
+    for (const key of ["SourcePath", "FileName", "FileExtension", "AttachmentDate", "UserID", "Override"] as const) {
+      const value = source[key];
+      if (value !== undefined && value !== null && value !== "") payload[key] = value;
+    }
+  }
+  return payload;
+}
+
 async function patchLines(
   baseUrl: string,
   cookies: string,
   absoluteEntry: number,
   lineNumbers: number[],
   field: string,
+  known: Lines | null,
 ): Promise<boolean> {
   try {
     const res = await fetch(`${baseUrl}/Attachments2(${absoluteEntry})`, {
       method: "PATCH",
       headers: { Cookie: cookies, "Content-Type": "application/json" },
       body: JSON.stringify({
-        Attachments2_Lines: lineNumbers.map((Line) => ({ Line, [field]: "tYES" })),
+        Attachments2_Lines: lineNumbers.map((line) => buildLinePayload(known, line, field)),
       }),
     });
     if (!res.ok) {
