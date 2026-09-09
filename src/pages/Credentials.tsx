@@ -569,7 +569,10 @@ export default function Credentials() {
                   </div>
                 </div>
               ))}
+
+              <CompanyIntegrationsSection companyDb={companyDb} />
             </div>
+
           )}
         </div>
       </main>
