@@ -181,13 +181,17 @@ Deno.serve(async (req) => {
       await admin.from("erp_session_cache").delete()
         .eq("user_id", user.id).eq("company_db", companyDb);
     }
-    const { data: cred, error: credErr } = await admin
+    const { data: credRow, error: credErr } = await admin
       .from("user_sap_credentials")
-      .select("sap_user, sap_password_encrypted")
+      .select("sap_user, sap_password_encrypted, invalid_at")
       .eq("user_id", user.id)
       .eq("company_db", companyDb)
       .maybeSingle();
     if (credErr) throw credErr;
+
+    // Credencial já recusada pelo SAP não é reutilizada: cada nova tentativa
+    // conta como senha incorreta e acaba bloqueando o usuário no ERP.
+    const cred = credRow?.invalid_at ? null : credRow;
 
     let sapUserName = cred?.sap_user || "";
     let password = "";
