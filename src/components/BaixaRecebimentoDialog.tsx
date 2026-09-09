@@ -279,7 +279,15 @@ export function BaixaRecebimentoDialog({
         valorTotal: valorRecebido,
         valorJurosMulta: excedente,
         itens: itensPayload,
+        adiantamentos: advSelected.map(({ adv, amount }) => ({
+          advanceId: adv.advanceId,
+          sapDocEntry: adv.sapDocEntry,
+          sapDocNum: adv.sapDocNum,
+          amount,
+          source: adv.source,
+        })),
       });
+
 
       if (!ok) {
         toast.error(`Baixa salva localmente, mas SAP recusou: ${errorMessage}`);
