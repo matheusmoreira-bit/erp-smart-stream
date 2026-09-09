@@ -74,7 +74,7 @@ import {
 
 
 import { RegistrationRequestModal } from "@/components/RegistrationRequestModal";
-import { UserPlus, RefreshCw, Building2 } from "lucide-react";
+import { UserPlus, RefreshCw, Building2, Split } from "lucide-react";
 import { usePagCorpCardMapping, type CardMappingStatus } from "@/hooks/usePagCorpCardMapping";
 import { PagCorpCardMappingBanner } from "@/components/PagCorpCardMappingBanner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -3671,7 +3671,7 @@ export function CreateExpenseModal({
                       <CachedSearchCombobox
                         label={`Projeto (Dimensão)${isProjectRequired && !isSplitEnabled(item.projectSplit) ? " *" : ""}`}
                         required={isProjectRequired && !isSplitEnabled(item.projectSplit)}
-                        disabled={isSplitEnabled(item.projectSplit)}
+                        renderEmptyState={undefined}
                         options={projectOptionsForCc(item.sapCostCenter?.code ?? item.cost_center)}
                         isLoading={projectsLoading}
                         value={item.sapProject || null}
