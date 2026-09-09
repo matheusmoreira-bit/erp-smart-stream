@@ -436,6 +436,20 @@ function SalesPageInner() {
     });
   }, [invoices, onlyOpen, search]);
 
+  const sortValue = useCallback((r: InvoiceRow, key: SalesSortKey): string | number | null => {
+    switch (key) {
+      case "nf": return r.docNum;
+      case "emissao": return r.docDate;
+      case "vencimento": return r.docDueDate;
+      case "total": return r.docTotal;
+      case "pago": return r.paidToDate;
+      case "saldo": return r.saldoResidual;
+      case "status": return r.status;
+      case "origem": return r.docType === "journal_entry" ? "SI" : r.origem === "erp_flow" ? "ERP Flow" : "SAP";
+      default: return null;
+    }
+  }, []);
+
   const groups: ClientGroup[] = useMemo(() => {
     const map = new Map<string, ClientGroup>();
     for (const r of filtered) {
