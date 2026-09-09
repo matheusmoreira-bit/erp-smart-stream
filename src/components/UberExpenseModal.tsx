@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Save,
   Send,
+  Split,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -992,6 +993,21 @@ export function UberExpenseModal({
           )}
         </DialogFooter>
       </DialogContent>
+
+      <ProjectSplitDialog
+        open={splitRowKey !== null}
+        onClose={() => setSplitRowKey(null)}
+        total={costCenterRows.find((r) => r.row_key === splitRowKey)?.amount || 0}
+        currency="BRL"
+        projectOptions={projectOptions}
+        projectsLoading={projectsLoading}
+        value={splitRowKey ? lineSplits[splitRowKey] || null : null}
+        lineLabel={costCenterRows.find((r) => r.row_key === splitRowKey)?.cost_center_label}
+        onConfirm={(split) => {
+          if (!splitRowKey) return;
+          setLineSplits((prev) => ({ ...prev, [splitRowKey]: split }));
+        }}
+      />
     </Dialog>
   );
 }
