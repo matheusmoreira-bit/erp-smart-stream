@@ -264,8 +264,23 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
         }
       }
 
+      // Cliente: integra imediatamente, sem etapa de aprovação.
+      if (isCustomer && input.submit) {
+        try {
+          await callAdvanceToSap(row.id);
+        } catch (e) {
+          await (supabase as any)
+            .from("advance_payments")
+            .update({ status: "failed", sap_integration_error: e instanceof Error ? e.message : String(e) })
+            .eq("id", row.id);
+          await fetchAll();
+          throw e;
+        }
+      }
+
       await fetchAll();
       return row as AdvancePayment;
+
     },
     [session, fetchAll, advanceType],
   );
