@@ -482,6 +482,9 @@ export function MainMenu() {
                         index={i}
                         hasAccess={true}
                         targetPath={firstAccessiblePath(mod, userModules, permLoading)}
+                        color={group.color}
+                        bgGlow={group.bgGlow}
+
                       />
                     ))}
                   </div>
