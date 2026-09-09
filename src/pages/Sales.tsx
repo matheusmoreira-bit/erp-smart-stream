@@ -105,6 +105,16 @@ interface InvoiceRow {
   docLine?: number | null;
 }
 
+type SalesSortKey =
+  | "nf"
+  | "emissao"
+  | "vencimento"
+  | "total"
+  | "pago"
+  | "saldo"
+  | "status"
+  | "origem";
+
 interface ClientGroup {
   cardCode: string;
   cardName: string;
