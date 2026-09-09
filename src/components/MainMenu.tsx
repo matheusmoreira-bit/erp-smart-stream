@@ -222,7 +222,7 @@ const modules: Record<string, ModuleCard> = {
     moduleKey: "financial_review",
   },
   advance_payments: {
-    title: "Adiantamentos",
+    title: "Adiantamentos Fornecedores",
     description: "Crie pedidos de adiantamento a fornecedor com aprovação e integração automática no SAP.",
     icon: Wallet,
     path: "/financeiro/adiantamentos",
@@ -230,6 +230,34 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-amber-500/20 to-amber-500/5",
     moduleKey: "expenses",
   },
+  sales_advances: {
+    title: "Adiantamentos Clientes",
+    description: "Adiantamentos recebidos de clientes, com vínculo às notas de saída.",
+    icon: Wallet,
+    path: "/vendas/adiantamentos",
+    color: "text-sky-400",
+    bgGlow: "from-sky-500/20 to-sky-500/5",
+    moduleKey: "sales",
+  },
+  sales_nfse: {
+    title: "NF de Saída",
+    description: "Emissão e acompanhamento de NFS-e dos pedidos de venda.",
+    icon: FileInput,
+    path: "/vendas/nfse",
+    color: "text-sky-400",
+    bgGlow: "from-sky-500/20 to-sky-500/5",
+    moduleKey: "sales",
+  },
+  accounts_receivable: {
+    title: "Contas a Receber",
+    description: "Títulos a receber por vencimento, com baixas e saldo residual.",
+    icon: Landmark,
+    path: "/vendas/recebimentos",
+    color: "text-sky-400",
+    bgGlow: "from-sky-500/20 to-sky-500/5",
+    moduleKey: "sales",
+  },
+
   notifications: {
     title: "Notificações",
     description: "Central de notificações, preferências, auditoria e histórico de envios (WhatsApp, e-mail).",
@@ -266,39 +294,52 @@ const modules: Record<string, ModuleCard> = {
   },
 };
 
-const moduleGroups: { title: string; keys: string[] }[] = (
-  [
-    {
-      title: "Operação",
-      keys: ["expenses", "sales", "approvals", "pagcorp"],
-    },
-    {
-      title: "Cadastros",
-      keys: ["suppliers", "items", "intercompany"],
-    },
-    {
-      title: "Solicitações",
-      keys: ["registration_requests"],
-    },
-    {
-      title: "Financeiro & Fiscal",
-      keys: ["advance_payments", "accounts_payable", "financial_review", "cashflow_forecast", "nf_entrada"],
-    },
-    {
-      title: "Análise",
-      keys: ["analytics", "auditoria"],
-    },
-    {
-      title: "Administração",
-      keys: ["users", "approval_rules", "integracoes", "notifications"],
-    },
-  ] as { title: string; keys: string[] }[]
-).map((g) => ({
-  ...g,
-  keys: [...g.keys].sort((a, b) =>
-    (modules[a]?.title ?? a).localeCompare(modules[b]?.title ?? b, "pt-BR"),
-  ),
-}));
+/** Cada grupo tem um padrão de cor próprio, aplicado aos ícones dos cards. */
+const moduleGroups: { title: string; keys: string[]; color: string; bgGlow: string }[] = [
+  {
+    title: "Aprovações",
+    color: "text-violet-400",
+    bgGlow: "from-violet-500/20 to-violet-500/5",
+    keys: ["approvals", "approval_rules"],
+  },
+  {
+    title: "Compras (entrada)",
+    color: "text-emerald-400",
+    bgGlow: "from-emerald-500/20 to-emerald-500/5",
+    keys: ["expenses", "pagcorp", "advance_payments", "nf_entrada", "financial_review", "accounts_payable"],
+  },
+  {
+    title: "Vendas (saída)",
+    color: "text-sky-400",
+    bgGlow: "from-sky-500/20 to-sky-500/5",
+    keys: ["sales", "sales_advances", "sales_nfse", "accounts_receivable"],
+  },
+  {
+    title: "Financeiro",
+    color: "text-amber-400",
+    bgGlow: "from-amber-500/20 to-amber-500/5",
+    keys: ["accounts_payable", "cashflow_forecast", "accounts_receivable", "financial_review"],
+  },
+  {
+    title: "Cadastros",
+    color: "text-indigo-400",
+    bgGlow: "from-indigo-500/20 to-indigo-500/5",
+    keys: ["suppliers", "items", "intercompany", "registration_requests"],
+  },
+  {
+    title: "Análise",
+    color: "text-cyan-400",
+    bgGlow: "from-cyan-500/20 to-cyan-500/5",
+    keys: ["analytics", "auditoria"],
+  },
+  {
+    title: "Administração",
+    color: "text-rose-400",
+    bgGlow: "from-rose-500/20 to-rose-500/5",
+    keys: ["users", "integracoes", "notifications"],
+  },
+];
+
 
 function moduleHasAccess(mod: ModuleCard, userModules: string[]): boolean {
   if (mod.subModuleKeys && mod.subModuleKeys.length > 0) {
@@ -313,11 +354,15 @@ function ModuleCardItem({
   index,
   hasAccess,
   targetPath,
+  color,
+  bgGlow,
 }: {
   mod: ModuleCard;
   index: number;
   hasAccess: boolean;
   targetPath: string;
+  color?: string;
+  bgGlow?: string;
 }) {
   const navigate = useNavigate();
   const Icon = mod.icon;
@@ -339,13 +384,14 @@ function ModuleCardItem({
       }`}
     >
       {/* Glow background */}
-      <div className={`absolute inset-0 bg-gradient-to-br ${mod.bgGlow} opacity-0 group-hover:opacity-100 transition-opacity`} />
+      <div className={`absolute inset-0 bg-gradient-to-br ${bgGlow ?? mod.bgGlow} opacity-0 group-hover:opacity-100 transition-opacity`} />
 
       <div className="relative z-10">
         <div className="flex items-start justify-between mb-3 sm:mb-4">
-          <div className={`p-2.5 sm:p-3 rounded-xl bg-card border border-border ${mod.color}`}>
+          <div className={`p-2.5 sm:p-3 rounded-xl bg-card border border-border ${color ?? mod.color}`}>
             <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
+
           {!hasAccess ? (
             <Lock className="w-4 h-4 text-muted-foreground" />
           ) : (
@@ -436,6 +482,9 @@ export function MainMenu() {
                         index={i}
                         hasAccess={true}
                         targetPath={firstAccessiblePath(mod, userModules, permLoading)}
+                        color={group.color}
+                        bgGlow={group.bgGlow}
+
                       />
                     ))}
                   </div>

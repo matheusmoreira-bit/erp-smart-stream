@@ -20,11 +20,14 @@ export const NAV_MODULES: NavModule[] = [
   {
     key: "expenses",
     label: "Compras",
-    match: ["/compras", "/financeiro/adiantamentos", "/financeiro/nf-entrada"],
+    match: ["/compras", "/cartoes", "/financeiro/adiantamentos", "/financeiro/nf-entrada"],
     items: [
       { label: "Pedidos de Compra", path: "/compras", moduleKey: "expenses" },
-      { label: "Adiantamentos", path: "/financeiro/adiantamentos", moduleKey: "expenses" },
+      { label: "Cartões Corporativos", path: "/cartoes/transacoes", moduleKey: "pagcorp" },
+      { label: "Adiantamentos Fornecedores", path: "/financeiro/adiantamentos", moduleKey: "expenses" },
       { label: "NF de Entrada", path: "/financeiro/nf-entrada", moduleKey: "nf_entrada" },
+      { label: "Reconciliação de Adiantamentos", path: "/financeiro/reconciliacao", moduleKey: "financial_review" },
+      { label: "Contas a Pagar", path: "/financeiro/contas-a-pagar", moduleKey: "financial_review" },
     ],
   },
   {
@@ -33,13 +36,14 @@ export const NAV_MODULES: NavModule[] = [
     match: ["/vendas"],
     items: [
       { label: "Pedidos de Venda", path: "/vendas/pedidos", moduleKey: "sales" },
-      { label: "NFS-e", path: "/vendas/nfse", moduleKey: "sales" },
-      { label: "Adiantamentos", path: "/vendas/adiantamentos", moduleKey: "sales" },
+      { label: "Adiantamentos Clientes", path: "/vendas/adiantamentos", moduleKey: "sales" },
+      { label: "NF de Saída", path: "/vendas/nfse", moduleKey: "sales" },
       { label: "Contas a Receber", path: "/vendas/recebimentos", moduleKey: "sales" },
       { label: "Destinatários", path: "/vendas/destinatarios", moduleKey: "sales" },
       { label: "Histórico de Baixas", path: "/vendas/historico", moduleKey: "sales" },
     ],
   },
+
   {
     key: "approvals",
     label: "Aprovações",
@@ -81,11 +85,11 @@ export const NAV_MODULES: NavModule[] = [
     match: ["/financeiro"],
     items: [
       { label: "Contas a Pagar", path: "/financeiro/contas-a-pagar", moduleKey: "financial_review" },
-      { label: "Reconciliação de Adiantamentos", path: "/financeiro/reconciliacao", moduleKey: "financial_review" },
       { label: "Previsão de Caixa", path: "/financeiro/previsao-caixa", moduleKey: "financial_review" },
-      { label: "Adiantamentos", path: "/financeiro/adiantamentos", moduleKey: "expenses" },
-      { label: "NF de Entrada", path: "/financeiro/nf-entrada", moduleKey: "nf_entrada" },
+      { label: "Contas a Receber", path: "/vendas/recebimentos", moduleKey: "sales" },
+      { label: "Reconciliação de Adiantamentos", path: "/financeiro/reconciliacao", moduleKey: "financial_review" },
     ],
+
   },
   {
     key: "auditoria",
