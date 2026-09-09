@@ -22,12 +22,12 @@ const TONE_CLASSES: Record<Tone, { shell: string; label: string; origin: string 
   success: {
     shell: "border-success/30 bg-success/10",
     label: "text-success",
-    origin: "bg-success text-background border-success/30",
+    origin: "bg-success text-success-foreground border-success/30",
   },
   warning: {
     shell: "border-warning/35 bg-warning/10",
     label: "text-warning",
-    origin: "bg-warning text-background border-warning/30",
+    origin: "bg-warning text-warning-foreground border-warning/30",
   },
   danger: {
     shell: "border-destructive/30 bg-destructive/10",
