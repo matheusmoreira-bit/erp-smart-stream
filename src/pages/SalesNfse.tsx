@@ -791,6 +791,43 @@ export default function SalesNfse() {
     void load();
   }, [load]);
 
+  /** Consulta no ERP o status real (aberta/fechada/cancelada) das notas listadas. */
+  const refreshDocStatuses = useCallback(async () => {
+    if (!companyDb) return;
+    const entries = Array.from(
+      new Set(
+        invoices
+          .map((row) => Number(row.sap_invoice_doc_entry))
+          .filter((n) => Number.isFinite(n) && n > 0),
+      ),
+    ).slice(0, 200);
+    if (entries.length === 0) {
+      setDocStatuses({});
+      return;
+    }
+    setDocStatusLoading(true);
+    try {
+      const res = await sapFunctionFetch("sales-nfse-emit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "doc-status", company_db: companyDb, doc_entries: entries }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body?.error) throw new Error(body?.error || `Falha ao consultar status (${res.status})`);
+      setDocStatuses((body?.statuses || {}) as Record<string, SapDocStatus>);
+    } catch (e) {
+      console.warn("status real do ERP indisponível:", (e as Error).message);
+    } finally {
+      setDocStatusLoading(false);
+    }
+  }, [companyDb, invoices]);
+
+  useEffect(() => {
+    void refreshDocStatuses();
+  }, [refreshDocStatuses]);
+
+
+
   const pickPdf = useCallback((order: SalesOrderRow, inv: NfseRow | null) => {
     uploadTargetRef.current = { order, inv };
     fileInputRef.current?.click();
