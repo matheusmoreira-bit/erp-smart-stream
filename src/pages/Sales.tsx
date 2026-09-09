@@ -35,6 +35,7 @@ import { publicFunctionFetch } from "@/lib/auth-fetch";
 import { getErpShortLabel } from "@/lib/erp-labels";
 import { BaixaRecebimentoDialog, type BaixaInvoiceRow } from "@/components/BaixaRecebimentoDialog";
 import { PageHeader } from "@/components/PageHeader";
+import { SortTh, useTableSort, compareValues } from "@/components/SortTh";
 
 /* ─────────────────────────── helpers ─────────────────────────── */
 
