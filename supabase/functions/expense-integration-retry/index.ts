@@ -84,15 +84,19 @@ Deno.serve(async (req) => {
   const admin = createClient(supabaseUrl, serviceKey);
 
   const startedAt = new Date();
-  const cutoff = new Date(Date.now() - RETRY_COOLDOWN_MINUTES * 60_000).toISOString();
-
-  // Permite forçar o reprocessamento de um documento específico.
+  // Permite forçar o reprocessamento de um documento específico e reduzir o
+  // intervalo mínimo entre tentativas (mutirão de reprocessamento).
   let targetId: string | null = null;
+  let cooldownMinutes = RETRY_COOLDOWN_MINUTES;
   try {
     const body = await req.json().catch(() => ({}));
     const raw = (body as any)?.expense_id;
     if (typeof raw === "string" && /^[0-9a-f-]{36}$/i.test(raw)) targetId = raw;
+    const cd = Number((body as any)?.cooldown_minutes);
+    if (Number.isFinite(cd) && cd >= 0 && cd <= RETRY_COOLDOWN_MINUTES) cooldownMinutes = cd;
   } catch { /* sem body */ }
+
+  const cutoff = new Date(Date.now() - cooldownMinutes * 60_000).toISOString();
 
   const SELECT_COLS =
     "id, company_db, doc_type, supplier_name, supplier_code, requester_name, requester_email, total_amount, currency, sap_integration_last_attempt_at, sap_integration_error, origin";
