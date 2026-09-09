@@ -3,14 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
 import { useAdvancePayments, ADVANCE_STATUS_LABELS, ADVANCE_STATUS_COLORS, type AdvancePayment, type AdvanceType } from "@/hooks/useAdvancePayments";
 import { CreateAdvanceModal } from "@/components/CreateAdvanceModal";
+import { AdvanceReconcileDialog } from "@/components/AdvanceReconcileDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Plus, RefreshCw, Search, Loader2, CheckCircle2, XCircle, RotateCw, Trash2, Link2 } from "lucide-react";
+import { ArrowLeft, Plus, RefreshCw, Search, Loader2, CheckCircle2, XCircle, RotateCw, Trash2, Link2, Wallet } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { toast } from "sonner";
 import { PageTitle } from "@/components/PageTitle";
 import { copyDocLink, readDocParam } from "@/lib/doc-deep-link";
+
 
 function fmtCurrency(v: number, ccy: string = "BRL") {
   const code = /^[A-Z]{3}$/.test(ccy) ? ccy : "BRL";
