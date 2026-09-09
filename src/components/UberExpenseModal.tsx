@@ -32,6 +32,13 @@ import { useSapCachedList } from "@/hooks/useSapCachedList";
 import type { CreateExpenseInput } from "@/hooks/useExpenses";
 import { supabase } from "@/integrations/supabase/client";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
+import { ProjectSplitDialog } from "@/components/ProjectSplitDialog";
+import {
+  isSplitComplete,
+  isSplitEnabled,
+  resolveSplitAmounts,
+  type ProjectSplit,
+} from "@/lib/project-split";
 
 type WizardStep = "users" | "projects";
 
@@ -235,6 +242,9 @@ export function UberExpenseModal({
   const [dueDate, setDueDate] = useState(todayIso);
   const [userCostCenters, setUserCostCenters] = useState<Record<string, SapSearchOption | null>>({});
   const [lineProjects, setLineProjects] = useState<Record<string, SapSearchOption | null>>({});
+  // Rateio por projeto de cada centro de custo (row_key → rateio).
+  const [lineSplits, setLineSplits] = useState<Record<string, ProjectSplit | null>>({});
+  const [splitRowKey, setSplitRowKey] = useState<string | null>(null);
 
   const { options: supplierOptions, isLoading: suppliersLoading } = useMergedSupplierOptions({
     companyDb: activeCompanyDb,
