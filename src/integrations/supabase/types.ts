@@ -8278,6 +8278,81 @@ export type Database = {
         }
         Relationships: []
       }
+      uber_cost_center_project_defaults: {
+        Row: {
+          company_db: string
+          cost_center_code: string
+          cost_center_label: string | null
+          created_at: string
+          id: string
+          project_code: string
+          project_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_db: string
+          cost_center_code: string
+          cost_center_label?: string | null
+          created_at?: string
+          id?: string
+          project_code: string
+          project_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string
+          cost_center_code?: string
+          cost_center_label?: string | null
+          created_at?: string
+          id?: string
+          project_code?: string
+          project_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      uber_user_mappings: {
+        Row: {
+          company_db: string
+          cost_center_code: string
+          cost_center_label: string | null
+          created_at: string
+          employee_email: string | null
+          employee_key: string
+          employee_name: string
+          id: string
+          origin: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          company_db: string
+          cost_center_code: string
+          cost_center_label?: string | null
+          created_at?: string
+          employee_email?: string | null
+          employee_key: string
+          employee_name: string
+          id?: string
+          origin?: string
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string
+          cost_center_code?: string
+          cost_center_label?: string | null
+          created_at?: string
+          employee_email?: string | null
+          employee_key?: string
+          employee_name?: string
+          id?: string
+          origin?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_group_assignments: {
         Row: {
           company_db: string | null

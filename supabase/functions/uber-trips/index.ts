@@ -336,11 +336,12 @@ function indexMappings(rows: UserMapping[]) {
   return { byEmail, byName, byEmployeeId };
 }
 
-async function saveUserMappings(
+async function upsertUserMappings(
   admin: ReturnType<typeof createClient>,
   companyDb: string,
   rows: SaveUserMappingInput[],
-) {
+  origin: "manual" | "okta",
+): Promise<{ saved: number; error?: string }> {
   const now = new Date().toISOString();
   const payload = rows
     .map((row) => ({
@@ -351,18 +352,29 @@ async function saveUserMappings(
       employee_email: clean(row.employee_email).toLowerCase() || null,
       cost_center_code: clean(row.cost_center_code),
       cost_center_label: clean(row.cost_center_label) || clean(row.cost_center_code),
+      origin,
       updated_at: now,
     }))
     .filter((row) => row.employee_key && row.employee_name && row.cost_center_code);
 
-  if (!payload.length) return json(400, { error: "Nenhum mapeamento Uber válido para salvar." });
+  if (!payload.length) return { saved: 0 };
 
   const { error } = await admin
     .from("uber_user_mappings")
     .upsert(payload, { onConflict: "company_db,source,employee_key" });
-  if (error) return json(500, { error: `Falha ao salvar mapeamento Uber: ${error.message}` });
+  if (error) return { saved: 0, error: error.message };
+  return { saved: payload.length };
+}
 
-  return json(200, { ok: true, saved: payload.length });
+async function saveUserMappings(
+  admin: ReturnType<typeof createClient>,
+  companyDb: string,
+  rows: SaveUserMappingInput[],
+) {
+  const result = await upsertUserMappings(admin, companyDb, rows, "manual");
+  if (result.error) return json(500, { error: `Falha ao salvar mapeamento Uber: ${result.error}` });
+  if (!result.saved) return json(400, { error: "Nenhum mapeamento Uber válido para salvar." });
+  return json(200, { ok: true, saved: result.saved });
 }
 
 async function saveProjectDefaults(
@@ -505,6 +517,15 @@ Deno.serve(async (req) => {
       if (key && clean(row.cost_center_code)) manualByKey.set(key, manualMappingToUser(row));
     }
 
+    const savedRowByKey = new Map<string, ManualUserMapping>();
+    for (const row of (manualMappingsResult.data || []) as ManualUserMapping[]) {
+      const key = clean(row.employee_key).toLowerCase();
+      if (key) savedRowByKey.set(key, row);
+    }
+    // Quando o Okta traz um centro de custo diferente do último mapeamento salvo,
+    // atualizamos (upsert) o registro. Sem valor no Okta, mantemos o que foi salvo.
+    const pendingUpserts = new Map<string, SaveUserMappingInput>();
+
     const trips = tripsResult.trips;
     const summaryMap = new Map<string, {
       row_key: string;
@@ -527,11 +548,17 @@ Deno.serve(async (req) => {
 
     for (const trip of trips) {
       const tripUserKey = employeeKeyForTrip(trip);
-      const user = manualByKey.get(tripUserKey)
-        || (trip.employee_id ? mappings.byEmployeeId.get(trip.employee_id.toLowerCase()) : null)
+      const savedUser = manualByKey.get(tripUserKey) || null;
+      const oktaUser =
+        (trip.employee_id ? mappings.byEmployeeId.get(trip.employee_id.toLowerCase()) : null)
         || (trip.email ? mappings.byEmail.get(trip.email) : null)
         || mappings.byName.get(compactNameKey(trip.employee_name))
         || null;
+
+      const oktaCc = clean(oktaUser?.cost_center_code);
+      const savedCc = clean(savedUser?.cost_center_code);
+      // Okta com CC preenchido manda; sem CC no Okta, prevalece o último mapeamento salvo.
+      const user = oktaCc ? oktaUser : (savedUser || oktaUser);
       if (!user) {
         exceptions.push({ reason: "Colaborador não encontrado", trip, matched_user: null });
         continue;
@@ -540,6 +567,27 @@ Deno.serve(async (req) => {
       if (!cc) {
         exceptions.push({ reason: "Colaborador sem centro de custo", trip, matched_user: user });
         continue;
+      }
+
+      if (oktaCc && oktaCc !== savedCc && !pendingUpserts.has(tripUserKey)) {
+        const savedRow = savedRowByKey.get(tripUserKey);
+        pendingUpserts.set(tripUserKey, {
+          source: "uber",
+          employee_key: tripUserKey,
+          employee_name:
+            clean(oktaUser?.idp_display_name)
+            || clean(oktaUser?.sap_user_name)
+            || clean(savedRow?.employee_name)
+            || trip.employee_name
+            || trip.email,
+          employee_email:
+            clean(oktaUser?.idp_email).toLowerCase()
+            || clean(oktaUser?.sap_email).toLowerCase()
+            || clean(savedRow?.employee_email).toLowerCase()
+            || trip.email,
+          cost_center_code: oktaCc,
+          cost_center_label: clean(oktaUser?.cost_center_label) || oktaCc,
+        });
       }
       matched.push({ trip, user });
       const userKey =
@@ -579,6 +627,13 @@ Deno.serve(async (req) => {
       summaryMap.set(summaryKey, existing);
     }
 
+    let mappingsSynced = 0;
+    if (pendingUpserts.size) {
+      const syncResult = await upsertUserMappings(admin, companyDb, Array.from(pendingUpserts.values()), "okta");
+      if (syncResult.error) console.warn("[uber-trips] falha ao sincronizar mapeamentos do Okta", syncResult.error);
+      mappingsSynced = syncResult.saved;
+    }
+
     const summary = Array.from(summaryMap.values())
       .map((row) => ({
         ...row,
@@ -608,6 +663,7 @@ Deno.serve(async (req) => {
         is_active: uberIntegration.is_active,
       },
       cache: tripsResult.meta,
+      mappings_synced_from_okta: mappingsSynced,
       summary,
       exceptions,
       matched,
