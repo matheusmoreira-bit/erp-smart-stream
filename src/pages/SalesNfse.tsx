@@ -1521,7 +1521,9 @@ export default function SalesNfse() {
               <tbody>
                 {sortedRows.map(({ o, inv, emission, status }) => {
                   const emitted = emission.emitted;
+                  const erp = erpDocStatusFor(o, inv);
                   const saldoResidual = saldoResidualFor(inv);
+
                   const accessKey = normalizeNfseAccessKey(inv?.fiscal_doc_key);
                   const publicConsultationUrl = buildNfsePublicConsultationUrl(accessKey);
                   return (
