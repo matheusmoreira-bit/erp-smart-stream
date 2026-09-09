@@ -536,11 +536,17 @@ Deno.serve(async (req) => {
 
     for (const trip of trips) {
       const tripUserKey = employeeKeyForTrip(trip);
-      const user = manualByKey.get(tripUserKey)
-        || (trip.employee_id ? mappings.byEmployeeId.get(trip.employee_id.toLowerCase()) : null)
+      const savedUser = manualByKey.get(tripUserKey) || null;
+      const oktaUser =
+        (trip.employee_id ? mappings.byEmployeeId.get(trip.employee_id.toLowerCase()) : null)
         || (trip.email ? mappings.byEmail.get(trip.email) : null)
         || mappings.byName.get(compactNameKey(trip.employee_name))
         || null;
+
+      const oktaCc = clean(oktaUser?.cost_center_code);
+      const savedCc = clean(savedUser?.cost_center_code);
+      // Okta com CC preenchido manda; sem CC no Okta, prevalece o último mapeamento salvo.
+      const user = oktaCc ? oktaUser : (savedUser || oktaUser);
       if (!user) {
         exceptions.push({ reason: "Colaborador não encontrado", trip, matched_user: null });
         continue;
@@ -549,6 +555,27 @@ Deno.serve(async (req) => {
       if (!cc) {
         exceptions.push({ reason: "Colaborador sem centro de custo", trip, matched_user: user });
         continue;
+      }
+
+      if (oktaCc && oktaCc !== savedCc && !pendingUpserts.has(tripUserKey)) {
+        const savedRow = savedRowByKey.get(tripUserKey);
+        pendingUpserts.set(tripUserKey, {
+          source: "uber",
+          employee_key: tripUserKey,
+          employee_name:
+            clean(oktaUser?.idp_display_name)
+            || clean(oktaUser?.sap_user_name)
+            || clean(savedRow?.employee_name)
+            || trip.employee_name
+            || trip.email,
+          employee_email:
+            clean(oktaUser?.idp_email).toLowerCase()
+            || clean(oktaUser?.sap_email).toLowerCase()
+            || clean(savedRow?.employee_email).toLowerCase()
+            || trip.email,
+          cost_center_code: oktaCc,
+          cost_center_label: clean(oktaUser?.cost_center_label) || oktaCc,
+        });
       }
       matched.push({ trip, user });
       const userKey =
