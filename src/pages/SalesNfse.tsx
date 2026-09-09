@@ -693,8 +693,8 @@ export default function SalesNfse() {
         const byEntry = new Map<number, SapInvoiceRef>();
         const entries = new Set<number>();
         for (const nf of erpInvoiceRows) {
-          if (!nf || nf.Cancelled === "tYES") continue;
-          entries.add(Number(nf.DocEntry));
+          if (!nf) continue;
+          const cancelled = nf.Cancelled === "tYES";
           const ref: SapInvoiceRef = {
             docEntry: Number(nf.DocEntry),
             docNum: nf.DocNum ?? null,
@@ -703,8 +703,13 @@ export default function SalesNfse() {
             paidToDate: Number(nf.PaidToDate || 0),
             currency: nf.DocCurrency || "BRL",
             status: nf.DocumentStatus || null,
+            cancelled,
           };
+          // Canceladas entram só no índice por documento (para exibir o status
+          // real); nunca contam como nota válida do pedido.
           byEntry.set(ref.docEntry, ref);
+          if (cancelled) continue;
+          entries.add(Number(nf.DocEntry));
           const card = (nf.CardCode || "").trim().toUpperCase();
           const total = Number(nf.DocTotal || 0);
           if (card && total > 0) {
@@ -718,6 +723,7 @@ export default function SalesNfse() {
             if (!byOrder.has(base)) byOrder.set(base, ref);
           }
         }
+
         setSapInvoices({ available: true, byOrder, byMatch, byEntry, entries });
       } else {
         setSapInvoices({ available: false, byOrder: new Map(), byMatch: new Map(), byEntry: new Map(), entries: new Set() });
