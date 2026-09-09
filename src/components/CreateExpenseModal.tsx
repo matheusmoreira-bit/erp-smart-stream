@@ -3,6 +3,8 @@ import {
   Plus,
   Loader2,
   Trash2,
+  Copy,
+
   X,
   Upload,
   FileSpreadsheet,
@@ -2222,6 +2224,24 @@ export function CreateExpenseModal({
     setItems((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const duplicateItem = (index: number) => {
+    setItems((prev) => {
+      const src = prev[index];
+      if (!src) return prev;
+      const copy = {
+        ...src,
+        projectSplit: src.projectSplit
+          ? { ...src.projectSplit, entries: src.projectSplit.entries.map((e) => ({ ...e })) }
+          : src.projectSplit,
+      };
+      const updated = [...prev];
+      updated.splice(index + 1, 0, copy);
+      return updated;
+    });
+    toast.success(`Item ${index + 1} duplicado`);
+  };
+
+
   const total = items.reduce((sum, item) => sum + item.line_total, 0);
 
   const DEFAULT_MULTI_CURRENCIES = ["BRL", "EUR", "USD", "CAD", "CHF", "GBP"];
@@ -3580,10 +3600,16 @@ export function CreateExpenseModal({
                 <div key={i} className="max-w-full overflow-hidden rounded-lg border border-border/50 bg-muted/10 p-2.5 space-y-2 sm:p-3">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-medium text-muted-foreground uppercase">Item {i + 1}</span>
-                    <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(i)} disabled={items.length <= 1} className="h-6 w-6 text-muted-foreground hover:text-destructive">
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button type="button" variant="ghost" size="icon" onClick={() => duplicateItem(i)} title="Duplicar linha" aria-label={`Duplicar item ${i + 1}`} className="h-6 w-6 text-muted-foreground hover:text-primary">
+                        <Copy className="w-3 h-3" />
+                      </Button>
+                      <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(i)} disabled={items.length <= 1} title="Excluir linha" aria-label={`Excluir item ${i + 1}`} className="h-6 w-6 text-muted-foreground hover:text-destructive">
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
                   </div>
+
                   <CachedSearchCombobox
                     required
                     options={filteredItemOptions}

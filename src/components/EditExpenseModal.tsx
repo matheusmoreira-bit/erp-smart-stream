@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Plus, Trash2, Network, CheckCircle2, AlertTriangle, Paperclip, X, FileText } from "lucide-react";
+import { Loader2, Plus, Trash2, Copy, Network, CheckCircle2, AlertTriangle, Paperclip, X, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -358,6 +358,18 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
     setItems((p) => p.filter((_, idx) => idx !== i));
   };
 
+  const duplicateItem = (i: number) => {
+    setItems((p) => {
+      const src = p[i];
+      if (!src) return p;
+      const updated = [...p];
+      updated.splice(i + 1, 0, { ...src });
+      return updated;
+    });
+    toast.success(`Item ${i + 1} duplicado`);
+  };
+
+
   const total = items.reduce((s, i) => s + i.line_total, 0);
 
   const handleSave = async () => {
@@ -708,16 +720,31 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
                   <div key={i} className="border border-border/50 rounded-lg p-3 space-y-2 bg-muted/10">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-medium text-muted-foreground uppercase">Item {i + 1}</span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeItem(i)}
-                        disabled={items.length <= 1}
-                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => duplicateItem(i)}
+                          title="Duplicar linha"
+                          aria-label={`Duplicar item ${i + 1}`}
+                          className="h-6 w-6 text-muted-foreground hover:text-primary"
+                        >
+                          <Copy className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeItem(i)}
+                          disabled={items.length <= 1}
+                          title="Excluir linha"
+                          aria-label={`Excluir item ${i + 1}`}
+                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
                     </div>
+
 
                     {/* Busca item SAP */}
                     <CachedSearchCombobox
