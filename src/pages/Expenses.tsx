@@ -1903,8 +1903,27 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     only_overdue: false, only_missing_due: false, only_sap_error: false,
   };
   const [advanced, setAdvanced] = usePersistedState<AdvancedFilters>(filterKey("advanced"), emptyAdvanced);
-  // Compat com preferências antigas sem os campos novos.
-  const advFilters: AdvancedFilters = { ...emptyAdvanced, ...(advanced || {}) };
+  // Compat com preferências antigas sem os campos novos. Filtros de pessoa
+  // (solicitante/aprovador) passaram a guardar a CHAVE CANÔNICA de identidade:
+  // valores antigos (nome, login ou e-mail) são convertidos aqui.
+  const advFilters: AdvancedFilters = (() => {
+    const raw: AdvancedFilters = { ...emptyAdvanced, ...(advanced || {}) };
+    const toKeys = (...vals: MultiFilterValue[]) =>
+      Array.from(
+        new Set(
+          vals
+            .flatMap((v) => normalizeMultiValue(v))
+            .map((v) => canonicalUserKey(v))
+            .filter(Boolean),
+        ),
+      );
+    return {
+      ...raw,
+      requester: toKeys(raw.requester, raw.requester_email),
+      requester_email: [],
+      approver: toKeys(raw.approver),
+    };
+  })();
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [advDraft, setAdvDraft] = useState<AdvancedFilters>(advFilters);
   useEffect(() => { if (advancedOpen) setAdvDraft(advFilters); }, [advancedOpen]); // eslint-disable-line react-hooks/exhaustive-deps
