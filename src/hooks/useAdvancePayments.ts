@@ -78,11 +78,19 @@ export interface AdvancePayment {
   sap_doc_num?: number | null;
   sap_integration_error?: string | null;
   sap_integrated_at?: string | null;
+  /** Reconciliação (LCM) — recebimento em banco do adiantamento. */
+  reconciliation_date?: string | null;
+  reconciliation_account_code?: string | null;
+  reconciliation_account_name?: string | null;
+  reconciled_at?: string | null;
+  reconciliation_error?: string | null;
+  sap_incoming_payment_doc_entry?: number | null;
   created_at: string;
   updated_at: string;
   attachments?: AdvanceAttachment[];
   items?: AdvanceItem[];
 }
+
 
 export interface CreateAdvanceInput {
   company_db: string;
