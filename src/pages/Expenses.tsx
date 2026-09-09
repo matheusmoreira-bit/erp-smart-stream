@@ -2234,7 +2234,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     } as const)[sortKey];
 
     return { filters, or, order: { column: orderColumn, ascending: sortDir === "asc" } };
-  }, [advFilters, statusFilter, searchDebounced, sortKey, sortDir]);
+  }, [advFilters, statusFilter, searchDebounced, sortKey, sortDir, advancedOptions]);
 
   useEffect(() => {
     const spec = buildServerSpec();
