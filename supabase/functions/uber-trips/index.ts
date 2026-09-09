@@ -663,6 +663,7 @@ Deno.serve(async (req) => {
         is_active: uberIntegration.is_active,
       },
       cache: tripsResult.meta,
+      mappings_synced_from_okta: mappingsSynced,
       summary,
       exceptions,
       matched,
