@@ -1152,8 +1152,10 @@ export default function SalesNfse() {
       return {
         emitted: !!sapInv || localValid || closedInErp,
         docNum: sapInv?.docNum ?? (localValid ? inv?.sap_invoice_doc_num ?? null : null),
+        docEntry: sapInv?.docEntry ?? (localEntry ? Number(localEntry) : null),
         localStale: !!localEntry && !localValid && !sapInv && !closedInErp,
       };
+
     },
 
     [sapInvoices],
