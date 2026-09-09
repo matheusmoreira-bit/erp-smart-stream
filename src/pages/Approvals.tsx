@@ -4009,13 +4009,16 @@ export default function ApprovalsPage() {
 
               <div className="space-y-1.5">
                 <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Tipo</Label>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 flex-wrap">
                   {([
                     ["all", "Todos"],
-                    ["purchase", "Compra"],
-                    ["sales", "Venda"],
-                    ["other", "Outro"],
+                    ["purchase", DOC_KIND_LABEL.purchase],
+                    ["sales", DOC_KIND_LABEL.sales],
+                    ["advance", DOC_KIND_LABEL.advance],
+                    ["pagcorp", DOC_KIND_LABEL.pagcorp],
+                    ["other", DOC_KIND_LABEL.other],
                   ] as const).map(([key, lbl]) => (
+
                     <button
                       key={key}
                       onClick={() => setTypeFilter(key)}
