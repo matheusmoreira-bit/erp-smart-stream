@@ -27,7 +27,16 @@ interface CachedSearchComboboxProps {
   isOptionDisabled?: (opt: SapSearchOption) => boolean;
   /** Texto exibido abaixo do nome quando a opção está desabilitada. */
   getDisabledReason?: (opt: SapSearchOption) => string | null | undefined;
+  /** Ação fixa exibida como primeira opção da lista (ex.: ratear entre projetos). */
+  pinnedAction?: {
+    label: string;
+    description?: string;
+    icon?: ReactNode;
+    active?: boolean;
+    onSelect: () => void;
+  };
 }
+
 
 export function CachedSearchCombobox({
   options,
