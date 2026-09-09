@@ -1278,6 +1278,13 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
           return 0;
         }
         attachmentStatus = "failed";
+        if (isAttachmentEmergencyActive()) {
+          // Contingência 09/09/2026: integrar mesmo sem anexo e avisar depois.
+          emergencyWithoutAttachment = true;
+          emergencyAttachmentError = msg;
+          console.warn(`[contingência 09/09] Documento integrado sem anexo — falha no envio: ${msg}`);
+          return 0;
+        }
         await persistStatus({ sap_integration_error: `Falha no envio do anexo: ${msg}` });
         throw e;
       }
