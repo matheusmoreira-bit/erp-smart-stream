@@ -236,9 +236,11 @@ export function CreateExpenseModal({
   const [dueDate, setDueDate] = useState("");
   const [paymentTerms, setPaymentTerms] = useState<SapSearchOption | null>(null);
   const [remarks, setRemarks] = useState("");
-  const [items, setItems] = useState<(Omit<ExpenseItem, "id"> & { sapItem?: SapSearchOption | null; sapCostCenter?: SapSearchOption | null; sapProject?: SapSearchOption | null; searchHint?: string })[]>([
+  const [items, setItems] = useState<(Omit<ExpenseItem, "id"> & { sapItem?: SapSearchOption | null; sapCostCenter?: SapSearchOption | null; sapProject?: SapSearchOption | null; searchHint?: string; projectSplit?: ProjectSplit | null })[]>([
     { description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" },
   ]);
+  // Índice da linha cujo rateio por projeto está aberto (null = fechado).
+  const [splitLineIndex, setSplitLineIndex] = useState<number | null>(null);
   const [aiWarning, setAiWarning] = useState<string | null>(null);
   const [suggestedSupplierName, setSuggestedSupplierName] = useState<string | undefined>(undefined);
   const [aiSupplierData, setAiSupplierData] = useState<SupplierFormPrefill | null>(null);
