@@ -391,8 +391,57 @@ Deno.serve(withEdgeMetrics("baixa-recebimento", async (req, _mctx) => {
         return json(500, { ok: false, baixaId, errorMessage: itemErr.message });
       }
 
+      // Vínculo N:N entre adiantamentos já baixados e as NFs desta baixa.
+      const advancesInput = (input.adiantamentos || []).filter((a) => Number(a.amount) > 0);
+      if (advancesInput.length > 0) {
+        const remaining = input.itens.map((it) => ({
+          docEntry: Number(it.invoiceDocEntry),
+          docNum: it.invoiceDocNum != null ? String(it.invoiceDocNum) : null,
+          left: Number(it.valorBaixado),
+        }));
+        const appRows: Array<Record<string, unknown>> = [];
+        for (const adv of advancesInput) {
+          let toAllocate = Number(adv.amount);
+          for (const inv of remaining) {
+            if (toAllocate <= 0.005) break;
+            if (inv.left <= 0.005) continue;
+            const use = Math.min(inv.left, toAllocate);
+            inv.left = +(inv.left - use).toFixed(2);
+            toAllocate = +(toAllocate - use).toFixed(2);
+            appRows.push({
+              company_db: sap.companyDB,
+              card_code: input.cardCode.trim(),
+              advance_id: adv.advanceId || null,
+              advance_source: adv.source === "sap" ? "sap" : "flow",
+              sap_advance_doc_entry: Number(adv.sapDocEntry),
+              sap_advance_doc_num: adv.sapDocNum != null ? Number(adv.sapDocNum) : null,
+              invoice_doc_entry: inv.docEntry,
+              invoice_doc_num: inv.docNum,
+              baixa_id: baixaId,
+              amount: use,
+              created_by: criadoPor,
+            });
+          }
+        }
+        if (appRows.length > 0) {
+          const { error: appErr } = await sb.from("advance_invoice_applications").insert(appRows);
+          if (appErr) {
+            await sb.from("baixas_recebimento").update({ status: "erro", sap_error_message: appErr.message }).eq("id", baixaId);
+            return json(500, { ok: false, baixaId, errorMessage: appErr.message });
+          }
+        }
+      }
+
       return await syncExistingBaixa(baixaId, headers);
     }
+
+    if (action === "listCustomerAdvances") {
+      const cardCode = String(body.cardCode || "").trim();
+      if (!cardCode) return json(400, { ok: false, errorMessage: "Cliente obrigatório." });
+      return await listCustomerAdvances(cardCode, headers, sap.companyDB);
+    }
+
+
 
     return json(400, { ok: false, errorMessage: "Ação inválida." });
   } catch (e) {
