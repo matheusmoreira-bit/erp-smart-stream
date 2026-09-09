@@ -246,7 +246,32 @@ export function CachedSearchCombobox({
           className="z-[9999] max-w-[calc(100dvw-1rem)] rounded-md border border-border bg-popover shadow-md"
         >
           <div className="max-h-56 overflow-y-auto overflow-x-hidden">
+            {pinnedAction && (
+              <button
+                type="button"
+                onPointerDownCapture={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsOpen(false);
+                  setQuery("");
+                  pinnedAction.onSelect();
+                }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                className={`w-full border-b border-border/60 px-3 py-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground ${
+                  pinnedAction.active ? "bg-primary/10" : ""
+                }`}
+              >
+                <span className="flex items-center gap-1.5 font-medium text-foreground">
+                  {pinnedAction.icon}
+                  {pinnedAction.label}
+                </span>
+                {pinnedAction.description && (
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{pinnedAction.description}</span>
+                )}
+              </button>
+            )}
             {filtered.map((opt) => {
+
               const badge = renderOptionBadge?.(opt);
               const disabled = !!isOptionDisabled?.(opt);
               const disabledReason = disabled ? getDisabledReason?.(opt) : null;
