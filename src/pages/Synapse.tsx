@@ -399,13 +399,10 @@ export default function SynapsePage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfigOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              Salvar
+              Fechar
             </Button>
           </DialogFooter>
+
         </DialogContent>
       </Dialog>
 
