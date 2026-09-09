@@ -1375,26 +1375,26 @@ export default function SalesNfse() {
             <table className="w-full text-sm">
               <thead className="bg-muted/40 text-xs text-muted-foreground">
                 <tr>
-                  <th className="text-left px-3 py-2 font-medium">Pedido</th>
-                  <th className="text-left px-3 py-2 font-medium">Origem</th>
-                  <th className="text-left px-3 py-2 font-medium">Cliente</th>
-                  <th className="text-left px-3 py-2 font-medium">Data</th>
-                  <th className="text-right px-3 py-2 font-medium">Valor</th>
-                  <th className="text-left px-3 py-2 font-medium">NFS-e</th>
+                  <SortTh label="Pedido" sortKey="pedido" active={sort.key === "pedido"} dir={sort.dir} onSort={toggleSort} />
+                  <SortTh label="Status" sortKey="status" active={sort.key === "status"} dir={sort.dir} onSort={toggleSort} />
+                  <SortTh label="Origem" sortKey="origem" active={sort.key === "origem"} dir={sort.dir} onSort={toggleSort} />
+                  <SortTh label="Cliente" sortKey="cliente" active={sort.key === "cliente"} dir={sort.dir} onSort={toggleSort} />
+                  <SortTh label="Data" sortKey="data" active={sort.key === "data"} dir={sort.dir} onSort={toggleSort} />
+                  <SortTh label="Valor" sortKey="valor" active={sort.key === "valor"} dir={sort.dir} onSort={toggleSort} align="right" />
+                  <SortTh label="NFS-e" sortKey="nfse" active={sort.key === "nfse"} dir={sort.dir} onSort={toggleSort} />
                   <th className="text-left px-3 py-2 font-medium">PDF</th>
-                  <th className="text-right px-3 py-2 font-medium">Ação</th>
+                  <th className="text-right px-3 py-2 font-medium">Ações</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((o) => {
-                  const inv = invoiceByExpense.get(o.id);
-                  const emission = emissionFor(o, inv);
+                {sortedRows.map(({ o, inv, emission, status }) => {
                   const emitted = emission.emitted;
                   const saldoResidual = saldoResidualFor(inv);
                   const accessKey = normalizeNfseAccessKey(inv?.fiscal_doc_key);
                   const publicConsultationUrl = buildNfsePublicConsultationUrl(accessKey);
                   return (
-                    <tr key={o.id} className="border-t border-border/60">
+                    <tr key={o.id} className="border-t border-border/60 align-top hover:bg-muted/20 transition-colors">
+
                       <td className="px-3 py-2 font-mono text-xs">
                         {o.sap_doc_num ? `#${o.sap_doc_num}` : "—"}
                         {!o.sap_doc_entry && (
