@@ -497,6 +497,25 @@ export function CreateExpenseModal({
   );
 
 
+  /** Linhas cujo alerta atual veio de um rateio (para reabrir o rateio no "Alterar"). */
+  const ccAlertSplitLinesRef = useRef<Set<number>>(new Set());
+
+  /** Rateio: valida cada projeto do rateio contra o centro de custo da linha. */
+  const maybeTriggerCcAlertForSplit = useCallback(
+    (lineIndex: number, cc: SapSearchOption | null, split: ProjectSplit | null) => {
+      if (!ccAlertEnabled || !split) return;
+      const flagged = split.entries.filter((e) => shouldAlertCcProject(cc?.code, e.name, e.code));
+      if (!flagged.length) return;
+      ccAlertSplitLinesRef.current.add(lineIndex);
+      const infos = flagged.map((e) =>
+        buildCcAlertInfo(lineIndex, cc, { code: e.code, name: e.name } as SapSearchOption),
+      );
+      ccAlertQueueRef.current = [...infos.slice(1), ...ccAlertQueueRef.current];
+      openCcAlert(infos[0]);
+    },
+    [ccAlertEnabled, openCcAlert, buildCcAlertInfo],
+  );
+
   const advanceCcAlertQueue = useCallback(() => {
     const next = ccAlertQueueRef.current.shift();
     if (next) openCcAlert(next);
@@ -513,15 +532,28 @@ export function CreateExpenseModal({
     const idx = ccAlert?.lineIndex ?? -1;
     recordCcProjectAlertDecision(ccAlertIdRef.current, "changed", null);
     if (idx >= 0) {
+      const fromSplit = ccAlertSplitLinesRef.current.has(idx);
       setItems((prev) => {
         const updated = [...prev];
-        if (updated[idx]) updated[idx] = { ...updated[idx], sapProject: null, project: "" };
+        if (updated[idx]) {
+          updated[idx] = fromSplit
+            ? { ...updated[idx], projectSplit: null }
+            : { ...updated[idx], sapProject: null, project: "" };
+        }
         return updated;
       });
-      toast.info(`Item ${idx + 1}: selecione o projeto/marca correto.`);
+      if (fromSplit) {
+        ccAlertSplitLinesRef.current.delete(idx);
+        ccAlertQueueRef.current = ccAlertQueueRef.current.filter((info) => info.lineIndex !== idx);
+        setSplitLineIndex(idx);
+        toast.info(`Item ${idx + 1}: revise os projetos do rateio.`);
+      } else {
+        toast.info(`Item ${idx + 1}: selecione o projeto/marca correto.`);
+      }
     }
     advanceCcAlertQueue();
   }, [ccAlert, advanceCcAlertQueue]);
+
 
 
 
@@ -3692,33 +3724,29 @@ export function CreateExpenseModal({
                         }
                         suggestedQuery={item.project && !item.sapProject ? item.project : undefined}
                         portalContainer={dialogContainer}
+                        pinnedAction={{
+                          label: isSplitEnabled(item.projectSplit) ? "Editar rateio entre projetos" : "Ratear entre projetos",
+                          description: "Divida esta linha entre vários projetos (igualmente, por valor ou por %)",
+                          icon: <Split className="h-3.5 w-3.5" />,
+                          active: isSplitEnabled(item.projectSplit),
+                          onSelect: () => setSplitLineIndex(i),
+                        }}
                       />
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={isSplitEnabled(item.projectSplit) ? "secondary" : "outline"}
-                          className="h-7 gap-1.5 px-2 text-xs"
-                          onClick={() => setSplitLineIndex(i)}
+                      {isSplitEnabled(item.projectSplit) && (
+                        <span
+                          className={`block text-[11px] ${
+                            isSplitComplete(item.projectSplit, Number(item.line_total) || 0)
+                              ? "text-muted-foreground"
+                              : "text-amber-600 dark:text-amber-400"
+                          }`}
                         >
-                          <Split className="h-3.5 w-3.5" />
-                          {isSplitEnabled(item.projectSplit) ? "Editar rateio" : "Ratear entre projetos"}
-                        </Button>
-                        {isSplitEnabled(item.projectSplit) && (
-                          <span
-                            className={`text-[11px] ${
-                              isSplitComplete(item.projectSplit, Number(item.line_total) || 0)
-                                ? "text-muted-foreground"
-                                : "text-amber-600 dark:text-amber-400"
-                            }`}
-                          >
-                            {resolveSplitAmounts(item.projectSplit, Number(item.line_total) || 0)
-                              .map((p) => `${p.code} ${formatCurrency(p.amount, currency || "BRL")}`)
-                              .join(" · ")}
-                            {!isSplitComplete(item.projectSplit, Number(item.line_total) || 0) && " — rateio incompleto"}
-                          </span>
-                        )}
-                      </div>
+                          {resolveSplitAmounts(item.projectSplit, Number(item.line_total) || 0)
+                            .map((p) => `${p.code} ${formatCurrency(p.amount, currency || "BRL")}`)
+                            .join(" · ")}
+                          {!isSplitComplete(item.projectSplit, Number(item.line_total) || 0) && " — rateio incompleto"}
+                        </span>
+                      )}
+
                     </div>
                   </div>
                   {isSales && (
@@ -3779,12 +3807,15 @@ export function CreateExpenseModal({
       lineLabel={splitLineIndex !== null ? `Item ${splitLineIndex + 1}` : undefined}
       onConfirm={(split) => {
         if (splitLineIndex === null) return;
+        const idx = splitLineIndex;
         setItems((prev) => {
           const updated = [...prev];
-          updated[splitLineIndex] = { ...updated[splitLineIndex], projectSplit: split };
+          updated[idx] = { ...updated[idx], projectSplit: split };
           return updated;
         });
+        maybeTriggerCcAlertForSplit(idx, items[idx]?.sapCostCenter || null, split);
       }}
+
     />
 
     <CcProjectAlertDialog

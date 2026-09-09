@@ -27,7 +27,16 @@ interface CachedSearchComboboxProps {
   isOptionDisabled?: (opt: SapSearchOption) => boolean;
   /** Texto exibido abaixo do nome quando a opção está desabilitada. */
   getDisabledReason?: (opt: SapSearchOption) => string | null | undefined;
+  /** Ação fixa exibida como primeira opção da lista (ex.: ratear entre projetos). */
+  pinnedAction?: {
+    label: string;
+    description?: string;
+    icon?: ReactNode;
+    active?: boolean;
+    onSelect: () => void;
+  };
 }
+
 
 export function CachedSearchCombobox({
   options,
@@ -45,6 +54,8 @@ export function CachedSearchCombobox({
   footerHint,
   isOptionDisabled,
   getDisabledReason,
+  pinnedAction,
+
 }: CachedSearchComboboxProps) {
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -156,8 +167,9 @@ export function CachedSearchCombobox({
     ? `${[value.name, value.code].filter(Boolean).join(" — ")}${value.extra ? ` (${onlyDigits(value.extra).length >= 11 ? formatCnpjCpf(value.extra) : value.extra})` : ""}`
     : "";
 
-  const showResults = isOpen && filtered.length > 0 && dropdownPosition;
-  const showEmptyState = isOpen && !isLoading && filtered.length === 0 && dropdownPosition;
+  const showResults = isOpen && (filtered.length > 0 || !!pinnedAction) && dropdownPosition;
+  const showEmptyState = isOpen && !isLoading && filtered.length === 0 && !pinnedAction && dropdownPosition;
+
   const dropdownStyle: CSSProperties | undefined = dropdownPosition
     ? {
         position: portalContainer ? "absolute" : "fixed",
@@ -196,8 +208,9 @@ export function CachedSearchCombobox({
               if (e.key === "Escape") setIsOpen(false);
             }}
             onFocus={() => {
-              if (!hasResolvedValue) setIsOpen(true);
+              if (!hasResolvedValue || pinnedAction) setIsOpen(true);
             }}
+
             placeholder={isLoading ? "Carregando..." : placeholder}
             className={`h-9 min-w-0 truncate pl-8 pr-8 text-sm ${
               hasResolvedValue
@@ -233,7 +246,32 @@ export function CachedSearchCombobox({
           className="z-[9999] max-w-[calc(100dvw-1rem)] rounded-md border border-border bg-popover shadow-md"
         >
           <div className="max-h-56 overflow-y-auto overflow-x-hidden">
+            {pinnedAction && (
+              <button
+                type="button"
+                onPointerDownCapture={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsOpen(false);
+                  setQuery("");
+                  pinnedAction.onSelect();
+                }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                className={`w-full border-b border-border/60 px-3 py-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground ${
+                  pinnedAction.active ? "bg-primary/10" : ""
+                }`}
+              >
+                <span className="flex items-center gap-1.5 font-medium text-foreground">
+                  {pinnedAction.icon}
+                  {pinnedAction.label}
+                </span>
+                {pinnedAction.description && (
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{pinnedAction.description}</span>
+                )}
+              </button>
+            )}
             {filtered.map((opt) => {
+
               const badge = renderOptionBadge?.(opt);
               const disabled = !!isOptionDisabled?.(opt);
               const disabledReason = disabled ? getDisabledReason?.(opt) : null;
