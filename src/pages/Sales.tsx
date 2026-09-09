@@ -191,6 +191,7 @@ function SalesPageInner() {
   const [selected, setSelected] = useState<Set<string>>(new Set()); // set de row keys (docType:docEntry:docLine)
   const [baixaOpen, setBaixaOpen] = useState(false);
   const [mapInvoice, setMapInvoice] = useState<InvoiceRow | null>(null);
+  const { sort, toggleSort } = useTableSort<SalesSortKey>("vencimento", "asc");
   const fetchTokenRef = useRef(0);
 
   const isSap = session?.erpType === "sap";
