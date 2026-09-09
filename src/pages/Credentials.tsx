@@ -22,6 +22,8 @@ import { useSap } from "@/contexts/SapContext";
 import { toast } from "sonner";
 import { SYSTEMS, CATEGORY_LABELS, type SystemConfig } from "@/lib/system-definitions";
 import { useEnabledErpTypes } from "@/hooks/useEnabledErpTypes";
+import { CompanyIntegrationsSection } from "@/components/CompanyIntegrationsSection";
+
 import { CustomFieldsEditor } from "@/components/CustomFieldsEditor";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { PageTitle } from "@/components/PageTitle";
