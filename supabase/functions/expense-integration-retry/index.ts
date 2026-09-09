@@ -212,19 +212,25 @@ Deno.serve(async (req) => {
         .limit(1);
       const recentlyNotified = Array.isArray(recent) && recent.length > 0;
 
-      if (!recentlyNotified && adminPhone) {
+      // Além do admin, o plantão de contingência também recebe as falhas.
+      const notifyTargets = Array.from(new Set([adminPhone, EMERGENCY_ALERT_PHONE].filter(Boolean)));
+
+      if (!recentlyNotified && notifyTargets.length > 0) {
         const amount = formatCurrency(Number(exp.total_amount || 0), exp.currency || "BRL");
         const link = `https://erp-flow.cactuscorporation.com/compras?doc=${exp.id}`;
         const msg =
           `⚠️ *Falha na integração ao SAP*\n\n` +
           `Empresa: ${exp.company_db}\n` +
+          `Documento: ${exp.id}\n` +
           `Fornecedor: ${exp.supplier_name || "-"} (${exp.supplier_code || "-"})\n` +
           `Solicitante: ${exp.requester_name || "-"}\n` +
           `Valor: ${amount}\n\n` +
           `Erro: ${errMsg.slice(0, 300)}\n\n` +
           `Abrir: ${link}`;
-        const send = await sendWhatsApp(adminPhone, msg);
-        notified = !!send.ok;
+        for (const to of notifyTargets) {
+          const send = await sendWhatsApp(to, msg);
+          if (send.ok) notified = true;
+        }
 
         // Registra a notificação (mesmo se falhou, para não flood-notificar).
         try {
