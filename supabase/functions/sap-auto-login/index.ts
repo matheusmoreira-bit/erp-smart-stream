@@ -242,6 +242,22 @@ Deno.serve(async (req) => {
         : json({ error: payload.message, status: 504 }, 503);
     }
 
+    // Credencial pessoal recusada: marca como inválida para nunca mais ser
+    // tentada automaticamente (é isso que bloqueia o usuário no SAP).
+    if (!loginResp.ok && !usingService && cred) {
+      const cloned = loginResp.clone();
+      const failText = await cloned.text().catch(() => "");
+      const failure = sapLoginFailure(failText, loginResp.status);
+      const credentialProblem = failure.sapCode === -304 || failure.sapCode === -131 ||
+        loginResp.status === 401 || /password|locked|disabled|none-sso/i.test(failure.rawMessage);
+      if (credentialProblem) {
+        await admin.from("user_sap_credentials")
+          .update({ invalid_at: new Date().toISOString(), invalid_reason: failure.rawMessage.slice(0, 300) })
+          .eq("user_id", user.id).eq("company_db", companyDb);
+        console.warn("[sap-auto-login] credencial pessoal marcada como inválida", { companyDb, sapUserName });
+      }
+    }
+
     // Leituras silenciosas podem usar ApiUser. Se a credencial pessoal estiver
     // vencida ou for somente SSO, tenta a credencial técnica antes de desistir.
     if (!loginResp.ok && allowService && !usingService) {
