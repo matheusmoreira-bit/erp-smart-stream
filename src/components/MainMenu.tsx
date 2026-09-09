@@ -294,39 +294,52 @@ const modules: Record<string, ModuleCard> = {
   },
 };
 
-const moduleGroups: { title: string; keys: string[] }[] = (
-  [
-    {
-      title: "Operação",
-      keys: ["expenses", "sales", "approvals", "pagcorp"],
-    },
-    {
-      title: "Cadastros",
-      keys: ["suppliers", "items", "intercompany"],
-    },
-    {
-      title: "Solicitações",
-      keys: ["registration_requests"],
-    },
-    {
-      title: "Financeiro & Fiscal",
-      keys: ["advance_payments", "accounts_payable", "financial_review", "cashflow_forecast", "nf_entrada"],
-    },
-    {
-      title: "Análise",
-      keys: ["analytics", "auditoria"],
-    },
-    {
-      title: "Administração",
-      keys: ["users", "approval_rules", "integracoes", "notifications"],
-    },
-  ] as { title: string; keys: string[] }[]
-).map((g) => ({
-  ...g,
-  keys: [...g.keys].sort((a, b) =>
-    (modules[a]?.title ?? a).localeCompare(modules[b]?.title ?? b, "pt-BR"),
-  ),
-}));
+/** Cada grupo tem um padrão de cor próprio, aplicado aos ícones dos cards. */
+const moduleGroups: { title: string; keys: string[]; color: string; bgGlow: string }[] = [
+  {
+    title: "Aprovações",
+    color: "text-violet-400",
+    bgGlow: "from-violet-500/20 to-violet-500/5",
+    keys: ["approvals", "approval_rules"],
+  },
+  {
+    title: "Compras (entrada)",
+    color: "text-emerald-400",
+    bgGlow: "from-emerald-500/20 to-emerald-500/5",
+    keys: ["expenses", "pagcorp", "advance_payments", "nf_entrada", "financial_review", "accounts_payable"],
+  },
+  {
+    title: "Vendas (saída)",
+    color: "text-sky-400",
+    bgGlow: "from-sky-500/20 to-sky-500/5",
+    keys: ["sales", "sales_advances", "sales_nfse", "accounts_receivable"],
+  },
+  {
+    title: "Financeiro",
+    color: "text-amber-400",
+    bgGlow: "from-amber-500/20 to-amber-500/5",
+    keys: ["accounts_payable", "cashflow_forecast", "accounts_receivable", "financial_review"],
+  },
+  {
+    title: "Cadastros",
+    color: "text-indigo-400",
+    bgGlow: "from-indigo-500/20 to-indigo-500/5",
+    keys: ["suppliers", "items", "intercompany", "registration_requests"],
+  },
+  {
+    title: "Análise",
+    color: "text-cyan-400",
+    bgGlow: "from-cyan-500/20 to-cyan-500/5",
+    keys: ["analytics", "auditoria"],
+  },
+  {
+    title: "Administração",
+    color: "text-rose-400",
+    bgGlow: "from-rose-500/20 to-rose-500/5",
+    keys: ["users", "integracoes", "notifications"],
+  },
+];
+
 
 function moduleHasAccess(mod: ModuleCard, userModules: string[]): boolean {
   if (mod.subModuleKeys && mod.subModuleKeys.length > 0) {
