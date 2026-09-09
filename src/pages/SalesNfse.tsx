@@ -626,7 +626,10 @@ export default function SalesNfse() {
               "Invoices",
               {
                 $select: "DocEntry,DocNum,DocDate,CardCode,DocTotal,PaidToDate,DocCurrency,Cancelled,DocumentStatus,DocumentLines",
-                $filter: `DocDate ge '${cutoffIso}' and Cancelled ne 'tYES'`,
+                // Sem filtro de canceladas: a tela precisa mostrar o status real,
+                // inclusive das notas canceladas no ERP.
+                $filter: `DocDate ge '${cutoffIso}'`,
+
                 $orderby: "DocDate desc",
               },
               true,
