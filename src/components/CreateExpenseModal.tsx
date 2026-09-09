@@ -64,10 +64,17 @@ import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
 import { canViewLotusCostCenters, filterLotusCostCenters } from "@/lib/cost-center-visibility";
 import { useMyManagementSegment } from "@/hooks/useMyManagementSegment";
 import { filterProjectsBySegment, filterInstitutionalProjects } from "@/lib/management-segment-projects";
+import { ProjectSplitDialog } from "@/components/ProjectSplitDialog";
+import {
+  isSplitComplete,
+  isSplitEnabled,
+  resolveSplitAmounts,
+  type ProjectSplit,
+} from "@/lib/project-split";
 
 
 import { RegistrationRequestModal } from "@/components/RegistrationRequestModal";
-import { UserPlus, RefreshCw, Building2 } from "lucide-react";
+import { UserPlus, RefreshCw, Building2, Split } from "lucide-react";
 import { usePagCorpCardMapping, type CardMappingStatus } from "@/hooks/usePagCorpCardMapping";
 import { PagCorpCardMappingBanner } from "@/components/PagCorpCardMappingBanner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -229,9 +236,11 @@ export function CreateExpenseModal({
   const [dueDate, setDueDate] = useState("");
   const [paymentTerms, setPaymentTerms] = useState<SapSearchOption | null>(null);
   const [remarks, setRemarks] = useState("");
-  const [items, setItems] = useState<(Omit<ExpenseItem, "id"> & { sapItem?: SapSearchOption | null; sapCostCenter?: SapSearchOption | null; sapProject?: SapSearchOption | null; searchHint?: string })[]>([
+  const [items, setItems] = useState<(Omit<ExpenseItem, "id"> & { sapItem?: SapSearchOption | null; sapCostCenter?: SapSearchOption | null; sapProject?: SapSearchOption | null; searchHint?: string; projectSplit?: ProjectSplit | null })[]>([
     { description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" },
   ]);
+  // Índice da linha cujo rateio por projeto está aberto (null = fechado).
+  const [splitLineIndex, setSplitLineIndex] = useState<number | null>(null);
   const [aiWarning, setAiWarning] = useState<string | null>(null);
   const [suggestedSupplierName, setSuggestedSupplierName] = useState<string | undefined>(undefined);
   const [aiSupplierData, setAiSupplierData] = useState<SupplierFormPrefill | null>(null);
@@ -2293,7 +2302,14 @@ export function CreateExpenseModal({
           return;
         }
       }
-      if (isProjectRequired && (!it.project || !String(it.project).trim())) {
+      // Rateio por projeto: quando habilitado na linha, 100% do valor precisa
+      // estar distribuído; nesse caso o campo "Projeto" da linha é dispensado.
+      if (isSplitEnabled(it.projectSplit)) {
+        if (!isSplitComplete(it.projectSplit, Number(it.line_total) || 0)) {
+          toast.error(`Item ${n}: o rateio por projeto precisa cobrir 100% do valor da linha`);
+          return;
+        }
+      } else if (isProjectRequired && (!it.project || !String(it.project).trim())) {
         toast.error(`Item ${n}: projeto é obrigatório`);
         return;
       }
@@ -2427,7 +2443,20 @@ export function CreateExpenseModal({
         rateio_type: !isSales ? rateioType : undefined,
         nfse_split_mode: isSales ? nfseSplitMode : undefined,
         sales_usage: isSales ? salesUsage?.code || undefined : undefined,
-        items: items.map(({ sapItem, sapCostCenter, sapProject, searchHint, ...rest }) => rest),
+        // Linhas com rateio por projeto viram uma linha por projeto, com o
+        // valor proporcional — cada (CC, projeto) segue a sua própria alçada.
+        items: items.flatMap(({ sapItem, sapCostCenter, sapProject, searchHint, projectSplit, ...rest }) => {
+          const lineTotal = Number(rest.line_total) || 0;
+          if (!isSplitEnabled(projectSplit)) return [rest];
+          return resolveSplitAmounts(projectSplit, lineTotal).map((part) => ({
+            ...rest,
+            quantity: 1,
+            unit_price: part.amount,
+            line_total: part.amount,
+            project: part.code,
+            description: `${rest.description || ""}${rest.description ? " — " : ""}Projeto ${part.code}`.trim(),
+          }));
+        }),
         files: files.length > 0 ? files : undefined,
         // Fila multi-fornecedor: informa ao chamador quantos grupos ainda
         // serão submetidos neste encadeamento. Origens como o PagCorp usam
@@ -3638,31 +3667,59 @@ export function CreateExpenseModal({
                       suggestedQuery={item.cost_center && !item.sapCostCenter ? item.cost_center : undefined}
                       portalContainer={dialogContainer}
                     />
-                    <CachedSearchCombobox
-                      label={`Projeto (Dimensão)${isProjectRequired ? " *" : ""}`}
-                      required={isProjectRequired}
-
-
-                      options={projectOptionsForCc(item.sapCostCenter?.code ?? item.cost_center)}
-                      isLoading={projectsLoading}
-                      value={item.sapProject || null}
-                      onChange={(val) => {
-                        setItems((prev) => {
-                          const updated = [...prev];
-                          updated[i] = { ...updated[i], sapProject: val, project: val?.code || "" };
-                          return updated;
-                        });
-                        maybeTriggerCcAlert(i, item.sapCostCenter || null, val);
-                      }}
-
-                      placeholder={
-                        origin === "pagcorp" && mappingInfo?.missingFields.includes("Projeto")
-                          ? "Sem mapeamento — selecione manualmente"
-                          : "Buscar projeto..."
-                      }
-                      suggestedQuery={item.project && !item.sapProject ? item.project : undefined}
-                      portalContainer={dialogContainer}
-                    />
+                    <div className="min-w-0 space-y-1">
+                      <CachedSearchCombobox
+                        label={`Projeto (Dimensão)${isProjectRequired && !isSplitEnabled(item.projectSplit) ? " *" : ""}`}
+                        required={isProjectRequired && !isSplitEnabled(item.projectSplit)}
+                        renderEmptyState={undefined}
+                        options={projectOptionsForCc(item.sapCostCenter?.code ?? item.cost_center)}
+                        isLoading={projectsLoading}
+                        value={item.sapProject || null}
+                        onChange={(val) => {
+                          setItems((prev) => {
+                            const updated = [...prev];
+                            updated[i] = { ...updated[i], sapProject: val, project: val?.code || "" };
+                            return updated;
+                          });
+                          maybeTriggerCcAlert(i, item.sapCostCenter || null, val);
+                        }}
+                        placeholder={
+                          isSplitEnabled(item.projectSplit)
+                            ? "Rateado entre projetos"
+                            : origin === "pagcorp" && mappingInfo?.missingFields.includes("Projeto")
+                              ? "Sem mapeamento — selecione manualmente"
+                              : "Buscar projeto..."
+                        }
+                        suggestedQuery={item.project && !item.sapProject ? item.project : undefined}
+                        portalContainer={dialogContainer}
+                      />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={isSplitEnabled(item.projectSplit) ? "secondary" : "outline"}
+                          className="h-7 gap-1.5 px-2 text-xs"
+                          onClick={() => setSplitLineIndex(i)}
+                        >
+                          <Split className="h-3.5 w-3.5" />
+                          {isSplitEnabled(item.projectSplit) ? "Editar rateio" : "Ratear entre projetos"}
+                        </Button>
+                        {isSplitEnabled(item.projectSplit) && (
+                          <span
+                            className={`text-[11px] ${
+                              isSplitComplete(item.projectSplit, Number(item.line_total) || 0)
+                                ? "text-muted-foreground"
+                                : "text-amber-600 dark:text-amber-400"
+                            }`}
+                          >
+                            {resolveSplitAmounts(item.projectSplit, Number(item.line_total) || 0)
+                              .map((p) => `${p.code} ${formatCurrency(p.amount, currency || "BRL")}`)
+                              .join(" · ")}
+                            {!isSplitComplete(item.projectSplit, Number(item.line_total) || 0) && " — rateio incompleto"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   {isSales && (
                     <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -3707,11 +3764,35 @@ export function CreateExpenseModal({
       </DialogContent>
     </Dialog>
 
+    <ProjectSplitDialog
+      open={splitLineIndex !== null}
+      onClose={() => setSplitLineIndex(null)}
+      total={splitLineIndex !== null ? Number(items[splitLineIndex]?.line_total) || 0 : 0}
+      currency={currency || "BRL"}
+      projectOptions={
+        splitLineIndex !== null
+          ? projectOptionsForCc(items[splitLineIndex]?.sapCostCenter?.code ?? items[splitLineIndex]?.cost_center)
+          : []
+      }
+      projectsLoading={projectsLoading}
+      value={splitLineIndex !== null ? items[splitLineIndex]?.projectSplit || null : null}
+      lineLabel={splitLineIndex !== null ? `Item ${splitLineIndex + 1}` : undefined}
+      onConfirm={(split) => {
+        if (splitLineIndex === null) return;
+        setItems((prev) => {
+          const updated = [...prev];
+          updated[splitLineIndex] = { ...updated[splitLineIndex], projectSplit: split };
+          return updated;
+        });
+      }}
+    />
+
     <CcProjectAlertDialog
       info={ccAlert}
       onConfirm={handleCcAlertConfirm}
       onChange={handleCcAlertChange}
     />
+
 
     <AlertDialog open={!!dupConfirm} onOpenChange={(v) => { if (!v) setDupConfirm(null); }}>
       <AlertDialogContent className="z-[60]" overlayClassName="z-[60] bg-black/40">

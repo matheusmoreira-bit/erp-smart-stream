@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Save,
   Send,
+  Split,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -32,6 +33,13 @@ import { useSapCachedList } from "@/hooks/useSapCachedList";
 import type { CreateExpenseInput } from "@/hooks/useExpenses";
 import { supabase } from "@/integrations/supabase/client";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
+import { ProjectSplitDialog } from "@/components/ProjectSplitDialog";
+import {
+  isSplitComplete,
+  isSplitEnabled,
+  resolveSplitAmounts,
+  type ProjectSplit,
+} from "@/lib/project-split";
 
 type WizardStep = "users" | "projects";
 
@@ -235,6 +243,9 @@ export function UberExpenseModal({
   const [dueDate, setDueDate] = useState(todayIso);
   const [userCostCenters, setUserCostCenters] = useState<Record<string, SapSearchOption | null>>({});
   const [lineProjects, setLineProjects] = useState<Record<string, SapSearchOption | null>>({});
+  // Rateio por projeto de cada centro de custo (row_key → rateio).
+  const [lineSplits, setLineSplits] = useState<Record<string, ProjectSplit | null>>({});
+  const [splitRowKey, setSplitRowKey] = useState<string | null>(null);
 
   const { options: supplierOptions, isLoading: suppliersLoading } = useMergedSupplierOptions({
     companyDb: activeCompanyDb,
@@ -489,7 +500,12 @@ export function UberExpenseModal({
       .sort((a, b) => a.cost_center_code.localeCompare(b.cost_center_code, "pt-BR", { numeric: true }));
   }, [effectiveCostCenterForUser, userRows]);
 
-  const missingProjects = costCenterRows.filter((row) => !lineProjects[row.row_key]);
+  // Uma linha está pronta quando tem projeto único OU rateio cobrindo 100%.
+  const missingProjects = costCenterRows.filter((row) => {
+    const split = lineSplits[row.row_key];
+    if (isSplitEnabled(split)) return !isSplitComplete(split, row.amount);
+    return !lineProjects[row.row_key];
+  });
   const totalAmount = costCenterRows.reduce((sum, row) => sum + row.amount, 0);
   const supplierReady = !!supplier?.code;
   const itemReady = !!item?.code;
@@ -618,17 +634,30 @@ export function UberExpenseModal({
     try {
       await saveProjectDefaults();
 
-      const items = costCenterRows.map((row) => {
-        const project = lineProjects[row.row_key];
-        return {
+      const items = costCenterRows.flatMap((row) => {
+        const split = lineSplits[row.row_key];
+        const base = {
           item_code: item.code,
           description: `Transporte de passageiros Uber - ${row.cost_center_label}`,
           quantity: 1,
+          cost_center: row.cost_center_code,
+        };
+        if (isSplitEnabled(split)) {
+          // Uma linha por projeto rateado, com o valor proporcional.
+          return resolveSplitAmounts(split, row.amount).map((part) => ({
+            ...base,
+            description: `${base.description} - Projeto ${part.code}`,
+            unit_price: part.amount,
+            line_total: part.amount,
+            project: part.code,
+          }));
+        }
+        return [{
+          ...base,
           unit_price: row.amount,
           line_total: row.amount,
-          cost_center: row.cost_center_code,
-          project: project?.code || "",
-        };
+          project: lineProjects[row.row_key]?.code || "",
+        }];
       });
 
       await onCreate({
@@ -878,15 +907,45 @@ export function UberExpenseModal({
                             <div className="truncate text-xs text-muted-foreground">{row.employees.join(", ")}</div>
                           </TableCell>
                           <TableCell>
-                            <CachedSearchCombobox
-                              options={projectOptions}
-                              isLoading={projectsLoading}
-                              value={lineProjects[row.row_key] || null}
-                              onChange={(value) => setLineProjects((prev) => ({ ...prev, [row.row_key]: value }))}
-                              placeholder="Buscar projeto..."
-                              portalContainer={dialogBodyRef.current}
-                              required
-                            />
+                            <div className="space-y-1">
+                              {!isSplitEnabled(lineSplits[row.row_key]) && (
+                                <CachedSearchCombobox
+                                  options={projectOptions}
+                                  isLoading={projectsLoading}
+                                  value={lineProjects[row.row_key] || null}
+                                  onChange={(value) => setLineProjects((prev) => ({ ...prev, [row.row_key]: value }))}
+                                  placeholder="Buscar projeto..."
+                                  portalContainer={dialogBodyRef.current}
+                                  required
+                                />
+                              )}
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={isSplitEnabled(lineSplits[row.row_key]) ? "secondary" : "outline"}
+                                  className="h-7 gap-1.5 px-2 text-xs"
+                                  onClick={() => setSplitRowKey(row.row_key)}
+                                >
+                                  <Split className="h-3.5 w-3.5" />
+                                  {isSplitEnabled(lineSplits[row.row_key]) ? "Editar rateio" : "Ratear entre projetos"}
+                                </Button>
+                                {isSplitEnabled(lineSplits[row.row_key]) && (
+                                  <span
+                                    className={`text-[11px] ${
+                                      isSplitComplete(lineSplits[row.row_key], row.amount)
+                                        ? "text-muted-foreground"
+                                        : "text-amber-600 dark:text-amber-400"
+                                    }`}
+                                  >
+                                    {resolveSplitAmounts(lineSplits[row.row_key], row.amount)
+                                      .map((p) => `${p.code} ${formatCurrency(p.amount)}`)
+                                      .join(" · ")}
+                                    {!isSplitComplete(lineSplits[row.row_key], row.amount) && " — rateio incompleto"}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </TableCell>
                           <TableCell className="text-right font-semibold">{formatCurrency(row.amount)}</TableCell>
                         </TableRow>
@@ -934,6 +993,21 @@ export function UberExpenseModal({
           )}
         </DialogFooter>
       </DialogContent>
+
+      <ProjectSplitDialog
+        open={splitRowKey !== null}
+        onClose={() => setSplitRowKey(null)}
+        total={costCenterRows.find((r) => r.row_key === splitRowKey)?.amount || 0}
+        currency="BRL"
+        projectOptions={projectOptions}
+        projectsLoading={projectsLoading}
+        value={splitRowKey ? lineSplits[splitRowKey] || null : null}
+        lineLabel={costCenterRows.find((r) => r.row_key === splitRowKey)?.cost_center_label}
+        onConfirm={(split) => {
+          if (!splitRowKey) return;
+          setLineSplits((prev) => ({ ...prev, [splitRowKey]: split }));
+        }}
+      />
     </Dialog>
   );
 }
