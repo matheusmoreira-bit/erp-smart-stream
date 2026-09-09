@@ -105,6 +105,16 @@ function validateInput(input: BaixaInput, sessionCompanyDb: string): string | nu
     if (!Number.isFinite(Number(item.invoiceDocEntry)) || Number(item.invoiceDocEntry) <= 0) return "NF inválida no rateio.";
     if (!Number.isFinite(Number(item.valorBaixado)) || Number(item.valorBaixado) <= 0) return "Valor do rateio inválido.";
   }
+  const advances = Array.isArray(input.adiantamentos) ? input.adiantamentos : [];
+  let totalAdvances = 0;
+  for (const adv of advances) {
+    if (!Number.isFinite(Number(adv.sapDocEntry)) || Number(adv.sapDocEntry) <= 0) return "Adiantamento inválido.";
+    if (!Number.isFinite(Number(adv.amount)) || Number(adv.amount) <= 0) return "Valor do adiantamento inválido.";
+    totalAdvances += Number(adv.amount);
+  }
+  if (totalAdvances > Number(input.valorTotal) + 0.01) {
+    return "A soma dos adiantamentos aplicados excede o valor da baixa.";
+  }
   return null;
 }
 
@@ -112,28 +122,47 @@ function buildIncomingPayment(
   baixa: Record<string, unknown>,
   itens: Array<Record<string, unknown>>,
   bplId: number,
+  advances: Array<{ doc_entry: number; amount: number }> = [],
 ) {
   const excedente = Number(baixa.valor_juros_multa || 0);
+  const totalAdvances = advances.reduce((s, a) => s + Number(a.amount || 0), 0);
+  const bankSum = +(Number(baixa.valor_total) - totalAdvances).toFixed(2);
+
+  const paymentInvoices: Array<Record<string, unknown>> = itens.map((it) => {
+    const type = String(it.invoice_type || "invoice");
+    const isJE = type === "journal_entry";
+    const entry: Record<string, unknown> = {
+      DocEntry: Number(it.invoice_doc_entry),
+      SumApplied: Number(it.valor_baixado),
+      InvoiceType: isJE ? "it_JournalEntry" : "it_Invoice",
+    };
+    if (isJE) entry.DocLine = Number(it.invoice_doc_line || 0);
+    return entry;
+  });
+
+  // Adiantamentos já baixados entram como aplicação negativa (it_DownPayment),
+  // abatendo parte do valor das NFs — o restante é recebido em banco.
+  for (const adv of advances) {
+    paymentInvoices.push({
+      DocEntry: Number(adv.doc_entry),
+      SumApplied: -Math.abs(Number(adv.amount)),
+      InvoiceType: "it_DownPayment",
+    });
+  }
+
   const payload: Record<string, unknown> = {
     DocType: "rCustomer",
     CardCode: baixa.card_code,
     DocDate: baixa.data_recebimento,
-    TransferDate: baixa.data_recebimento,
-    TransferAccount: baixa.conta_contabil_codigo,
-    TransferSum: Number(baixa.valor_total),
     BPLID: bplId,
-    PaymentInvoices: itens.map((it) => {
-      const type = String(it.invoice_type || "invoice");
-      const isJE = type === "journal_entry";
-      const entry: Record<string, unknown> = {
-        DocEntry: Number(it.invoice_doc_entry),
-        SumApplied: Number(it.valor_baixado),
-        InvoiceType: isJE ? "it_JournalEntry" : "it_Invoice",
-      };
-      if (isJE) entry.DocLine = Number(it.invoice_doc_line || 0);
-      return entry;
-    }),
+    PaymentInvoices: paymentInvoices,
   };
+
+  if (bankSum > 0.005) {
+    payload.TransferDate = baixa.data_recebimento;
+    payload.TransferAccount = baixa.conta_contabil_codigo;
+    payload.TransferSum = bankSum;
+  }
 
   if (excedente > 0 && baixa.conta_juros_multa_codigo) {
     payload.PaymentAccounts = [{
@@ -143,6 +172,7 @@ function buildIncomingPayment(
   }
   return payload;
 }
+
 
 async function resolveDefaultBranchId(companyDb: string): Promise<number> {
   const sb = adminClient();
