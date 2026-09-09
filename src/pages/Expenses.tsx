@@ -10,6 +10,7 @@ import { useMyCapabilities } from "@/hooks/useMyCapabilities";
 import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
 import { useDirectorateScope } from "@/hooks/useDirectorateScope";
 import { identityMatches } from "@/lib/permission-group-utils";
+import { canonicalUserKey } from "@/lib/text-normalize";
 
 import { motion } from "framer-motion";
 import {
@@ -1829,6 +1830,47 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
     };
 
+    // ─── Pessoas unificadas ─────────────────────────────────────────
+    // Um usuário aparece com N grafias (login, e-mail, nome completo).
+    // Agrupamos tudo pela chave canônica de identidade para que exista
+    // apenas UMA opção por pessoa no filtro, guardando todas as variantes
+    // para uso na consulta ao servidor.
+    const buildPeople = (
+      getName: (row: Partial<Expense>) => unknown,
+      getEmail?: (row: Partial<Expense>) => unknown,
+    ) => {
+      const map = new Map<string, { names: Set<string>; emails: Set<string> }>();
+      for (const row of rows) {
+        const name = clean(getName(row));
+        const email = clean(getEmail?.(row));
+        const key = canonicalUserKey(email) || canonicalUserKey(name);
+        if (!key) continue;
+        let entry = map.get(key);
+        if (!entry) { entry = { names: new Set(), emails: new Set() }; map.set(key, entry); }
+        if (name && !name.includes("@")) entry.names.add(name);
+        if (name && name.includes("@")) entry.emails.add(name);
+        if (email) entry.emails.add(email);
+      }
+      const variants = new Map<string, { names: string[]; emails: string[] }>();
+      const options: FilterOption[] = [];
+      for (const [key, entry] of map) {
+        const names = Array.from(entry.names);
+        const emails = Array.from(entry.emails);
+        // Melhor rótulo: nome com espaço (nome completo); senão o mais longo.
+        const label =
+          names.slice().sort((a, b) => (b.includes(" ") ? 1 : 0) - (a.includes(" ") ? 1 : 0) || b.length - a.length)[0]
+          || emails[0]
+          || key;
+        variants.set(key, { names, emails });
+        options.push({ value: key, label, meta: emails[0] && emails[0] !== label ? emails[0] : undefined });
+      }
+      options.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+      return { options, variants };
+    };
+
+    const requesterPeople = buildPeople((row) => row.requester_name, (row) => row.requester_email);
+    const approverPeople = buildPeople((row) => row.current_approver);
+
     return {
       supplier: build(
         (row) => row.supplier_name,
@@ -1840,9 +1882,11 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         (_row, value) => value,
         (row) => clean(row.supplier_name) || undefined,
       ),
-      requester: build((row) => row.requester_name, undefined, (row) => clean(row.requester_email) || undefined),
-      requester_email: build((row) => row.requester_email, undefined, (row) => clean(row.requester_name) || undefined),
-      approver: build((row) => row.current_approver),
+      requester: requesterPeople.options,
+      requesterVariants: requesterPeople.variants,
+      requester_email: [] as FilterOption[],
+      approver: approverPeople.options,
+      approverVariants: approverPeople.variants,
       cost_center: build((row) => row.cost_center),
       project: build((row) => row.project),
       currency: build((row) => row.currency),
