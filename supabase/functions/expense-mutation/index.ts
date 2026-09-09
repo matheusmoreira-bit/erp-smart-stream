@@ -1488,6 +1488,22 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
     return json(409, { error: `Despesa não está em rascunho (status: ${current.status})` });
   }
 
+  // Trava real de anexo: no create validamos apenas a contagem informada pelo
+  // cliente; se o upload falhar depois, o documento fica sem anexo. Aqui
+  // conferimos os anexos realmente persistidos antes de liberar a aprovação.
+  if (String(current.doc_type || "purchase").toLowerCase() !== "sales" && String(current.origin || "") !== "uber") {
+    const { count: attCount, error: attErr } = await admin
+      .from("expense_attachments")
+      .select("id", { count: "exact", head: true })
+      .eq("expense_id", expenseId);
+    if (attErr) return json(500, { error: `Falha ao verificar anexos: ${attErr.message}` });
+    if (!attCount || attCount < 1) {
+      return json(400, {
+        error: "Anexo obrigatório: este documento não possui nenhum anexo salvo. Reabra o pedido e anexe o documento antes de enviar para aprovação.",
+      });
+    }
+  }
+
   // Cartão corporativo (PagCorp) nunca entra em fluxo de aprovação.
   const autoApprovedByRule = isPagCorpExpense(current.origin, current.remarks)
     || await isAutomaticApprovalRule(admin, current.approval_rule_id);
