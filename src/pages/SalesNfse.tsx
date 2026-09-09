@@ -1504,6 +1504,11 @@ export default function SalesNfse() {
                 <tr>
                   <SortTh label="Pedido" sortKey="pedido" active={sort.key === "pedido"} dir={sort.dir} onSort={toggleSort} />
                   <SortTh label="Status" sortKey="status" active={sort.key === "status"} dir={sort.dir} onSort={toggleSort} />
+                  <th className="text-left px-3 py-2 font-medium">
+                    Status no ERP
+                    {docStatusLoading && <Loader2 className="ml-1 inline w-3 h-3 animate-spin" />}
+                  </th>
+
                   <SortTh label="Origem" sortKey="origem" active={sort.key === "origem"} dir={sort.dir} onSort={toggleSort} />
                   <SortTh label="Cliente" sortKey="cliente" active={sort.key === "cliente"} dir={sort.dir} onSort={toggleSort} />
                   <SortTh label="Data" sortKey="data" active={sort.key === "data"} dir={sort.dir} onSort={toggleSort} />
