@@ -1073,17 +1073,12 @@ function ExpenseCard({
     >
       <div className="flex items-start justify-between">
         <div className="flex flex-wrap items-center gap-1.5">
-          <Badge className={STATUS_COLORS[expense.status]}>{statusLabel(expense.status)}</Badge>
-          {originBadge === "erp_flow" && (
-            <Badge variant="outline" className="text-[10px] gap-1 border-primary/40 text-primary">
-              ERP Flow
-            </Badge>
-          )}
-          {originBadge === "erp" && (
-            <Badge variant="outline" className="text-[10px] gap-1 border-amber-500/40 text-amber-500">
-              {erpLbl}
-            </Badge>
-          )}
+          <StatusOriginChip
+            status={expense.status}
+            label={statusLabel(expense.status)}
+            origin={originBadge}
+            erpLabel={erpLbl}
+          />
         </div>
         <div className="flex items-center gap-1">
           {onRelationsMap && (
@@ -2830,15 +2825,12 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                         onClick={() => openExpense(exp, origin)}
                       >
                         <td className="px-4 py-2.5">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <Badge className={STATUS_COLORS[exp.status]}>{statusLabel(exp.status)}</Badge>
-                            {origin === "erp_flow" && (
-                              <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">ERP Flow</Badge>
-                            )}
-                            {origin === "erp" && (
-                              <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-500">{erpLabel}</Badge>
-                            )}
-                          </div>
+                          <StatusOriginChip
+                            status={exp.status}
+                            label={statusLabel(exp.status)}
+                            origin={origin}
+                            erpLabel={erpLabel}
+                          />
                         </td>
                         <td className="px-4 py-2.5 max-w-[260px]">
                           <div className="flex items-center gap-2 text-foreground">
