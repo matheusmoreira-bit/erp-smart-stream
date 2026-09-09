@@ -90,6 +90,12 @@ export function BaixaRecebimentoDialog({
   const [submitting, setSubmitting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
+  // Adiantamentos do cliente já baixados (ERP Flow ou criados direto no ERP)
+  const [advances, setAdvances] = useState<AvailableCustomerAdvance[]>([]);
+  const [advLoading, setAdvLoading] = useState(false);
+  const [advError, setAdvError] = useState<string | null>(null);
+  const [advSel, setAdvSel] = useState<Record<number, string>>({});
+
   // Chave estável para rateio: combina tipo + docEntry + docLine.
   // NFs (invoice) e Saldos Iniciais (journal_entry) podem compartilhar DocEntry, então
   // precisamos de uma chave composta para evitar colisão.
@@ -110,7 +116,34 @@ export function BaixaRecebimentoDialog({
     }
     setRateio(initial);
     setConfirmOpen(false);
+    setAdvSel({});
   }, [open, saldoTotal, invoices, today]);
+
+  useEffect(() => {
+    if (!open || !cardCode) return;
+    let cancelled = false;
+    setAdvLoading(true);
+    setAdvError(null);
+    listCustomerAdvances(cardCode)
+      .then((res) => {
+        if (cancelled) return;
+        setAdvances(res.advances);
+        setAdvError(res.sapError);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setAdvances([]);
+          setAdvError((e as Error).message);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAdvLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, cardCode]);
+
 
   const accountsCache = useSapCachedList({
     cacheKey: "chart_of_accounts_active",
