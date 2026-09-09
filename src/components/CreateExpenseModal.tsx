@@ -2222,6 +2222,24 @@ export function CreateExpenseModal({
     setItems((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const duplicateItem = (index: number) => {
+    setItems((prev) => {
+      const src = prev[index];
+      if (!src) return prev;
+      const copy = {
+        ...src,
+        projectSplit: src.projectSplit
+          ? { ...src.projectSplit, entries: src.projectSplit.entries.map((e) => ({ ...e })) }
+          : src.projectSplit,
+      };
+      const updated = [...prev];
+      updated.splice(index + 1, 0, copy);
+      return updated;
+    });
+    toast.success(`Item ${index + 1} duplicado`);
+  };
+
+
   const total = items.reduce((sum, item) => sum + item.line_total, 0);
 
   const DEFAULT_MULTI_CURRENCIES = ["BRL", "EUR", "USD", "CAD", "CHF", "GBP"];
