@@ -199,6 +199,20 @@ export function BaixaRecebimentoDialog({
   );
   const diffSoma = +(valorRecebido - somaRateio).toFixed(2);
 
+  // Adiantamentos aplicados nesta baixa (abatem o valor recebido em banco)
+  const advSelected = useMemo(
+    () =>
+      advances
+        .map((a) => ({ adv: a, amount: parseAmount(advSel[a.sapDocEntry] || "0") }))
+        .filter((x) => x.amount > 0),
+    [advances, advSel],
+  );
+  const totalAdiantamentos = useMemo(
+    () => +advSelected.reduce((s, x) => s + x.amount, 0).toFixed(2),
+    [advSelected],
+  );
+  const valorEmBanco = +(valorRecebido - totalAdiantamentos).toFixed(2);
+
   /* ── Validações ─────────────────────────────────────── */
   const validationErrors: string[] = [];
   if (!dataRecebimento) validationErrors.push("Informe a data de recebimento.");
@@ -216,6 +230,17 @@ export function BaixaRecebimentoDialog({
       "Há valor a baixar acima do saldo de uma ou mais NFs — selecione a conta de juros/multa.",
     );
   }
+  for (const { adv, amount } of advSelected) {
+    if (amount > adv.available + 0.01) {
+      validationErrors.push(
+        `Adiantamento #${adv.sapDocNum ?? adv.sapDocEntry}: valor acima do saldo disponível (${fmt(adv.available, adv.currency)}).`,
+      );
+    }
+  }
+  if (totalAdiantamentos > valorRecebido + 0.01) {
+    validationErrors.push("A soma dos adiantamentos aplicados excede o valor da baixa.");
+  }
+
 
   /* ── Submit ─────────────────────────────────────────── */
   async function handleConfirmar() {
