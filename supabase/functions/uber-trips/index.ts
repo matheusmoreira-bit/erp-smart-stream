@@ -505,6 +505,15 @@ Deno.serve(async (req) => {
       if (key && clean(row.cost_center_code)) manualByKey.set(key, manualMappingToUser(row));
     }
 
+    const savedRowByKey = new Map<string, ManualUserMapping>();
+    for (const row of (manualMappingsResult.data || []) as ManualUserMapping[]) {
+      const key = clean(row.employee_key).toLowerCase();
+      if (key) savedRowByKey.set(key, row);
+    }
+    // Quando o Okta traz um centro de custo diferente do último mapeamento salvo,
+    // atualizamos (upsert) o registro. Sem valor no Okta, mantemos o que foi salvo.
+    const pendingUpserts = new Map<string, SaveUserMappingInput>();
+
     const trips = tripsResult.trips;
     const summaryMap = new Map<string, {
       row_key: string;
