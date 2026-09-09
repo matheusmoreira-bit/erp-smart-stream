@@ -3692,33 +3692,29 @@ export function CreateExpenseModal({
                         }
                         suggestedQuery={item.project && !item.sapProject ? item.project : undefined}
                         portalContainer={dialogContainer}
+                        pinnedAction={{
+                          label: isSplitEnabled(item.projectSplit) ? "Editar rateio entre projetos" : "Ratear entre projetos",
+                          description: "Divida esta linha entre vários projetos (igualmente, por valor ou por %)",
+                          icon: <Split className="h-3.5 w-3.5" />,
+                          active: isSplitEnabled(item.projectSplit),
+                          onSelect: () => setSplitLineIndex(i),
+                        }}
                       />
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={isSplitEnabled(item.projectSplit) ? "secondary" : "outline"}
-                          className="h-7 gap-1.5 px-2 text-xs"
-                          onClick={() => setSplitLineIndex(i)}
+                      {isSplitEnabled(item.projectSplit) && (
+                        <span
+                          className={`block text-[11px] ${
+                            isSplitComplete(item.projectSplit, Number(item.line_total) || 0)
+                              ? "text-muted-foreground"
+                              : "text-amber-600 dark:text-amber-400"
+                          }`}
                         >
-                          <Split className="h-3.5 w-3.5" />
-                          {isSplitEnabled(item.projectSplit) ? "Editar rateio" : "Ratear entre projetos"}
-                        </Button>
-                        {isSplitEnabled(item.projectSplit) && (
-                          <span
-                            className={`text-[11px] ${
-                              isSplitComplete(item.projectSplit, Number(item.line_total) || 0)
-                                ? "text-muted-foreground"
-                                : "text-amber-600 dark:text-amber-400"
-                            }`}
-                          >
-                            {resolveSplitAmounts(item.projectSplit, Number(item.line_total) || 0)
-                              .map((p) => `${p.code} ${formatCurrency(p.amount, currency || "BRL")}`)
-                              .join(" · ")}
-                            {!isSplitComplete(item.projectSplit, Number(item.line_total) || 0) && " — rateio incompleto"}
-                          </span>
-                        )}
-                      </div>
+                          {resolveSplitAmounts(item.projectSplit, Number(item.line_total) || 0)
+                            .map((p) => `${p.code} ${formatCurrency(p.amount, currency || "BRL")}`)
+                            .join(" · ")}
+                          {!isSplitComplete(item.projectSplit, Number(item.line_total) || 0) && " — rateio incompleto"}
+                        </span>
+                      )}
+
                     </div>
                   </div>
                   {isSales && (
