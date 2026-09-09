@@ -2302,7 +2302,14 @@ export function CreateExpenseModal({
           return;
         }
       }
-      if (isProjectRequired && (!it.project || !String(it.project).trim())) {
+      // Rateio por projeto: quando habilitado na linha, 100% do valor precisa
+      // estar distribuído; nesse caso o campo "Projeto" da linha é dispensado.
+      if (isSplitEnabled(it.projectSplit)) {
+        if (!isSplitComplete(it.projectSplit, Number(it.line_total) || 0)) {
+          toast.error(`Item ${n}: o rateio por projeto precisa cobrir 100% do valor da linha`);
+          return;
+        }
+      } else if (isProjectRequired && (!it.project || !String(it.project).trim())) {
         toast.error(`Item ${n}: projeto é obrigatório`);
         return;
       }
