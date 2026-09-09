@@ -1,5 +1,6 @@
 import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { ensureCopyToTargetDocument } from "../_shared/sap-attach-copy.ts";
+import { isAttachmentEmergencyActive, notifyEmergencyContacts } from "../_shared/attachment-emergency.ts";
 // Edge function: post an internal approved expense as a Purchase Order in SAP B1
 // Endpoint: POST /functions/v1/expense-to-sap
 // Body: { expense_id: string }
