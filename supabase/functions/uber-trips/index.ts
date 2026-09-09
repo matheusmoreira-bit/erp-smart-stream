@@ -627,6 +627,13 @@ Deno.serve(async (req) => {
       summaryMap.set(summaryKey, existing);
     }
 
+    let mappingsSynced = 0;
+    if (pendingUpserts.size) {
+      const syncResult = await upsertUserMappings(admin, companyDb, Array.from(pendingUpserts.values()), "okta");
+      if (syncResult.error) console.warn("[uber-trips] falha ao sincronizar mapeamentos do Okta", syncResult.error);
+      mappingsSynced = syncResult.saved;
+    }
+
     const summary = Array.from(summaryMap.values())
       .map((row) => ({
         ...row,
