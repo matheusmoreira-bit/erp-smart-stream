@@ -202,6 +202,12 @@ async function updateExpenseWithItems(
     return "O pedido precisa ter ao menos um item";
   }
 
+  // Bloqueia linhas mistas: se alguma linha tem código de item, todas precisam ter.
+  const withCode = items.filter((it) => String(it?.item_code || "").trim().length > 0).length;
+  if (withCode > 0 && withCode < items.length) {
+    return "Há linhas sem código de item. Preencha o código em todas as linhas antes de salvar.";
+  }
+
   const { error: upErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
   if (upErr) return upErr.message;
 

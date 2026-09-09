@@ -388,6 +388,10 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
         toast.error(`Item ${n}: valor unitário deve ser maior que zero`);
         return;
       }
+      if (!it.item_code || !String(it.item_code).trim()) {
+        toast.error(`Item ${n}: selecione o código do item`);
+        return;
+      }
       if (!it.cost_center || !String(it.cost_center).trim()) {
         toast.error(`Item ${n}: centro de custo é obrigatório`);
         return;
