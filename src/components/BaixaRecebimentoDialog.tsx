@@ -16,9 +16,15 @@ import { toast } from "sonner";
 import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
-import { createBaixaRecebimentoAndSync } from "@/lib/baixa-recebimento-sync";
+import {
+  createBaixaRecebimentoAndSync,
+  listCustomerAdvances,
+  type AvailableCustomerAdvance,
+} from "@/lib/baixa-recebimento-sync";
 import { useSap } from "@/contexts/SapContext";
 import { DateInputBR } from "@/components/DateInputBR";
+import { Checkbox } from "@/components/ui/checkbox";
+
 
 export interface BaixaInvoiceRow {
   docEntry: number;
