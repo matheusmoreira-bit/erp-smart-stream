@@ -2158,9 +2158,28 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     if (statusFilter !== "all") filters.push({ op: "eq", column: "status", value: statusFilter });
     textMulti("supplier_name", f.supplier);
     textMulti("supplier_code", f.supplier_code);
-    textMulti("requester_name", f.requester);
-    textMulti("requester_email", f.requester_email);
-    textMulti("current_approver", f.approver);
+    // Pessoa selecionada = chave canônica; expandimos para todas as grafias
+    // conhecidas daquela pessoa antes de consultar o banco.
+    const personMulti = (
+      nameColumn: string,
+      emailColumn: string | null,
+      v: MultiFilterValue,
+      variants: Map<string, { names: string[]; emails: string[] }>,
+    ) => {
+      const keys = normalizeMultiValue(v).map((k) => canonicalUserKey(k)).filter(Boolean);
+      if (!keys.length) return;
+      const names = new Set<string>();
+      const emails = new Set<string>();
+      for (const key of keys) {
+        const entry = variants.get(key);
+        entry?.names.forEach((n) => names.add(n));
+        entry?.emails.forEach((e) => emails.add(e));
+      }
+      if (names.size) filters.push({ op: "in", column: nameColumn, value: Array.from(names) });
+      else if (emailColumn && emails.size) filters.push({ op: "in", column: emailColumn, value: Array.from(emails) });
+    };
+    personMulti("requester_name", "requester_email", f.requester, advancedOptions.requesterVariants);
+    personMulti("current_approver", null, f.approver, advancedOptions.approverVariants);
     textMulti("cost_center", f.cost_center);
     textMulti("project", f.project);
     like("remarks", f.remarks);
