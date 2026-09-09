@@ -1111,7 +1111,60 @@ export default function SalesNfse() {
     });
   }, [orders, search, invoiceByExpense, originFilter]);
 
+  /** Situação consolidada da nota, usada no chip de status e na ordenação. */
+  const statusFor = useCallback(
+    (o: SalesOrderRow, inv: NfseRow | null | undefined) => {
+      const em = emissionFor(o, inv);
+      if (em.emitted && inv?.status === "authorized")
+        return { rank: 1, label: "Autorizada", cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-600" };
+      if (em.emitted) return { rank: 2, label: "Emitida", cls: "border-primary/30 bg-primary/10 text-primary" };
+      if (em.localStale)
+        return { rank: 3, label: "Cancelada no ERP", cls: "border-amber-500/40 bg-amber-500/10 text-amber-600" };
+      if (inv?.status === "failed")
+        return { rank: 4, label: "Falha na emissão", cls: "border-destructive/30 bg-destructive/10 text-destructive" };
+      if (!o.sap_doc_entry)
+        return { rank: 5, label: "Não integrado", cls: "border-border bg-muted/40 text-muted-foreground" };
+      return { rank: 6, label: "Aguardando emissão", cls: "border-border bg-muted/40 text-muted-foreground" };
+    },
+    [emissionFor],
+  );
+
+  const sortedRows = useMemo(() => {
+    const rows = filtered.map((o) => {
+      const inv = invoiceByExpense.get(o.id) ?? null;
+      return { o, inv, emission: emissionFor(o, inv), status: statusFor(o, inv) };
+    });
+    const dir = sort.dir === "asc" ? 1 : -1;
+    const val = (r: (typeof rows)[number]) => {
+      switch (sort.key) {
+        case "pedido":
+          return Number(r.o.sap_doc_num || 0);
+        case "status":
+          return r.status.rank;
+        case "origem":
+          return r.o.source === "erp_flow" ? 0 : 1;
+        case "cliente":
+          return (r.o.supplier_name || "").toLowerCase();
+        case "valor":
+          return Number(r.o.total_amount || 0);
+        case "nfse":
+          return Number(r.inv?.nfse_number || 0);
+        case "data":
+        default:
+          return r.o.doc_date ? new Date(r.o.doc_date).getTime() : 0;
+      }
+    };
+    return rows.sort((a, b) => {
+      const va = val(a);
+      const vb = val(b);
+      if (typeof va === "string" || typeof vb === "string")
+        return String(va).localeCompare(String(vb), "pt-BR") * dir;
+      return (Number(va) - Number(vb)) * dir;
+    });
+  }, [filtered, invoiceByExpense, emissionFor, statusFor, sort]);
+
   const pendentes = filtered.filter((o) => !emissionFor(o, invoiceByExpense.get(o.id)).emitted);
+
 
   const emit = useCallback(async () => {
     if (!confirmOrder) return;
