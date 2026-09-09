@@ -208,8 +208,9 @@ export function CachedSearchCombobox({
               if (e.key === "Escape") setIsOpen(false);
             }}
             onFocus={() => {
-              if (!hasResolvedValue) setIsOpen(true);
+              if (!hasResolvedValue || pinnedAction) setIsOpen(true);
             }}
+
             placeholder={isLoading ? "Carregando..." : placeholder}
             className={`h-9 min-w-0 truncate pl-8 pr-8 text-sm ${
               hasResolvedValue
