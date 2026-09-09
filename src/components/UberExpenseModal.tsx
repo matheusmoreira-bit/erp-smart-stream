@@ -908,45 +908,39 @@ export function UberExpenseModal({
                           </TableCell>
                           <TableCell>
                             <div className="space-y-1">
-                              {!isSplitEnabled(lineSplits[row.row_key]) && (
-                                <CachedSearchCombobox
-                                  options={projectOptions}
-                                  isLoading={projectsLoading}
-                                  value={lineProjects[row.row_key] || null}
-                                  onChange={(value) => setLineProjects((prev) => ({ ...prev, [row.row_key]: value }))}
-                                  placeholder="Buscar projeto..."
-                                  portalContainer={dialogBodyRef.current}
-                                  required
-                                />
-                              )}
-                              <div className="flex flex-wrap items-center gap-2">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant={isSplitEnabled(lineSplits[row.row_key]) ? "secondary" : "outline"}
-                                  className="h-7 gap-1.5 px-2 text-xs"
-                                  onClick={() => setSplitRowKey(row.row_key)}
+                              <CachedSearchCombobox
+                                options={projectOptions}
+                                isLoading={projectsLoading}
+                                value={isSplitEnabled(lineSplits[row.row_key]) ? null : lineProjects[row.row_key] || null}
+                                onChange={(value) => setLineProjects((prev) => ({ ...prev, [row.row_key]: value }))}
+                                placeholder={isSplitEnabled(lineSplits[row.row_key]) ? "Rateado entre projetos" : "Buscar projeto..."}
+                                portalContainer={dialogBodyRef.current}
+                                required={!isSplitEnabled(lineSplits[row.row_key])}
+                                pinnedAction={{
+                                  label: isSplitEnabled(lineSplits[row.row_key]) ? "Editar rateio entre projetos" : "Ratear entre projetos",
+                                  description: "Divida este centro de custo entre vários projetos",
+                                  icon: <Split className="h-3.5 w-3.5" />,
+                                  active: isSplitEnabled(lineSplits[row.row_key]),
+                                  onSelect: () => setSplitRowKey(row.row_key),
+                                }}
+                              />
+                              {isSplitEnabled(lineSplits[row.row_key]) && (
+                                <span
+                                  className={`block text-[11px] ${
+                                    isSplitComplete(lineSplits[row.row_key], row.amount)
+                                      ? "text-muted-foreground"
+                                      : "text-amber-600 dark:text-amber-400"
+                                  }`}
                                 >
-                                  <Split className="h-3.5 w-3.5" />
-                                  {isSplitEnabled(lineSplits[row.row_key]) ? "Editar rateio" : "Ratear entre projetos"}
-                                </Button>
-                                {isSplitEnabled(lineSplits[row.row_key]) && (
-                                  <span
-                                    className={`text-[11px] ${
-                                      isSplitComplete(lineSplits[row.row_key], row.amount)
-                                        ? "text-muted-foreground"
-                                        : "text-amber-600 dark:text-amber-400"
-                                    }`}
-                                  >
-                                    {resolveSplitAmounts(lineSplits[row.row_key], row.amount)
-                                      .map((p) => `${p.code} ${formatCurrency(p.amount)}`)
-                                      .join(" · ")}
-                                    {!isSplitComplete(lineSplits[row.row_key], row.amount) && " — rateio incompleto"}
-                                  </span>
-                                )}
-                              </div>
+                                  {resolveSplitAmounts(lineSplits[row.row_key], row.amount)
+                                    .map((p) => `${p.code} ${formatCurrency(p.amount)}`)
+                                    .join(" · ")}
+                                  {!isSplitComplete(lineSplits[row.row_key], row.amount) && " — rateio incompleto"}
+                                </span>
+                              )}
                             </div>
                           </TableCell>
+
                           <TableCell className="text-right font-semibold">{formatCurrency(row.amount)}</TableCell>
                         </TableRow>
                       ))}
