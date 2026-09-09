@@ -3291,13 +3291,6 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 onChange={(requester) => setAdvDraft({ ...advDraft, requester })}
               />
               <MultiFilterSelect
-                label="E-mail do solicitante"
-                values={advDraft.requester_email}
-                options={advancedOptions.requester_email}
-                placeholder="Selecionar e-mails"
-                onChange={(requester_email) => setAdvDraft({ ...advDraft, requester_email })}
-              />
-              <MultiFilterSelect
                 label="Aprovador"
                 values={advDraft.approver}
                 options={advancedOptions.approver}
