@@ -716,14 +716,14 @@ function SalesPageInner() {
                         <thead>
                           <tr className="border-b border-border/60 text-muted-foreground">
                             <th className="w-8 py-2 px-2"></th>
-                            <th className="text-left py-2 px-2">Nº NF</th>
-                            <th className="text-left py-2 px-2">Emissão</th>
-                            <th className="text-left py-2 px-2">Vencimento</th>
-                            <th className="text-right py-2 px-2">Valor total</th>
-                            <th className="text-right py-2 px-2">Pago</th>
-                            <th className="text-right py-2 px-2">Saldo residual</th>
-                            <th className="text-left py-2 px-2">Status</th>
-                            <th className="text-left py-2 px-2">Origem</th>
+                            <SortTh label="Nº NF" sortKey="nf" active={sort.key === "nf"} dir={sort.dir} onSort={toggleSort} className="px-2 py-2" />
+                            <SortTh label="Emissão" sortKey="emissao" active={sort.key === "emissao"} dir={sort.dir} onSort={toggleSort} className="px-2 py-2" />
+                            <SortTh label="Vencimento" sortKey="vencimento" active={sort.key === "vencimento"} dir={sort.dir} onSort={toggleSort} className="px-2 py-2" />
+                            <SortTh label="Valor total" sortKey="total" active={sort.key === "total"} dir={sort.dir} onSort={toggleSort} align="right" className="px-2 py-2" />
+                            <SortTh label="Pago" sortKey="pago" active={sort.key === "pago"} dir={sort.dir} onSort={toggleSort} align="right" className="px-2 py-2" />
+                            <SortTh label="Saldo residual" sortKey="saldo" active={sort.key === "saldo"} dir={sort.dir} onSort={toggleSort} align="right" className="px-2 py-2" />
+                            <SortTh label="Status" sortKey="status" active={sort.key === "status"} dir={sort.dir} onSort={toggleSort} className="px-2 py-2" />
+                            <SortTh label="Origem" sortKey="origem" active={sort.key === "origem"} dir={sort.dir} onSort={toggleSort} className="px-2 py-2" />
                             <th className="w-8 py-2 px-2"></th>
                           </tr>
                         </thead>
