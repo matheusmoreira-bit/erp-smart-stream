@@ -73,10 +73,13 @@ export function AdvanceReconcileDialog({ open, advance, onClose, onConfirm }: Pr
     try {
       await onConfirm({ data_recebimento: data, conta_codigo: conta!.code, conta_nome: conta!.name });
       onClose();
+    } catch {
+      // Erro já sinalizado ao usuário pelo chamador; mantém o diálogo aberto.
     } finally {
       setSubmitting(false);
     }
   }
+
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && !submitting && onClose()}>
