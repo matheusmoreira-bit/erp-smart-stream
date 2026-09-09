@@ -285,6 +285,12 @@ export function UberExpenseModal({
         body: JSON.stringify({ company_db: companyDb }),
       });
       const payload = await response.json().catch(() => null);
+      if ([404, 409, 422].includes(response.status)) {
+        // Integração ainda não configurada/ativada para esta empresa: estado informativo, não erro técnico.
+        setData(null);
+        setError(payload?.error || "Integração Uber não disponível para esta empresa.");
+        return;
+      }
       if (!response.ok || !payload?.ok) {
         throw new Error(payload?.error || "Falha ao carregar viagens Uber");
       }
