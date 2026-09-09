@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { SortTh, useTableSort } from "@/components/SortTh";
 import { sapFunctionFetch, authFetch, publicFunctionFetch } from "@/lib/auth-fetch";
 import { sapQueryAll } from "@/lib/sap-client";
 import { useSap } from "@/contexts/SapContext";
@@ -538,12 +539,7 @@ export default function SalesNfse() {
   const [erpWarning, setErpWarning] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [originFilter, setOriginFilter] = useState<"all" | "erp_flow" | "erp">("all");
-  const [sort, setSort] = useState<{ key: NfseSortKey; dir: "asc" | "desc" }>({ key: "data", dir: "desc" });
-  const toggleSort = useCallback(
-    (key: NfseSortKey) =>
-      setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" })),
-    [],
-  );
+  const { sort, toggleSort } = useTableSort<NfseSortKey>("data", "desc");
 
   const [confirmOrder, setConfirmOrder] = useState<SalesOrderRow | null>(null);
   const [emitting, setEmitting] = useState(false);
