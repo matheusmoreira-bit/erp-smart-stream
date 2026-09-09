@@ -222,7 +222,7 @@ const modules: Record<string, ModuleCard> = {
     moduleKey: "financial_review",
   },
   advance_payments: {
-    title: "Adiantamentos",
+    title: "Adiantamentos Fornecedores",
     description: "Crie pedidos de adiantamento a fornecedor com aprovação e integração automática no SAP.",
     icon: Wallet,
     path: "/financeiro/adiantamentos",
@@ -230,6 +230,34 @@ const modules: Record<string, ModuleCard> = {
     bgGlow: "from-amber-500/20 to-amber-500/5",
     moduleKey: "expenses",
   },
+  sales_advances: {
+    title: "Adiantamentos Clientes",
+    description: "Adiantamentos recebidos de clientes, com vínculo às notas de saída.",
+    icon: Wallet,
+    path: "/vendas/adiantamentos",
+    color: "text-sky-400",
+    bgGlow: "from-sky-500/20 to-sky-500/5",
+    moduleKey: "sales",
+  },
+  sales_nfse: {
+    title: "NF de Saída",
+    description: "Emissão e acompanhamento de NFS-e dos pedidos de venda.",
+    icon: FileInput,
+    path: "/vendas/nfse",
+    color: "text-sky-400",
+    bgGlow: "from-sky-500/20 to-sky-500/5",
+    moduleKey: "sales",
+  },
+  accounts_receivable: {
+    title: "Contas a Receber",
+    description: "Títulos a receber por vencimento, com baixas e saldo residual.",
+    icon: Landmark,
+    path: "/vendas/recebimentos",
+    color: "text-sky-400",
+    bgGlow: "from-sky-500/20 to-sky-500/5",
+    moduleKey: "sales",
+  },
+
   notifications: {
     title: "Notificações",
     description: "Central de notificações, preferências, auditoria e histórico de envios (WhatsApp, e-mail).",
