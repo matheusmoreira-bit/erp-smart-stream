@@ -197,7 +197,25 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
                     {(a.sap_doc_num || a.sap_doc_entry) && (
                       <span className="text-xs text-success">SAP: #{a.sap_doc_num || a.sap_doc_entry}</span>
                     )}
+                    {isCustomerAdvance && a.reconciled_at && (
+                      <span className="text-xs text-success">
+                        Reconciliado em {fmtDate(a.reconciliation_date || a.reconciled_at)}
+                        {a.reconciliation_account_code ? ` · ${a.reconciliation_account_code}` : ""}
+                        {a.sap_incoming_payment_doc_entry ? ` · Recebimento #${a.sap_incoming_payment_doc_entry}` : ""}
+                      </span>
+                    )}
+                    {isCustomerAdvance && !a.reconciled_at && a.status === "integrated" && (
+                      <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 dark:text-amber-400">
+                        Aguardando reconciliação
+                      </Badge>
+                    )}
                   </div>
+                  {isCustomerAdvance && a.reconciliation_error && (
+                    <p className="text-xs text-destructive mt-2 break-words">
+                      Erro na reconciliação: {a.reconciliation_error}
+                    </p>
+                  )}
+
                   {a.remarks && <p className="text-xs text-muted-foreground mt-2 break-words">{a.remarks}</p>}
                   {a.sap_integration_error && (
                     <p className="text-xs text-destructive mt-2 break-words">Erro SAP: {a.sap_integration_error}</p>
