@@ -1578,8 +1578,9 @@ export default function SalesNfse() {
                           );
                         })()}
                       </td>
-                      <td className="px-3 py-2 text-right">
+                      <td className="px-3 py-2 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1">
+
                           <Button
                             size="sm"
                             variant="outline"
