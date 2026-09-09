@@ -29,6 +29,9 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
 import { syncBaixaRecebimentoToSap } from "@/lib/baixa-recebimento-sync";
+import { SortButton, useTableSort, compareValues } from "@/components/SortTh";
+
+type BaixaSortKey = "cliente" | "data" | "valor" | "status" | "sap";
 
 /* ─────────────────────────── helpers ─────────────────────────── */
 
@@ -145,6 +148,7 @@ function BaixasHistoryInner() {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const { sort, toggleSort } = useTableSort<BaixaSortKey>("data", "desc");
 
   const load = useCallback(async () => {
     if (!companyDb) {
@@ -209,6 +213,20 @@ function BaixasHistoryInner() {
       );
     });
   }, [rows, status, search]);
+
+  const sorted = useMemo(() => {
+    const value = (r: (typeof filtered)[number]) => {
+      switch (sort.key) {
+        case "cliente": return r.card_name || r.card_code;
+        case "data": return r.data_recebimento || r.created_at;
+        case "valor": return Number(r.valor_total) || 0;
+        case "status": return r.status;
+        case "sap": return r.sap_incoming_payment_doc_entry ?? null;
+        default: return null;
+      }
+    };
+    return [...filtered].sort((a, b) => compareValues(value(a), value(b), sort.dir));
+  }, [filtered, sort]);
 
   const counts = useMemo(() => {
     const c = { total: rows.length, pendente: 0, sincronizado: 0, erro: 0 };
@@ -328,13 +346,20 @@ function BaixasHistoryInner() {
             <Skeleton className="h-16 w-full" />
             <Skeleton className="h-16 w-full" />
           </div>
-        ) : filtered.length === 0 ? (
+        ) : sorted.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
             Nenhuma baixa encontrada.
           </div>
         ) : (
           <div className="space-y-2">
-            {filtered.map((r) => {
+            <div className="flex flex-wrap items-center gap-4 px-3 py-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
+              <SortButton label="Cliente" sortKey="cliente" active={sort.key === "cliente"} dir={sort.dir} onSort={toggleSort} />
+              <SortButton label="Data" sortKey="data" active={sort.key === "data"} dir={sort.dir} onSort={toggleSort} />
+              <SortButton label="Valor" sortKey="valor" active={sort.key === "valor"} dir={sort.dir} onSort={toggleSort} />
+              <SortButton label="Status" sortKey="status" active={sort.key === "status"} dir={sort.dir} onSort={toggleSort} />
+              <SortButton label="Nº SAP" sortKey="sap" active={sort.key === "sap"} dir={sort.dir} onSort={toggleSort} />
+            </div>
+            {sorted.map((r) => {
               const isOpen = !!expanded[r.id];
               const canRetry = r.status !== "sincronizado";
               return (

@@ -16,13 +16,11 @@ import {
   Copy,
   ExternalLink,
   Download,
-  ArrowUp,
-  ArrowDown,
-  ArrowUpDown,
 
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { SortTh, useTableSort } from "@/components/SortTh";
 import { sapFunctionFetch, authFetch, publicFunctionFetch } from "@/lib/auth-fetch";
 import { sapQueryAll } from "@/lib/sap-client";
 import { useSap } from "@/contexts/SapContext";
@@ -513,49 +511,6 @@ interface SapInvoiceRef {
 
 type NfseSortKey = "pedido" | "status" | "origem" | "cliente" | "data" | "valor" | "nfse";
 
-/** Cabeçalho clicável com indicador de ordenação. */
-function SortTh({
-  label,
-  sortKey,
-  active,
-  dir,
-  onSort,
-  align = "left",
-  className = "",
-}: {
-  label: string;
-  sortKey: NfseSortKey;
-  active: boolean;
-  dir: "asc" | "desc";
-  onSort: (key: NfseSortKey) => void;
-  align?: "left" | "right";
-  className?: string;
-}) {
-  return (
-    <th className={`px-3 py-2 font-medium ${align === "right" ? "text-right" : "text-left"} ${className}`}>
-      <button
-        type="button"
-        onClick={() => onSort(sortKey)}
-        className={`inline-flex items-center gap-1 rounded transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-          active ? "text-foreground" : ""
-        }`}
-        aria-label={`Ordenar por ${label}`}
-      >
-        {label}
-        {active ? (
-          dir === "asc" ? (
-            <ArrowUp className="w-3 h-3" />
-          ) : (
-            <ArrowDown className="w-3 h-3" />
-          )
-        ) : (
-          <ArrowUpDown className="w-3 h-3 opacity-40" />
-        )}
-      </button>
-    </th>
-  );
-}
-
 /* ── página ──────────────────────────────────────────────── */
 
 
@@ -581,12 +536,7 @@ export default function SalesNfse() {
   const [erpWarning, setErpWarning] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [originFilter, setOriginFilter] = useState<"all" | "erp_flow" | "erp">("all");
-  const [sort, setSort] = useState<{ key: NfseSortKey; dir: "asc" | "desc" }>({ key: "data", dir: "desc" });
-  const toggleSort = useCallback(
-    (key: NfseSortKey) =>
-      setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" })),
-    [],
-  );
+  const { sort, toggleSort } = useTableSort<NfseSortKey>("data", "desc");
 
   const [confirmOrder, setConfirmOrder] = useState<SalesOrderRow | null>(null);
   const [emitting, setEmitting] = useState(false);
