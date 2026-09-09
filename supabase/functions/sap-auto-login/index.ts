@@ -181,13 +181,17 @@ Deno.serve(async (req) => {
       await admin.from("erp_session_cache").delete()
         .eq("user_id", user.id).eq("company_db", companyDb);
     }
-    const { data: cred, error: credErr } = await admin
+    const { data: credRow, error: credErr } = await admin
       .from("user_sap_credentials")
-      .select("sap_user, sap_password_encrypted")
+      .select("sap_user, sap_password_encrypted, invalid_at")
       .eq("user_id", user.id)
       .eq("company_db", companyDb)
       .maybeSingle();
     if (credErr) throw credErr;
+
+    // Credencial já recusada pelo SAP não é reutilizada: cada nova tentativa
+    // conta como senha incorreta e acaba bloqueando o usuário no ERP.
+    const cred = credRow?.invalid_at ? null : credRow;
 
     let sapUserName = cred?.sap_user || "";
     let password = "";
@@ -236,6 +240,22 @@ Deno.serve(async (req) => {
       return applicationErrors
         ? json(payload)
         : json({ error: payload.message, status: 504 }, 503);
+    }
+
+    // Credencial pessoal recusada: marca como inválida para nunca mais ser
+    // tentada automaticamente (é isso que bloqueia o usuário no SAP).
+    if (!loginResp.ok && !usingService && cred) {
+      const cloned = loginResp.clone();
+      const failText = await cloned.text().catch(() => "");
+      const failure = sapLoginFailure(failText, loginResp.status);
+      const credentialProblem = failure.sapCode === -304 || failure.sapCode === -131 ||
+        loginResp.status === 401 || /password|locked|disabled|none-sso/i.test(failure.rawMessage);
+      if (credentialProblem) {
+        await admin.from("user_sap_credentials")
+          .update({ invalid_at: new Date().toISOString(), invalid_reason: failure.rawMessage.slice(0, 300) })
+          .eq("user_id", user.id).eq("company_db", companyDb);
+        console.warn("[sap-auto-login] credencial pessoal marcada como inválida", { companyDb, sapUserName });
+      }
     }
 
     // Leituras silenciosas podem usar ApiUser. Se a credencial pessoal estiver

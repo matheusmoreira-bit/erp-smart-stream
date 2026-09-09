@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
 
       const encrypted = await encryptSecret(sapPassword);
       const { error } = await admin.from("user_sap_credentials").upsert(
-        { user_id: user.id, company_db: companyDb, sap_user: sapUser, sap_password_encrypted: encrypted, updated_at: new Date().toISOString() },
+        { user_id: user.id, company_db: companyDb, sap_user: sapUser, sap_password_encrypted: encrypted, invalid_at: null, invalid_reason: null, updated_at: new Date().toISOString() },
         { onConflict: "user_id,company_db" },
       );
       if (error) throw error;

@@ -8582,6 +8582,8 @@ export type Database = {
           company_db: string
           created_at: string
           id: string
+          invalid_at: string | null
+          invalid_reason: string | null
           sap_password_encrypted: string
           sap_user: string
           updated_at: string
@@ -8591,6 +8593,8 @@ export type Database = {
           company_db: string
           created_at?: string
           id?: string
+          invalid_at?: string | null
+          invalid_reason?: string | null
           sap_password_encrypted: string
           sap_user: string
           updated_at?: string
@@ -8600,6 +8604,8 @@ export type Database = {
           company_db?: string
           created_at?: string
           id?: string
+          invalid_at?: string | null
+          invalid_reason?: string | null
           sap_password_encrypted?: string
           sap_user?: string
           updated_at?: string
