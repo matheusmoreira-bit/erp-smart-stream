@@ -507,7 +507,23 @@ interface SapInvoiceRef {
   paidToDate?: number | null;
   currency?: string | null;
   status?: string | null;
+  /** Nota cancelada/estornada no ERP. */
+  cancelled?: boolean;
 }
+
+/** Status real do documento lido no ERP (Service Layer). */
+interface SapDocStatus {
+  doc_entry: number;
+  doc_num: number | null;
+  document_status: string | null;
+  cancelled: boolean;
+  doc_total: number | null;
+  paid_to_date: number | null;
+  currency: string | null;
+  /** UDF de fila de transmissão do addon fiscal. */
+  transmission_status: string | null;
+}
+
 
 type NfseSortKey = "pedido" | "status" | "origem" | "cliente" | "data" | "valor" | "nfse";
 
