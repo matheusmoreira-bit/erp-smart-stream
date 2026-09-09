@@ -279,6 +279,25 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
       </main>
 
       <CreateAdvanceModal open={createOpen} onClose={() => setCreateOpen(false)} advanceType={advanceType} />
+
+      <AdvanceReconcileDialog
+        open={!!reconcileTarget}
+        advance={reconcileTarget}
+        onClose={() => setReconcileTarget(null)}
+        onConfirm={async (params) => {
+          if (!reconcileTarget) return;
+          try {
+            const res = await reconcile(reconcileTarget.id, params);
+            toast.success(
+              `Adiantamento reconciliado${res?.sapDocEntry ? ` · Recebimento #${res.sapDocEntry}` : ""}.`,
+            );
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Falha ao reconciliar");
+            throw e;
+          }
+        }}
+      />
+
     </div>
   );
 }
