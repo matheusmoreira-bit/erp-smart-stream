@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { docNumberLabel, isInternalDoc, matchesDocQuery } from "@/lib/doc-number";
+import { DocKindOriginChip, DOC_KIND_LABEL, type DocKind as SharedDocKind } from "@/components/DocKindOriginChip";
+
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
 import { useMyCapabilities } from "@/hooks/useMyCapabilities";
@@ -201,53 +203,45 @@ function docProjects(doc: ApprovalDoc): string[] {
   return Array.from(set);
 }
 
-/** Natureza do documento: compra, venda ou outro tipo (pagamento, etc.). */
-type DocKind = "purchase" | "sales" | "other";
+/** Natureza do documento: compra, venda, adiantamento, cartão corporativo ou outro. */
+type DocKind = SharedDocKind;
 
 function docKind(doc: { docTypeName?: string; __explain?: { docType?: string } }): DocKind {
   const internal = doc.__explain?.docType;
-  if (internal === "sales") return "sales";
   const name = (doc.docTypeName || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+  if (/pagcorp|cartao/.test(name)) return "pagcorp";
+  if (/adiantamento/.test(name)) return "advance";
+  if (internal === "sales") return "sales";
   if (/venda|saida|entrega|cliente|faturamento/.test(name)) return "sales";
   if (/compra|entrada|fornecedor|mercadoria|despesa|reembolso/.test(name)) return "purchase";
   if (internal === "purchase") return "purchase";
   return "other";
 }
 
-const DOC_KIND_LABEL: Record<DocKind, string> = {
-  purchase: "Compra",
-  sales: "Venda",
-  other: "Outro",
-};
-
-const DOC_KIND_CLASS: Record<DocKind, string> = {
-  purchase: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30",
-  sales: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
-  other: "bg-muted text-muted-foreground border-border",
-};
-
 /** Como chamar o parceiro de negócio conforme a natureza do documento. */
 function partnerLabel(doc: { docTypeName?: string; __explain?: { docType?: string } }): string {
   const kind = docKind(doc);
   if (kind === "sales") return "Cliente";
-  if (kind === "purchase") return "Fornecedor";
+  if (kind === "purchase" || kind === "advance" || kind === "pagcorp") return "Fornecedor";
   return "Parceiro";
 }
 
-/** Selo visual que deixa explícita a natureza do documento. */
-function DocKindBadge({ doc, className = "" }: { doc: { docTypeName?: string; __explain?: { docType?: string } }; className?: string }) {
-  const kind = docKind(doc);
+/** Selo no padrão das telas de compras: {Tipo de Doc} | {Origem}. */
+function DocKindBadge({ doc, className = "" }: { doc: { docTypeName?: string; __explain?: { docType?: string }; __internalId?: string }; className?: string }) {
+  const internal = !!(doc as { __internalId?: string }).__internalId;
   return (
-    <span
-      className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full border ${DOC_KIND_CLASS[kind]} ${className}`}
-    >
-      {DOC_KIND_LABEL[kind]}
-    </span>
+    <DocKindOriginChip
+      kind={docKind(doc)}
+      origin={internal ? "flow" : "erp"}
+      title={doc.docTypeName}
+      className={className}
+    />
   );
 }
+
 
 
 type ApprovalTransferUserOption = SapSearchOption & { email?: string };
@@ -4015,13 +4009,16 @@ export default function ApprovalsPage() {
 
               <div className="space-y-1.5">
                 <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Tipo</Label>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 flex-wrap">
                   {([
                     ["all", "Todos"],
-                    ["purchase", "Compra"],
-                    ["sales", "Venda"],
-                    ["other", "Outro"],
+                    ["purchase", DOC_KIND_LABEL.purchase],
+                    ["sales", DOC_KIND_LABEL.sales],
+                    ["advance", DOC_KIND_LABEL.advance],
+                    ["pagcorp", DOC_KIND_LABEL.pagcorp],
+                    ["other", DOC_KIND_LABEL.other],
                   ] as const).map(([key, lbl]) => (
+
                     <button
                       key={key}
                       onClick={() => setTypeFilter(key)}
