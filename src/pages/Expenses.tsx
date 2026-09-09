@@ -10,6 +10,7 @@ import { useMyCapabilities } from "@/hooks/useMyCapabilities";
 import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
 import { useDirectorateScope } from "@/hooks/useDirectorateScope";
 import { identityMatches } from "@/lib/permission-group-utils";
+import { canonicalUserKey } from "@/lib/text-normalize";
 
 import { motion } from "framer-motion";
 import {
@@ -1829,6 +1830,47 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
     };
 
+    // ─── Pessoas unificadas ─────────────────────────────────────────
+    // Um usuário aparece com N grafias (login, e-mail, nome completo).
+    // Agrupamos tudo pela chave canônica de identidade para que exista
+    // apenas UMA opção por pessoa no filtro, guardando todas as variantes
+    // para uso na consulta ao servidor.
+    const buildPeople = (
+      getName: (row: Partial<Expense>) => unknown,
+      getEmail?: (row: Partial<Expense>) => unknown,
+    ) => {
+      const map = new Map<string, { names: Set<string>; emails: Set<string> }>();
+      for (const row of rows) {
+        const name = clean(getName(row));
+        const email = clean(getEmail?.(row));
+        const key = canonicalUserKey(email) || canonicalUserKey(name);
+        if (!key) continue;
+        let entry = map.get(key);
+        if (!entry) { entry = { names: new Set(), emails: new Set() }; map.set(key, entry); }
+        if (name && !name.includes("@")) entry.names.add(name);
+        if (name && name.includes("@")) entry.emails.add(name);
+        if (email) entry.emails.add(email);
+      }
+      const variants = new Map<string, { names: string[]; emails: string[] }>();
+      const options: FilterOption[] = [];
+      for (const [key, entry] of map) {
+        const names = Array.from(entry.names);
+        const emails = Array.from(entry.emails);
+        // Melhor rótulo: nome com espaço (nome completo); senão o mais longo.
+        const label =
+          names.slice().sort((a, b) => (b.includes(" ") ? 1 : 0) - (a.includes(" ") ? 1 : 0) || b.length - a.length)[0]
+          || emails[0]
+          || key;
+        variants.set(key, { names, emails });
+        options.push({ value: key, label, meta: emails[0] && emails[0] !== label ? emails[0] : undefined });
+      }
+      options.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+      return { options, variants };
+    };
+
+    const requesterPeople = buildPeople((row) => row.requester_name, (row) => row.requester_email);
+    const approverPeople = buildPeople((row) => row.current_approver);
+
     return {
       supplier: build(
         (row) => row.supplier_name,
@@ -1840,9 +1882,11 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         (_row, value) => value,
         (row) => clean(row.supplier_name) || undefined,
       ),
-      requester: build((row) => row.requester_name, undefined, (row) => clean(row.requester_email) || undefined),
-      requester_email: build((row) => row.requester_email, undefined, (row) => clean(row.requester_name) || undefined),
-      approver: build((row) => row.current_approver),
+      requester: requesterPeople.options,
+      requesterVariants: requesterPeople.variants,
+      requester_email: [] as FilterOption[],
+      approver: approverPeople.options,
+      approverVariants: approverPeople.variants,
       cost_center: build((row) => row.cost_center),
       project: build((row) => row.project),
       currency: build((row) => row.currency),
@@ -1859,8 +1903,27 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     only_overdue: false, only_missing_due: false, only_sap_error: false,
   };
   const [advanced, setAdvanced] = usePersistedState<AdvancedFilters>(filterKey("advanced"), emptyAdvanced);
-  // Compat com preferências antigas sem os campos novos.
-  const advFilters: AdvancedFilters = { ...emptyAdvanced, ...(advanced || {}) };
+  // Compat com preferências antigas sem os campos novos. Filtros de pessoa
+  // (solicitante/aprovador) passaram a guardar a CHAVE CANÔNICA de identidade:
+  // valores antigos (nome, login ou e-mail) são convertidos aqui.
+  const advFilters: AdvancedFilters = (() => {
+    const raw: AdvancedFilters = { ...emptyAdvanced, ...(advanced || {}) };
+    const toKeys = (...vals: MultiFilterValue[]) =>
+      Array.from(
+        new Set(
+          vals
+            .flatMap((v) => normalizeMultiValue(v))
+            .map((v) => canonicalUserKey(v))
+            .filter(Boolean),
+        ),
+      );
+    return {
+      ...raw,
+      requester: toKeys(raw.requester, raw.requester_email),
+      requester_email: [],
+      approver: toKeys(raw.approver),
+    };
+  })();
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [advDraft, setAdvDraft] = useState<AdvancedFilters>(advFilters);
   useEffect(() => { if (advancedOpen) setAdvDraft(advFilters); }, [advancedOpen]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1887,9 +1950,16 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     if (f.origin !== "all" && f.origin !== origin) return false;
     if (!matchesMulti(e.supplier_name, f.supplier)) return false;
     if (!matchesMulti(e.supplier_code, f.supplier_code)) return false;
-    if (!matchesMulti(e.requester_name, f.requester)) return false;
-    if (!matchesMulti(e.requester_email, f.requester_email)) return false;
-    if (!matchesMulti(e.current_approver, f.approver)) return false;
+    // Pessoas: comparação por identidade canônica (1 pessoa = 1 opção).
+    const matchesPerson = (vals: (string | null | undefined)[], filter: MultiFilterValue) => {
+      const selected = normalizeMultiValue(filter);
+      if (selected.length === 0) return true;
+      const keys = vals.map((v) => canonicalUserKey(v)).filter(Boolean);
+      if (!keys.length) return false;
+      return selected.some((sel) => keys.includes(canonicalUserKey(sel)));
+    };
+    if (!matchesPerson([e.requester_name, e.requester_email, e.created_by_email], f.requester)) return false;
+    if (!matchesPerson([e.current_approver], f.approver)) return false;
     if (!matchesMulti(e.cost_center, f.cost_center)) return false;
     if (!matchesMulti(e.project, f.project)) return false;
     if (!matchesMulti(e.currency, f.currency)) return false;
@@ -2088,9 +2158,28 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     if (statusFilter !== "all") filters.push({ op: "eq", column: "status", value: statusFilter });
     textMulti("supplier_name", f.supplier);
     textMulti("supplier_code", f.supplier_code);
-    textMulti("requester_name", f.requester);
-    textMulti("requester_email", f.requester_email);
-    textMulti("current_approver", f.approver);
+    // Pessoa selecionada = chave canônica; expandimos para todas as grafias
+    // conhecidas daquela pessoa antes de consultar o banco.
+    const personMulti = (
+      nameColumn: string,
+      emailColumn: string | null,
+      v: MultiFilterValue,
+      variants: Map<string, { names: string[]; emails: string[] }>,
+    ) => {
+      const keys = normalizeMultiValue(v).map((k) => canonicalUserKey(k)).filter(Boolean);
+      if (!keys.length) return;
+      const names = new Set<string>();
+      const emails = new Set<string>();
+      for (const key of keys) {
+        const entry = variants.get(key);
+        entry?.names.forEach((n) => names.add(n));
+        entry?.emails.forEach((e) => emails.add(e));
+      }
+      if (names.size) filters.push({ op: "in", column: nameColumn, value: Array.from(names) });
+      else if (emailColumn && emails.size) filters.push({ op: "in", column: emailColumn, value: Array.from(emails) });
+    };
+    personMulti("requester_name", "requester_email", f.requester, advancedOptions.requesterVariants);
+    personMulti("current_approver", null, f.approver, advancedOptions.approverVariants);
     textMulti("cost_center", f.cost_center);
     textMulti("project", f.project);
     like("remarks", f.remarks);
@@ -2145,7 +2234,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     } as const)[sortKey];
 
     return { filters, or, order: { column: orderColumn, ascending: sortDir === "asc" } };
-  }, [advFilters, statusFilter, searchDebounced, sortKey, sortDir]);
+  }, [advFilters, statusFilter, searchDebounced, sortKey, sortDir, advancedOptions]);
 
   useEffect(() => {
     const spec = buildServerSpec();
@@ -3200,13 +3289,6 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
                 options={advancedOptions.requester}
                 placeholder="Selecionar solicitantes"
                 onChange={(requester) => setAdvDraft({ ...advDraft, requester })}
-              />
-              <MultiFilterSelect
-                label="E-mail do solicitante"
-                values={advDraft.requester_email}
-                options={advancedOptions.requester_email}
-                placeholder="Selecionar e-mails"
-                onChange={(requester_email) => setAdvDraft({ ...advDraft, requester_email })}
               />
               <MultiFilterSelect
                 label="Aprovador"
