@@ -300,7 +300,7 @@ const moduleGroups: { title: string; keys: string[]; color: string; bgGlow: stri
     title: "Aprovações",
     color: "text-violet-400",
     bgGlow: "from-violet-500/20 to-violet-500/5",
-    keys: ["approvals", "approval_rules"],
+    keys: ["approvals"],
   },
   {
     title: "Compras (entrada)",
@@ -336,7 +336,7 @@ const moduleGroups: { title: string; keys: string[]; color: string; bgGlow: stri
     title: "Administração",
     color: "text-rose-400",
     bgGlow: "from-rose-500/20 to-rose-500/5",
-    keys: ["users", "integracoes", "notifications"],
+    keys: ["users", "approval_rules", "integracoes", "notifications"],
   },
 ];
 
