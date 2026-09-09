@@ -102,29 +102,8 @@ export default function SynapsePage() {
     setConfigOpen(true);
   };
 
-  const handleSave = async () => {
-    if (!selectedIntegration) return;
-    setSaving(true);
-    try {
-      const params: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(formParams)) {
-        if (v === "true") params[k] = true;
-        else if (v === "false") params[k] = false;
-        else params[k] = v;
-      }
-      await updateIntegration(selectedIntegration.id, {
-        is_active: formActive,
-        interval_minutes: formInterval,
-        parameters: params,
-      } as any);
-      toast.success("Configuração salva");
-      setConfigOpen(false);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao salvar");
-    } finally {
-      setSaving(false);
-    }
-  };
+
+
 
   const handleRun = async (integration: SynapseIntegration) => {
     try {
@@ -312,55 +291,36 @@ export default function SynapsePage() {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            <div className="flex items-center justify-between">
-              <Label>Integração ativa</Label>
-              <Switch checked={formActive} onCheckedChange={setFormActive} />
-            </div>
-
-            <div className="space-y-1">
-              <Label>Intervalo de execução (minutos)</Label>
-              <Input
-                type="number"
-                min={30}
-                value={formInterval}
-                onChange={(e) => setFormInterval(Number(e.target.value))}
-                className="bg-card"
-              />
-            </div>
-
-            {Object.keys(formParams).length > 0 && (
-              <div className="border-t border-border pt-4 space-y-3">
-                <p className="text-sm font-medium text-foreground">Parâmetros</p>
-                {Object.entries(formParams).map(([key, value]) => (
-                  <div key={key} className="space-y-1">
-                    <Label className="text-xs text-muted-foreground capitalize">
-                      {key.replace(/_/g, " ")}
-                    </Label>
-                    {value === "true" || value === "false" ? (
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={value === "true"}
-                          onCheckedChange={(checked) =>
-                            setFormParams((p) => ({ ...p, [key]: String(checked) }))
-                          }
-                        />
-                        <span className="text-sm text-muted-foreground">
-                          {value === "true" ? "Sim" : "Não"}
-                        </span>
-                      </div>
-                    ) : (
-                      <Input
-                        value={value}
-                        onChange={(e) =>
-                          setFormParams((p) => ({ ...p, [key]: e.target.value }))
-                        }
-                        className="bg-card"
-                      />
-                    )}
-                  </div>
-                ))}
+            <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2">
+              <p className="text-sm text-foreground">
+                Ativação, intervalo e parâmetros desta integração são configurados na tela de
+                Credenciais da empresa.
+              </p>
+              <div className="flex items-center gap-4 text-sm">
+                <span className="text-muted-foreground">
+                  Status:{" "}
+                  <span className={selectedIntegration?.is_active ? "text-green-500" : ""}>
+                    {selectedIntegration?.is_active ? "Ativa" : "Inativa"}
+                  </span>
+                </span>
+                <span className="text-muted-foreground">
+                  Intervalo: {selectedIntegration?.interval_minutes} min
+                </span>
               </div>
-            )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => {
+                  setConfigOpen(false);
+                  navigate("/integracoes/credenciais");
+                }}
+              >
+                <Settings2 className="w-4 h-4" />
+                Abrir Credenciais
+              </Button>
+            </div>
+
 
             {/* Recent logs */}
             {logs.length > 0 && (
@@ -418,13 +378,10 @@ export default function SynapsePage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfigOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              Salvar
+              Fechar
             </Button>
           </DialogFooter>
+
         </DialogContent>
       </Dialog>
 
