@@ -188,7 +188,11 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
       const uid = userData?.user?.id;
       if (!uid) throw new Error("Usuário não autenticado.");
 
-      const status: AdvanceStatus = input.submit ? "pending" : "draft";
+      // Adiantamento de cliente não passa por aprovação: ao enviar, já integra ao ERP.
+      const type = input.advance_type || advanceType;
+      const isCustomer = type === "customer";
+      const status: AdvanceStatus = input.submit ? (isCustomer ? "integrating" : "pending") : "draft";
+
 
       const items = input.items || [];
       if (!items.length) throw new Error("Adicione ao menos um item.");
