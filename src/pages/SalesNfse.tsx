@@ -1205,6 +1205,65 @@ export default function SalesNfse() {
     [emissionFor],
   );
 
+  /**
+   * Status REAL do documento no ERP (não o registro local): usa o que foi lido
+   * no Service Layer — cancelada, fechada (faturada/paga), aberta — e o estado
+   * fiscal (número da NFS-e autorizada pela prefeitura).
+   */
+  const erpDocStatusFor = useCallback(
+    (o: SalesOrderRow, inv: NfseRow | null | undefined) => {
+      const entry = Number(inv?.sap_invoice_doc_entry ?? emissionFor(o, inv).docEntry ?? 0);
+      if (!Number.isFinite(entry) || entry <= 0) {
+        return {
+          label: "Sem documento no ERP",
+          cls: "border-border bg-muted/40 text-muted-foreground",
+          detail: "Nenhuma nota fiscal foi criada para este pedido.",
+          cancelled: false,
+          docEntry: 0,
+          docNum: null as number | null,
+        };
+      }
+      const live = docStatuses[String(entry)];
+      const ref = sapInvoices.byEntry.get(entry);
+      const docNum = live?.doc_num ?? ref?.docNum ?? inv?.sap_invoice_doc_num ?? null;
+      const cancelled = live?.cancelled ?? ref?.cancelled ?? inv?.status === "cancelled";
+      if (cancelled) {
+        return {
+          label: "Cancelada no ERP",
+          cls: "border-destructive/30 bg-destructive/10 text-destructive",
+          detail: `Documento ${docNum ?? entry} cancelado no ERP.`,
+          cancelled: true,
+          docEntry: entry,
+          docNum,
+        };
+      }
+      const docStatus = live?.document_status ?? ref?.status ?? null;
+      const closed = docStatus === "bost_Close";
+      const authorized = !!(inv?.nfse_number || inv?.fiscal_doc_key);
+      if (authorized) {
+        return {
+          label: closed ? "Autorizada · fechada" : "Autorizada na prefeitura",
+          cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-600",
+          detail: `NFS-e ${inv?.nfse_number ?? ""} · documento ${docNum ?? entry}${closed ? " · quitada/fechada no ERP" : " · em aberto no ERP"}`,
+          cancelled: false,
+          docEntry: entry,
+          docNum,
+        };
+      }
+      return {
+        label: closed ? "Emitida · fechada" : "Emitida · aguardando prefeitura",
+        cls: "border-primary/30 bg-primary/10 text-primary",
+        detail: `Documento ${docNum ?? entry} criado no ERP, ainda sem número de NFS-e autorizado.`,
+        cancelled: false,
+        docEntry: entry,
+        docNum,
+      };
+    },
+    [docStatuses, sapInvoices, emissionFor],
+  );
+
+
+
   const sortedRows = useMemo(() => {
     const rows = filtered.map((o) => {
       const inv = invoiceByExpense.get(o.id) ?? null;
