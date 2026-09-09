@@ -1704,6 +1704,44 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       })
       .eq("id", expenseId);
 
+    // 5.1 Contingência 09/09/2026 — avisa por WhatsApp que o documento entrou
+    // no ERP sem o anexo, com os dados do pedido e o id do doc no SAP.
+    if (emergencyWithoutAttachment) {
+      const amount = (() => {
+        const n = Number((expense as any).total_amount || 0);
+        try {
+          return new Intl.NumberFormat("pt-BR", {
+            style: "currency",
+            currency: (expense as any).currency || "BRL",
+          }).format(n);
+        } catch {
+          return `R$ ${n.toFixed(2)}`;
+        }
+      })();
+      const msg =
+        `📎 *Documento integrado SEM anexo* (contingência 09/09)\n\n` +
+        `Empresa: ${expense.company_db || "-"}\n` +
+        `SAP DocNum: ${sapResult.docNum ?? "-"} | DocEntry: ${sapResult.docEntry ?? "-"}\n` +
+        `Documento SAP (${sapEndpoint})\n` +
+        `Fornecedor: ${(expense as any).supplier_name || "-"} (${(expense as any).supplier_code || "-"})\n` +
+        `Solicitante: ${(expense as any).requester_name || (expense as any).requester_email || "-"}\n` +
+        `Valor: ${amount}\n` +
+        `NF/Doc: ${(expense as any).document_number || "-"}\n\n` +
+        `Motivo: ${emergencyAttachmentError.slice(0, 250)}\n\n` +
+        `Abrir: https://erp-flow.cactuscorporation.com/compras?doc=${expenseId}`;
+      try {
+        const sent = await notifyEmergencyContacts(supabase as any, msg);
+        console.log(`[contingência 09/09] aviso enviado para: ${sent.join(", ") || "nenhum destino"}`);
+      } catch (e) {
+        console.warn("[contingência 09/09] falha ao avisar:", (e as Error).message);
+      }
+      await supabase
+        .from("expenses")
+        .update({ sap_attachment_status: "failed" })
+        .eq("id", expenseId);
+    }
+
+
     // 6. Audit
     await supabase.rpc("insert_audit_log", {
       p_action: isPatchMode ? "sap_document_updated" : "sap_document_created",
