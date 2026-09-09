@@ -2443,7 +2443,20 @@ export function CreateExpenseModal({
         rateio_type: !isSales ? rateioType : undefined,
         nfse_split_mode: isSales ? nfseSplitMode : undefined,
         sales_usage: isSales ? salesUsage?.code || undefined : undefined,
-        items: items.map(({ sapItem, sapCostCenter, sapProject, searchHint, ...rest }) => rest),
+        // Linhas com rateio por projeto viram uma linha por projeto, com o
+        // valor proporcional — cada (CC, projeto) segue a sua própria alçada.
+        items: items.flatMap(({ sapItem, sapCostCenter, sapProject, searchHint, projectSplit, ...rest }) => {
+          const lineTotal = Number(rest.line_total) || 0;
+          if (!isSplitEnabled(projectSplit)) return [rest];
+          return resolveSplitAmounts(projectSplit, lineTotal).map((part) => ({
+            ...rest,
+            quantity: 1,
+            unit_price: part.amount,
+            line_total: part.amount,
+            project: part.code,
+            description: `${rest.description || ""}${rest.description ? " — " : ""}Projeto ${part.code}`.trim(),
+          }));
+        }),
         files: files.length > 0 ? files : undefined,
         // Fila multi-fornecedor: informa ao chamador quantos grupos ainda
         // serão submetidos neste encadeamento. Origens como o PagCorp usam
