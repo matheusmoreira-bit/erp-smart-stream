@@ -110,7 +110,7 @@ export async function ensureCopyToTargetDocument(
     : Array.from({ length: Math.max(count, 1) }, (_, idx) => idx);
 
   for (const field of FIELD_VARIANTS) {
-    const ok = await patchLines(baseUrl, cookies, absoluteEntry, lineNumbers, field);
+    const ok = await patchLines(baseUrl, cookies, absoluteEntry, lineNumbers, field, lines);
 
     const after = await fetchLines(baseUrl, cookies, absoluteEntry);
     if (!after) {
@@ -127,10 +127,11 @@ export async function ensureCopyToTargetDocument(
     // Última tentativa da variante: linha a linha (algumas versões do SL
     // ignoram o PATCH em lote quando há linhas já marcadas).
     for (const ln of lineNumbers) {
-      await patchLines(baseUrl, cookies, absoluteEntry, [ln], field);
+      await patchLines(baseUrl, cookies, absoluteEntry, [ln], field, lines);
     }
     const final = await fetchLines(baseUrl, cookies, absoluteEntry);
     if (!final || final.every(isFlagged)) return true;
+    lines = final;
     lineNumbers = final.filter((l) => !isFlagged(l)).map((l, idx) => (typeof l?.Line === "number" ? l.Line : idx));
   }
 
