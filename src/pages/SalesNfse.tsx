@@ -1325,8 +1325,9 @@ export default function SalesNfse() {
             Nenhum pedido de venda encontrado para esta empresa.
           </div>
         ) : (
-          <div className="rounded-lg border border-border overflow-hidden bg-card">
-            <table className="w-full text-sm">
+          <div className="rounded-lg border border-border overflow-x-auto bg-card">
+            <table className="w-full min-w-[1180px] text-sm">
+
               <thead className="bg-muted/40 text-xs text-muted-foreground">
                 <tr>
                   <SortTh label="Pedido" sortKey="pedido" active={sort.key === "pedido"} dir={sort.dir} onSort={toggleSort} />
