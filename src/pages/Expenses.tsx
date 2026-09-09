@@ -1950,9 +1950,16 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     if (f.origin !== "all" && f.origin !== origin) return false;
     if (!matchesMulti(e.supplier_name, f.supplier)) return false;
     if (!matchesMulti(e.supplier_code, f.supplier_code)) return false;
-    if (!matchesMulti(e.requester_name, f.requester)) return false;
-    if (!matchesMulti(e.requester_email, f.requester_email)) return false;
-    if (!matchesMulti(e.current_approver, f.approver)) return false;
+    // Pessoas: comparação por identidade canônica (1 pessoa = 1 opção).
+    const matchesPerson = (vals: (string | null | undefined)[], filter: MultiFilterValue) => {
+      const selected = normalizeMultiValue(filter);
+      if (selected.length === 0) return true;
+      const keys = vals.map((v) => canonicalUserKey(v)).filter(Boolean);
+      if (!keys.length) return false;
+      return selected.some((sel) => keys.includes(canonicalUserKey(sel)));
+    };
+    if (!matchesPerson([e.requester_name, e.requester_email, e.created_by_email], f.requester)) return false;
+    if (!matchesPerson([e.current_approver], f.approver)) return false;
     if (!matchesMulti(e.cost_center, f.cost_center)) return false;
     if (!matchesMulti(e.project, f.project)) return false;
     if (!matchesMulti(e.currency, f.currency)) return false;
