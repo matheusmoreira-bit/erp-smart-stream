@@ -1443,6 +1443,14 @@ export default function SalesNfse() {
                       </td>
 
                       <td className="px-3 py-2">
+                        <span
+                          className={`inline-flex items-center whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium ${status.cls}`}
+                        >
+                          {status.label}
+                        </span>
+                      </td>
+
+                      <td className="px-3 py-2">
                         <Badge variant="outline" className="text-[11px]">
                           {o.source === "erp_flow" ? "ERP Flow" : "ERP"}
                         </Badge>
@@ -1450,6 +1458,7 @@ export default function SalesNfse() {
                           <span className="ml-2 text-[11px] text-muted-foreground">fechado</span>
                         )}
                       </td>
+
 
                       <td className="px-3 py-2">
                         <div className="font-medium">{o.supplier_name}</div>
