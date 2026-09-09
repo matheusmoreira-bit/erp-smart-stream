@@ -85,11 +85,11 @@ export const NAV_MODULES: NavModule[] = [
     match: ["/financeiro"],
     items: [
       { label: "Contas a Pagar", path: "/financeiro/contas-a-pagar", moduleKey: "financial_review" },
-      { label: "Reconciliação de Adiantamentos", path: "/financeiro/reconciliacao", moduleKey: "financial_review" },
       { label: "Previsão de Caixa", path: "/financeiro/previsao-caixa", moduleKey: "financial_review" },
-      { label: "Adiantamentos", path: "/financeiro/adiantamentos", moduleKey: "expenses" },
-      { label: "NF de Entrada", path: "/financeiro/nf-entrada", moduleKey: "nf_entrada" },
+      { label: "Contas a Receber", path: "/vendas/recebimentos", moduleKey: "sales" },
+      { label: "Reconciliação de Adiantamentos", path: "/financeiro/reconciliacao", moduleKey: "financial_review" },
     ],
+
   },
   {
     key: "auditoria",
