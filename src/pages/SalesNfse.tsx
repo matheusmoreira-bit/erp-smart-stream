@@ -513,49 +513,6 @@ interface SapInvoiceRef {
 
 type NfseSortKey = "pedido" | "status" | "origem" | "cliente" | "data" | "valor" | "nfse";
 
-/** Cabeçalho clicável com indicador de ordenação. */
-function SortTh({
-  label,
-  sortKey,
-  active,
-  dir,
-  onSort,
-  align = "left",
-  className = "",
-}: {
-  label: string;
-  sortKey: NfseSortKey;
-  active: boolean;
-  dir: "asc" | "desc";
-  onSort: (key: NfseSortKey) => void;
-  align?: "left" | "right";
-  className?: string;
-}) {
-  return (
-    <th className={`px-3 py-2 font-medium ${align === "right" ? "text-right" : "text-left"} ${className}`}>
-      <button
-        type="button"
-        onClick={() => onSort(sortKey)}
-        className={`inline-flex items-center gap-1 rounded transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-          active ? "text-foreground" : ""
-        }`}
-        aria-label={`Ordenar por ${label}`}
-      >
-        {label}
-        {active ? (
-          dir === "asc" ? (
-            <ArrowUp className="w-3 h-3" />
-          ) : (
-            <ArrowDown className="w-3 h-3" />
-          )
-        ) : (
-          <ArrowUpDown className="w-3 h-3 opacity-40" />
-        )}
-      </button>
-    </th>
-  );
-}
-
 /* ── página ──────────────────────────────────────────────── */
 
 
