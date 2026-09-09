@@ -499,7 +499,12 @@ export function UberExpenseModal({
       .sort((a, b) => a.cost_center_code.localeCompare(b.cost_center_code, "pt-BR", { numeric: true }));
   }, [effectiveCostCenterForUser, userRows]);
 
-  const missingProjects = costCenterRows.filter((row) => !lineProjects[row.row_key]);
+  // Uma linha está pronta quando tem projeto único OU rateio cobrindo 100%.
+  const missingProjects = costCenterRows.filter((row) => {
+    const split = lineSplits[row.row_key];
+    if (isSplitEnabled(split)) return !isSplitComplete(split, row.amount);
+    return !lineProjects[row.row_key];
+  });
   const totalAmount = costCenterRows.reduce((sum, row) => sum + row.amount, 0);
   const supplierReady = !!supplier?.code;
   const itemReady = !!item?.code;
