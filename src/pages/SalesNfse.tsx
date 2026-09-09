@@ -566,8 +566,15 @@ export default function SalesNfse() {
   const [detailOrder, setDetailOrder] = useState<SalesOrderRow | null>(null);
   const [retryTarget, setRetryTarget] = useState<SalesOrderRow | null>(null);
   const [baixaTarget, setBaixaTarget] = useState<{ order: SalesOrderRow; inv: NfseRow; saldoResidual: number } | null>(null);
+  // Status real dos documentos no ERP (consultado no Service Layer)
+  const [docStatuses, setDocStatuses] = useState<Record<string, SapDocStatus>>({});
+  const [docStatusLoading, setDocStatusLoading] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<{ order: SalesOrderRow; inv: NfseRow } | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelling, setCancelling] = useState(false);
   const uploadTargetRef = useRef<{ order: SalesOrderRow; inv: NfseRow | null } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
 
 
   // envio de e-mail
