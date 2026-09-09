@@ -358,6 +358,18 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
     setItems((p) => p.filter((_, idx) => idx !== i));
   };
 
+  const duplicateItem = (i: number) => {
+    setItems((p) => {
+      const src = p[i];
+      if (!src) return p;
+      const updated = [...p];
+      updated.splice(i + 1, 0, { ...src });
+      return updated;
+    });
+    toast.success(`Item ${i + 1} duplicado`);
+  };
+
+
   const total = items.reduce((s, i) => s + i.line_total, 0);
 
   const handleSave = async () => {
