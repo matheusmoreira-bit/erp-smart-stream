@@ -353,6 +353,27 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
     },
     [fetchAll],
   );
+  /** Reconcilia (LCM) o adiantamento informando a conta bancária de recebimento. */
+  const reconcile = useCallback(
+    async (
+      id: string,
+      params: { data_recebimento: string; conta_codigo: string; conta_nome?: string | null },
+    ) => {
+      const res = await sapFunctionFetch("advance-reconcile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ advance_id: id, ...params }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.errorMessage || data?.error || `Falha ao reconciliar (${res.status})`);
+      }
+      await fetchAll();
+      return data as { sapDocEntry?: number | null };
+    },
+    [fetchAll],
+  );
 
-  return { items, loading, error, refresh: fetchAll, create, approve, reject, retry, remove };
+  return { items, loading, error, refresh: fetchAll, create, approve, reject, retry, remove, reconcile };
+
 }
