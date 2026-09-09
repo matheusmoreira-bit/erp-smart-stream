@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { docNumberLabel, isInternalDoc, matchesDocQuery } from "@/lib/doc-number";
+import { DocKindOriginChip, DOC_KIND_LABEL, type DocKind as SharedDocKind } from "@/components/DocKindOriginChip";
+
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
 import { useMyCapabilities } from "@/hooks/useMyCapabilities";
