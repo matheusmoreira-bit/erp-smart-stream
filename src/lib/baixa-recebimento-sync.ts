@@ -97,3 +97,35 @@ export async function syncBaixaRecebimentoToSap(
   return callBaixaFunction({ action: "syncExisting", baixaId });
 }
 
+
+export interface AvailableCustomerAdvance {
+  advanceId: string | null;
+  source: "flow" | "sap";
+  sapDocEntry: number;
+  sapDocNum: number | null;
+  date: string | null;
+  currency: string;
+  total: number;
+  applied: number;
+  available: number;
+  remarks: string | null;
+}
+
+/** Lista adiantamentos do cliente já baixados e com saldo disponível para abater NFs. */
+export async function listCustomerAdvances(
+  cardCode: string,
+): Promise<{ advances: AvailableCustomerAdvance[]; sapError: string | null }> {
+  const response = await sapFunctionFetch("baixa-recebimento", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "listCustomerAdvances", cardCode }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) {
+    throw new Error(data.errorMessage || data.error || `Falha ao buscar adiantamentos (${response.status})`);
+  }
+  return {
+    advances: (data.advances || []) as AvailableCustomerAdvance[],
+    sapError: data.sapError || null,
+  };
+}
