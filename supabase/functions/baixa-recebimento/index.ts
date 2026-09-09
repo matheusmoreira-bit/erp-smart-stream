@@ -234,6 +234,19 @@ async function syncExistingBaixa(baixaId: string, headers: ReturnType<typeof par
     return json(200, { ok: false, baixaId, errorMessage: msg });
   }
 
+  // Adiantamentos já baixados aplicados nesta baixa (abatimento).
+  const { data: appRows } = await sb
+    .from("advance_invoice_applications")
+    .select("sap_advance_doc_entry,amount")
+    .eq("baixa_id", baixaId);
+  const advanceMap = new Map<number, number>();
+  for (const row of (appRows || []) as Array<{ sap_advance_doc_entry: number | null; amount: number }>) {
+    const entry = Number(row.sap_advance_doc_entry);
+    if (!Number.isFinite(entry) || entry <= 0) continue;
+    advanceMap.set(entry, (advanceMap.get(entry) || 0) + Number(row.amount || 0));
+  }
+  const advances = [...advanceMap.entries()].map(([doc_entry, amount]) => ({ doc_entry, amount }));
+
   const baseUrl = await getSapBaseUrl(headers.companyDB);
   const cookie = `B1SESSION=${headers.sapSession}${headers.routeId ? `; ROUTEID=${headers.routeId}` : ""}`;
 
@@ -249,8 +262,9 @@ async function syncExistingBaixa(baixaId: string, headers: ReturnType<typeof par
   const sapResp = await fetch(`${baseUrl}/IncomingPayments`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Cookie: cookie },
-    body: JSON.stringify(buildIncomingPayment(baixa as Record<string, unknown>, itens as Array<Record<string, unknown>>, bplId)),
+    body: JSON.stringify(buildIncomingPayment(baixa as Record<string, unknown>, itens as Array<Record<string, unknown>>, bplId, advances)),
   });
+
   const text = await sapResp.text();
   let payload: unknown = null;
   try { payload = text ? JSON.parse(text) : null; } catch { payload = text; }
