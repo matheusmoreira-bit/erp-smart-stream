@@ -1175,8 +1175,11 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       if (existingAttachmentEntry > 0) {
         attachmentStatus = "success";
         console.log(`Reaproveitando anexo já enviado ao SAP — AbsoluteEntry=${existingAttachmentEntry}`);
+        // Também em edição/reintegração: reforça "Copiar para documento de destino".
+        await ensureCopyToTargetDocument(sapBaseUrl, sapCookies, existingAttachmentEntry);
         return existingAttachmentEntry;
       }
+
 
       // Pedidos de venda não exigem anexo (regra válida para todas as empresas):
       // quando não há anexo, ou a base tem anexos desativados, seguimos a
