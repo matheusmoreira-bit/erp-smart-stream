@@ -37,6 +37,15 @@ export interface CreateBaixaInput {
     /** Linha do JournalEntry — obrigatório quando invoiceType='journal_entry'. */
     invoiceDocLine?: number | null;
   }>;
+  /** Adiantamentos já baixados aplicados como abatimento nas NFs desta baixa. */
+  adiantamentos?: Array<{
+    advanceId?: string | null;
+    sapDocEntry: number;
+    sapDocNum?: number | null;
+    amount: number;
+    source?: "flow" | "sap";
+  }>;
+
 }
 
 async function callBaixaFunction(body: Record<string, unknown>): Promise<SyncBaixaResult> {
