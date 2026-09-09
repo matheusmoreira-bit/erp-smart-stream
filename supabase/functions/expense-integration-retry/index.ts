@@ -13,6 +13,7 @@ import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
 import { isNativeErpExpenseOrigin } from "../_shared/expense-origin.ts";
 import { listManualExpenseCancellations } from "../_shared/expense-integration-cancel.ts";
+import { EMERGENCY_ALERT_PHONE } from "../_shared/attachment-emergency.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
