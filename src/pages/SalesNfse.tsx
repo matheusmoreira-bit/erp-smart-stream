@@ -1339,6 +1339,45 @@ export default function SalesNfse() {
     }
   }, [confirmOrder, load, companyDb]);
 
+  /** Cancela a nota no ERP (validação e credenciais ficam no servidor). */
+  const cancelInvoice = useCallback(async () => {
+    if (!cancelTarget) return;
+    const entry = Number(cancelTarget.inv.sap_invoice_doc_entry ?? 0);
+    if (!entry) {
+      toast.error("Nota sem documento no ERP para cancelar.");
+      return;
+    }
+    setCancelling(true);
+    try {
+      const res = await sapFunctionFetch("sales-nfse-emit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "cancel",
+          company_db: companyDb,
+          sap_invoice_doc_entry: entry,
+          reason: cancelReason.trim(),
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body?.error) throw new Error(body?.error || `Falha ao cancelar (${res.status})`);
+      toast.success(
+        body?.already_cancelled
+          ? "Esta nota já estava cancelada no ERP."
+          : `Nota ${body?.doc_num ?? entry} cancelada no ERP.`,
+      );
+      setCancelTarget(null);
+      setCancelReason("");
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setCancelling(false);
+    }
+  }, [cancelTarget, cancelReason, companyDb, load]);
+
+
+
   const syncStatus = useCallback(async () => {
     setSyncing(true);
     try {
