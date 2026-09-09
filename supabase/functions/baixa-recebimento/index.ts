@@ -307,6 +307,121 @@ async function syncExistingBaixa(baixaId: string, headers: ReturnType<typeof par
   return json(200, { ok: true, baixaId, sapDocEntry });
 }
 
+/**
+ * Lista adiantamentos de cliente já baixados (reconciliados) disponíveis para
+ * abater NFs: os criados no ERP Flow e os criados diretamente no SAP.
+ */
+async function listCustomerAdvances(
+  cardCode: string,
+  headers: NonNullable<ReturnType<typeof parseSapHeaders>>,
+  companyDb: string,
+) {
+  const sb = adminClient();
+
+  const { data: applied } = await sb
+    .from("advance_invoice_applications")
+    .select("sap_advance_doc_entry,amount")
+    .eq("company_db", companyDb)
+    .eq("card_code", cardCode);
+  const appliedMap = new Map<number, number>();
+  for (const row of (applied || []) as Array<{ sap_advance_doc_entry: number | null; amount: number }>) {
+    const entry = Number(row.sap_advance_doc_entry);
+    if (!Number.isFinite(entry) || entry <= 0) continue;
+    appliedMap.set(entry, (appliedMap.get(entry) || 0) + Number(row.amount || 0));
+  }
+
+  const { data: flowRows } = await sb
+    .from("advance_payments")
+    .select("id,sap_doc_entry,sap_doc_num,amount,currency,reconciliation_date,reconciled_at,remarks")
+    .eq("company_db", companyDb)
+    .eq("advance_type", "customer")
+    .eq("supplier_card_code", cardCode)
+    .not("sap_doc_entry", "is", null)
+    .not("reconciled_at", "is", null);
+
+  type AdvanceOption = {
+    advanceId: string | null;
+    source: "flow" | "sap";
+    sapDocEntry: number;
+    sapDocNum: number | null;
+    date: string | null;
+    currency: string;
+    total: number;
+    applied: number;
+    available: number;
+    remarks: string | null;
+  };
+
+  const options: AdvanceOption[] = [];
+  const seen = new Set<number>();
+  for (const r of (flowRows || []) as Array<Record<string, unknown>>) {
+    const entry = Number(r.sap_doc_entry);
+    if (!Number.isFinite(entry) || entry <= 0) continue;
+    const total = Number(r.amount || 0);
+    const used = appliedMap.get(entry) || 0;
+    seen.add(entry);
+    options.push({
+      advanceId: String(r.id),
+      source: "flow",
+      sapDocEntry: entry,
+      sapDocNum: r.sap_doc_num != null ? Number(r.sap_doc_num) : null,
+      date: (r.reconciliation_date as string) || (r.reconciled_at as string) || null,
+      currency: String(r.currency || "BRL"),
+      total,
+      applied: used,
+      available: +(total - used).toFixed(2),
+      remarks: (r.remarks as string) || null,
+    });
+  }
+
+  // Adiantamentos criados direto no SAP (já pagos pelo cliente).
+  let sapError: string | null = null;
+  try {
+    const baseUrl = await getSapBaseUrl(companyDb);
+    const cookie = `B1SESSION=${headers.sapSession}${headers.routeId ? `; ROUTEID=${headers.routeId}` : ""}`;
+    const filter = encodeURIComponent(`CardCode eq '${cardCode.replace(/'/g, "''")}'`);
+    const url = `${baseUrl}/DownPayments?$filter=${filter}&$select=DocEntry,DocNum,DocDate,DocTotal,PaidToDate,DocCurrency,DocumentStatus,Cancelled&$orderby=DocEntry desc&$top=50`;
+    const r = await fetch(url, { headers: { Cookie: cookie, Prefer: "odata.maxpagesize=50" } });
+    if (r.ok) {
+      const j = await r.json().catch(() => null) as { value?: Array<Record<string, unknown>> } | null;
+      for (const d of j?.value || []) {
+        const entry = Number(d.DocEntry);
+        if (!Number.isFinite(entry) || entry <= 0 || seen.has(entry)) continue;
+        if (String(d.Cancelled || "tNO") === "tYES") continue;
+        const paid = Number(d.PaidToDate || 0);
+        if (paid <= 0) continue; // só adiantamentos já baixados
+        const used = appliedMap.get(entry) || 0;
+        const available = +(paid - used).toFixed(2);
+        if (available <= 0.005) continue;
+        options.push({
+          advanceId: null,
+          source: "sap",
+          sapDocEntry: entry,
+          sapDocNum: d.DocNum != null ? Number(d.DocNum) : null,
+          date: typeof d.DocDate === "string" ? d.DocDate.slice(0, 10) : null,
+          currency: String(d.DocCurrency || "BRL"),
+          total: Number(d.DocTotal || paid),
+          applied: used,
+          available,
+          remarks: null,
+        });
+      }
+    } else {
+      sapError = extractSapError(await r.json().catch(() => null), `SAP recusou a consulta de adiantamentos (${r.status}).`);
+    }
+  } catch (e) {
+    sapError = (e as Error).message;
+  }
+
+  return json(200, {
+    ok: true,
+    advances: options.filter((o) => o.available > 0.005),
+    sapError,
+  });
+}
+
+
+
 Deno.serve(withEdgeMetrics("baixa-recebimento", async (req, _mctx) => {
   const foreignOrigin = rejectForeignOrigin(req);
   if (foreignOrigin) return foreignOrigin;
