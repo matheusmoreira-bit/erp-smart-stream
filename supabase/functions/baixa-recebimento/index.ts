@@ -11,6 +11,14 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+type AdvanceApplicationInput = {
+  advanceId?: string | null;
+  sapDocEntry: number;
+  sapDocNum?: number | null;
+  amount: number;
+  source?: "flow" | "sap";
+};
+
 type BaixaInput = {
   companyDb: string;
   cardCode: string;
@@ -29,7 +37,10 @@ type BaixaInput = {
     invoiceType?: "invoice" | "journal_entry";
     invoiceDocLine?: number | null;
   }>;
+  /** Adiantamentos já baixados aplicados nesta baixa (abatimento do valor da NF). */
+  adiantamentos?: AdvanceApplicationInput[];
 };
+
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
