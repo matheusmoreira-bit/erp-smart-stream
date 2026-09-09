@@ -54,6 +54,8 @@ export function CachedSearchCombobox({
   footerHint,
   isOptionDisabled,
   getDisabledReason,
+  pinnedAction,
+
 }: CachedSearchComboboxProps) {
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -165,8 +167,9 @@ export function CachedSearchCombobox({
     ? `${[value.name, value.code].filter(Boolean).join(" — ")}${value.extra ? ` (${onlyDigits(value.extra).length >= 11 ? formatCnpjCpf(value.extra) : value.extra})` : ""}`
     : "";
 
-  const showResults = isOpen && filtered.length > 0 && dropdownPosition;
-  const showEmptyState = isOpen && !isLoading && filtered.length === 0 && dropdownPosition;
+  const showResults = isOpen && (filtered.length > 0 || !!pinnedAction) && dropdownPosition;
+  const showEmptyState = isOpen && !isLoading && filtered.length === 0 && !pinnedAction && dropdownPosition;
+
   const dropdownStyle: CSSProperties | undefined = dropdownPosition
     ? {
         position: portalContainer ? "absolute" : "fixed",
