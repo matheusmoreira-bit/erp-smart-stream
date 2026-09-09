@@ -633,17 +633,30 @@ export function UberExpenseModal({
     try {
       await saveProjectDefaults();
 
-      const items = costCenterRows.map((row) => {
-        const project = lineProjects[row.row_key];
-        return {
+      const items = costCenterRows.flatMap((row) => {
+        const split = lineSplits[row.row_key];
+        const base = {
           item_code: item.code,
           description: `Transporte de passageiros Uber - ${row.cost_center_label}`,
           quantity: 1,
+          cost_center: row.cost_center_code,
+        };
+        if (isSplitEnabled(split)) {
+          // Uma linha por projeto rateado, com o valor proporcional.
+          return resolveSplitAmounts(split, row.amount).map((part) => ({
+            ...base,
+            description: `${base.description} - Projeto ${part.code}`,
+            unit_price: part.amount,
+            line_total: part.amount,
+            project: part.code,
+          }));
+        }
+        return [{
+          ...base,
           unit_price: row.amount,
           line_total: row.amount,
-          cost_center: row.cost_center_code,
-          project: project?.code || "",
-        };
+          project: lineProjects[row.row_key]?.code || "",
+        }];
       });
 
       await onCreate({
