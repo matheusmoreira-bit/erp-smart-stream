@@ -74,8 +74,8 @@ async function patchLines(
       }),
     });
     if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      console.warn(`Attachments2 PATCH ${field} falhou [${res.status}]: ${txt.slice(0, 200)}`);
+      const txt = (await res.text().catch(() => "")).replace(/\s+/g, " ");
+      console.warn(`Attachments2 PATCH ${field} falhou [${res.status}]: ${txt.slice(0, 400)}`);
       return false;
     }
     return true;
