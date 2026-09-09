@@ -497,6 +497,25 @@ export function CreateExpenseModal({
   );
 
 
+  /** Linhas cujo alerta atual veio de um rateio (para reabrir o rateio no "Alterar"). */
+  const ccAlertSplitLinesRef = useRef<Set<number>>(new Set());
+
+  /** Rateio: valida cada projeto do rateio contra o centro de custo da linha. */
+  const maybeTriggerCcAlertForSplit = useCallback(
+    (lineIndex: number, cc: SapSearchOption | null, split: ProjectSplit | null) => {
+      if (!ccAlertEnabled || !split) return;
+      const flagged = split.entries.filter((e) => shouldAlertCcProject(cc?.code, e.name, e.code));
+      if (!flagged.length) return;
+      ccAlertSplitLinesRef.current.add(lineIndex);
+      const infos = flagged.map((e) =>
+        buildCcAlertInfo(lineIndex, cc, { code: e.code, name: e.name } as SapSearchOption),
+      );
+      ccAlertQueueRef.current = [...infos.slice(1), ...ccAlertQueueRef.current];
+      openCcAlert(infos[0]);
+    },
+    [ccAlertEnabled, openCcAlert, buildCcAlertInfo],
+  );
+
   const advanceCcAlertQueue = useCallback(() => {
     const next = ccAlertQueueRef.current.shift();
     if (next) openCcAlert(next);
@@ -513,15 +532,28 @@ export function CreateExpenseModal({
     const idx = ccAlert?.lineIndex ?? -1;
     recordCcProjectAlertDecision(ccAlertIdRef.current, "changed", null);
     if (idx >= 0) {
+      const fromSplit = ccAlertSplitLinesRef.current.has(idx);
       setItems((prev) => {
         const updated = [...prev];
-        if (updated[idx]) updated[idx] = { ...updated[idx], sapProject: null, project: "" };
+        if (updated[idx]) {
+          updated[idx] = fromSplit
+            ? { ...updated[idx], projectSplit: null }
+            : { ...updated[idx], sapProject: null, project: "" };
+        }
         return updated;
       });
-      toast.info(`Item ${idx + 1}: selecione o projeto/marca correto.`);
+      if (fromSplit) {
+        ccAlertSplitLinesRef.current.delete(idx);
+        ccAlertQueueRef.current = ccAlertQueueRef.current.filter((info) => info.lineIndex !== idx);
+        setSplitLineIndex(idx);
+        toast.info(`Item ${idx + 1}: revise os projetos do rateio.`);
+      } else {
+        toast.info(`Item ${idx + 1}: selecione o projeto/marca correto.`);
+      }
     }
     advanceCcAlertQueue();
   }, [ccAlert, advanceCcAlertQueue]);
+
 
 
 
