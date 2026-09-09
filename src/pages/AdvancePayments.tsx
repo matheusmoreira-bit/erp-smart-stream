@@ -239,7 +239,7 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
                   >
                     <Link2 className="w-4 h-4" />
                   </Button>
-                  {a.status === "pending" && (
+                  {!isCustomerAdvance && a.status === "pending" && (
                     <>
                       <Button size="icon" variant="outline" onClick={() => handleApprove(a)} disabled={busyId === a.id} aria-label="Aprovar" className="h-10 w-10 sm:h-9 sm:w-9">
                         {busyId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
@@ -249,6 +249,17 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
                       </Button>
                     </>
                   )}
+                  {isCustomerAdvance && a.status === "integrated" && !a.reconciled_at && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setReconcileTarget(a)}
+                      className="h-10 sm:h-9 gap-1.5"
+                    >
+                      <Wallet className="w-4 h-4" /> Reconciliar
+                    </Button>
+                  )}
+
                   {a.status === "failed" && (
                     <Button size="icon" variant="outline" onClick={() => handleRetry(a)} disabled={busyId === a.id} aria-label="Reintegrar" className="h-10 w-10 sm:h-9 sm:w-9">
                       {busyId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4" />}
