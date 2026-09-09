@@ -16,6 +16,10 @@ import {
   Copy,
   ExternalLink,
   Download,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -507,7 +511,53 @@ interface SapInvoiceRef {
   status?: string | null;
 }
 
+type NfseSortKey = "pedido" | "status" | "origem" | "cliente" | "data" | "valor" | "nfse";
+
+/** Cabeçalho clicável com indicador de ordenação. */
+function SortTh({
+  label,
+  sortKey,
+  active,
+  dir,
+  onSort,
+  align = "left",
+  className = "",
+}: {
+  label: string;
+  sortKey: NfseSortKey;
+  active: boolean;
+  dir: "asc" | "desc";
+  onSort: (key: NfseSortKey) => void;
+  align?: "left" | "right";
+  className?: string;
+}) {
+  return (
+    <th className={`px-3 py-2 font-medium ${align === "right" ? "text-right" : "text-left"} ${className}`}>
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className={`inline-flex items-center gap-1 rounded transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+          active ? "text-foreground" : ""
+        }`}
+        aria-label={`Ordenar por ${label}`}
+      >
+        {label}
+        {active ? (
+          dir === "asc" ? (
+            <ArrowUp className="w-3 h-3" />
+          ) : (
+            <ArrowDown className="w-3 h-3" />
+          )
+        ) : (
+          <ArrowUpDown className="w-3 h-3 opacity-40" />
+        )}
+      </button>
+    </th>
+  );
+}
+
 /* ── página ──────────────────────────────────────────────── */
+
 
 export default function SalesNfse() {
   const { session, logout } = useSap();
@@ -531,6 +581,13 @@ export default function SalesNfse() {
   const [erpWarning, setErpWarning] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [originFilter, setOriginFilter] = useState<"all" | "erp_flow" | "erp">("all");
+  const [sort, setSort] = useState<{ key: NfseSortKey; dir: "asc" | "desc" }>({ key: "data", dir: "desc" });
+  const toggleSort = useCallback(
+    (key: NfseSortKey) =>
+      setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" })),
+    [],
+  );
+
   const [confirmOrder, setConfirmOrder] = useState<SalesOrderRow | null>(null);
   const [emitting, setEmitting] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -1111,7 +1168,60 @@ export default function SalesNfse() {
     });
   }, [orders, search, invoiceByExpense, originFilter]);
 
+  /** Situação consolidada da nota, usada no chip de status e na ordenação. */
+  const statusFor = useCallback(
+    (o: SalesOrderRow, inv: NfseRow | null | undefined) => {
+      const em = emissionFor(o, inv);
+      if (em.emitted && inv?.status === "authorized")
+        return { rank: 1, label: "Autorizada", cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-600" };
+      if (em.emitted) return { rank: 2, label: "Emitida", cls: "border-primary/30 bg-primary/10 text-primary" };
+      if (em.localStale)
+        return { rank: 3, label: "Cancelada no ERP", cls: "border-amber-500/40 bg-amber-500/10 text-amber-600" };
+      if (inv?.status === "failed")
+        return { rank: 4, label: "Falha na emissão", cls: "border-destructive/30 bg-destructive/10 text-destructive" };
+      if (!o.sap_doc_entry)
+        return { rank: 5, label: "Não integrado", cls: "border-border bg-muted/40 text-muted-foreground" };
+      return { rank: 6, label: "Aguardando emissão", cls: "border-border bg-muted/40 text-muted-foreground" };
+    },
+    [emissionFor],
+  );
+
+  const sortedRows = useMemo(() => {
+    const rows = filtered.map((o) => {
+      const inv = invoiceByExpense.get(o.id) ?? null;
+      return { o, inv, emission: emissionFor(o, inv), status: statusFor(o, inv) };
+    });
+    const dir = sort.dir === "asc" ? 1 : -1;
+    const val = (r: (typeof rows)[number]) => {
+      switch (sort.key) {
+        case "pedido":
+          return Number(r.o.sap_doc_num || 0);
+        case "status":
+          return r.status.rank;
+        case "origem":
+          return r.o.source === "erp_flow" ? 0 : 1;
+        case "cliente":
+          return (r.o.supplier_name || "").toLowerCase();
+        case "valor":
+          return Number(r.o.total_amount || 0);
+        case "nfse":
+          return Number(r.inv?.nfse_number || 0);
+        case "data":
+        default:
+          return r.o.doc_date ? new Date(r.o.doc_date).getTime() : 0;
+      }
+    };
+    return rows.sort((a, b) => {
+      const va = val(a);
+      const vb = val(b);
+      if (typeof va === "string" || typeof vb === "string")
+        return String(va).localeCompare(String(vb), "pt-BR") * dir;
+      return (Number(va) - Number(vb)) * dir;
+    });
+  }, [filtered, invoiceByExpense, emissionFor, statusFor, sort]);
+
   const pendentes = filtered.filter((o) => !emissionFor(o, invoiceByExpense.get(o.id)).emitted);
+
 
   const emit = useCallback(async () => {
     if (!confirmOrder) return;
@@ -1269,26 +1379,26 @@ export default function SalesNfse() {
             <table className="w-full text-sm">
               <thead className="bg-muted/40 text-xs text-muted-foreground">
                 <tr>
-                  <th className="text-left px-3 py-2 font-medium">Pedido</th>
-                  <th className="text-left px-3 py-2 font-medium">Origem</th>
-                  <th className="text-left px-3 py-2 font-medium">Cliente</th>
-                  <th className="text-left px-3 py-2 font-medium">Data</th>
-                  <th className="text-right px-3 py-2 font-medium">Valor</th>
-                  <th className="text-left px-3 py-2 font-medium">NFS-e</th>
+                  <SortTh label="Pedido" sortKey="pedido" active={sort.key === "pedido"} dir={sort.dir} onSort={toggleSort} />
+                  <SortTh label="Status" sortKey="status" active={sort.key === "status"} dir={sort.dir} onSort={toggleSort} />
+                  <SortTh label="Origem" sortKey="origem" active={sort.key === "origem"} dir={sort.dir} onSort={toggleSort} />
+                  <SortTh label="Cliente" sortKey="cliente" active={sort.key === "cliente"} dir={sort.dir} onSort={toggleSort} />
+                  <SortTh label="Data" sortKey="data" active={sort.key === "data"} dir={sort.dir} onSort={toggleSort} />
+                  <SortTh label="Valor" sortKey="valor" active={sort.key === "valor"} dir={sort.dir} onSort={toggleSort} align="right" />
+                  <SortTh label="NFS-e" sortKey="nfse" active={sort.key === "nfse"} dir={sort.dir} onSort={toggleSort} />
                   <th className="text-left px-3 py-2 font-medium">PDF</th>
-                  <th className="text-right px-3 py-2 font-medium">Ação</th>
+                  <th className="text-right px-3 py-2 font-medium">Ações</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((o) => {
-                  const inv = invoiceByExpense.get(o.id);
-                  const emission = emissionFor(o, inv);
+                {sortedRows.map(({ o, inv, emission, status }) => {
                   const emitted = emission.emitted;
                   const saldoResidual = saldoResidualFor(inv);
                   const accessKey = normalizeNfseAccessKey(inv?.fiscal_doc_key);
                   const publicConsultationUrl = buildNfsePublicConsultationUrl(accessKey);
                   return (
-                    <tr key={o.id} className="border-t border-border/60">
+                    <tr key={o.id} className="border-t border-border/60 align-top hover:bg-muted/20 transition-colors">
+
                       <td className="px-3 py-2 font-mono text-xs">
                         {o.sap_doc_num ? `#${o.sap_doc_num}` : "—"}
                         {!o.sap_doc_entry && (
@@ -1337,6 +1447,14 @@ export default function SalesNfse() {
                       </td>
 
                       <td className="px-3 py-2">
+                        <span
+                          className={`inline-flex items-center whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium ${status.cls}`}
+                        >
+                          {status.label}
+                        </span>
+                      </td>
+
+                      <td className="px-3 py-2">
                         <Badge variant="outline" className="text-[11px]">
                           {o.source === "erp_flow" ? "ERP Flow" : "ERP"}
                         </Badge>
@@ -1344,6 +1462,7 @@ export default function SalesNfse() {
                           <span className="ml-2 text-[11px] text-muted-foreground">fechado</span>
                         )}
                       </td>
+
 
                       <td className="px-3 py-2">
                         <div className="font-medium">{o.supplier_name}</div>
