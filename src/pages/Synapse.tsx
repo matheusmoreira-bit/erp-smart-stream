@@ -124,7 +124,7 @@ export default function SynapsePage() {
     <div className="min-h-screen bg-background">
       <PageTitle title="Automações" />
       <header className="border-b border-border px-6 py-6">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" aria-label="Voltar" onClick={() => navigate("/")}>
               <ArrowLeft className="w-5 h-5" />
@@ -146,7 +146,7 @@ export default function SynapsePage() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+      <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
         {!session && (
           <div className="p-6 rounded-xl border border-border bg-card text-center space-y-2">
             <AlertCircle className="w-8 h-8 text-yellow-500 mx-auto" />

@@ -60,7 +60,7 @@ export function PageHeader({
     <>
       <PageTitle title={documentTitle ?? title} />
       <header className="border-b border-border bg-background/95 px-4 py-3 backdrop-blur sm:px-6">
-        <div className="mx-auto flex h-12 max-w-6xl items-center justify-between gap-3">
+        <div className="mx-auto flex h-12 max-w-7xl items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"

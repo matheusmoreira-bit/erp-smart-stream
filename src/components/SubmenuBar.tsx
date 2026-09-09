@@ -40,7 +40,7 @@ export function SubmenuBar({ moduleLabel, moduleHref, items, active, onSelect, a
 
   return (
     <div className="sticky top-[var(--app-header-h,72px)] z-20 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-      <div className="mx-auto flex h-12 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
+      <div className="mx-auto flex h-12 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
         <nav aria-label="Trilha de navegação" className="flex min-w-0 items-center gap-2">
           <button
             type="button"

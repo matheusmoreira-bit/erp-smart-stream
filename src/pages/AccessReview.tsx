@@ -309,7 +309,7 @@ export default function AccessReview() {
         icon={<ShieldCheck className="h-5 w-5 text-primary" />}
       />
 
-      <main className="mx-auto max-w-6xl py-6 space-y-6">
+      <main className="mx-auto max-w-7xl py-6 space-y-6">
         {error && (
           <Card className="border-destructive/40">
             <CardContent className="p-4 text-sm text-destructive">{error}</CardContent>

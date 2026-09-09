@@ -462,7 +462,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
       {!embedded && <PageTitle title="Usuários" />}
 
       <header className={embedded ? "px-0 pb-4" : "border-b border-border px-6 py-6"}>
-        <div className="max-w-6xl mx-auto flex items-start justify-between gap-4 flex-wrap">
+        <div className="max-w-7xl mx-auto flex items-start justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
             {!embedded && (
               <Button variant="ghost" size="icon" aria-label="Voltar" onClick={() => navigate("/")}>
@@ -505,7 +505,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
         </div>
 
         {/* Segmentos */}
-        <div className="max-w-6xl mx-auto mt-4 flex flex-wrap gap-2">
+        <div className="max-w-7xl mx-auto mt-4 flex flex-wrap gap-2">
           {(Object.keys(SEGMENT_LABEL) as SegmentKey[]).map((key) => (
             <button
               key={key}
@@ -523,7 +523,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
         </div>
       </header>
 
-      <main className={embedded ? "max-w-6xl mx-auto space-y-4" : "max-w-6xl mx-auto px-6 py-6 space-y-4"}>
+      <main className={embedded ? "max-w-7xl mx-auto space-y-4" : "max-w-6xl mx-auto px-6 py-6 space-y-4"}>
         {pageError && (
           <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">
             {pageError}
