@@ -102,29 +102,8 @@ export default function SynapsePage() {
     setConfigOpen(true);
   };
 
-  const handleSave = async () => {
-    if (!selectedIntegration) return;
-    setSaving(true);
-    try {
-      const params: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(formParams)) {
-        if (v === "true") params[k] = true;
-        else if (v === "false") params[k] = false;
-        else params[k] = v;
-      }
-      await updateIntegration(selectedIntegration.id, {
-        is_active: formActive,
-        interval_minutes: formInterval,
-        parameters: params,
-      } as any);
-      toast.success("Configuração salva");
-      setConfigOpen(false);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao salvar");
-    } finally {
-      setSaving(false);
-    }
-  };
+
+
 
   const handleRun = async (integration: SynapseIntegration) => {
     try {
