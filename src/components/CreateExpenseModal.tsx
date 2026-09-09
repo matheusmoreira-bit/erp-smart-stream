@@ -3667,31 +3667,59 @@ export function CreateExpenseModal({
                       suggestedQuery={item.cost_center && !item.sapCostCenter ? item.cost_center : undefined}
                       portalContainer={dialogContainer}
                     />
-                    <CachedSearchCombobox
-                      label={`Projeto (Dimensão)${isProjectRequired ? " *" : ""}`}
-                      required={isProjectRequired}
-
-
-                      options={projectOptionsForCc(item.sapCostCenter?.code ?? item.cost_center)}
-                      isLoading={projectsLoading}
-                      value={item.sapProject || null}
-                      onChange={(val) => {
-                        setItems((prev) => {
-                          const updated = [...prev];
-                          updated[i] = { ...updated[i], sapProject: val, project: val?.code || "" };
-                          return updated;
-                        });
-                        maybeTriggerCcAlert(i, item.sapCostCenter || null, val);
-                      }}
-
-                      placeholder={
-                        origin === "pagcorp" && mappingInfo?.missingFields.includes("Projeto")
-                          ? "Sem mapeamento — selecione manualmente"
-                          : "Buscar projeto..."
-                      }
-                      suggestedQuery={item.project && !item.sapProject ? item.project : undefined}
-                      portalContainer={dialogContainer}
-                    />
+                    <div className="min-w-0 space-y-1">
+                      <CachedSearchCombobox
+                        label={`Projeto (Dimensão)${isProjectRequired && !isSplitEnabled(item.projectSplit) ? " *" : ""}`}
+                        required={isProjectRequired && !isSplitEnabled(item.projectSplit)}
+                        disabled={isSplitEnabled(item.projectSplit)}
+                        options={projectOptionsForCc(item.sapCostCenter?.code ?? item.cost_center)}
+                        isLoading={projectsLoading}
+                        value={item.sapProject || null}
+                        onChange={(val) => {
+                          setItems((prev) => {
+                            const updated = [...prev];
+                            updated[i] = { ...updated[i], sapProject: val, project: val?.code || "" };
+                            return updated;
+                          });
+                          maybeTriggerCcAlert(i, item.sapCostCenter || null, val);
+                        }}
+                        placeholder={
+                          isSplitEnabled(item.projectSplit)
+                            ? "Rateado entre projetos"
+                            : origin === "pagcorp" && mappingInfo?.missingFields.includes("Projeto")
+                              ? "Sem mapeamento — selecione manualmente"
+                              : "Buscar projeto..."
+                        }
+                        suggestedQuery={item.project && !item.sapProject ? item.project : undefined}
+                        portalContainer={dialogContainer}
+                      />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={isSplitEnabled(item.projectSplit) ? "secondary" : "outline"}
+                          className="h-7 gap-1.5 px-2 text-xs"
+                          onClick={() => setSplitLineIndex(i)}
+                        >
+                          <Split className="h-3.5 w-3.5" />
+                          {isSplitEnabled(item.projectSplit) ? "Editar rateio" : "Ratear entre projetos"}
+                        </Button>
+                        {isSplitEnabled(item.projectSplit) && (
+                          <span
+                            className={`text-[11px] ${
+                              isSplitComplete(item.projectSplit, Number(item.line_total) || 0)
+                                ? "text-muted-foreground"
+                                : "text-amber-600 dark:text-amber-400"
+                            }`}
+                          >
+                            {resolveSplitAmounts(item.projectSplit, Number(item.line_total) || 0)
+                              .map((p) => `${p.code} ${formatCurrency(p.amount, currency || "BRL")}`)
+                              .join(" · ")}
+                            {!isSplitComplete(item.projectSplit, Number(item.line_total) || 0) && " — rateio incompleto"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   {isSales && (
                     <label className="flex items-center gap-2 text-xs text-muted-foreground">
