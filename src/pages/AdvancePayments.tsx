@@ -30,16 +30,18 @@ function fmtDate(s?: string | null) {
 export default function AdvancePayments({ advanceType = "supplier" }: { advanceType?: AdvanceType } = {}) {
   const navigate = useNavigate();
   const { session } = useSap();
-  const { items, loading, error, refresh, approve, reject, retry, remove } = useAdvancePayments(advanceType);
+  const { items, loading, error, refresh, approve, reject, retry, remove, reconcile } = useAdvancePayments(advanceType);
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [reconcileTarget, setReconcileTarget] = useState<AdvancePayment | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const deepLinkHandledRef = useRef(false);
   const isCustomerAdvance = advanceType === "customer";
   const partnerLabel = isCustomerAdvance ? "cliente" : "fornecedor";
   const pageTitle = isCustomerAdvance ? "Adiantamentos a Cliente" : "Adiantamentos a Fornecedor";
+
 
   useEffect(() => {
     if (deepLinkHandledRef.current) return;
