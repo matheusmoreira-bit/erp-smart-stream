@@ -16,6 +16,10 @@ import {
   Copy,
   ExternalLink,
   Download,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
