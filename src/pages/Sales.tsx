@@ -471,8 +471,12 @@ function SalesPageInner() {
       g.totalSaldo += r.saldoResidual;
       if (r.saldoResidual > 0) g.qtdAbertas += 1;
     }
-    return Array.from(map.values()).sort((a, b) => b.totalSaldo - a.totalSaldo);
-  }, [filtered]);
+    const list = Array.from(map.values());
+    for (const g of list) {
+      g.rows.sort((a, b) => compareValues(sortValue(a, sort.key), sortValue(b, sort.key), sort.dir));
+    }
+    return list.sort((a, b) => b.totalSaldo - a.totalSaldo);
+  }, [filtered, sort, sortValue]);
 
   /* ── selection ──────────────────────────────────────── */
 
