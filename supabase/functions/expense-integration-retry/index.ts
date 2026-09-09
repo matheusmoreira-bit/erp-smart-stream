@@ -107,6 +107,8 @@ Deno.serve(async (req) => {
       .eq("status", "aprovado")
       .eq("doc_type", "purchase")
       .is("sap_doc_entry", null)
+      .not("company_db", "ilike", "tst%")
+      .not("company_db", "ilike", "%TESTE%")
       .or("sap_purchase_order_status.is.null,sap_purchase_order_status.neq.success")
       .or(`sap_integration_last_attempt_at.is.null,sap_integration_last_attempt_at.lt.${cutoff}`)
       .order("sap_integration_last_attempt_at", { ascending: true, nullsFirst: true })
