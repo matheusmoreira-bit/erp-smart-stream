@@ -64,6 +64,13 @@ import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
 import { canViewLotusCostCenters, filterLotusCostCenters } from "@/lib/cost-center-visibility";
 import { useMyManagementSegment } from "@/hooks/useMyManagementSegment";
 import { filterProjectsBySegment, filterInstitutionalProjects } from "@/lib/management-segment-projects";
+import { ProjectSplitDialog } from "@/components/ProjectSplitDialog";
+import {
+  isSplitComplete,
+  isSplitEnabled,
+  resolveSplitAmounts,
+  type ProjectSplit,
+} from "@/lib/project-split";
 
 
 import { RegistrationRequestModal } from "@/components/RegistrationRequestModal";
