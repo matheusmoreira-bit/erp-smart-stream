@@ -109,13 +109,48 @@ export function PoMastertaxNfDialog({ open, onClose, companyDb, poDocEntry, poLa
               </SelectContent>
             </Select>
           </div>
-          {po && (
-            <p className="text-xs text-muted-foreground">
-              Pedido: <span className="text-foreground font-medium">{po.cardName || po.cardCode}</span>
-              {" · "}{formatDate(po.docDate)}{" · "}{formatCurrency(po.docTotal)}
-            </p>
+
+          <div className="space-y-1">
+            <Label htmlFor="mt-cnpj" className="text-xs text-muted-foreground">CNPJ do fornecedor (opcional)</Label>
+            <Input
+              id="mt-cnpj"
+              inputMode="numeric"
+              placeholder="Somente números"
+              className="w-52"
+              value={cnpj}
+              disabled={loading || linking}
+              onChange={(e) => setCnpj(e.target.value.replace(/\D/g, "").slice(0, 14))}
+              onKeyDown={(e) => { if (e.key === "Enter") void runSearch(windowDays, cnpj); }}
+            />
+          </div>
+
+          <Button
+            variant="secondary"
+            onClick={() => void runSearch(windowDays, cnpj)}
+            disabled={loading || linking}
+          >
+            Filtrar
+          </Button>
+
+          {supplierTaxId && supplierTaxId !== cnpj && (
+            <Button
+              variant="ghost"
+              className="text-xs"
+              onClick={() => { setCnpj(supplierTaxId); void runSearch(windowDays, supplierTaxId); }}
+              disabled={loading || linking}
+            >
+              Usar CNPJ do pedido
+            </Button>
           )}
         </div>
+
+        {po && (
+          <p className="text-xs text-muted-foreground">
+            Pedido: <span className="text-foreground font-medium">{po.cardName || po.cardCode}</span>
+            {" · "}{formatDate(po.docDate)}{" · "}{formatCurrency(po.docTotal)}
+            {result?.cnpjFilter ? ` · filtrando pelo CNPJ ${result.cnpjFilter}` : ""}
+          </p>
+        )}
 
         {loading && (
           <div className="flex items-center gap-2 py-10 justify-center text-sm text-muted-foreground">
