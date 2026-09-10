@@ -187,6 +187,9 @@ function normalizeTrip(row: Record<string, unknown>, source: string, sourceLabel
     source_label: sourceLabel,
     employee_id: clean(row["ID do funcionário"]),
     employee_name: [firstName, lastName].filter(Boolean).join(" ").trim(),
+    employee_first_name: firstName,
+    employee_last_name: lastName,
+
     email: clean(row["E-mail"]).toLowerCase(),
     requested_at_local: localDateTime(requestedDateLocal, requestedTimeLocal),
     requested_date_local: requestedDateLocal || null,
