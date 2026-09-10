@@ -63,7 +63,21 @@ export interface MastertaxPoSearchResult {
 
   candidates: MastertaxCandidate[];
   masterTaxConfigured: boolean;
+  masterTax?: {
+    configured: boolean;
+    httpStatus: number | null;
+    periodo: { de: string; ate: string };
+    recebidas: number;
+    lidas: number;
+    outroDestinatario: number;
+    totalAnalisadas: number;
+    descartadasPorCnpj: number;
+    descartadasPorValor: number;
+    exibidas: number;
+    error: string | null;
+  } | null;
   warning: string | null;
+
 }
 
 export interface MastertaxLinkResult {
