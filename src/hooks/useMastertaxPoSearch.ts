@@ -73,6 +73,10 @@ export interface MastertaxPoSearchResult {
     totalAnalisadas: number;
     descartadasPorCnpj: number;
     descartadasPorValor: number;
+    descartadasJaLancadas?: number;
+    descartadasComEsboco?: number;
+    descartadasOutroPedido?: number;
+    descartadasCanceladas?: number;
     exibidas: number;
     error: string | null;
   } | null;
