@@ -306,7 +306,7 @@ const moduleGroups: { title: string; keys: string[]; color: string; bgGlow: stri
     title: "Compras (entrada)",
     color: "text-emerald-400",
     bgGlow: "from-emerald-500/20 to-emerald-500/5",
-    keys: ["expenses", "pagcorp", "advance_payments", "nf_entrada", "financial_review", "accounts_payable"],
+    keys: ["expenses", "advance_payments", "nf_entrada", "financial_review", "accounts_payable"],
   },
   {
     title: "Vendas (saída)",
@@ -318,7 +318,7 @@ const moduleGroups: { title: string; keys: string[]; color: string; bgGlow: stri
     title: "Financeiro",
     color: "text-amber-400",
     bgGlow: "from-amber-500/20 to-amber-500/5",
-    keys: ["accounts_payable", "cashflow_forecast", "accounts_receivable", "financial_review"],
+    keys: ["accounts_payable", "cashflow_forecast", "accounts_receivable", "financial_review", "pagcorp"],
   },
   {
     title: "Cadastros",
