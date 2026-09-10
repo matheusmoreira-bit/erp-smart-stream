@@ -391,6 +391,14 @@ function ExpenseDetailModal({
 
   const showSubmit = expense.status === "rascunho";
   const alreadyInSap = !!(expense.sap_doc_entry || expense.sap_doc_num);
+  // Busca de NF na Master Tax: só para pedidos de compra já existentes no ERP e
+  // para quem tem o módulo NF de Entrada (a Edge Function revalida no servidor).
+  const canSearchMastertax =
+    !isSalesDoc &&
+    !!expense.sap_doc_entry &&
+    (capPrivileged || hasCap("nf_entrada")) &&
+    expense.status !== "cancelado";
+
   // Cancelamento: rascunho/pendente, ou já integrado ao ERP e ainda sem NF de
   // entrada — nesse caso o cancelamento é propagado ao ERP.
   const cancelPropagatesToErp =
