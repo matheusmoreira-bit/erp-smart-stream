@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AlertCircle, FileSearch, Loader2, SearchX } from "lucide-react";
@@ -40,20 +39,19 @@ interface Props {
 export function PoMastertaxNfDialog({ open, onClose, companyDb, poDocEntry, poLabel, onDone }: Props) {
   const { search, link, reset, loading, linking, error, result } = useMastertaxPoSearch(companyDb);
   const [windowDays, setWindowDays] = useState("90");
-  const [cnpj, setCnpj] = useState("");
   const [selected, setSelected] = useState<string>("");
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const runSearch = useCallback(async (days: string, cnpjValue: string) => {
+  const runSearch = useCallback(async (days: string) => {
     setSelected("");
     setActionError(null);
-    const data = await search(poDocEntry, Number(days), cnpjValue);
+    const data = await search(poDocEntry, Number(days));
     if (data?.candidates?.length) setSelected(data.candidates[0].chave_acesso);
   }, [search, poDocEntry]);
 
   useEffect(() => {
-    if (open) void runSearch(windowDays, cnpj);
-    else { reset(); setCnpj(""); }
+    if (open) void runSearch(windowDays);
+    else reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, poDocEntry]);
 
@@ -97,7 +95,7 @@ export function PoMastertaxNfDialog({ open, onClose, companyDb, poDocEntry, poLa
             <Label htmlFor="mt-window" className="text-xs text-muted-foreground">Período em torno da data do pedido</Label>
             <Select
               value={windowDays}
-              onValueChange={(v) => { setWindowDays(v); void runSearch(v, cnpj); }}
+              onValueChange={(v) => { setWindowDays(v); void runSearch(v); }}
               disabled={loading || linking}
             >
               <SelectTrigger id="mt-window" className="w-48">
@@ -112,39 +110,15 @@ export function PoMastertaxNfDialog({ open, onClose, companyDb, poDocEntry, poLa
             </Select>
           </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="mt-cnpj" className="text-xs text-muted-foreground">CNPJ do fornecedor (opcional)</Label>
-            <Input
-              id="mt-cnpj"
-              inputMode="numeric"
-              placeholder="Somente números"
-              className="w-52"
-              value={cnpj}
-              disabled={loading || linking}
-              onChange={(e) => setCnpj(e.target.value.replace(/\D/g, "").slice(0, 14))}
-              onKeyDown={(e) => { if (e.key === "Enter") void runSearch(windowDays, cnpj); }}
-            />
-          </div>
-
           <Button
             variant="secondary"
-            onClick={() => void runSearch(windowDays, cnpj)}
+            onClick={() => void runSearch(windowDays)}
             disabled={loading || linking}
           >
-            Filtrar
+            Atualizar
           </Button>
-
-          {supplierTaxId && supplierTaxId !== cnpj && (
-            <Button
-              variant="ghost"
-              className="text-xs"
-              onClick={() => { setCnpj(supplierTaxId); void runSearch(windowDays, supplierTaxId); }}
-              disabled={loading || linking}
-            >
-              Usar CNPJ do pedido
-            </Button>
-          )}
         </div>
+
 
         {po && (
           <p className="text-xs text-muted-foreground">
