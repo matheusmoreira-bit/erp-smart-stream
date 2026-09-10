@@ -562,7 +562,14 @@ export default function SalesNfse() {
   const [confirmAck, setConfirmAck] = useState(false);
   const [emitting, setEmitting] = useState(false);
 
+  // Sempre reinicia a dupla confirmação ao trocar/abrir o pedido
+  useEffect(() => {
+    setConfirmStep(1);
+    setConfirmAck(false);
+  }, [confirmOrder?.id]);
+
   const [syncing, setSyncing] = useState(false);
+
   const [pdfFiles, setPdfFiles] = useState<Set<string>>(new Set());
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
   const [fetchingPdfFor, setFetchingPdfFor] = useState<string | null>(null);
