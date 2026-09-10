@@ -146,7 +146,6 @@ export function useMastertaxPoSearch(companyDb: string | null | undefined) {
   const search = useCallback(async (
     poDocEntry: number | string,
     windowDays = 90,
-    cnpjFornecedor?: string,
   ) => {
     if (!companyDb) {
       setError("Sessão do ERP não encontrada.");
@@ -160,7 +159,6 @@ export function useMastertaxPoSearch(companyDb: string | null | undefined) {
         company_db: companyDb,
         po_doc_entry: poDocEntry,
         window_days: windowDays,
-        cnpj_fornecedor: cnpjFornecedor?.replace(/\D/g, "") || undefined,
       });
       setResult(data);
       return data;
