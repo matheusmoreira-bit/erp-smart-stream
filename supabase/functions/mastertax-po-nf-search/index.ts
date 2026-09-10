@@ -568,14 +568,22 @@ Deno.serve(async (req) => {
 
       // Master Tax (opcional: se não houver credencial, só usamos as importadas).
       let mtError: string | undefined;
+      let mtStatus: number | undefined;
+      let mtRawRows = 0;
+      let mtNotas = 0;
+      let mtOutroDestinatario = 0;
       const mt = await loadMasterTaxCreds(sb, companyDb);
       if (mt) {
         for (const empresaId of mt.empresa_ids) {
-          const { notas, error } = await fetchMasterTaxRange(mt, empresaId, de, ate);
+          const { notas, error, httpStatus, rawRows } = await fetchMasterTaxRange(mt, empresaId, de, ate);
           if (error) mtError = error;
+          if (typeof httpStatus === "number") mtStatus = httpStatus;
+          mtRawRows += rawRows;
+          mtNotas += notas.length;
           for (const n of notas) {
-            if (mt.cnpj && n.cnpj_destinatario && n.cnpj_destinatario !== mt.cnpj) continue;
+            if (mt.cnpj && n.cnpj_destinatario && n.cnpj_destinatario !== mt.cnpj) { mtOutroDestinatario++; continue; }
             if (byChave.has(n.chave_acesso)) continue;
+
             const s = scoreCandidate(po, n);
             byChave.set(n.chave_acesso, {
               chave_acesso: n.chave_acesso,
