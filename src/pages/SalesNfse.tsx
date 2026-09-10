@@ -1869,47 +1869,132 @@ export default function SalesNfse() {
         )}
       </div>
 
-      <Dialog open={!!confirmOrder} onOpenChange={(v) => !v && setConfirmOrder(null)}>
-        <DialogContent>
+      <Dialog open={!!confirmOrder} onOpenChange={(v) => !v && !emitting && setConfirmOrder(null)}>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Confirmar emissão de NFS-e</DialogTitle>
+            <DialogTitle>
+              {confirmStep === 1
+                ? "Confira os dados antes de emitir a NFS-e"
+                : "Confirmação final — emissão fiscal"}
+            </DialogTitle>
             <DialogDescription>
-              A nota será criada no ERP a partir do pedido de venda e enviada ao addon fiscal.
+              {confirmStep === 1
+                ? "Estes dados serão enviados ao Ambiente Nacional / Prefeitura para emissão da nota fiscal de serviço."
+                : "Esta é a última etapa. Ao confirmar, a nota será transmitida imediatamente ao órgão fiscal."}
             </DialogDescription>
           </DialogHeader>
+
           {confirmOrder && (
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">Pedido</span>
-                <span className="font-mono">#{confirmOrder.sap_doc_num}</span>
+            <div className="space-y-4">
+              <div
+                role="alert"
+                className="rounded-md border-2 border-destructive/60 bg-destructive/10 p-3 space-y-1"
+              >
+                <p className="flex items-center gap-2 text-sm font-bold text-destructive uppercase tracking-wide">
+                  <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  Atenção: emissão fiscal é irreversível
+                </p>
+                <p className="text-sm text-destructive">
+                  A emissão incorreta pode acarretar <strong>retrabalho, cancelamento junto à
+                  prefeitura, impostos indevidos e prejuízo financeiro</strong>. Confira cliente,
+                  valor e pedido antes de prosseguir.
+                </p>
               </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">Cliente</span>
-                <span className="text-right">{confirmOrder.supplier_name}</span>
+
+              <div className="space-y-2 text-sm rounded-md border border-border p-3">
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">Pedido</span>
+                  <span className="font-mono">#{confirmOrder.sap_doc_num}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">Cliente</span>
+                  <span className="text-right">{confirmOrder.supplier_name}</span>
+                </div>
+                {confirmOrder.supplier_code && (
+                  <div className="flex justify-between gap-4">
+                    <span className="text-muted-foreground">Código do cliente</span>
+                    <span className="font-mono">{confirmOrder.supplier_code}</span>
+                  </div>
+                )}
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">Valor</span>
+                  <span className="font-mono font-semibold">
+                    {formatCurrency(Number(confirmOrder.total_amount), confirmOrder.currency)}
+                  </span>
+                </div>
+                {confirmOrder.doc_date && (
+                  <div className="flex justify-between gap-4">
+                    <span className="text-muted-foreground">Data do pedido</span>
+                    <span>{formatDate(confirmOrder.doc_date)}</span>
+                  </div>
+                )}
+                {confirmOrder.project && (
+                  <div className="flex justify-between gap-4">
+                    <span className="text-muted-foreground">Projeto</span>
+                    <span className="text-right">{confirmOrder.project}</span>
+                  </div>
+                )}
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">Solicitante</span>
+                  <span>{confirmOrder.requester_name || "—"}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">Empresa</span>
+                  <span className="font-mono">{companyDb || "—"}</span>
+                </div>
               </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">Valor</span>
-                <span className="font-mono">
-                  {formatCurrency(Number(confirmOrder.total_amount), confirmOrder.currency)}
-                </span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">Solicitante</span>
-                <span>{confirmOrder.requester_name || "—"}</span>
-              </div>
+
+              {confirmStep === 1 ? (
+                <label className="flex items-start gap-3 rounded-md border border-border p-3 cursor-pointer">
+                  <Checkbox
+                    checked={confirmAck}
+                    onCheckedChange={(v) => setConfirmAck(v === true)}
+                    aria-label="Confirmo que conferi os dados da nota"
+                  />
+                  <span className="text-sm">
+                    Confirmo que conferi os dados acima e assumo a responsabilidade pela emissão
+                    desta nota fiscal.
+                  </span>
+                </label>
+              ) : (
+                <p className="text-sm font-semibold text-destructive">
+                  Confirme novamente: deseja realmente transmitir esta NFS-e ao Ambiente Nacional /
+                  Prefeitura agora?
+                </p>
+              )}
             </div>
           )}
+
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setConfirmOrder(null)} disabled={emitting}>
-              Cancelar
-            </Button>
-            <Button onClick={() => void emit()} disabled={emitting} className="gap-2">
-              {emitting && <Loader2 className="w-4 h-4 animate-spin" />}
-              Emitir NFS-e
-            </Button>
+            {confirmStep === 1 ? (
+              <>
+                <Button variant="ghost" onClick={() => setConfirmOrder(null)}>
+                  Cancelar
+                </Button>
+                <Button disabled={!confirmAck} onClick={() => setConfirmStep(2)}>
+                  Continuar
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" onClick={() => setConfirmStep(1)} disabled={emitting}>
+                  Voltar e revisar
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => void emit()}
+                  disabled={emitting || !confirmAck}
+                  className="gap-2"
+                >
+                  {emitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Sim, emitir NFS-e definitivamente
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
 
       <Dialog
         open={!!cancelTarget}
