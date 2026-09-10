@@ -609,18 +609,36 @@ Deno.serve(async (req) => {
       const minValor = poTotal > 0 ? Number((poTotal * (1 - VALUE_TOLERANCE)).toFixed(2)) : 0;
       const maxValor = poTotal > 0 ? Number((poTotal * (1 + VALUE_TOLERANCE)).toFixed(2)) : 0;
 
-      const candidates = Array.from(byChave.values())
+      const pool = Array.from(byChave.values());
+      let cutCnpj = 0;
+      let cutValor = 0;
+      const candidates = pool
         .filter((c) => {
-          if (requiredCnpj && onlyDigits(c.cnpj_fornecedor) !== requiredCnpj) return false;
+          if (requiredCnpj && onlyDigits(c.cnpj_fornecedor) !== requiredCnpj) { cutCnpj++; return false; }
           if (!requiredCnpj && c.score < 15) return false;
           if (poTotal > 0) {
             const valor = Math.abs(Number(c.valor_total || 0));
-            if (valor < minValor || valor > maxValor) return false;
+            if (valor < minValor || valor > maxValor) { cutValor++; return false; }
           }
           return true;
         })
         .sort((a, b) => b.score - a.score || Math.abs(a.valorDiff) - Math.abs(b.valorDiff))
         .slice(0, MAX_CANDIDATES);
+
+      const masterTaxDiag = {
+        configured: !!mt,
+        httpStatus: mtStatus ?? null,
+        periodo: { de, ate },
+        recebidas: mtRawRows,
+        lidas: mtNotas,
+        outroDestinatario: mtOutroDestinatario,
+        totalAnalisadas: pool.length,
+        descartadasPorCnpj: cutCnpj,
+        descartadasPorValor: cutValor,
+        exibidas: 0,
+        error: mtError || null,
+      };
+
 
 
       // NF já vinculada a este pedido (se houver).
