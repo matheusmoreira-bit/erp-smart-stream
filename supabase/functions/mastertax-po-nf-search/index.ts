@@ -982,6 +982,7 @@ Deno.serve(async (req) => {
       .from("nf_entrada_imports")
       .select("*")
       .eq("chave_acesso", chave)
+      .eq("sap_company_db", companyDb)
       .maybeSingle();
 
     // deno-lint-ignore no-explicit-any
