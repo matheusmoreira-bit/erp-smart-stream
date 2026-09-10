@@ -109,6 +109,20 @@ Deno.serve(async (req) => {
       },
     }];
 
+    // Cache: o mesmo documento não é reavaliado pela IA.
+    const AI_MODEL = "google/gemini-2.5-flash";
+    const cacheKey = {
+      scope: "supplier_extract",
+      inputHash: await hashInput({ model: AI_MODEL, content: userContent }),
+    };
+    const cached = await getCachedAnalysis<Record<string, unknown>>(admin, cacheKey);
+    if (cached) {
+      return new Response(JSON.stringify({ supplier: cached.result, cached: true, analyzedAt: cached.analyzedAt }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -116,7 +130,7 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: AI_MODEL,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: userContent },
