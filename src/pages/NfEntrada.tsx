@@ -50,6 +50,16 @@ function DetailField({ label, value, mono }: { label: string; value: string | nu
   );
 }
 
+/** Situação real do documento no ERP (aberto, fechado ou cancelado). */
+function erpSituationLabel(it: { erp_invoice_doc_entry?: string | null; erp_invoice_doc_num?: string | null; erp_invoice_cancelled?: boolean | null; erp_invoice_doc_status?: string | null }) {
+  if (!it.erp_invoice_doc_entry && !it.erp_invoice_doc_num) return "Não lançada no ERP";
+  if (it.erp_invoice_cancelled) return "Cancelada no ERP";
+  if (it.erp_invoice_doc_status === "bost_Close") return "Fechada no ERP";
+  if (it.erp_invoice_doc_status === "bost_Open") return "Aberta no ERP";
+  return "Situação não consultada";
+}
+
+
 export default function NfEntrada() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -65,6 +75,21 @@ export default function NfEntrada() {
   const [logs, setLogs] = useState<NfEntradaLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [syncingErp, setSyncingErp] = useState(false);
+
+  /** Consulta no ERP a situação real (aberta, fechada, cancelada) das NFs lançadas. */
+  async function handleSyncErpStatus() {
+    setSyncingErp(true);
+    try {
+      const res = await syncErpStatus();
+      toast({ title: "Situação atualizada", description: `${res?.synced ?? 0} nota(s) consultada(s) no ERP.` });
+    } catch (e) {
+      toast({ title: "Falha ao consultar o ERP", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setSyncingErp(false);
+    }
+  }
+
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editItem, setEditItem] = useState<NfEntradaImport | null>(null);
   const [provisionItem, setProvisionItem] = useState<NfEntradaImport | null>(null);
