@@ -150,6 +150,31 @@ function isSamePasswordError(message: string): boolean {
   );
 }
 
+/**
+ * Traduz falhas de login do Service Layer/SLD em causas acionáveis.
+ * -304 "Fail to NONE-SSO login from SLD" NÃO indica falta de Superuser:
+ * o SLD recusou login por usuário/senha para essa conta (conta vinculada a
+ * SSO/Windows, sem licença nessa base, bloqueada ou senha não aplicada).
+ */
+function explainLoginFailure(raw: string): string {
+  const m = (raw || "").toLowerCase();
+  if (m.includes("-304") || m.includes("none-sso")) {
+    return (
+      "O SAP (SLD) recusou o login por usuário e senha desta conta. " +
+      "Verifique nesta base: (1) o campo \"Vincular com a conta do Microsoft Windows\" no cadastro do usuário — se preenchido, o login só ocorre por SSO; " +
+      "(2) se o usuário possui licença atribuída nesta empresa; (3) se a conta não está bloqueada/expirada."
+    );
+  }
+  if (m.includes("-306")) {
+    return "O SAP recusou a credencial (código -306): usuário sem licença/permissão de acesso ao Service Layer nesta base.";
+  }
+  if (m.includes("invalid") && m.includes("password")) {
+    return "Usuário ou senha inválidos no SAP para esta base.";
+  }
+  return raw;
+}
+
+
 interface ResultRow {
   companyDB: string;
   displayName: string;
