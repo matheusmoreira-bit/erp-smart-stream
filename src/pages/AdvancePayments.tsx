@@ -30,10 +30,11 @@ function fmtDate(s?: string | null) {
 export default function AdvancePayments({ advanceType = "supplier" }: { advanceType?: AdvanceType } = {}) {
   const navigate = useNavigate();
   const { session } = useSap();
-  const { items, loading, error, refresh, approve, reject, retry, remove, reconcile } = useAdvancePayments(advanceType);
+  const { items, loading, error, refresh, approve, reject, retry, remove, reconcile, syncSapStatus } = useAdvancePayments(advanceType);
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [reconcileTarget, setReconcileTarget] = useState<AdvancePayment | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -120,6 +121,19 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
     }
   };
 
+  const handleSyncStatus = async (a?: AdvancePayment) => {
+    if (a) setBusyId(a.id); else setSyncing(true);
+    try {
+      const res = await syncSapStatus(a?.id);
+      toast.success(a ? "Situação atualizada com o ERP" : `Situação atualizada (${res?.synced ?? 0} documento(s))`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao consultar o ERP");
+    } finally {
+      if (a) setBusyId(null); else setSyncing(false);
+    }
+  };
+
+
   return (
     <div className="min-h-screen bg-background">
       <PageTitle title={pageTitle} />
@@ -137,6 +151,17 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
           <div className="flex items-center gap-2 shrink-0">
             <Button variant="ghost" size="icon" onClick={refresh} className="h-10 w-10 sm:h-9 sm:w-9" aria-label="Atualizar">
               <RefreshCw className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleSyncStatus()}
+              disabled={syncing || loading}
+              className="h-10 sm:h-9 gap-1.5"
+              title="Consultar no ERP a situação dos adiantamentos já integrados"
+            >
+              {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4" />}
+              <span className="hidden sm:inline">Sincronizar ERP</span>
             </Button>
             <Button size="sm" onClick={() => setCreateOpen(true)} className="h-10 sm:h-9">
               <Plus className="w-4 h-4 sm:mr-1" /> <span className="hidden sm:inline">Novo</span>
@@ -195,7 +220,35 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
                     <span className="text-xs">Vence: {fmtDate(a.due_date)}</span>
                     <span className="text-xs">Solicitante: {a.requester_name || "—"}</span>
                     {(a.sap_doc_num || a.sap_doc_entry) && (
-                      <span className="text-xs text-success">SAP: #{a.sap_doc_num || a.sap_doc_entry}</span>
+                      <span className="text-xs text-success">
+                        ERP: nº {a.sap_doc_num || a.sap_doc_entry}
+                        {a.sap_doc_date ? ` · ${fmtDate(a.sap_doc_date)}` : ""}
+                      </span>
+                    )}
+                    {(a.sap_doc_num || a.sap_doc_entry) && (
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] ${
+                          a.sap_cancelled
+                            ? "border-destructive/40 text-destructive"
+                            : a.sap_doc_status === "bost_Close"
+                              ? "border-success/40 text-success"
+                              : "border-primary/40 text-primary"
+                        }`}
+                      >
+                        {a.sap_cancelled
+                          ? "Cancelado no ERP"
+                          : a.sap_doc_status === "bost_Close"
+                            ? "Fechado no ERP"
+                            : a.sap_doc_status === "bost_Open"
+                              ? "Aberto no ERP"
+                              : "Situação não consultada"}
+                      </Badge>
+                    )}
+                    {a.sap_status_synced_at && (
+                      <span className="text-[10px] text-muted-foreground">
+                        Consultado em {fmtDate(a.sap_status_synced_at)}
+                      </span>
                     )}
                     {isCustomerAdvance && a.reconciled_at && (
                       <span className="text-xs text-success">
@@ -259,6 +312,21 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
                       <Wallet className="w-4 h-4" /> Reconciliar
                     </Button>
                   )}
+                  {a.sap_doc_entry && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => void handleSyncStatus(a)}
+                      disabled={busyId === a.id}
+                      aria-label="Atualizar situação no ERP"
+                      title="Atualizar situação no ERP"
+                      className="h-10 w-10 sm:h-9 sm:w-9"
+                    >
+                      {busyId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                    </Button>
+                  )}
+
+
 
                   {a.status === "failed" && (
                     <Button size="icon" variant="outline" onClick={() => handleRetry(a)} disabled={busyId === a.id} aria-label="Reintegrar" className="h-10 w-10 sm:h-9 sm:w-9">

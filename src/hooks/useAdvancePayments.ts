@@ -76,6 +76,12 @@ export interface AdvancePayment {
   cost_center_name?: string | null;
   sap_doc_entry?: number | null;
   sap_doc_num?: number | null;
+  /** Dados do documento no ERP (SAP). */
+  sap_doc_date?: string | null;
+  sap_doc_status?: string | null;
+  sap_cancelled?: boolean | null;
+  sap_open_amount?: number | null;
+  sap_status_synced_at?: string | null;
   sap_integration_error?: string | null;
   sap_integrated_at?: string | null;
   /** Reconciliação (LCM) — recebimento em banco do adiantamento. */
@@ -374,6 +380,28 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
     [fetchAll],
   );
 
-  return { items, loading, error, refresh: fetchAll, create, approve, reject, retry, remove, reconcile };
+  /** Consulta no ERP (SAP) o status real dos adiantamentos já integrados. */
+  const syncSapStatus = useCallback(
+    async (id?: string) => {
+      const company = session?.companyDB;
+      if (!id && !company) throw new Error("Selecione uma empresa antes de sincronizar.");
+      const res = await sapFunctionFetch("advance-sap-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          id ? { advance_id: id } : { company_db: company, advance_type: advanceType },
+        ),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || data?.success === false) {
+        throw new Error(data?.error || `Falha ao sincronizar status (${res.status})`);
+      }
+      await fetchAll();
+      return data as { synced: number };
+    },
+    [fetchAll, session?.companyDB, advanceType],
+  );
+
+  return { items, loading, error, refresh: fetchAll, create, approve, reject, retry, remove, reconcile, syncSapStatus };
 
 }

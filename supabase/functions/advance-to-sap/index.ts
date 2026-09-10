@@ -234,11 +234,17 @@ Deno.serve(async (req) => {
         status: "integrated",
         sap_doc_entry: respBody.DocEntry,
         sap_doc_num: respBody.DocNum,
+        sap_doc_date: (respBody.DocDate ? String(respBody.DocDate).slice(0, 10) : today),
+        sap_doc_status: respBody.DocumentStatus || "bost_Open",
+        sap_cancelled: respBody.Cancelled === "tYES",
+        sap_open_amount: typeof respBody.DocTotal === "number" ? respBody.DocTotal : Number(adv.amount),
+        sap_status_synced_at: new Date().toISOString(),
         sap_integration_status: "success",
         sap_integration_error: null,
         sap_integrated_at: new Date().toISOString(),
       })
       .eq("id", advanceId);
+
 
     // Logout
     await fetch(`${baseUrl}/Logout`, { method: "POST", headers: { Cookie: cookies } }).catch(() => {});
