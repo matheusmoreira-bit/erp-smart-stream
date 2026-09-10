@@ -59,6 +59,8 @@ export interface MastertaxPoSearchResult {
   bestConfidence?: number;
   window: { de: string; ate: string };
   cnpjFilter?: string | null;
+  valueRange?: { min: number; max: number; tolerance: number } | null;
+
   candidates: MastertaxCandidate[];
   masterTaxConfigured: boolean;
   warning: string | null;

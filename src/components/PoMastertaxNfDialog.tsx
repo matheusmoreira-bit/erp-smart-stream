@@ -150,9 +150,13 @@ export function PoMastertaxNfDialog({ open, onClose, companyDb, poDocEntry, poLa
           <p className="text-xs text-muted-foreground">
             Pedido: <span className="text-foreground font-medium">{po.cardName || po.cardCode}</span>
             {" · "}{formatDate(po.docDate)}{" · "}{formatCurrency(po.docTotal)}
-            {result?.cnpjFilter ? ` · filtrando pelo CNPJ ${result.cnpjFilter}` : ""}
+            {result?.cnpjFilter ? ` · somente notas do CNPJ ${result.cnpjFilter}` : ""}
+            {result?.valueRange
+              ? ` · valores entre ${formatCurrency(result.valueRange.min)} e ${formatCurrency(result.valueRange.max)} (±15%)`
+              : ""}
           </p>
         )}
+
 
         {loading && (
           <div className="flex items-center gap-2 py-10 justify-center text-sm text-muted-foreground">
@@ -181,10 +185,9 @@ export function PoMastertaxNfDialog({ open, onClose, companyDb, poDocEntry, poLa
             <SearchX className="w-6 h-6" aria-hidden="true" />
             <p>Nenhuma nota compatível entre {formatDate(result.window.de)} e {formatDate(result.window.ate)}.</p>
             <p className="text-xs">
-              {result.cnpjFilter
-                ? "Amplie o período ou limpe o CNPJ para ver mais notas."
-                : "Amplie o período acima para procurar em um intervalo maior."}
+              A busca considera apenas notas do mesmo CNPJ do fornecedor e com valor até 15% acima ou abaixo do pedido. Amplie o período para procurar em um intervalo maior.
             </p>
+
           </div>
         )}
 
