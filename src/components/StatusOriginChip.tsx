@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { originSegmentClasses } from "@/lib/erp-origin-styles";
 
 /**
  * Chip único que combina status do documento e origem (ERP Flow x ERP nativo).
