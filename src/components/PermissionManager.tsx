@@ -697,39 +697,46 @@ function GroupsView({
           <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <IosList>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {groups.map((g) => {
             const enabled = Object.entries(g.modulePerms).filter(([, p]) => p.view);
             const moduleCount = enabled.filter(([k]) => !capKeys.has(k)).length;
             const capCount = enabled.filter(([k]) => capKeys.has(k)).length;
             const members = memberCount.get(g.id)?.size ?? 0;
             return (
-              <IosRow key={g.id} onClick={() => onOpen(g)}>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-medium text-foreground truncate">{g.name}</p>
-                    {g.name === "Usuário" && (
-                      <Badge variant="secondary" className="text-[10px]">Padrão</Badge>
+              <button
+                key={g.id}
+                onClick={() => onOpen(g)}
+                className="group text-left rounded-2xl border border-border bg-card p-4 transition-colors hover:bg-muted/40 hover:border-cactus-amber/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium text-foreground truncate">{g.name}</p>
+                      {g.name === "Usuário" && (
+                        <Badge variant="secondary" className="text-[10px]">Padrão</Badge>
+                      )}
+                      {members === 0 && (
+                        <Badge variant="outline" className="text-[10px]">Sem usuários</Badge>
+                      )}
+                    </div>
+                    {g.description && (
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">{g.description}</p>
                     )}
-                    {members === 0 && (
-                      <Badge variant="outline" className="text-[10px]">Sem usuários</Badge>
-                    )}
+                    <p className="text-[11px] text-muted-foreground mt-2">
+                      {members} {members === 1 ? "usuário" : "usuários"} · {moduleCount}{" "}
+                      {moduleCount === 1 ? "tela" : "telas"} · {capCount}{" "}
+                      {capCount === 1 ? "capacidade" : "capacidades"}
+                    </p>
                   </div>
-                  {g.description && (
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">{g.description}</p>
-                  )}
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    {members} {members === 1 ? "usuário" : "usuários"} · {moduleCount}{" "}
-                    {moduleCount === 1 ? "tela" : "telas"} · {capCount}{" "}
-                    {capCount === 1 ? "capacidade" : "capacidades"}
-                  </p>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 transition-transform group-hover:translate-x-0.5" />
                 </div>
-                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-              </IosRow>
+              </button>
             );
           })}
-        </IosList>
+        </div>
       )}
+
     </div>
   );
 }
