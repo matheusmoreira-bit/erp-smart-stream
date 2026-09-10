@@ -30,10 +30,11 @@ function fmtDate(s?: string | null) {
 export default function AdvancePayments({ advanceType = "supplier" }: { advanceType?: AdvanceType } = {}) {
   const navigate = useNavigate();
   const { session } = useSap();
-  const { items, loading, error, refresh, approve, reject, retry, remove, reconcile } = useAdvancePayments(advanceType);
+  const { items, loading, error, refresh, approve, reject, retry, remove, reconcile, syncSapStatus } = useAdvancePayments(advanceType);
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [reconcileTarget, setReconcileTarget] = useState<AdvancePayment | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
