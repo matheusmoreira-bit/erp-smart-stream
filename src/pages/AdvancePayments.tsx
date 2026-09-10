@@ -222,7 +222,12 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-foreground break-words">{a.supplier_name}</span>
-                    <Badge className={ADVANCE_STATUS_COLORS[a.status]}>{ADVANCE_STATUS_LABELS[a.status]}</Badge>
+                    <DocKindOriginChip kind="advance" origin="flow" title="Adiantamento criado no ERP Flow" />
+                    <StatusOriginChip
+                      status={ADVANCE_TO_PURCHASE_STATUS[a.status] || "rascunho"}
+                      label={ADVANCE_STATUS_LABELS[a.status]}
+                      origin="erp_flow"
+                    />
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5 break-all">
                     {a.supplier_card_code}
