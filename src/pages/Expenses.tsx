@@ -382,7 +382,7 @@ function ExpenseDetailModal({
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [showPullback, setShowPullback] = useState(false);
-  const [mastertaxOpen, setMastertaxOpen] = useState(false);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const statusLabel = useStatusLabel();
   const { has: hasCap, isPrivileged: capPrivileged } = useMyCapabilities();
@@ -940,16 +940,6 @@ function ExpenseDetailModal({
         </DialogContent>
       </Dialog>
 
-      {canSearchMastertax && mastertaxOpen && (
-        <PoMastertaxNfDialog
-          open={mastertaxOpen}
-          onClose={() => setMastertaxOpen(false)}
-          companyDb={expense.company_db || sapSession?.companyDB || null}
-          poDocEntry={expense.sap_doc_entry}
-          poLabel={`#${expense.sap_doc_num || expense.sap_doc_entry}`}
-          onDone={onSynced}
-        />
-      )}
 
 
 
