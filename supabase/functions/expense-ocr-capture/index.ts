@@ -173,5 +173,6 @@ Deno.serve(async (req) => {
     confidence: typeof extracted?.confidence === "number" ? Math.max(0, Math.min(1, extracted.confidence)) : null,
   };
 
-  return json({ ok: true, data: result });
+  await saveAnalysis(db, cacheKey, result, { model: MODEL, entityType: "expense_ocr" });
+  return json({ ok: true, data: result, cached: false });
 });
