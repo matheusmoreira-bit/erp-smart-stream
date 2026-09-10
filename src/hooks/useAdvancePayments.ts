@@ -328,11 +328,19 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
 
   const approve = useCallback(
     async (id: string) => {
+      const { data: userData } = await supabase.auth.getUser();
       const { error: err } = await (supabase as any)
         .from("advance_payments")
-        .update({ status: "approved" })
+        .update({
+          status: "approved",
+          approved_by: userData?.user?.id ?? null,
+          approved_by_name: session?.userName || userData?.user?.email || null,
+          approved_at: new Date().toISOString(),
+          auto_approved: false,
+        })
         .eq("id", id);
       if (err) throw err;
+
       // Tenta integrar imediatamente
       try {
         await supabase
