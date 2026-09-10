@@ -559,7 +559,9 @@ Deno.serve(async (req) => {
 
 
       const byChave = new Map<string, Candidate>();
-      for (const r of (localRows || []) as Array<Record<string, string | number | boolean | null>>) {
+      const localAll = [...(localRows || []), ...(localByCnpj || [])];
+      for (const r of localAll as Array<Record<string, string | number | boolean | null>>) {
+
         const chave = String(r.chave_acesso || "");
         if (!chave || r.status === "cancelled") continue;
         const s = scoreCandidate(po, {
