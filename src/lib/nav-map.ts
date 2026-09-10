@@ -20,10 +20,9 @@ export const NAV_MODULES: NavModule[] = [
   {
     key: "expenses",
     label: "Compras",
-    match: ["/compras", "/cartoes", "/financeiro/adiantamentos", "/financeiro/nf-entrada"],
+    match: ["/compras", "/financeiro/adiantamentos", "/financeiro/nf-entrada"],
     items: [
       { label: "Pedidos de Compra", path: "/compras", moduleKey: "expenses" },
-      { label: "Cartões Corporativos", path: "/cartoes/transacoes", moduleKey: "pagcorp" },
       { label: "Adiantamentos Fornecedores", path: "/financeiro/adiantamentos", moduleKey: "expenses" },
       { label: "NF de Entrada", path: "/financeiro/nf-entrada", moduleKey: "nf_entrada" },
       { label: "Reconciliação de Adiantamentos", path: "/financeiro/reconciliacao", moduleKey: "financial_review" },
@@ -88,6 +87,7 @@ export const NAV_MODULES: NavModule[] = [
       { label: "Previsão de Caixa", path: "/financeiro/previsao-caixa", moduleKey: "financial_review" },
       { label: "Contas a Receber", path: "/vendas/recebimentos", moduleKey: "sales" },
       { label: "Reconciliação de Adiantamentos", path: "/financeiro/reconciliacao", moduleKey: "financial_review" },
+      { label: "Cartões Corporativos", path: "/cartoes/transacoes", moduleKey: "pagcorp" },
     ],
 
   },
