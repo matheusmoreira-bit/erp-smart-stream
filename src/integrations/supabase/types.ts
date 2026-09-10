@@ -9352,6 +9352,15 @@ export type Database = {
           total: number
         }[]
       }
+      get_my_directorate_peers: {
+        Args: { _sap_user_name?: string }
+        Returns: {
+          cost_center_code: string
+          idp_email: string
+          sap_email: string
+          sap_user_code: string
+        }[]
+      }
       get_my_idp_cost_center: {
         Args: { _sap_user_name?: string }
         Returns: string
