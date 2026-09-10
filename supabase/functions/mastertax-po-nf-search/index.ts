@@ -902,7 +902,7 @@ Deno.serve(async (req) => {
           match_resolved_by: actor,
           status: "awaiting_sap",
           last_error: null,
-        }, { onConflict: "chave_acesso" })
+        }, { onConflict: "chave_acesso,sap_company_db" })
         .select("id, status")
         .maybeSingle();
       if (saveErr || !saved) return json(500, { error: saveErr?.message || "Falha ao registrar a NF." });
@@ -1025,7 +1025,7 @@ Deno.serve(async (req) => {
           raw_mastertax: found.raw,
           sap_company_db: companyDb,
           status: "awaiting_sap",
-        }, { onConflict: "chave_acesso" })
+        }, { onConflict: "chave_acesso,sap_company_db" })
         .select("*")
         .maybeSingle();
       if (insErr) return json(500, { error: insErr.message });
