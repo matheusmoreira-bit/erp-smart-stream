@@ -596,6 +596,8 @@ Deno.serve(async (req) => {
         (trip.employee_id ? mappings.byEmployeeId.get(trip.employee_id.toLowerCase()) : null)
         || (trip.email ? mappings.byEmail.get(trip.email) : null)
         || mappings.byName.get(compactNameKey(trip.employee_name))
+        || matchByFirstLastName(mappings.fullNames, trip.employee_first_name, trip.employee_last_name)
+
         || null;
 
       const oktaCc = clean(oktaUser?.cost_center_code);
