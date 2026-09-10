@@ -940,6 +940,19 @@ function ExpenseDetailModal({
         </DialogContent>
       </Dialog>
 
+      {canSearchMastertax && mastertaxOpen && (
+        <PoMastertaxNfDialog
+          open={mastertaxOpen}
+          onClose={() => setMastertaxOpen(false)}
+          companyDb={expense.company_db || sapSession?.companyDB || null}
+          poDocEntry={expense.sap_doc_entry as string}
+          poLabel={`#${expense.sap_doc_num || expense.sap_doc_entry}`}
+          onDone={onSynced}
+        />
+      )}
+
+
+
       <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
         <AlertDialogContent>
           <AlertDialogHeader>
