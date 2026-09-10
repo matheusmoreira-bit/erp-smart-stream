@@ -648,7 +648,9 @@ Deno.serve(async (req) => {
         linked,
         bestConfidence: candidates.length ? candidates[0].confidence : 0,
         window: { de, ate },
-        cnpjFilter: cnpjFilter || null,
+        cnpjFilter: requiredCnpj || null,
+        valueRange: poTotal > 0 ? { min: minValor, max: maxValor, tolerance: VALUE_TOLERANCE } : null,
+
         candidates,
         masterTaxConfigured: !!mt,
         warning: mtError || null,
