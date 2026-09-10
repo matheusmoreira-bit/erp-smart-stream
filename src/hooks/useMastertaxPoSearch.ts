@@ -123,7 +123,11 @@ export function useMastertaxPoSearch(companyDb: string | null | undefined) {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<MastertaxPoSearchResult | null>(null);
 
-  const search = useCallback(async (poDocEntry: number | string, windowDays = 90) => {
+  const search = useCallback(async (
+    poDocEntry: number | string,
+    windowDays = 90,
+    cnpjFornecedor?: string,
+  ) => {
     if (!companyDb) {
       setError("Sessão do ERP não encontrada.");
       return null;
