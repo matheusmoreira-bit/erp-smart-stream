@@ -58,6 +58,7 @@ export interface MastertaxPoSearchResult {
   linked?: MastertaxLinkedNf | null;
   bestConfidence?: number;
   window: { de: string; ate: string };
+  cnpjFilter?: string | null;
   candidates: MastertaxCandidate[];
   masterTaxConfigured: boolean;
   warning: string | null;
