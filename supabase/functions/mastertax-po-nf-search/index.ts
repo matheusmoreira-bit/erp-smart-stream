@@ -576,14 +576,26 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Regras rígidas: mesmo CNPJ do fornecedor do pedido e valor dentro de ±15%.
+      const requiredCnpj = cnpjFilter || onlyDigits(po.supplierTaxId || "");
+      const poTotal = Math.abs(Number(po.DocTotal || 0));
+      const VALUE_TOLERANCE = 0.15;
+      const minValor = poTotal > 0 ? Number((poTotal * (1 - VALUE_TOLERANCE)).toFixed(2)) : 0;
+      const maxValor = poTotal > 0 ? Number((poTotal * (1 + VALUE_TOLERANCE)).toFixed(2)) : 0;
+
       const candidates = Array.from(byChave.values())
-        .filter((c) =>
-          cnpjFilter
-            ? onlyDigits(c.cnpj_fornecedor) === cnpjFilter
-            : c.score >= 15
-        )
+        .filter((c) => {
+          if (requiredCnpj && onlyDigits(c.cnpj_fornecedor) !== requiredCnpj) return false;
+          if (!requiredCnpj && c.score < 15) return false;
+          if (poTotal > 0) {
+            const valor = Math.abs(Number(c.valor_total || 0));
+            if (valor < minValor || valor > maxValor) return false;
+          }
+          return true;
+        })
         .sort((a, b) => b.score - a.score || Math.abs(a.valorDiff) - Math.abs(b.valorDiff))
         .slice(0, MAX_CANDIDATES);
+
 
       // NF já vinculada a este pedido (se houver).
       const { data: linkedRows } = await sb
