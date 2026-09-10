@@ -14,9 +14,28 @@ export interface MastertaxCandidate {
   alreadyLinkedPoDocEntry?: string | null;
   alreadyPosted?: boolean;
   score: number;
+  confidence: number;
   reasons: string[];
   valorDiff: number;
   diasDiff: number | null;
+}
+
+export interface MastertaxLinkedNf {
+  importId: string;
+  chaveAcesso: string;
+  numeroNf: string;
+  serie: string;
+  cnpjFornecedor: string;
+  nomeFornecedor: string;
+  dataEmissao: string | null;
+  valorTotal: number;
+  posted: boolean;
+  invoiceDocNum: string | null;
+  invoiceDocEntry: string | null;
+  draftId: string | null;
+  matchReason: string | null;
+  resolvedBy: string | null;
+  resolvedAt: string | null;
 }
 
 export interface MastertaxPoSearchResult {
@@ -27,8 +46,17 @@ export interface MastertaxPoSearchResult {
     cardName: string | null;
     docDate: string | null;
     docTotal: number;
+    docCurrency?: string | null;
     documentStatus: string | null;
   };
+  supplier?: {
+    cardCode: string;
+    taxId: string;
+    country: string;
+    international: boolean;
+  };
+  linked?: MastertaxLinkedNf | null;
+  bestConfidence?: number;
   window: { de: string; ate: string };
   candidates: MastertaxCandidate[];
   masterTaxConfigured: boolean;
@@ -44,6 +72,28 @@ export interface MastertaxLinkResult {
   invoiceDocNum?: string | null;
   poDocNum?: number | null;
   importId?: string;
+}
+
+export interface ManualNfInput {
+  numero_nf: string;
+  serie?: string;
+  chave_acesso?: string;
+  data_emissao: string;
+  valor_total: number;
+  cnpj_fornecedor?: string;
+  nome_fornecedor?: string;
+}
+
+export interface AiNfFields {
+  numero_nf?: string | null;
+  serie?: string | null;
+  chave_acesso?: string | null;
+  data_emissao?: string | null;
+  valor_total?: number | string | null;
+  cnpj_fornecedor?: string | null;
+  nome_fornecedor?: string | null;
+  moeda?: string | null;
+  observacoes?: string | null;
 }
 
 const FN = "mastertax-po-nf-search";
