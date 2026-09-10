@@ -95,7 +95,7 @@ export function PoMastertaxNfDialog({ open, onClose, companyDb, poDocEntry, poLa
             <Label htmlFor="mt-window" className="text-xs text-muted-foreground">Período em torno da data do pedido</Label>
             <Select
               value={windowDays}
-              onValueChange={(v) => { setWindowDays(v); void runSearch(v); }}
+              onValueChange={(v) => { setWindowDays(v); void runSearch(v, cnpj); }}
               disabled={loading || linking}
             >
               <SelectTrigger id="mt-window" className="w-48">
