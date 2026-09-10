@@ -36,6 +36,7 @@ interface Candidate {
   alreadyLinkedPoDocEntry?: string | null;
   alreadyPosted?: boolean;
   score: number;
+  confidence: number;
   reasons: string[];
   valorDiff: number;
   diasDiff: number | null;
@@ -129,11 +130,14 @@ interface PoInfo {
   DocumentStatus: string | null;
   DocumentLines: Array<Record<string, unknown>>;
   supplierTaxId: string;
+  supplierCountry: string;
+  supplierInternational: boolean;
+  DocCurrency: string | null;
 }
 
 async function loadPurchaseOrder(baseUrl: string, cookie: string, docEntry: number): Promise<PoInfo | null> {
   const r = await fetch(
-    `${baseUrl}/PurchaseOrders(${docEntry})?$select=DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocumentStatus,DocumentLines`,
+    `${baseUrl}/PurchaseOrders(${docEntry})?$select=DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocCurrency,DocumentStatus,DocumentLines`,
     { headers: { Cookie: cookie } },
   );
   if (r.status === 404) return null;
@@ -141,15 +145,25 @@ async function loadPurchaseOrder(baseUrl: string, cookie: string, docEntry: numb
   const po = await r.json();
 
   let supplierTaxId = "";
+  let supplierCountry = "";
   if (po.CardCode) {
     try {
       const bp = await fetch(
-        `${baseUrl}/BusinessPartners('${encodeURIComponent(po.CardCode)}')?$select=CardCode,CardName,FederalTaxID`,
+        `${baseUrl}/BusinessPartners('${encodeURIComponent(po.CardCode)}')?$select=CardCode,CardName,FederalTaxID,Country`,
         { headers: { Cookie: cookie } },
       );
-      if (bp.ok) supplierTaxId = onlyDigits((await bp.json())?.FederalTaxID);
+      if (bp.ok) {
+        const bpj = await bp.json();
+        supplierTaxId = onlyDigits(bpj?.FederalTaxID);
+        supplierCountry = String(bpj?.Country ?? "").toUpperCase();
+      }
     } catch { /* fornecedor sem CNPJ cadastrado — segue por nome/valor */ }
   }
+
+  // Fornecedor internacional: país diferente de BR, ou sem CNPJ/CPF válido.
+  const supplierInternational =
+    (!!supplierCountry && supplierCountry !== "BR") ||
+    (!supplierCountry && supplierTaxId.length !== 14 && supplierTaxId.length !== 11);
 
   return {
     DocEntry: Number(po.DocEntry),
@@ -161,6 +175,9 @@ async function loadPurchaseOrder(baseUrl: string, cookie: string, docEntry: numb
     DocumentStatus: po.DocumentStatus ?? null,
     DocumentLines: Array.isArray(po.DocumentLines) ? po.DocumentLines : [],
     supplierTaxId,
+    supplierCountry,
+    supplierInternational,
+    DocCurrency: po.DocCurrency ?? null,
   };
 }
 
@@ -317,7 +334,7 @@ function scoreCandidate(po: PoInfo, n: {
   nome_fornecedor: string;
   valor_total: number;
   data_emissao: string | null;
-}): { score: number; reasons: string[]; valorDiff: number; diasDiff: number | null } {
+}): { score: number; confidence: number; reasons: string[]; valorDiff: number; diasDiff: number | null } {
   const reasons: string[] = [];
   let score = 0;
 
@@ -346,7 +363,8 @@ function scoreCandidate(po: PoInfo, n: {
     else if (diasDiff <= 45) { score += 8; reasons.push("Emitida no mesmo período"); }
   }
 
-  return { score, reasons, valorDiff, diasDiff };
+  // Confiança em % (máximo teórico 105 pontos → limitado a 100).
+  return { score, confidence: Math.max(0, Math.min(100, score)), reasons, valorDiff, diasDiff };
 }
 
 /* ─────────── Handler ─────────── */
@@ -373,6 +391,10 @@ Deno.serve(async (req) => {
     window_days?: number;
     chave_acesso?: string;
     mode?: string;
+    import_id?: string;
+    reason?: string;
+    expense_id?: string;
+    nf?: Record<string, unknown>;
   } = {};
   try { body = await req.json(); } catch { /* ignore */ }
 
@@ -393,9 +415,74 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  if (action !== "search") {
+  if (action !== "search" && action !== "ai_extract") {
     const pause = await getIntegrationPause("sap_b1");
     if (pause) return pauseResponse(pause, corsHeaders);
+  }
+
+  /* ── IA: lê os anexos do pedido e sugere os dados da NF (sem SAP) ── */
+  if (action === "ai_extract") {
+    const expenseId = String(body.expense_id || "").trim();
+    if (!/^[0-9a-f-]{36}$/i.test(expenseId)) return json(400, { error: "expense_id inválido" });
+    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    if (!apiKey) return json(500, { error: "IA indisponível nesta instalação." });
+
+    const { data: atts } = await sb
+      .from("expense_attachments")
+      .select("file_name, file_path, mime_type, file_size")
+      .eq("expense_id", expenseId)
+      .limit(5);
+    const rows = (atts || []) as Array<{ file_name: string; file_path: string; mime_type: string | null; file_size: number | null }>;
+    if (!rows.length) return json(404, { error: "Este pedido não tem anexos para a IA analisar." });
+
+    // deno-lint-ignore no-explicit-any
+    const content: any[] = [{
+      type: "text",
+      text:
+        "Extraia os dados da nota fiscal de entrada dos anexos. Responda APENAS JSON com as chaves: " +
+        "numero_nf, serie, chave_acesso, data_emissao (YYYY-MM-DD), valor_total (número), " +
+        "cnpj_fornecedor, nome_fornecedor, moeda, observacoes. Use null quando não encontrar.",
+    }];
+    let used = 0;
+    for (const a of rows) {
+      if ((a.file_size ?? 0) > 8 * 1024 * 1024) continue;
+      const dl = await sb.storage.from("expense-attachments").download(a.file_path);
+      if (dl.error || !dl.data) continue;
+      const buf = new Uint8Array(await dl.data.arrayBuffer());
+      let bin = "";
+      for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+      const b64 = btoa(bin);
+      const mime = a.mime_type || (a.file_name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg");
+      if (!/^image\//.test(mime) && mime !== "application/pdf") continue;
+      content.push({ type: "image_url", image_url: { url: `data:${mime};base64,${b64}` } });
+      used++;
+      if (used >= 3) break;
+    }
+    if (used === 0) return json(422, { error: "Nenhum anexo legível (imagem ou PDF) foi encontrado." });
+
+    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-3.6-flash",
+        messages: [
+          { role: "system", content: "Você extrai dados fiscais de notas brasileiras e responde só JSON." },
+          { role: "user", content },
+        ],
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (aiResp.status === 429) return json(429, { error: "Muitas análises seguidas. Tente novamente em instantes." });
+    if (aiResp.status === 402) return json(402, { error: "Créditos de IA esgotados." });
+    if (!aiResp.ok) return json(502, { error: `Falha na análise por IA (${aiResp.status}).` });
+    const aiJson = await aiResp.json();
+    const text = String(aiJson?.choices?.[0]?.message?.content ?? "");
+    const match = text.match(/\{[\s\S]*\}/);
+    // deno-lint-ignore no-explicit-any
+    let parsedFields: any = null;
+    try { parsedFields = match ? JSON.parse(match[0]) : null; } catch { parsedFields = null; }
+    if (!parsedFields) return json(422, { error: "A IA não conseguiu ler os anexos. Preencha manualmente." });
+    return json(200, { ok: true, fields: parsedFields, analyzedFiles: used });
   }
 
   let baseUrl = "";
@@ -491,6 +578,36 @@ Deno.serve(async (req) => {
         .sort((a, b) => b.score - a.score || Math.abs(a.valorDiff) - Math.abs(b.valorDiff))
         .slice(0, MAX_CANDIDATES);
 
+      // NF já vinculada a este pedido (se houver).
+      const { data: linkedRows } = await sb
+        .from("nf_entrada_imports")
+        .select("id, chave_acesso, numero_nf, serie, cnpj_fornecedor, nome_fornecedor, data_emissao, valor_total, status, erp_invoice_posted, erp_invoice_doc_num, erp_invoice_doc_entry, sap_invoice_draft_id, sap_match_reason, match_resolved_by, match_resolved_at")
+        .eq("sap_company_db", companyDb)
+        .eq("sap_matched_po_doc_entry", String(po.DocEntry))
+        .neq("status", "cancelled")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      const linkedRow = (linkedRows || [])[0] as Record<string, unknown> | undefined;
+      const linked = linkedRow
+        ? {
+          importId: String(linkedRow.id),
+          chaveAcesso: String(linkedRow.chave_acesso || ""),
+          numeroNf: String(linkedRow.numero_nf || ""),
+          serie: String(linkedRow.serie || ""),
+          cnpjFornecedor: String(linkedRow.cnpj_fornecedor || ""),
+          nomeFornecedor: String(linkedRow.nome_fornecedor || ""),
+          dataEmissao: linkedRow.data_emissao ? String(linkedRow.data_emissao) : null,
+          valorTotal: Number(linkedRow.valor_total || 0),
+          posted: linkedRow.erp_invoice_posted === true,
+          invoiceDocNum: linkedRow.erp_invoice_doc_num ? String(linkedRow.erp_invoice_doc_num) : null,
+          invoiceDocEntry: linkedRow.erp_invoice_doc_entry ? String(linkedRow.erp_invoice_doc_entry) : null,
+          draftId: linkedRow.sap_invoice_draft_id ? String(linkedRow.sap_invoice_draft_id) : null,
+          matchReason: linkedRow.sap_match_reason ? String(linkedRow.sap_match_reason) : null,
+          resolvedBy: linkedRow.match_resolved_by ? String(linkedRow.match_resolved_by) : null,
+          resolvedAt: linkedRow.match_resolved_at ? String(linkedRow.match_resolved_at) : null,
+        }
+        : null;
+
       return json(200, {
         ok: true,
         purchaseOrder: {
@@ -500,8 +617,17 @@ Deno.serve(async (req) => {
           cardName: po.CardName,
           docDate: po.DocDate,
           docTotal: po.DocTotal,
+          docCurrency: po.DocCurrency,
           documentStatus: po.DocumentStatus,
         },
+        supplier: {
+          cardCode: po.CardCode,
+          taxId: po.supplierTaxId,
+          country: po.supplierCountry,
+          international: po.supplierInternational,
+        },
+        linked,
+        bestConfidence: candidates.length ? candidates[0].confidence : 0,
         window: { de, ate },
         candidates,
         masterTaxConfigured: !!mt,
@@ -509,7 +635,167 @@ Deno.serve(async (req) => {
       });
     }
 
+    /* ── Desvincular NF marcada como incorreta ── */
+    if (action === "unlink") {
+      const importId = String(body.import_id || "").trim();
+      if (!/^[0-9a-f-]{36}$/i.test(importId)) return json(400, { error: "import_id inválido" });
+      const { data: row } = await sb
+        .from("nf_entrada_imports")
+        .select("id, status, sap_company_db, sap_matched_po_doc_entry, erp_invoice_posted")
+        .eq("id", importId)
+        .maybeSingle();
+      if (!row) return json(404, { error: "Nota não encontrada." });
+      if (row.sap_company_db && row.sap_company_db !== companyDb) {
+        return json(403, { error: "Nota pertence a outra empresa." });
+      }
+      if (String(row.sap_matched_po_doc_entry || "") !== String(po.DocEntry)) {
+        return json(409, { error: "Esta nota não está vinculada a este pedido." });
+      }
+      if (row.erp_invoice_posted === true) {
+        return json(409, { error: "A NF já foi lançada no ERP — cancele o documento no ERP antes de desvincular." });
+      }
+      await sb.from("nf_entrada_imports").update({
+        sap_matched_po_doc_entry: null,
+        sap_matched_po_doc_num: null,
+        sap_matched_card_code: null,
+        sap_match_reason: "unlinked_by_user",
+        match_resolved_by: actor,
+        match_resolved_at: new Date().toISOString(),
+        status: "pending_expense",
+      }).eq("id", importId);
+      await sb.from("nf_entrada_logs").insert({
+        import_id: importId,
+        step: "manual_po_unlink",
+        message: `Vinculação com o PC ${po.DocNum ?? po.DocEntry} desfeita pelo usuário${body.reason ? `: ${String(body.reason).slice(0, 300)}` : ""}`,
+        actor,
+      });
+      return json(200, { ok: true, unlinked: true });
+    }
+
+    /* ── Lançamento manual (fornecedor internacional / sem match) ── */
+    if (action === "manual_post") {
+      const nf = (body.nf || {}) as Record<string, unknown>;
+      const numero = String(nf.numero_nf ?? "").trim();
+      const serie = String(nf.serie ?? "").trim();
+      const dataEmissao = String(nf.data_emissao ?? "").slice(0, 10);
+      const valorTotal = Number(nf.valor_total ?? 0);
+      const chaveManual = String(nf.chave_acesso ?? "").replace(/\D+/g, "");
+      const mode = body.mode === "post" ? "post" : "draft";
+
+      if (!numero) return json(400, { error: "Informe o número da NF." });
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dataEmissao)) return json(400, { error: "Informe a data de emissão." });
+      if (!Number.isFinite(valorTotal) || valorTotal <= 0) return json(400, { error: "Informe o valor total da NF." });
+      if (chaveManual && chaveManual.length !== 44) return json(400, { error: "Chave de acesso deve ter 44 dígitos." });
+      if (po.DocumentStatus === "bost_Close") {
+        return json(409, { error: "Pedido de compra já está fechado no ERP." });
+      }
+
+      const chaveKey = chaveManual || `MANUAL-${companyDb}-${po.DocEntry}-${numero}-${serie || "0"}`;
+
+      const { data: dup } = await sb
+        .from("nf_entrada_imports")
+        .select("id, erp_invoice_posted, erp_invoice_doc_num, sap_matched_po_doc_entry, sap_company_db, status")
+        .eq("chave_acesso", chaveKey)
+        .maybeSingle();
+      if (dup && dup.sap_company_db && dup.sap_company_db !== companyDb) {
+        return json(403, { error: "Nota pertence a outra empresa." });
+      }
+      if (dup?.erp_invoice_posted === true) {
+        return json(409, { error: `Esta NF já foi lançada no ERP (#${dup.erp_invoice_doc_num || "—"}).` });
+      }
+      if (dup && dup.sap_matched_po_doc_entry && String(dup.sap_matched_po_doc_entry) !== String(po.DocEntry)) {
+        return json(409, { error: "Esta NF já está vinculada a outro pedido." });
+      }
+
+      const { data: saved, error: saveErr } = await sb
+        .from("nf_entrada_imports")
+        .upsert({
+          chave_acesso: chaveKey,
+          numero_nf: numero,
+          serie: serie || null,
+          cnpj_fornecedor: onlyDigits(nf.cnpj_fornecedor) || po.supplierTaxId || null,
+          nome_fornecedor: String(nf.nome_fornecedor ?? po.CardName ?? "") || null,
+          data_emissao: dataEmissao,
+          valor_total: valorTotal,
+          itens: [],
+          impostos: {},
+          sap_company_db: companyDb,
+          sap_matched_po_doc_entry: String(po.DocEntry),
+          sap_matched_po_doc_num: po.DocNum != null ? String(po.DocNum) : null,
+          sap_matched_card_code: po.CardCode,
+          sap_matched_po_is_draft: false,
+          sap_match_reason: "manual_entry",
+          match_resolved_at: new Date().toISOString(),
+          match_resolved_by: actor,
+          status: "awaiting_sap",
+          last_error: null,
+        }, { onConflict: "chave_acesso" })
+        .select("id, status")
+        .maybeSingle();
+      if (saveErr || !saved) return json(500, { error: saveErr?.message || "Falha ao registrar a NF." });
+
+      const manualLines = po.DocumentLines.length
+        ? po.DocumentLines.map((l) => ({ BaseType: 22, BaseEntry: po.DocEntry, BaseLine: l.LineNum ?? 0 }))
+        : [{ BaseType: 22, BaseEntry: po.DocEntry, BaseLine: 0 }];
+      const comments = `NF de entrada lançada manualmente — NF ${numero}${serie ? `/${serie}` : ""}` +
+        `${chaveManual ? ` chave ${chaveManual}` : ""} (PC #${po.DocNum ?? po.DocEntry})`;
+      const payload = {
+        CardCode: po.CardCode,
+        DocDate: dataEmissao,
+        TaxDate: dataEmissao,
+        NumAtCard: `${numero}${serie ? `/${serie}` : ""}`.slice(0, 100),
+        Comments: comments.slice(0, 250),
+        DocumentLines: manualLines,
+        ...(mode === "draft" ? { DocObjectCode: "oPurchaseInvoices" } : {}),
+      };
+
+      const endpoint = mode === "draft" ? `${baseUrl}/Drafts` : `${baseUrl}/PurchaseInvoices`;
+      const resp = await fetch(endpoint, {
+        method: "POST",
+        headers: { Cookie: cookie, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) {
+        const msg = `Lançamento manual falhou ${resp.status}: ${(await resp.text()).slice(0, 300)}`;
+        await sb.from("nf_entrada_imports").update({ last_error: msg }).eq("id", saved.id);
+        await sb.from("nf_entrada_logs").insert({
+          import_id: saved.id, step: "manual_nf_entry", message: msg, actor,
+        });
+        return json(502, { error: msg });
+      }
+      const created = await resp.json();
+      const update: Record<string, unknown> = { status: "completed", last_error: null };
+      if (mode === "draft") update.sap_invoice_draft_id = String(created.DocEntry);
+      else {
+        update.erp_invoice_doc_entry = String(created.DocEntry);
+        update.erp_invoice_doc_num = created.DocNum != null ? String(created.DocNum) : null;
+        update.erp_invoice_posted = true;
+        update.erp_invoice_doc_date = dataEmissao;
+        update.erp_invoice_checked_at = new Date().toISOString();
+      }
+      await sb.from("nf_entrada_imports").update(update).eq("id", saved.id);
+      await sb.from("nf_entrada_logs").insert({
+        import_id: saved.id,
+        step: "manual_nf_entry",
+        status_to: "completed",
+        message: mode === "draft"
+          ? `Esboço de NF de Entrada criado manualmente — PC ${po.DocNum ?? po.DocEntry}, Draft ${created.DocEntry}`
+          : `NF de Entrada lançada manualmente — PC ${po.DocNum ?? po.DocEntry}, NF ERP #${created.DocNum ?? created.DocEntry}`,
+        actor,
+      });
+      return json(200, {
+        ok: true,
+        mode,
+        importId: saved.id,
+        draftId: mode === "draft" ? String(created.DocEntry) : undefined,
+        invoiceDocEntry: mode === "post" ? String(created.DocEntry) : undefined,
+        invoiceDocNum: mode === "post" && created.DocNum != null ? String(created.DocNum) : null,
+        poDocNum: po.DocNum,
+      });
+    }
+
     if (action !== "link") return json(400, { error: "Ação inválida" });
+
 
     const mode = body.mode === "post" ? "post" : "draft";
     const chave = String(body.chave_acesso || "").trim();

@@ -14,9 +14,28 @@ export interface MastertaxCandidate {
   alreadyLinkedPoDocEntry?: string | null;
   alreadyPosted?: boolean;
   score: number;
+  confidence: number;
   reasons: string[];
   valorDiff: number;
   diasDiff: number | null;
+}
+
+export interface MastertaxLinkedNf {
+  importId: string;
+  chaveAcesso: string;
+  numeroNf: string;
+  serie: string;
+  cnpjFornecedor: string;
+  nomeFornecedor: string;
+  dataEmissao: string | null;
+  valorTotal: number;
+  posted: boolean;
+  invoiceDocNum: string | null;
+  invoiceDocEntry: string | null;
+  draftId: string | null;
+  matchReason: string | null;
+  resolvedBy: string | null;
+  resolvedAt: string | null;
 }
 
 export interface MastertaxPoSearchResult {
@@ -27,8 +46,17 @@ export interface MastertaxPoSearchResult {
     cardName: string | null;
     docDate: string | null;
     docTotal: number;
+    docCurrency?: string | null;
     documentStatus: string | null;
   };
+  supplier?: {
+    cardCode: string;
+    taxId: string;
+    country: string;
+    international: boolean;
+  };
+  linked?: MastertaxLinkedNf | null;
+  bestConfidence?: number;
   window: { de: string; ate: string };
   candidates: MastertaxCandidate[];
   masterTaxConfigured: boolean;
@@ -44,6 +72,28 @@ export interface MastertaxLinkResult {
   invoiceDocNum?: string | null;
   poDocNum?: number | null;
   importId?: string;
+}
+
+export interface ManualNfInput {
+  numero_nf: string;
+  serie?: string;
+  chave_acesso?: string;
+  data_emissao: string;
+  valor_total: number;
+  cnpj_fornecedor?: string;
+  nome_fornecedor?: string;
+}
+
+export interface AiNfFields {
+  numero_nf?: string | null;
+  serie?: string | null;
+  chave_acesso?: string | null;
+  data_emissao?: string | null;
+  valor_total?: number | string | null;
+  cnpj_fornecedor?: string | null;
+  nome_fornecedor?: string | null;
+  moeda?: string | null;
+  observacoes?: string | null;
 }
 
 const FN = "mastertax-po-nf-search";
@@ -117,10 +167,60 @@ export function useMastertaxPoSearch(companyDb: string | null | undefined) {
     }
   }, [companyDb]);
 
+  /** Desfaz a vinculação de uma NF marcada como incorreta (só antes do lançamento). */
+  const unlink = useCallback(async (poDocEntry: number | string, importId: string, reason?: string) => {
+    if (!companyDb) throw new Error("Sessão do ERP não encontrada.");
+    setLinking(true);
+    try {
+      return await call<{ ok: boolean; unlinked: boolean }>({
+        action: "unlink",
+        company_db: companyDb,
+        po_doc_entry: poDocEntry,
+        import_id: importId,
+        reason,
+      });
+    } finally {
+      setLinking(false);
+    }
+  }, [companyDb]);
+
+  /** Lançamento manual da NF de entrada, vinculada ao pedido. */
+  const manualPost = useCallback(async (
+    poDocEntry: number | string,
+    nf: ManualNfInput,
+    mode: "draft" | "post",
+  ) => {
+    if (!companyDb) throw new Error("Sessão do ERP não encontrada.");
+    setLinking(true);
+    try {
+      return await call<MastertaxLinkResult>({
+        action: "manual_post",
+        company_db: companyDb,
+        po_doc_entry: poDocEntry,
+        nf,
+        mode,
+      });
+    } finally {
+      setLinking(false);
+    }
+  }, [companyDb]);
+
+  /** IA lê os anexos do pedido e sugere os campos da NF. */
+  const aiExtract = useCallback(async (poDocEntry: number | string, expenseId: string) => {
+    if (!companyDb) throw new Error("Sessão do ERP não encontrada.");
+    const data = await call<{ ok: boolean; fields: AiNfFields; analyzedFiles: number }>({
+      action: "ai_extract",
+      company_db: companyDb,
+      po_doc_entry: poDocEntry,
+      expense_id: expenseId,
+    });
+    return data;
+  }, [companyDb]);
+
   const reset = useCallback(() => {
     setResult(null);
     setError(null);
   }, []);
 
-  return { search, link, reset, loading, linking, error, result };
+  return { search, link, unlink, manualPost, aiExtract, reset, loading, linking, error, result };
 }
