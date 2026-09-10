@@ -121,6 +121,19 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
     }
   };
 
+  const handleSyncStatus = async (a?: AdvancePayment) => {
+    if (a) setBusyId(a.id); else setSyncing(true);
+    try {
+      const res = await syncSapStatus(a?.id);
+      toast.success(a ? "Situação atualizada com o ERP" : `Situação atualizada (${res?.synced ?? 0} documento(s))`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao consultar o ERP");
+    } finally {
+      if (a) setBusyId(null); else setSyncing(false);
+    }
+  };
+
+
   return (
     <div className="min-h-screen bg-background">
       <PageTitle title={pageTitle} />
