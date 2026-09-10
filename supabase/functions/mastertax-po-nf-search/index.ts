@@ -577,7 +577,11 @@ Deno.serve(async (req) => {
       }
 
       const candidates = Array.from(byChave.values())
-        .filter((c) => c.score >= 15)
+        .filter((c) =>
+          cnpjFilter
+            ? onlyDigits(c.cnpj_fornecedor) === cnpjFilter
+            : c.score >= 15
+        )
         .sort((a, b) => b.score - a.score || Math.abs(a.valorDiff) - Math.abs(b.valorDiff))
         .slice(0, MAX_CANDIDATES);
 
