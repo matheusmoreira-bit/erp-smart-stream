@@ -239,6 +239,31 @@ async function loadMasterTaxCreds(sb: Sb, companyDb: string): Promise<MtCreds | 
   };
 }
 
+/**
+ * Campos fiscais da localização brasileira do SAP B1 (Nº NF / Série / Subsérie / Modelo).
+ * SequenceCode = -1 indica numeração manual: o SAP passa a aceitar os valores informados.
+ * Modelo padrão 55 = NF-e.
+ */
+function brFiscalFields(args: {
+  numero?: string | null;
+  serie?: string | null;
+  subserie?: string | null;
+  modelo?: string | null;
+}): Record<string, unknown> {
+  const numero = String(args.numero ?? "").replace(/\D+/g, "");
+  if (!numero) return {};
+  const serie = String(args.serie ?? "").trim();
+  const subserie = String(args.subserie ?? "").trim();
+  const modelo = String(args.modelo ?? "").trim() || "55";
+  return {
+    SequenceCode: -1,
+    SequenceSerial: Number(numero),
+    SeriesString: serie || "1",
+    SubSeriesString: subserie || null,
+    SequenceModel: Number(modelo),
+  };
+}
+
 interface MtNota {
   chave_acesso: string;
   numero_nf: string;
@@ -877,6 +902,8 @@ Deno.serve(async (req) => {
       const nf = (body.nf || {}) as Record<string, unknown>;
       const numero = String(nf.numero_nf ?? "").trim();
       const serie = String(nf.serie ?? "").trim();
+      const subserie = String(nf.subserie ?? "").trim();
+      const modelo = String(nf.modelo ?? "").trim();
       const dataEmissao = String(nf.data_emissao ?? "").slice(0, 10);
       const valorTotal = Number(nf.valor_total ?? 0);
       const chaveManual = String(nf.chave_acesso ?? "").replace(/\D+/g, "");
@@ -944,6 +971,7 @@ Deno.serve(async (req) => {
         DocDate: dataEmissao,
         TaxDate: dataEmissao,
         NumAtCard: `${numero}${serie ? `/${serie}` : ""}`.slice(0, 100),
+        ...brFiscalFields({ numero, serie, subserie, modelo }),
         Comments: comments.slice(0, 250),
         DocumentLines: manualLines,
         ...(mode === "draft" ? { DocObjectCode: "oPurchaseInvoices" } : {}),
@@ -1099,6 +1127,10 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           DocObjectCode: "oPurchaseInvoices",
           CardCode: po.CardCode,
+          DocDate: row.data_emissao || undefined,
+          TaxDate: row.data_emissao || undefined,
+          NumAtCard: `${row.numero_nf ?? ""}${row.serie ? `/${row.serie}` : ""}`.slice(0, 100) || undefined,
+          ...brFiscalFields({ numero: row.numero_nf, serie: row.serie }),
           Comments: `NF Entrada chave ${chave} (vinculada ao PC #${po.DocNum ?? po.DocEntry})`,
           DocumentLines: lines,
         }),
@@ -1144,6 +1176,8 @@ Deno.serve(async (req) => {
         CardCode: po.CardCode,
         DocDate: row.data_emissao || undefined,
         TaxDate: row.data_emissao || undefined,
+        NumAtCard: `${row.numero_nf ?? ""}${row.serie ? `/${row.serie}` : ""}`.slice(0, 100) || undefined,
+        ...brFiscalFields({ numero: row.numero_nf, serie: row.serie }),
         Comments: `NF Entrada chave ${chave} (vinculada ao PC #${po.DocNum ?? po.DocEntry})`,
         DocumentLines: lines,
       }),

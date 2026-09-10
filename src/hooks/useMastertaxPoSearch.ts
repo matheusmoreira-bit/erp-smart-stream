@@ -98,6 +98,8 @@ export interface MastertaxLinkResult {
 export interface ManualNfInput {
   numero_nf: string;
   serie?: string;
+  subserie?: string;
+  modelo?: string;
   chave_acesso?: string;
   data_emissao: string;
   valor_total: number;
