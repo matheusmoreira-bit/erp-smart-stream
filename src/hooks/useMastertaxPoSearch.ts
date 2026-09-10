@@ -167,6 +167,56 @@ export function useMastertaxPoSearch(companyDb: string | null | undefined) {
     }
   }, [companyDb]);
 
+  /** Desfaz a vinculação de uma NF marcada como incorreta (só antes do lançamento). */
+  const unlink = useCallback(async (poDocEntry: number | string, importId: string, reason?: string) => {
+    if (!companyDb) throw new Error("Sessão do ERP não encontrada.");
+    setLinking(true);
+    try {
+      return await call<{ ok: boolean; unlinked: boolean }>({
+        action: "unlink",
+        company_db: companyDb,
+        po_doc_entry: poDocEntry,
+        import_id: importId,
+        reason,
+      });
+    } finally {
+      setLinking(false);
+    }
+  }, [companyDb]);
+
+  /** Lançamento manual da NF de entrada, vinculada ao pedido. */
+  const manualPost = useCallback(async (
+    poDocEntry: number | string,
+    nf: ManualNfInput,
+    mode: "draft" | "post",
+  ) => {
+    if (!companyDb) throw new Error("Sessão do ERP não encontrada.");
+    setLinking(true);
+    try {
+      return await call<MastertaxLinkResult>({
+        action: "manual_post",
+        company_db: companyDb,
+        po_doc_entry: poDocEntry,
+        nf,
+        mode,
+      });
+    } finally {
+      setLinking(false);
+    }
+  }, [companyDb]);
+
+  /** IA lê os anexos do pedido e sugere os campos da NF. */
+  const aiExtract = useCallback(async (poDocEntry: number | string, expenseId: string) => {
+    if (!companyDb) throw new Error("Sessão do ERP não encontrada.");
+    const data = await call<{ ok: boolean; fields: AiNfFields; analyzedFiles: number }>({
+      action: "ai_extract",
+      company_db: companyDb,
+      po_doc_entry: poDocEntry,
+      expense_id: expenseId,
+    });
+    return data;
+  }, [companyDb]);
+
   const reset = useCallback(() => {
     setResult(null);
     setError(null);
