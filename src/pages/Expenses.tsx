@@ -76,7 +76,7 @@ import {
 } from "@/components/ui/command";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VirtualExpensesTable } from "@/components/VirtualExpensesTable";
-import { ShieldAlert, FileSearch } from "lucide-react";
+import { ShieldAlert } from "lucide-react";
 import { PoNfEntradaActions } from "@/components/PoNfEntradaActions";
 
 import {
