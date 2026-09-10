@@ -389,6 +389,7 @@ Deno.serve(async (req) => {
     company_db?: string;
     po_doc_entry?: number | string;
     window_days?: number;
+    cnpj_fornecedor?: string;
     chave_acesso?: string;
     mode?: string;
     import_id?: string;
@@ -504,6 +505,8 @@ Deno.serve(async (req) => {
         Math.max(Number(body.window_days) || DEFAULT_WINDOW_DAYS, 15),
         MAX_WINDOW_DAYS,
       );
+      // Filtro opcional por CNPJ do fornecedor (match mais preciso).
+      const cnpjFilter = onlyDigits(body.cnpj_fornecedor);
       const ref = po.DocDate ? new Date(po.DocDate) : new Date();
       const de = isoDay(new Date(ref.getTime() - windowDays * 86_400_000));
       const ateRaw = new Date(ref.getTime() + windowDays * 86_400_000);
@@ -574,7 +577,11 @@ Deno.serve(async (req) => {
       }
 
       const candidates = Array.from(byChave.values())
-        .filter((c) => c.score >= 15)
+        .filter((c) =>
+          cnpjFilter
+            ? onlyDigits(c.cnpj_fornecedor) === cnpjFilter
+            : c.score >= 15
+        )
         .sort((a, b) => b.score - a.score || Math.abs(a.valorDiff) - Math.abs(b.valorDiff))
         .slice(0, MAX_CANDIDATES);
 
@@ -629,6 +636,7 @@ Deno.serve(async (req) => {
         linked,
         bestConfidence: candidates.length ? candidates[0].confidence : 0,
         window: { de, ate },
+        cnpjFilter: cnpjFilter || null,
         candidates,
         masterTaxConfigured: !!mt,
         warning: mtError || null,
