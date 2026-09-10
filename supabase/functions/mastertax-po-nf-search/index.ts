@@ -508,7 +508,7 @@ Deno.serve(async (req) => {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-3.6-flash",
+        model: AI_MODEL,
         messages: [
           { role: "system", content: "Você extrai dados fiscais de notas brasileiras e responde só JSON." },
           { role: "user", content },
