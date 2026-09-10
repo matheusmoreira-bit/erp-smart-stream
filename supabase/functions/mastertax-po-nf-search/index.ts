@@ -505,6 +505,8 @@ Deno.serve(async (req) => {
         Math.max(Number(body.window_days) || DEFAULT_WINDOW_DAYS, 15),
         MAX_WINDOW_DAYS,
       );
+      // Filtro opcional por CNPJ do fornecedor (match mais preciso).
+      const cnpjFilter = onlyDigits(body.cnpj_fornecedor);
       const ref = po.DocDate ? new Date(po.DocDate) : new Date();
       const de = isoDay(new Date(ref.getTime() - windowDays * 86_400_000));
       const ateRaw = new Date(ref.getTime() + windowDays * 86_400_000);
