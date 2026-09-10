@@ -223,11 +223,19 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-foreground break-words">{a.supplier_name}</span>
                     <DocKindOriginChip kind="advance" origin="flow" title="Adiantamento criado no ERP Flow" />
-                    <StatusOriginChip
-                      status={ADVANCE_TO_PURCHASE_STATUS[a.status] || "rascunho"}
-                      label={ADVANCE_STATUS_LABELS[a.status]}
-                      origin="erp_flow"
-                    />
+                    {(() => {
+                      const erp = erpSituation(a);
+                      return erp ? (
+                        <StatusOriginChip status={erp.status} label={erp.label} origin="erp" erpLabel="SAP" />
+                      ) : (
+                        <StatusOriginChip
+                          status={ADVANCE_TO_PURCHASE_STATUS[a.status] || "rascunho"}
+                          label={ADVANCE_STATUS_LABELS[a.status]}
+                          origin="erp_flow"
+                        />
+                      );
+                    })()}
+
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5 break-all">
                     {a.supplier_card_code}
@@ -249,25 +257,11 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
                       </span>
                     )}
                     {(a.sap_doc_num || a.sap_doc_entry) && (
-                      <Badge
-                        variant="outline"
-                        className={`text-[10px] ${
-                          a.sap_cancelled
-                            ? "border-destructive/40 text-destructive"
-                            : a.sap_doc_status === "bost_Close"
-                              ? "border-success/40 text-success"
-                              : "border-primary/40 text-primary"
-                        }`}
-                      >
-                        {a.sap_cancelled
-                          ? "Cancelado no ERP"
-                          : a.sap_doc_status === "bost_Close"
-                            ? "Fechado no ERP"
-                            : a.sap_doc_status === "bost_Open"
-                              ? "Aberto no ERP"
-                              : "Situação não consultada"}
+                      <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                        Flow: {ADVANCE_STATUS_LABELS[a.status]}
                       </Badge>
                     )}
+
                     {a.sap_status_synced_at && (
                       <span className="text-[10px] text-muted-foreground">
                         Consultado em {fmtDate(a.sap_status_synced_at)}
