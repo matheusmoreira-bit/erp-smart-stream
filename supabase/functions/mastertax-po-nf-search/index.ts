@@ -389,6 +389,7 @@ Deno.serve(async (req) => {
     company_db?: string;
     po_doc_entry?: number | string;
     window_days?: number;
+    cnpj_fornecedor?: string;
     chave_acesso?: string;
     mode?: string;
     import_id?: string;
