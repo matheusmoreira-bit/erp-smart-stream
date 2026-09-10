@@ -391,6 +391,10 @@ Deno.serve(async (req) => {
     window_days?: number;
     chave_acesso?: string;
     mode?: string;
+    import_id?: string;
+    reason?: string;
+    expense_id?: string;
+    nf?: Record<string, unknown>;
   } = {};
   try { body = await req.json(); } catch { /* ignore */ }
 
@@ -411,9 +415,74 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  if (action !== "search") {
+  if (action !== "search" && action !== "ai_extract") {
     const pause = await getIntegrationPause("sap_b1");
     if (pause) return pauseResponse(pause, corsHeaders);
+  }
+
+  /* ── IA: lê os anexos do pedido e sugere os dados da NF (sem SAP) ── */
+  if (action === "ai_extract") {
+    const expenseId = String(body.expense_id || "").trim();
+    if (!/^[0-9a-f-]{36}$/i.test(expenseId)) return json(400, { error: "expense_id inválido" });
+    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    if (!apiKey) return json(500, { error: "IA indisponível nesta instalação." });
+
+    const { data: atts } = await sb
+      .from("expense_attachments")
+      .select("file_name, file_path, mime_type, file_size")
+      .eq("expense_id", expenseId)
+      .limit(5);
+    const rows = (atts || []) as Array<{ file_name: string; file_path: string; mime_type: string | null; file_size: number | null }>;
+    if (!rows.length) return json(404, { error: "Este pedido não tem anexos para a IA analisar." });
+
+    // deno-lint-ignore no-explicit-any
+    const content: any[] = [{
+      type: "text",
+      text:
+        "Extraia os dados da nota fiscal de entrada dos anexos. Responda APENAS JSON com as chaves: " +
+        "numero_nf, serie, chave_acesso, data_emissao (YYYY-MM-DD), valor_total (número), " +
+        "cnpj_fornecedor, nome_fornecedor, moeda, observacoes. Use null quando não encontrar.",
+    }];
+    let used = 0;
+    for (const a of rows) {
+      if ((a.file_size ?? 0) > 8 * 1024 * 1024) continue;
+      const dl = await sb.storage.from("expense-attachments").download(a.file_path);
+      if (dl.error || !dl.data) continue;
+      const buf = new Uint8Array(await dl.data.arrayBuffer());
+      let bin = "";
+      for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+      const b64 = btoa(bin);
+      const mime = a.mime_type || (a.file_name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg");
+      if (!/^image\//.test(mime) && mime !== "application/pdf") continue;
+      content.push({ type: "image_url", image_url: { url: `data:${mime};base64,${b64}` } });
+      used++;
+      if (used >= 3) break;
+    }
+    if (used === 0) return json(422, { error: "Nenhum anexo legível (imagem ou PDF) foi encontrado." });
+
+    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-3.6-flash",
+        messages: [
+          { role: "system", content: "Você extrai dados fiscais de notas brasileiras e responde só JSON." },
+          { role: "user", content },
+        ],
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (aiResp.status === 429) return json(429, { error: "Muitas análises seguidas. Tente novamente em instantes." });
+    if (aiResp.status === 402) return json(402, { error: "Créditos de IA esgotados." });
+    if (!aiResp.ok) return json(502, { error: `Falha na análise por IA (${aiResp.status}).` });
+    const aiJson = await aiResp.json();
+    const text = String(aiJson?.choices?.[0]?.message?.content ?? "");
+    const match = text.match(/\{[\s\S]*\}/);
+    // deno-lint-ignore no-explicit-any
+    let parsedFields: any = null;
+    try { parsedFields = match ? JSON.parse(match[0]) : null; } catch { parsedFields = null; }
+    if (!parsedFields) return json(422, { error: "A IA não conseguiu ler os anexos. Preencha manualmente." });
+    return json(200, { ok: true, fields: parsedFields, analyzedFiles: used });
   }
 
   let baseUrl = "";
