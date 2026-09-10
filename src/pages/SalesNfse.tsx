@@ -558,7 +558,10 @@ export default function SalesNfse() {
   const { sort, toggleSort } = useTableSort<NfseSortKey>("data", "desc");
 
   const [confirmOrder, setConfirmOrder] = useState<SalesOrderRow | null>(null);
+  const [confirmStep, setConfirmStep] = useState<1 | 2>(1);
+  const [confirmAck, setConfirmAck] = useState(false);
   const [emitting, setEmitting] = useState(false);
+
   const [syncing, setSyncing] = useState(false);
   const [pdfFiles, setPdfFiles] = useState<Set<string>>(new Set());
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
