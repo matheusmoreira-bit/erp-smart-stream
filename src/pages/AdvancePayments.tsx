@@ -237,6 +237,11 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
                     <span className="font-mono text-foreground">{fmtCurrency(a.amount, a.currency)}</span>
                     <span className="text-xs">Vence: {fmtDate(a.due_date)}</span>
                     <span className="text-xs">Solicitante: {a.requester_name || "—"}</span>
+                    {a.approved_at && (
+                      <span className="text-xs">
+                        {a.auto_approved ? "Autoaprovado" : `Aprovado por ${a.approved_by_name || "—"}`} em {fmtDate(a.approved_at)}
+                      </span>
+                    )}
                     {(a.sap_doc_num || a.sap_doc_entry) && (
                       <span className="text-xs text-success">
                         ERP: nº {a.sap_doc_num || a.sap_doc_entry}
