@@ -77,6 +77,7 @@ export function PoMastertaxNfDialog({ open, onClose, companyDb, poDocEntry, poLa
 
   const candidates: MastertaxCandidate[] = result?.candidates || [];
   const po = result?.purchaseOrder;
+  const supplierTaxId = (result?.supplier?.taxId || "").replace(/\D/g, "");
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v && !linking) onClose(); }}>
