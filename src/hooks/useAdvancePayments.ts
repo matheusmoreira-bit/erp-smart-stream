@@ -91,6 +91,11 @@ export interface AdvancePayment {
   reconciled_at?: string | null;
   reconciliation_error?: string | null;
   sap_incoming_payment_doc_entry?: number | null;
+  /** Aprovação (mesma etapa usada nas compras). */
+  approved_by?: string | null;
+  approved_by_name?: string | null;
+  approved_at?: string | null;
+  auto_approved?: boolean | null;
   created_at: string;
   updated_at: string;
   attachments?: AdvanceAttachment[];
@@ -113,6 +118,22 @@ export interface CreateAdvanceInput {
 }
 
 type AdvanceAttachmentInsert = TablesInsert<"advance_payment_attachments">;
+
+/**
+ * Fluxo de autoaprovação de adiantamentos.
+ * Lido do cadastro de recursos do sistema (global ou por empresa).
+ */
+export async function isAutoApprovalEnabled(companyDb?: string | null): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("feature_flags")
+    .select("enabled, scope, company_db")
+    .eq("key", "advance_auto_approval");
+  if (error || !data?.length) return false;
+  const perCompany = companyDb ? data.find((f) => f.company_db === companyDb) : undefined;
+  const global = data.find((f) => f.scope === "global" || !f.company_db);
+  return Boolean((perCompany ?? global)?.enabled);
+}
+
 
 async function callAdvanceToSap(advance_id: string) {
   const res = await sapFunctionFetch("advance-to-sap", {
@@ -194,10 +215,11 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
       const uid = userData?.user?.id;
       if (!uid) throw new Error("Usuário não autenticado.");
 
-      // Adiantamento de cliente não passa por aprovação: ao enviar, já integra ao ERP.
-      const type = input.advance_type || advanceType;
-      const isCustomer = type === "customer";
-      const status: AdvanceStatus = input.submit ? (isCustomer ? "integrating" : "pending") : "draft";
+      // Todo adiantamento (cliente ou fornecedor) passa por aprovação.
+      // A autoaprovação, quando ligada, aprova logo após o envio.
+      const status: AdvanceStatus = input.submit ? "pending" : "draft";
+
+
 
 
       const items = input.items || [];
@@ -270,9 +292,20 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
         }
       }
 
-      // Cliente: integra imediatamente, sem etapa de aprovação.
-      if (isCustomer && input.submit) {
+      // Autoaprovação: se o fluxo automático estiver ligado, aprova e integra na sequência.
+      if (input.submit && (await isAutoApprovalEnabled(input.company_db))) {
+        await (supabase as any)
+          .from("advance_payments")
+          .update({
+            status: "approved",
+            approved_by: uid,
+            approved_by_name: "Autoaprovação",
+            approved_at: new Date().toISOString(),
+            auto_approved: true,
+          })
+          .eq("id", row.id);
         try {
+          await (supabase as any).from("advance_payments").update({ status: "integrating" }).eq("id", row.id);
           await callAdvanceToSap(row.id);
         } catch (e) {
           await (supabase as any)
@@ -284,6 +317,7 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
         }
       }
 
+
       await fetchAll();
       return row as AdvancePayment;
 
@@ -293,11 +327,19 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
 
   const approve = useCallback(
     async (id: string) => {
+      const { data: userData } = await supabase.auth.getUser();
       const { error: err } = await (supabase as any)
         .from("advance_payments")
-        .update({ status: "approved" })
+        .update({
+          status: "approved",
+          approved_by: userData?.user?.id ?? null,
+          approved_by_name: session?.userName || userData?.user?.email || null,
+          approved_at: new Date().toISOString(),
+          auto_approved: false,
+        })
         .eq("id", id);
       if (err) throw err;
+
       // Tenta integrar imediatamente
       try {
         await supabase
@@ -315,7 +357,7 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
         await fetchAll();
       }
     },
-    [fetchAll],
+    [fetchAll, session?.userName],
   );
 
   const reject = useCallback(

@@ -12,6 +12,19 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { toast } from "sonner";
 import { PageTitle } from "@/components/PageTitle";
 import { copyDocLink, readDocParam } from "@/lib/doc-deep-link";
+import { StatusOriginChip } from "@/components/StatusOriginChip";
+import { DocKindOriginChip } from "@/components/DocKindOriginChip";
+
+/** Mapeia o status do adiantamento para o mesmo vocabulário visual das compras. */
+const ADVANCE_TO_PURCHASE_STATUS: Record<string, string> = {
+  draft: "rascunho",
+  pending: "pendente_aprovacao",
+  approved: "aprovado",
+  rejected: "rejeitado",
+  integrating: "pc_lancado",
+  integrated: "finalizado",
+  failed: "cancelado",
+};
 
 
 function fmtCurrency(v: number, ccy: string = "BRL") {
@@ -209,7 +222,12 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-foreground break-words">{a.supplier_name}</span>
-                    <Badge className={ADVANCE_STATUS_COLORS[a.status]}>{ADVANCE_STATUS_LABELS[a.status]}</Badge>
+                    <DocKindOriginChip kind="advance" origin="flow" title="Adiantamento criado no ERP Flow" />
+                    <StatusOriginChip
+                      status={ADVANCE_TO_PURCHASE_STATUS[a.status] || "rascunho"}
+                      label={ADVANCE_STATUS_LABELS[a.status]}
+                      origin="erp_flow"
+                    />
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5 break-all">
                     {a.supplier_card_code}
@@ -219,6 +237,11 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
                     <span className="font-mono text-foreground">{fmtCurrency(a.amount, a.currency)}</span>
                     <span className="text-xs">Vence: {fmtDate(a.due_date)}</span>
                     <span className="text-xs">Solicitante: {a.requester_name || "—"}</span>
+                    {a.approved_at && (
+                      <span className="text-xs">
+                        {a.auto_approved ? "Autoaprovado" : `Aprovado por ${a.approved_by_name || "—"}`} em {fmtDate(a.approved_at)}
+                      </span>
+                    )}
                     {(a.sap_doc_num || a.sap_doc_entry) && (
                       <span className="text-xs text-success">
                         ERP: nº {a.sap_doc_num || a.sap_doc_entry}
@@ -292,7 +315,7 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
                   >
                     <Link2 className="w-4 h-4" />
                   </Button>
-                  {!isCustomerAdvance && a.status === "pending" && (
+                  {a.status === "pending" && (
                     <>
                       <Button size="icon" variant="outline" onClick={() => handleApprove(a)} disabled={busyId === a.id} aria-label="Aprovar" className="h-10 w-10 sm:h-9 sm:w-9">
                         {busyId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
