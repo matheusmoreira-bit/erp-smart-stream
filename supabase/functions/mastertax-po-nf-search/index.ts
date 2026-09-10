@@ -15,6 +15,7 @@ import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 let corsHeaders: Record<string, string> = corsFor(new Request("http://localhost"));
 import { requireAdminOrSapModule, authErrorResponse } from "../_shared/auth.ts";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
+import { hashInput, getCachedAnalysis, saveAnalysis } from "../_shared/ai-doc-cache.ts";
 
 const DEFAULT_MASTERTAX_URL = "https://api.mastertax.app";
 const MAX_WINDOW_DAYS = 180;
