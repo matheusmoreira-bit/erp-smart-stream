@@ -415,6 +415,7 @@ Deno.serve(async (req) => {
     reason?: string;
     expense_id?: string;
     nf?: Record<string, unknown>;
+    force_ai?: boolean;
   } = {};
   try { body = await req.json(); } catch { /* ignore */ }
 
