@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { originSegmentClasses } from "@/lib/erp-origin-styles";
 
 /**
  * Chip único no mesmo padrão visual de `StatusOriginChip`:
