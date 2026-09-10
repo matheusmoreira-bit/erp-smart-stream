@@ -294,16 +294,24 @@ async function fetchMasterTaxRange(
       });
     } catch (e) {
       error = `Master Tax indisponível: ${(e as Error).message}`;
+      console.error(`[mastertax] falha de rede empresa=${empresaId}: ${(e as Error).message}`);
       break;
     }
+    lastStatus = resp.status;
     const raw = await resp.text().catch(() => "");
     if (!resp.ok) {
       error = `Master Tax HTTP ${resp.status}`;
+      console.error(`[mastertax] HTTP ${resp.status} empresa=${empresaId} body=${raw.slice(0, 400)}`);
       break;
     }
     // deno-lint-ignore no-explicit-any
     let data: any = null;
     try { data = JSON.parse(raw); } catch { data = null; }
+    if (data === null) {
+      error = "Master Tax retornou uma resposta inválida";
+      console.error(`[mastertax] resposta não-JSON empresa=${empresaId} body=${raw.slice(0, 400)}`);
+      break;
+    }
     const retorno = data?.retorno ?? data;
     // deno-lint-ignore no-explicit-any
     const rows: any[] = Array.isArray(retorno?.data)
@@ -313,9 +321,11 @@ async function fetchMasterTaxRange(
         : Array.isArray(data?.data)
           ? data.data
           : Array.isArray(data) ? data : [];
+    rawRows += rows.length;
     for (const r of rows) {
       const n = parseNota(r);
       if (n) notas.push(n);
+      else skipped++;
     }
     const lastPage = Number(
       retorno?.last_page ?? retorno?.meta?.last_page ?? data?.meta?.last_page ??
@@ -324,8 +334,12 @@ async function fetchMasterTaxRange(
     if (!rows.length || rows.length < limite || pagina >= lastPage || pagina >= 20) break;
     pagina++;
   }
-  return { notas, error };
+  console.log(
+    `[mastertax] empresa=${empresaId} periodo=${de}..${ate} status=${lastStatus ?? "-"} linhas=${rawRows} notas=${notas.length} ignoradas=${skipped}`,
+  );
+  return { notas, error, httpStatus: lastStatus, rawRows };
 }
+
 
 /* ─────────── Score ─────────── */
 
