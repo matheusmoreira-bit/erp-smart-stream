@@ -922,9 +922,13 @@ Deno.serve(async (req) => {
         if (found) break;
       }
       if (!found) return json(404, { error: "Nota não encontrada na Master Tax." });
-      if (mt.cnpj && found.cnpj_destinatario && found.cnpj_destinatario !== mt.cnpj) {
+      if (
+        mt.cnpj && found.cnpj_destinatario &&
+        found.cnpj_destinatario.slice(0, 8) !== mt.cnpj.slice(0, 8)
+      ) {
         return json(403, { error: "Nota pertence a outra empresa." });
       }
+
       const { data: inserted, error: insErr } = await sb
         .from("nf_entrada_imports")
         .upsert({
