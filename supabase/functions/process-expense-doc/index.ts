@@ -454,7 +454,24 @@ Regras IMPORTANTES:
 - Quando vários arquivos forem enviados juntos, is_invoice_equivalent deve ser TRUE se AO MENOS UM deles for Nota Fiscal, invoice ou equivalente, mesmo que os demais sejam apenas comprovantes ou documentos de apoio.
 - document_kind: use "invoice" para invoices internacionais, "nota_fiscal" para NFs BR, "receipt" para recibos, "comprovante_pagamento" para comprovantes bancários/PIX, "boleto" para boletos, "contrato" para contratos, "outro" para o resto.`;
 
-    const aiResponse = await fetch(
+    // Cache: o mesmo documento (mesmos arquivos + mesmo prompt/modelo) não é
+    // reavaliado pela IA — a análise anterior é reaproveitada.
+    const aiCacheDb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const aiCacheKey = {
+      scope: "expense_doc_extract",
+      inputHash: await hashInput({
+        provider: aiProvider,
+        model: aiProvider === "openai" ? OPENAI_AI_MODEL : LOVABLE_AI_MODEL,
+        prompt: systemPrompt,
+        parts: aiProvider === "openai" ? openAiContentParts : lovableContentParts,
+      }),
+    };
+    const aiCacheHit = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+      ? await getCachedAnalysis<unknown>(aiCacheDb, aiCacheKey)
+      : null;
+
+    const aiResponse = aiCacheHit ? null : await fetch(
+
       aiProvider === "openai"
         ? "https://api.openai.com/v1/responses"
         : "https://ai.gateway.lovable.dev/v1/chat/completions",
