@@ -1353,7 +1353,7 @@ export default function SalesNfse() {
     } finally {
       setEmitting(false);
     }
-  }, [confirmOrder, load, companyDb]);
+  }, [confirmOrder, load, companyDb, confirmStep, confirmAck]);
 
   /** Cancela a nota no ERP (validação e credenciais ficam no servidor). */
   const cancelInvoice = useCallback(async () => {
