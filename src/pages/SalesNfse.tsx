@@ -1898,6 +1898,75 @@ export default function SalesNfse() {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={!!cancelTarget}
+        onOpenChange={(v) => {
+          if (!v && !cancelling) {
+            setCancelTarget(null);
+            setCancelReason("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancelar nota no ERP</DialogTitle>
+            <DialogDescription>
+              A nota será cancelada diretamente no ERP. Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          {cancelTarget && (
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">Documento</span>
+                <span className="font-mono">
+                  {cancelTarget.inv.sap_invoice_doc_num ?? cancelTarget.inv.sap_invoice_doc_entry}
+                </span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">Cliente</span>
+                <span className="text-right">{cancelTarget.order.supplier_name}</span>
+              </div>
+              {cancelTarget.inv.nfse_number && (
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">NFS-e</span>
+                  <span className="font-mono">{cancelTarget.inv.nfse_number}</span>
+                </div>
+              )}
+              <div className="space-y-1">
+                <label htmlFor="nfse-cancel-reason" className="text-xs text-muted-foreground">
+                  Motivo (opcional)
+                </label>
+                <Textarea
+                  id="nfse-cancel-reason"
+                  value={cancelReason}
+                  maxLength={250}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Ex.: nota emitida com valor incorreto"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              disabled={cancelling}
+              onClick={() => {
+                setCancelTarget(null);
+                setCancelReason("");
+              }}
+            >
+              Voltar
+            </Button>
+            <Button variant="destructive" className="gap-2" disabled={cancelling} onClick={() => void cancelInvoice()}>
+              {cancelling && <Loader2 className="w-4 h-4 animate-spin" />}
+              Cancelar nota
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
+
       <BaixaRecebimentoDialog
         open={!!baixaTarget}
         onClose={() => setBaixaTarget(null)}
