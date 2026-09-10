@@ -661,6 +661,34 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Notas já consumidas (lançadas, com esboço ou vinculadas a outro pedido)
+      // não podem reaparecer na busca — evita reuso/duplicidade de lançamento.
+      const consumed = new Map<string, string>();
+      {
+        const { data: usedRows } = await sb
+          .from("nf_entrada_imports")
+          .select("chave_acesso, status, erp_invoice_posted, erp_invoice_doc_num, sap_invoice_draft_id, sap_matched_po_doc_entry")
+          .eq("sap_company_db", companyDb)
+          .limit(2000);
+        for (const u of (usedRows || []) as Array<Record<string, unknown>>) {
+          const chave = String(u.chave_acesso || "");
+          if (!chave) continue;
+          const status = String(u.status || "");
+          if (u.erp_invoice_posted === true || u.erp_invoice_doc_num) {
+            consumed.set(chave, "lancada");
+          } else if (u.sap_invoice_draft_id) {
+            consumed.set(chave, "esboco");
+          } else if (
+            u.sap_matched_po_doc_entry &&
+            String(u.sap_matched_po_doc_entry) !== String(po.DocEntry)
+          ) {
+            consumed.set(chave, "outro_pedido");
+          } else if (status === "cancelled") {
+            consumed.set(chave, "cancelada");
+          }
+        }
+      }
+
       // Regras rígidas: mesmo CNPJ do fornecedor do pedido e valor dentro de ±15%.
       const requiredCnpj = supplierCnpj;
       const poTotal = Math.abs(Number(po.DocTotal || 0));
@@ -671,10 +699,24 @@ Deno.serve(async (req) => {
       const pool = Array.from(byChave.values());
       let cutCnpj = 0;
       let cutValor = 0;
+      let cutLancada = 0;
+      let cutEsboco = 0;
+      let cutOutroPedido = 0;
+      let cutCancelada = 0;
       const candidates = pool
         .filter((c) => {
           if (requiredCnpj && onlyDigits(c.cnpj_fornecedor) !== requiredCnpj) { cutCnpj++; return false; }
           if (!requiredCnpj && c.score < 15) return false;
+          const reuse = consumed.get(c.chave_acesso);
+          if (reuse === "lancada") { cutLancada++; return false; }
+          if (reuse === "esboco") { cutEsboco++; return false; }
+          if (reuse === "outro_pedido") { cutOutroPedido++; return false; }
+          if (reuse === "cancelada") { cutCancelada++; return false; }
+          if (c.alreadyPosted) { cutLancada++; return false; }
+          if (
+            c.alreadyLinkedPoDocEntry &&
+            String(c.alreadyLinkedPoDocEntry) !== String(po.DocEntry)
+          ) { cutOutroPedido++; return false; }
           if (poTotal > 0) {
             const valor = Math.abs(Number(c.valor_total || 0));
             if (valor < minValor || valor > maxValor) { cutValor++; return false; }
@@ -694,9 +736,14 @@ Deno.serve(async (req) => {
         totalAnalisadas: pool.length,
         descartadasPorCnpj: cutCnpj,
         descartadasPorValor: cutValor,
+        descartadasJaLancadas: cutLancada,
+        descartadasComEsboco: cutEsboco,
+        descartadasOutroPedido: cutOutroPedido,
+        descartadasCanceladas: cutCancelada,
         exibidas: 0,
         error: mtError || null,
       };
+
 
 
 
