@@ -77,7 +77,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { VirtualExpensesTable } from "@/components/VirtualExpensesTable";
 import { ShieldAlert, FileSearch } from "lucide-react";
-import { PoMastertaxNfDialog } from "@/components/PoMastertaxNfDialog";
+import { PoNfEntradaActions } from "@/components/PoNfEntradaActions";
 
 import {
   Dialog,
@@ -818,15 +818,13 @@ function ExpenseDetailModal({
               <div className="border-t border-border pt-4 flex flex-col-reverse sm:flex-row sm:justify-end sm:flex-wrap gap-2 sm:gap-3">
                 <Button variant="outline" onClick={onClose} className="w-full sm:w-auto justify-center">Fechar</Button>
                 {canSearchMastertax && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setMastertaxOpen(true)}
-                    className="w-full sm:w-auto justify-center gap-1.5"
-                    title="Procurar na Master Tax a NF correspondente a este pedido"
-                  >
-                    <FileSearch className="w-4 h-4" aria-hidden="true" />
-                    Buscar NF na Master Tax
-                  </Button>
+                  <PoNfEntradaActions
+                    companyDb={expense.company_db || sapSession?.companyDB || null}
+                    poDocEntry={expense.sap_doc_entry!}
+                    poLabel={`#${expense.sap_doc_num || expense.sap_doc_entry}`}
+                    expenseId={expense.id}
+                    onDone={onSynced}
+                  />
                 )}
 
                 {showOpenNfse && (
