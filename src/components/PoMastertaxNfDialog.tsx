@@ -187,9 +187,21 @@ export function PoMastertaxNfDialog({ open, onClose, companyDb, poDocEntry, poLa
             <p className="text-xs">
               A busca considera apenas notas do mesmo CNPJ do fornecedor e com valor até 15% acima ou abaixo do pedido. Amplie o período para procurar em um intervalo maior.
             </p>
-
+            {result.masterTax && (
+              <p className="text-xs">
+                Master Tax respondeu com {result.masterTax.lidas} nota(s) no período
+                {result.masterTax.descartadasPorCnpj > 0
+                  ? ` · ${result.masterTax.descartadasPorCnpj} de outro CNPJ`
+                  : ""}
+                {result.masterTax.descartadasPorValor > 0
+                  ? ` · ${result.masterTax.descartadasPorValor} fora da faixa de valor`
+                  : ""}
+                .
+              </p>
+            )}
           </div>
         )}
+
 
         {!loading && !error && candidates.length > 0 && (
           <ScrollArea className="max-h-[45vh] pr-2">

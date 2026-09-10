@@ -267,12 +267,16 @@ async function fetchMasterTaxRange(
   empresaId: string,
   de: string,
   ate: string,
-): Promise<{ notas: MtNota[]; error?: string }> {
+): Promise<{ notas: MtNota[]; error?: string; httpStatus?: number; rawRows: number }> {
   const notas: MtNota[] = [];
   const authHeader = creds.token.toLowerCase().startsWith("bearer ") ? creds.token : `Bearer ${creds.token}`;
   const limite = 50;
   let pagina = 1;
   let error: string | undefined;
+  let lastStatus: number | undefined;
+  let rawRows = 0;
+  let skipped = 0;
+
 
   while (true) {
     const params = new URLSearchParams({
@@ -294,16 +298,24 @@ async function fetchMasterTaxRange(
       });
     } catch (e) {
       error = `Master Tax indisponível: ${(e as Error).message}`;
+      console.error(`[mastertax] falha de rede empresa=${empresaId}: ${(e as Error).message}`);
       break;
     }
+    lastStatus = resp.status;
     const raw = await resp.text().catch(() => "");
     if (!resp.ok) {
       error = `Master Tax HTTP ${resp.status}`;
+      console.error(`[mastertax] HTTP ${resp.status} empresa=${empresaId} body=${raw.slice(0, 400)}`);
       break;
     }
     // deno-lint-ignore no-explicit-any
     let data: any = null;
     try { data = JSON.parse(raw); } catch { data = null; }
+    if (data === null) {
+      error = "Master Tax retornou uma resposta inválida";
+      console.error(`[mastertax] resposta não-JSON empresa=${empresaId} body=${raw.slice(0, 400)}`);
+      break;
+    }
     const retorno = data?.retorno ?? data;
     // deno-lint-ignore no-explicit-any
     const rows: any[] = Array.isArray(retorno?.data)
@@ -313,9 +325,11 @@ async function fetchMasterTaxRange(
         : Array.isArray(data?.data)
           ? data.data
           : Array.isArray(data) ? data : [];
+    rawRows += rows.length;
     for (const r of rows) {
       const n = parseNota(r);
       if (n) notas.push(n);
+      else skipped++;
     }
     const lastPage = Number(
       retorno?.last_page ?? retorno?.meta?.last_page ?? data?.meta?.last_page ??
@@ -324,8 +338,12 @@ async function fetchMasterTaxRange(
     if (!rows.length || rows.length < limite || pagina >= lastPage || pagina >= 20) break;
     pagina++;
   }
-  return { notas, error };
+  console.log(
+    `[mastertax] empresa=${empresaId} periodo=${de}..${ate} status=${lastStatus ?? "-"} linhas=${rawRows} notas=${notas.length} ignoradas=${skipped}`,
+  );
+  return { notas, error, httpStatus: lastStatus, rawRows };
 }
+
 
 /* ─────────── Score ─────────── */
 
@@ -514,6 +532,7 @@ Deno.serve(async (req) => {
       const ate = isoDay(ateRaw > today ? today : ateRaw);
 
       // Notas já importadas na base (mesma empresa, dentro da janela).
+      const supplierCnpj = cnpjFilter || onlyDigits(po.supplierTaxId || "");
       const { data: localRows } = await sb
         .from("nf_entrada_imports")
         .select("id, chave_acesso, numero_nf, serie, cnpj_fornecedor, nome_fornecedor, data_emissao, valor_total, sap_matched_po_doc_entry, erp_invoice_posted, status")
@@ -522,8 +541,27 @@ Deno.serve(async (req) => {
         .lte("data_emissao", ate)
         .limit(500);
 
+      // Reforço: notas do mesmo fornecedor fora da janela também entram na análise.
+      let localByCnpj: typeof localRows = null;
+      if (supplierCnpj) {
+        const wideDe = isoDay(new Date(ref.getTime() - MAX_WINDOW_DAYS * 86_400_000));
+        const wideAte = isoDay(new Date(Math.min(ref.getTime() + MAX_WINDOW_DAYS * 86_400_000, today.getTime())));
+        const { data } = await sb
+          .from("nf_entrada_imports")
+          .select("id, chave_acesso, numero_nf, serie, cnpj_fornecedor, nome_fornecedor, data_emissao, valor_total, sap_matched_po_doc_entry, erp_invoice_posted, status")
+          .eq("sap_company_db", companyDb)
+          .eq("cnpj_fornecedor", supplierCnpj)
+          .gte("data_emissao", wideDe)
+          .lte("data_emissao", wideAte)
+          .limit(200);
+        localByCnpj = data;
+      }
+
+
       const byChave = new Map<string, Candidate>();
-      for (const r of (localRows || []) as Array<Record<string, string | number | boolean | null>>) {
+      const localAll = [...(localRows || []), ...(localByCnpj || [])];
+      for (const r of localAll as Array<Record<string, string | number | boolean | null>>) {
+
         const chave = String(r.chave_acesso || "");
         if (!chave || r.status === "cancelled") continue;
         const s = scoreCandidate(po, {
@@ -550,14 +588,28 @@ Deno.serve(async (req) => {
 
       // Master Tax (opcional: se não houver credencial, só usamos as importadas).
       let mtError: string | undefined;
+      let mtStatus: number | undefined;
+      let mtRawRows = 0;
+      let mtNotas = 0;
+      let mtOutroDestinatario = 0;
       const mt = await loadMasterTaxCreds(sb, companyDb);
       if (mt) {
         for (const empresaId of mt.empresa_ids) {
-          const { notas, error } = await fetchMasterTaxRange(mt, empresaId, de, ate);
+          const { notas, error, httpStatus, rawRows } = await fetchMasterTaxRange(mt, empresaId, de, ate);
           if (error) mtError = error;
+          if (typeof httpStatus === "number") mtStatus = httpStatus;
+          mtRawRows += rawRows;
+          mtNotas += notas.length;
           for (const n of notas) {
-            if (mt.cnpj && n.cnpj_destinatario && n.cnpj_destinatario !== mt.cnpj) continue;
+            // A consulta já é escopada por empresa_id da Master Tax; só descartamos
+            // quando o destinatário é de outro grupo (raiz de CNPJ diferente).
+            if (
+              mt.cnpj && n.cnpj_destinatario &&
+              n.cnpj_destinatario.slice(0, 8) !== mt.cnpj.slice(0, 8)
+            ) { mtOutroDestinatario++; continue; }
+
             if (byChave.has(n.chave_acesso)) continue;
+
             const s = scoreCandidate(po, n);
             byChave.set(n.chave_acesso, {
               chave_acesso: n.chave_acesso,
@@ -577,24 +629,42 @@ Deno.serve(async (req) => {
       }
 
       // Regras rígidas: mesmo CNPJ do fornecedor do pedido e valor dentro de ±15%.
-      const requiredCnpj = cnpjFilter || onlyDigits(po.supplierTaxId || "");
+      const requiredCnpj = supplierCnpj;
       const poTotal = Math.abs(Number(po.DocTotal || 0));
       const VALUE_TOLERANCE = 0.15;
       const minValor = poTotal > 0 ? Number((poTotal * (1 - VALUE_TOLERANCE)).toFixed(2)) : 0;
       const maxValor = poTotal > 0 ? Number((poTotal * (1 + VALUE_TOLERANCE)).toFixed(2)) : 0;
 
-      const candidates = Array.from(byChave.values())
+      const pool = Array.from(byChave.values());
+      let cutCnpj = 0;
+      let cutValor = 0;
+      const candidates = pool
         .filter((c) => {
-          if (requiredCnpj && onlyDigits(c.cnpj_fornecedor) !== requiredCnpj) return false;
+          if (requiredCnpj && onlyDigits(c.cnpj_fornecedor) !== requiredCnpj) { cutCnpj++; return false; }
           if (!requiredCnpj && c.score < 15) return false;
           if (poTotal > 0) {
             const valor = Math.abs(Number(c.valor_total || 0));
-            if (valor < minValor || valor > maxValor) return false;
+            if (valor < minValor || valor > maxValor) { cutValor++; return false; }
           }
           return true;
         })
         .sort((a, b) => b.score - a.score || Math.abs(a.valorDiff) - Math.abs(b.valorDiff))
         .slice(0, MAX_CANDIDATES);
+
+      const masterTaxDiag = {
+        configured: !!mt,
+        httpStatus: mtStatus ?? null,
+        periodo: { de, ate },
+        recebidas: mtRawRows,
+        lidas: mtNotas,
+        outroDestinatario: mtOutroDestinatario,
+        totalAnalisadas: pool.length,
+        descartadasPorCnpj: cutCnpj,
+        descartadasPorValor: cutValor,
+        exibidas: 0,
+        error: mtError || null,
+      };
+
 
 
       // NF já vinculada a este pedido (se houver).
@@ -650,10 +720,11 @@ Deno.serve(async (req) => {
         window: { de, ate },
         cnpjFilter: requiredCnpj || null,
         valueRange: poTotal > 0 ? { min: minValor, max: maxValor, tolerance: VALUE_TOLERANCE } : null,
-
         candidates,
         masterTaxConfigured: !!mt,
+        masterTax: { ...masterTaxDiag, exibidas: candidates.length },
         warning: mtError || null,
+
       });
     }
 
@@ -851,9 +922,13 @@ Deno.serve(async (req) => {
         if (found) break;
       }
       if (!found) return json(404, { error: "Nota não encontrada na Master Tax." });
-      if (mt.cnpj && found.cnpj_destinatario && found.cnpj_destinatario !== mt.cnpj) {
+      if (
+        mt.cnpj && found.cnpj_destinatario &&
+        found.cnpj_destinatario.slice(0, 8) !== mt.cnpj.slice(0, 8)
+      ) {
         return json(403, { error: "Nota pertence a outra empresa." });
       }
+
       const { data: inserted, error: insErr } = await sb
         .from("nf_entrada_imports")
         .upsert({
