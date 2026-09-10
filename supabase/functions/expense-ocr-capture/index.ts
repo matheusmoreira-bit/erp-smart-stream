@@ -1,4 +1,6 @@
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { hashInput, getCachedAnalysis, saveAnalysis } from "../_shared/ai-doc-cache.ts";
 
 /**
  * OCR de captura rápida (mobile): recebe a foto de uma nota/boleto e
