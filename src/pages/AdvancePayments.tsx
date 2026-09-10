@@ -312,6 +312,21 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
                       <Wallet className="w-4 h-4" /> Reconciliar
                     </Button>
                   )}
+                  {a.sap_doc_entry && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => void handleSyncStatus(a)}
+                      disabled={busyId === a.id}
+                      aria-label="Atualizar situação no ERP"
+                      title="Atualizar situação no ERP"
+                      className="h-10 w-10 sm:h-9 sm:w-9"
+                    >
+                      {busyId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                    </Button>
+                  )}
+
+
 
                   {a.status === "failed" && (
                     <Button size="icon" variant="outline" onClick={() => handleRetry(a)} disabled={busyId === a.id} aria-label="Reintegrar" className="h-10 w-10 sm:h-9 sm:w-9">
