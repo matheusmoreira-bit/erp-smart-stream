@@ -76,7 +76,9 @@ import {
 } from "@/components/ui/command";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VirtualExpensesTable } from "@/components/VirtualExpensesTable";
-import { ShieldAlert } from "lucide-react";
+import { ShieldAlert, FileSearch } from "lucide-react";
+import { PoMastertaxNfDialog } from "@/components/PoMastertaxNfDialog";
+
 import {
   Dialog,
   DialogContent,
@@ -380,13 +382,25 @@ function ExpenseDetailModal({
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [showPullback, setShowPullback] = useState(false);
+  const [mastertaxOpen, setMastertaxOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const statusLabel = useStatusLabel();
+  const { has: hasCap, isPrivileged: capPrivileged } = useMyCapabilities();
+  const { session: sapSession } = useSap();
   const isSalesDoc = mode === "sales";
   if (!expense) return null;
 
+
   const showSubmit = expense.status === "rascunho";
   const alreadyInSap = !!(expense.sap_doc_entry || expense.sap_doc_num);
+  // Busca de NF na Master Tax: só para pedidos de compra já existentes no ERP e
+  // para quem tem o módulo NF de Entrada (a Edge Function revalida no servidor).
+  const canSearchMastertax =
+    !isSalesDoc &&
+    !!expense.sap_doc_entry &&
+    (capPrivileged || hasCap("nf_entrada")) &&
+    expense.status !== "cancelado";
+
   // Cancelamento: rascunho/pendente, ou já integrado ao ERP e ainda sem NF de
   // entrada — nesse caso o cancelamento é propagado ao ERP.
   const cancelPropagatesToErp =
@@ -800,9 +814,21 @@ function ExpenseDetailModal({
 
 
 
-            {(showSubmit || showCancel || showRetrySap || showEdit || showApproval || showReactivate || showEmitNfse || showOpenNfse) && (
+            {(showSubmit || showCancel || showRetrySap || showEdit || showApproval || showReactivate || showEmitNfse || showOpenNfse || canSearchMastertax) && (
               <div className="border-t border-border pt-4 flex flex-col-reverse sm:flex-row sm:justify-end sm:flex-wrap gap-2 sm:gap-3">
                 <Button variant="outline" onClick={onClose} className="w-full sm:w-auto justify-center">Fechar</Button>
+                {canSearchMastertax && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setMastertaxOpen(true)}
+                    className="w-full sm:w-auto justify-center gap-1.5"
+                    title="Procurar na Master Tax a NF correspondente a este pedido"
+                  >
+                    <FileSearch className="w-4 h-4" aria-hidden="true" />
+                    Buscar NF na Master Tax
+                  </Button>
+                )}
+
                 {showOpenNfse && (
                   <Button
                     variant="outline"
@@ -915,6 +941,19 @@ function ExpenseDetailModal({
           </div>
         </DialogContent>
       </Dialog>
+
+      {canSearchMastertax && mastertaxOpen && (
+        <PoMastertaxNfDialog
+          open={mastertaxOpen}
+          onClose={() => setMastertaxOpen(false)}
+          companyDb={expense.company_db || sapSession?.companyDB || null}
+          poDocEntry={expense.sap_doc_entry}
+          poLabel={`#${expense.sap_doc_num || expense.sap_doc_entry}`}
+          onDone={onSynced}
+        />
+      )}
+
+
 
       <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
         <AlertDialogContent>
