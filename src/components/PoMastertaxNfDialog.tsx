@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AlertCircle, FileSearch, Loader2, SearchX } from "lucide-react";
@@ -96,7 +95,7 @@ export function PoMastertaxNfDialog({ open, onClose, companyDb, poDocEntry, poLa
             <Label htmlFor="mt-window" className="text-xs text-muted-foreground">Período em torno da data do pedido</Label>
             <Select
               value={windowDays}
-              onValueChange={(v) => { setWindowDays(v); void runSearch(v, cnpj); }}
+              onValueChange={(v) => { setWindowDays(v); void runSearch(v); }}
               disabled={loading || linking}
             >
               <SelectTrigger id="mt-window" className="w-48">
