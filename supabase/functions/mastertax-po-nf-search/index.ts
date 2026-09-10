@@ -149,17 +149,39 @@ async function loadPurchaseOrder(baseUrl: string, cookie: string, docEntry: numb
   let supplierCountry = "";
   if (po.CardCode) {
     try {
+      // Sem $select: localizações BR guardam o CNPJ em BPFiscalTaxIDCollection,
+      // não em FederalTaxID.
       const bp = await fetch(
-        `${baseUrl}/BusinessPartners('${encodeURIComponent(po.CardCode)}')?$select=CardCode,CardName,FederalTaxID,Country`,
+        `${baseUrl}/BusinessPartners('${encodeURIComponent(po.CardCode)}')`,
         { headers: { Cookie: cookie } },
       );
       if (bp.ok) {
         const bpj = await bp.json();
-        supplierTaxId = onlyDigits(bpj?.FederalTaxID);
         supplierCountry = String(bpj?.Country ?? "").toUpperCase();
+
+        const candidates: string[] = [];
+        const push = (v: unknown) => {
+          const d = onlyDigits(v);
+          if (d) candidates.push(d);
+        };
+        push(bpj?.FederalTaxID);
+        push(bpj?.AdditionalID);
+        const fiscal = Array.isArray(bpj?.BPFiscalTaxIDCollection)
+          ? bpj.BPFiscalTaxIDCollection
+          : [];
+        for (const f of fiscal) {
+          push(f?.TaxId1); // CNPJ na localização brasileira
+          push(f?.CNPJ);
+          push(f?.TaxId0); // CPF
+          push(f?.CPF);
+        }
+        supplierTaxId = candidates.find((c) => c.length === 14) ??
+          candidates.find((c) => c.length === 11) ??
+          candidates[0] ?? "";
       }
     } catch { /* fornecedor sem CNPJ cadastrado — segue por nome/valor */ }
   }
+
 
   // Fornecedor internacional: país diferente de BR, ou sem CNPJ/CPF válido.
   const supplierInternational =
