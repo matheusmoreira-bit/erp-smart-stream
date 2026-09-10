@@ -16,6 +16,9 @@ import {
   Copy,
   ExternalLink,
   Download,
+  Ban,
+
+
 
 } from "lucide-react";
 import { toast } from "sonner";
@@ -507,7 +510,23 @@ interface SapInvoiceRef {
   paidToDate?: number | null;
   currency?: string | null;
   status?: string | null;
+  /** Nota cancelada/estornada no ERP. */
+  cancelled?: boolean;
 }
+
+/** Status real do documento lido no ERP (Service Layer). */
+interface SapDocStatus {
+  doc_entry: number;
+  doc_num: number | null;
+  document_status: string | null;
+  cancelled: boolean;
+  doc_total: number | null;
+  paid_to_date: number | null;
+  currency: string | null;
+  /** UDF de fila de transmissão do addon fiscal. */
+  transmission_status: string | null;
+}
+
 
 type NfseSortKey = "pedido" | "status" | "origem" | "cliente" | "data" | "valor" | "nfse";
 
@@ -550,8 +569,15 @@ export default function SalesNfse() {
   const [detailOrder, setDetailOrder] = useState<SalesOrderRow | null>(null);
   const [retryTarget, setRetryTarget] = useState<SalesOrderRow | null>(null);
   const [baixaTarget, setBaixaTarget] = useState<{ order: SalesOrderRow; inv: NfseRow; saldoResidual: number } | null>(null);
+  // Status real dos documentos no ERP (consultado no Service Layer)
+  const [docStatuses, setDocStatuses] = useState<Record<string, SapDocStatus>>({});
+  const [docStatusLoading, setDocStatusLoading] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<{ order: SalesOrderRow; inv: NfseRow } | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelling, setCancelling] = useState(false);
   const uploadTargetRef = useRef<{ order: SalesOrderRow; inv: NfseRow | null } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
 
 
   // envio de e-mail
@@ -626,7 +652,10 @@ export default function SalesNfse() {
               "Invoices",
               {
                 $select: "DocEntry,DocNum,DocDate,CardCode,DocTotal,PaidToDate,DocCurrency,Cancelled,DocumentStatus,DocumentLines",
-                $filter: `DocDate ge '${cutoffIso}' and Cancelled ne 'tYES'`,
+                // Sem filtro de canceladas: a tela precisa mostrar o status real,
+                // inclusive das notas canceladas no ERP.
+                $filter: `DocDate ge '${cutoffIso}'`,
+
                 $orderby: "DocDate desc",
               },
               true,
@@ -690,8 +719,8 @@ export default function SalesNfse() {
         const byEntry = new Map<number, SapInvoiceRef>();
         const entries = new Set<number>();
         for (const nf of erpInvoiceRows) {
-          if (!nf || nf.Cancelled === "tYES") continue;
-          entries.add(Number(nf.DocEntry));
+          if (!nf) continue;
+          const cancelled = nf.Cancelled === "tYES";
           const ref: SapInvoiceRef = {
             docEntry: Number(nf.DocEntry),
             docNum: nf.DocNum ?? null,
@@ -700,8 +729,13 @@ export default function SalesNfse() {
             paidToDate: Number(nf.PaidToDate || 0),
             currency: nf.DocCurrency || "BRL",
             status: nf.DocumentStatus || null,
+            cancelled,
           };
+          // Canceladas entram só no índice por documento (para exibir o status
+          // real); nunca contam como nota válida do pedido.
           byEntry.set(ref.docEntry, ref);
+          if (cancelled) continue;
+          entries.add(Number(nf.DocEntry));
           const card = (nf.CardCode || "").trim().toUpperCase();
           const total = Number(nf.DocTotal || 0);
           if (card && total > 0) {
@@ -715,6 +749,7 @@ export default function SalesNfse() {
             if (!byOrder.has(base)) byOrder.set(base, ref);
           }
         }
+
         setSapInvoices({ available: true, byOrder, byMatch, byEntry, entries });
       } else {
         setSapInvoices({ available: false, byOrder: new Map(), byMatch: new Map(), byEntry: new Map(), entries: new Set() });
@@ -758,6 +793,43 @@ export default function SalesNfse() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /** Consulta no ERP o status real (aberta/fechada/cancelada) das notas listadas. */
+  const refreshDocStatuses = useCallback(async () => {
+    if (!companyDb) return;
+    const entries = Array.from(
+      new Set(
+        invoices
+          .map((row) => Number(row.sap_invoice_doc_entry))
+          .filter((n) => Number.isFinite(n) && n > 0),
+      ),
+    ).slice(0, 200);
+    if (entries.length === 0) {
+      setDocStatuses({});
+      return;
+    }
+    setDocStatusLoading(true);
+    try {
+      const res = await sapFunctionFetch("sales-nfse-emit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "doc-status", company_db: companyDb, doc_entries: entries }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body?.error) throw new Error(body?.error || `Falha ao consultar status (${res.status})`);
+      setDocStatuses((body?.statuses || {}) as Record<string, SapDocStatus>);
+    } catch (e) {
+      console.warn("status real do ERP indisponível:", (e as Error).message);
+    } finally {
+      setDocStatusLoading(false);
+    }
+  }, [companyDb, invoices]);
+
+  useEffect(() => {
+    void refreshDocStatuses();
+  }, [refreshDocStatuses]);
+
+
 
   const pickPdf = useCallback((order: SalesOrderRow, inv: NfseRow | null) => {
     uploadTargetRef.current = { order, inv };
@@ -1083,8 +1155,10 @@ export default function SalesNfse() {
       return {
         emitted: !!sapInv || localValid || closedInErp,
         docNum: sapInv?.docNum ?? (localValid ? inv?.sap_invoice_doc_num ?? null : null),
+        docEntry: sapInv?.docEntry ?? (localEntry ? Number(localEntry) : null),
         localStale: !!localEntry && !localValid && !sapInv && !closedInErp,
       };
+
     },
 
     [sapInvoices],
@@ -1135,6 +1209,65 @@ export default function SalesNfse() {
     },
     [emissionFor],
   );
+
+  /**
+   * Status REAL do documento no ERP (não o registro local): usa o que foi lido
+   * no Service Layer — cancelada, fechada (faturada/paga), aberta — e o estado
+   * fiscal (número da NFS-e autorizada pela prefeitura).
+   */
+  const erpDocStatusFor = useCallback(
+    (o: SalesOrderRow, inv: NfseRow | null | undefined) => {
+      const entry = Number(inv?.sap_invoice_doc_entry ?? emissionFor(o, inv).docEntry ?? 0);
+      if (!Number.isFinite(entry) || entry <= 0) {
+        return {
+          label: "Sem documento no ERP",
+          cls: "border-border bg-muted/40 text-muted-foreground",
+          detail: "Nenhuma nota fiscal foi criada para este pedido.",
+          cancelled: false,
+          docEntry: 0,
+          docNum: null as number | null,
+        };
+      }
+      const live = docStatuses[String(entry)];
+      const ref = sapInvoices.byEntry.get(entry);
+      const docNum = live?.doc_num ?? ref?.docNum ?? inv?.sap_invoice_doc_num ?? null;
+      const cancelled = live?.cancelled ?? ref?.cancelled ?? inv?.status === "cancelled";
+      if (cancelled) {
+        return {
+          label: "Cancelada no ERP",
+          cls: "border-destructive/30 bg-destructive/10 text-destructive",
+          detail: `Documento ${docNum ?? entry} cancelado no ERP.`,
+          cancelled: true,
+          docEntry: entry,
+          docNum,
+        };
+      }
+      const docStatus = live?.document_status ?? ref?.status ?? null;
+      const closed = docStatus === "bost_Close";
+      const authorized = !!(inv?.nfse_number || inv?.fiscal_doc_key);
+      if (authorized) {
+        return {
+          label: closed ? "Autorizada · fechada" : "Autorizada na prefeitura",
+          cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-600",
+          detail: `NFS-e ${inv?.nfse_number ?? ""} · documento ${docNum ?? entry}${closed ? " · quitada/fechada no ERP" : " · em aberto no ERP"}`,
+          cancelled: false,
+          docEntry: entry,
+          docNum,
+        };
+      }
+      return {
+        label: closed ? "Emitida · fechada" : "Emitida · aguardando prefeitura",
+        cls: "border-primary/30 bg-primary/10 text-primary",
+        detail: `Documento ${docNum ?? entry} criado no ERP, ainda sem número de NFS-e autorizado.`,
+        cancelled: false,
+        docEntry: entry,
+        docNum,
+      };
+    },
+    [docStatuses, sapInvoices, emissionFor],
+  );
+
+
 
   const sortedRows = useMemo(() => {
     const rows = filtered.map((o) => {
@@ -1208,6 +1341,45 @@ export default function SalesNfse() {
       setEmitting(false);
     }
   }, [confirmOrder, load, companyDb]);
+
+  /** Cancela a nota no ERP (validação e credenciais ficam no servidor). */
+  const cancelInvoice = useCallback(async () => {
+    if (!cancelTarget) return;
+    const entry = Number(cancelTarget.inv.sap_invoice_doc_entry ?? 0);
+    if (!entry) {
+      toast.error("Nota sem documento no ERP para cancelar.");
+      return;
+    }
+    setCancelling(true);
+    try {
+      const res = await sapFunctionFetch("sales-nfse-emit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "cancel",
+          company_db: companyDb,
+          sap_invoice_doc_entry: entry,
+          reason: cancelReason.trim(),
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body?.error) throw new Error(body?.error || `Falha ao cancelar (${res.status})`);
+      toast.success(
+        body?.already_cancelled
+          ? "Esta nota já estava cancelada no ERP."
+          : `Nota ${body?.doc_num ?? entry} cancelada no ERP.`,
+      );
+      setCancelTarget(null);
+      setCancelReason("");
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setCancelling(false);
+    }
+  }, [cancelTarget, cancelReason, companyDb, load]);
+
+
 
   const syncStatus = useCallback(async () => {
     setSyncing(true);
@@ -1332,6 +1504,11 @@ export default function SalesNfse() {
                 <tr>
                   <SortTh label="Pedido" sortKey="pedido" active={sort.key === "pedido"} dir={sort.dir} onSort={toggleSort} />
                   <SortTh label="Status" sortKey="status" active={sort.key === "status"} dir={sort.dir} onSort={toggleSort} />
+                  <th className="text-left px-3 py-2 font-medium">
+                    Status no ERP
+                    {docStatusLoading && <Loader2 className="ml-1 inline w-3 h-3 animate-spin" />}
+                  </th>
+
                   <SortTh label="Origem" sortKey="origem" active={sort.key === "origem"} dir={sort.dir} onSort={toggleSort} />
                   <SortTh label="Cliente" sortKey="cliente" active={sort.key === "cliente"} dir={sort.dir} onSort={toggleSort} />
                   <SortTh label="Data" sortKey="data" active={sort.key === "data"} dir={sort.dir} onSort={toggleSort} />
@@ -1344,7 +1521,9 @@ export default function SalesNfse() {
               <tbody>
                 {sortedRows.map(({ o, inv, emission, status }) => {
                   const emitted = emission.emitted;
+                  const erp = erpDocStatusFor(o, inv);
                   const saldoResidual = saldoResidualFor(inv);
+
                   const accessKey = normalizeNfseAccessKey(inv?.fiscal_doc_key);
                   const publicConsultationUrl = buildNfsePublicConsultationUrl(accessKey);
                   return (
@@ -1404,6 +1583,22 @@ export default function SalesNfse() {
                           {status.label}
                         </span>
                       </td>
+
+                      <td className="px-3 py-2">
+                        <span
+                          className={`inline-flex items-center whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium ${erp.cls}`}
+                          title={erp.detail}
+                        >
+                          {erp.label}
+                        </span>
+                        {erp.docEntry > 0 && (
+                          <div className="mt-1 font-mono text-[10px] text-muted-foreground">
+                            doc {erp.docNum ?? erp.docEntry}
+                          </div>
+                        )}
+                      </td>
+
+
 
                       <td className="px-3 py-2">
                         <Badge variant="outline" className="text-[11px]">
@@ -1628,6 +1823,28 @@ export default function SalesNfse() {
                           >
                             {emitted ? "Emitida" : "Emitir NFS-e"}
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 gap-1 text-destructive hover:text-destructive"
+                            disabled={!inv?.sap_invoice_doc_entry || erp.cancelled || cancelling}
+                            title={
+                              !inv?.sap_invoice_doc_entry
+                                ? "Nenhuma nota emitida no ERP para cancelar"
+                                : erp.cancelled
+                                  ? "Nota já cancelada no ERP"
+                                  : "Cancelar a nota no ERP"
+                            }
+                            onClick={() => {
+                              if (!inv?.sap_invoice_doc_entry) return;
+                              setCancelReason("");
+                              setCancelTarget({ order: o, inv });
+                            }}
+                          >
+                            <Ban className="w-3.5 h-3.5" />
+                            Cancelar
+                          </Button>
+
                         </div>
                       </td>
                     </tr>
@@ -1680,6 +1897,75 @@ export default function SalesNfse() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={!!cancelTarget}
+        onOpenChange={(v) => {
+          if (!v && !cancelling) {
+            setCancelTarget(null);
+            setCancelReason("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancelar nota no ERP</DialogTitle>
+            <DialogDescription>
+              A nota será cancelada diretamente no ERP. Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          {cancelTarget && (
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">Documento</span>
+                <span className="font-mono">
+                  {cancelTarget.inv.sap_invoice_doc_num ?? cancelTarget.inv.sap_invoice_doc_entry}
+                </span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">Cliente</span>
+                <span className="text-right">{cancelTarget.order.supplier_name}</span>
+              </div>
+              {cancelTarget.inv.nfse_number && (
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">NFS-e</span>
+                  <span className="font-mono">{cancelTarget.inv.nfse_number}</span>
+                </div>
+              )}
+              <div className="space-y-1">
+                <label htmlFor="nfse-cancel-reason" className="text-xs text-muted-foreground">
+                  Motivo (opcional)
+                </label>
+                <Textarea
+                  id="nfse-cancel-reason"
+                  value={cancelReason}
+                  maxLength={250}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Ex.: nota emitida com valor incorreto"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              disabled={cancelling}
+              onClick={() => {
+                setCancelTarget(null);
+                setCancelReason("");
+              }}
+            >
+              Voltar
+            </Button>
+            <Button variant="destructive" className="gap-2" disabled={cancelling} onClick={() => void cancelInvoice()}>
+              {cancelling && <Loader2 className="w-4 h-4 animate-spin" />}
+              Cancelar nota
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
 
       <BaixaRecebimentoDialog
         open={!!baixaTarget}

@@ -180,8 +180,133 @@ Deno.serve(async (req) => {
       return json({ updated });
     }
 
+    /* ── status real dos documentos no ERP ─────────────────────────── */
+    if (action === "doc-status") {
+      const companyDb = String(body?.company_db || "").trim();
+      const docEntries = Array.isArray(body?.doc_entries)
+        ? (body.doc_entries as unknown[]).map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0)
+        : [];
+      if (!companyDb) return json({ error: "company_db obrigatório" }, 400);
+      if (docEntries.length === 0) return json({ statuses: {} });
+      if (docEntries.length > 200) return json({ error: "Limite de 200 documentos por consulta." }, 400);
+
+      const creds = await loadCreds(supabase, companyDb);
+      const baseUrl = buildBaseUrl(creds.service_layer_url);
+      const session = await sapLogin(baseUrl, creds.username, creds.password, creds.company_db || companyDb);
+
+      const statuses: Record<string, {
+        doc_entry: number;
+        doc_num: number | null;
+        document_status: string | null;
+        cancelled: boolean;
+        doc_total: number | null;
+        paid_to_date: number | null;
+        currency: string | null;
+        transmission_status: string | null;
+      }> = {};
+
+      for (let i = 0; i < docEntries.length; i += 40) {
+        const chunk = docEntries.slice(i, i + 40);
+        const filter = chunk.map((e) => `DocEntry eq ${e}`).join(" or ");
+        const res = await sapGet(
+          baseUrl,
+          session.cookies,
+          `Invoices?$select=DocEntry,DocNum,DocumentStatus,Cancelled,DocTotal,PaidToDate,DocCurrency,U_XmlServiceStatus&$filter=${encodeURIComponent(filter)}`,
+        ).catch((e: unknown) => {
+          console.error("doc-status chunk falhou", (e as Error).message);
+          return null;
+        });
+        for (const nf of (res?.value || []) as Array<Record<string, unknown>>) {
+          const entry = Number(nf.DocEntry);
+          if (!Number.isFinite(entry)) continue;
+          statuses[String(entry)] = {
+            doc_entry: entry,
+            doc_num: nf.DocNum != null ? Number(nf.DocNum) : null,
+            document_status: nf.DocumentStatus != null ? String(nf.DocumentStatus) : null,
+            cancelled: String(nf.Cancelled || "tNO") === "tYES",
+            doc_total: nf.DocTotal != null ? Number(nf.DocTotal) : null,
+            paid_to_date: nf.PaidToDate != null ? Number(nf.PaidToDate) : null,
+            currency: nf.DocCurrency != null ? String(nf.DocCurrency) : null,
+            transmission_status: nf.U_XmlServiceStatus != null ? String(nf.U_XmlServiceStatus) : null,
+          };
+        }
+      }
+
+      // Mantém o registro local coerente com o ERP (nota cancelada por fora).
+      for (const st of Object.values(statuses)) {
+        if (!st.cancelled) continue;
+        await supabase
+          .from("sales_order_invoices")
+          .update({ status: "cancelled" })
+          .eq("company_db", companyDb)
+          .eq("sap_invoice_doc_entry", st.doc_entry)
+          .neq("status", "cancelled");
+      }
+
+      return json({ statuses });
+    }
+
+    /* ── cancelamento da NFS-e no ERP ──────────────────────────────── */
+    if (action === "cancel") {
+      const companyDb = String(body?.company_db || "").trim();
+      const docEntry = Number(body?.sap_invoice_doc_entry ?? NaN);
+      const reason = String(body?.reason || "").trim().slice(0, 250);
+      if (!companyDb) return json({ error: "company_db obrigatório" }, 400);
+      if (!Number.isFinite(docEntry) || docEntry <= 0) {
+        return json({ error: "Documento inválido para cancelamento." }, 400);
+      }
+
+      const creds = await loadCreds(supabase, companyDb);
+      const baseUrl = buildBaseUrl(creds.service_layer_url);
+      const session = await sapLogin(baseUrl, creds.username, creds.password, creds.company_db || companyDb);
+
+      const current = await sapGet(
+        baseUrl,
+        session.cookies,
+        `Invoices(${docEntry})?$select=DocEntry,DocNum,Cancelled,DocumentStatus`,
+      );
+      if (String(current?.Cancelled || "tNO") === "tYES") {
+        await supabase
+          .from("sales_order_invoices")
+          .update({ status: "cancelled" })
+          .eq("company_db", companyDb)
+          .eq("sap_invoice_doc_entry", docEntry);
+        return json({ success: true, already_cancelled: true, doc_num: Number(current?.DocNum) || null });
+      }
+
+      const cancelRes = await fetch(`${baseUrl}/Invoices(${docEntry})/Cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: session.cookies },
+      });
+      if (!cancelRes.ok) {
+        const errBody = await cancelRes.json().catch(() => ({}));
+        const msg = (errBody as { error?: { message?: { value?: string } } })?.error?.message?.value
+          || JSON.stringify(errBody);
+        return json({ error: `ERP recusou o cancelamento [${cancelRes.status}]: ${String(msg).slice(0, 400)}` }, 400);
+      }
+      const cancelDoc = await cancelRes.json().catch(() => ({}));
+
+      const { error: updErr } = await supabase
+        .from("sales_order_invoices")
+        .update({
+          status: "cancelled",
+          last_error: reason ? `Cancelada no ERP Flow: ${reason}` : "Cancelada no ERP Flow",
+        })
+        .eq("company_db", companyDb)
+        .eq("sap_invoice_doc_entry", docEntry);
+      if (updErr) console.error("sales-nfse-emit cancel update", updErr.message);
+
+      return json({
+        success: true,
+        doc_num: Number(current?.DocNum) || null,
+        cancellation_doc_entry: (cancelDoc as { DocEntry?: number })?.DocEntry ?? null,
+        cancellation_doc_num: (cancelDoc as { DocNum?: number })?.DocNum ?? null,
+      });
+    }
+
     /* ── emissão da NFS-e a partir do pedido de venda ──────────────── */
     if (action !== "emit") return json({ error: "Ação inválida" }, 400);
+
 
     // Origem 1: pedido criado no ERP Flow (expense_id)
     // Origem 2: pedido criado direto no ERP (company_db + sap_order_doc_entry)
