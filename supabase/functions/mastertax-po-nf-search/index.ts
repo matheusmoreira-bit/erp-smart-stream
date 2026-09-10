@@ -239,6 +239,31 @@ async function loadMasterTaxCreds(sb: Sb, companyDb: string): Promise<MtCreds | 
   };
 }
 
+/**
+ * Campos fiscais da localização brasileira do SAP B1 (Nº NF / Série / Subsérie / Modelo).
+ * SequenceCode = -1 indica numeração manual: o SAP passa a aceitar os valores informados.
+ * Modelo padrão 55 = NF-e.
+ */
+function brFiscalFields(args: {
+  numero?: string | null;
+  serie?: string | null;
+  subserie?: string | null;
+  modelo?: string | null;
+}): Record<string, unknown> {
+  const numero = String(args.numero ?? "").replace(/\D+/g, "");
+  if (!numero) return {};
+  const serie = String(args.serie ?? "").trim();
+  const subserie = String(args.subserie ?? "").trim();
+  const modelo = String(args.modelo ?? "").trim() || "55";
+  return {
+    SequenceCode: -1,
+    SequenceSerial: Number(numero),
+    SeriesString: serie || "1",
+    SubSeriesString: subserie || null,
+    SequenceModel: Number(modelo),
+  };
+}
+
 interface MtNota {
   chave_acesso: string;
   numero_nf: string;
