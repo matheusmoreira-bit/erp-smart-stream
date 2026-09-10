@@ -41,7 +41,7 @@ function extractBasePo(inv: SapPurchaseInvoice): number | null {
 
 const SELECT = "DocEntry,DocNum,Series,CardCode,CardName,DocDate,DocDueDate,TaxDate,DocTotal,PaidToDate,DocCurrency,DocumentStatus,Cancelled,UpdateDate,UpdateTime,DocumentLines";
 
-async function syncCompany(sb: Sb, companyDb: string, _opts: RunnerOpts): Promise<WatcherResult> {
+async function syncCompany(sb: Sb, companyDb: string, opts: RunnerOpts): Promise<WatcherResult> {
   // NF de Entrada mantém comportamento original: aceita qualquer usuário SAP configurado.
   const creds = await loadSapCreds(sb, companyDb);
   if (!creds) return { companyDb, synced: 0, skipped: "no_credentials" };
@@ -64,7 +64,8 @@ async function syncCompany(sb: Sb, companyDb: string, _opts: RunnerOpts): Promis
       select: SELECT,
       stateTable: "sap_nf_entrada_sync_state",
       cacheTable: "sap_nf_entrada_cache",
-      maxPages: 5,
+      maxPages: 20,
+      timeBudgetMs: opts.timeBudgetMs,
       mapRow: (inv) => ({
         company_db: companyDb,
         doc_entry: inv.DocEntry,
@@ -94,6 +95,7 @@ async function syncCompany(sb: Sb, companyDb: string, _opts: RunnerOpts): Promis
 
 Deno.serve((req) => runSapCacheWatcher(req, {
   watcherName: "sap-nf-entrada-sync",
+  stateTable: "sap_nf_entrada_sync_state",
   supportBackfill: false,
   syncCompany,
 }));

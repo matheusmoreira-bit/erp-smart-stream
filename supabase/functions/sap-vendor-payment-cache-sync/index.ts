@@ -50,7 +50,7 @@ function sumApplied(p: SapVendorPayment, key: "SumApplied" | "AppliedFC"): numbe
 }
 
 
-async function syncCompany(sb: Sb, companyDb: string, _opts: RunnerOpts): Promise<WatcherResult> {
+async function syncCompany(sb: Sb, companyDb: string, opts: RunnerOpts): Promise<WatcherResult> {
   const creds = await loadSapCreds(sb, companyDb, { requireApiuser: true });
   if (!creds) return { companyDb, synced: 0, skipped: "no_credentials_or_not_apiuser" };
 
@@ -79,6 +79,7 @@ async function syncCompany(sb: Sb, companyDb: string, _opts: RunnerOpts): Promis
         stateTable: "sap_vendor_payment_sync_state",
         cacheTable: "sap_vendor_payment_cache",
         maxPages: 40,
+        timeBudgetMs: opts.timeBudgetMs,
         mapRow: (p) => ({
           company_db: companyDb,
           doc_entry: p.DocEntry,
@@ -120,6 +121,7 @@ async function syncCompany(sb: Sb, companyDb: string, _opts: RunnerOpts): Promis
 
 Deno.serve((req) => runSapCacheWatcher(req, {
   watcherName: "sap-vendor-payment-cache-sync",
+  stateTable: "sap_vendor_payment_sync_state",
   supportBackfill: false,
   syncCompany,
 }));

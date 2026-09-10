@@ -188,6 +188,8 @@ export interface RunnerOpts {
   backfill: boolean;
   fromDate?: string;
   onlyCompany?: string;
+  /** Fatia de tempo reservada para esta empresa nesta execução. */
+  timeBudgetMs?: number;
 }
 
 export interface RunWatcherOpts {
@@ -195,12 +197,14 @@ export interface RunWatcherOpts {
   timeBudgetMs?: number;
   /** Se false, não faz parse de backfill/from_date (apenas company_db). Default: true. */
   supportBackfill?: boolean;
+  /** Tabela de state usada para rodar primeiro as empresas há mais tempo sem sincronizar. */
+  stateTable?: string;
   syncCompany: (sb: Sb, companyDb: string, opts: RunnerOpts) => Promise<WatcherResult>;
 }
 
 export async function runSapCacheWatcher(
   req: Request,
-  { watcherName, timeBudgetMs = 90_000, supportBackfill = true, syncCompany }: RunWatcherOpts,
+  { watcherName, timeBudgetMs = 90_000, supportBackfill = true, stateTable, syncCompany }: RunWatcherOpts,
 ): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -245,13 +249,35 @@ export async function runSapCacheWatcher(
     )) as string[];
     if (onlyCompany) companyDbs = companyDbs.filter((c) => c === onlyCompany);
 
-    for (const companyDb of companyDbs) {
-      if (Date.now() - startedAt > timeBudgetMs) {
+    // Roda primeiro quem está há mais tempo sem sincronizar: sem isso, uma base
+    // pesada consome todo o tempo da execução e as demais nunca avançam.
+    if (stateTable && companyDbs.length > 1) {
+      const { data: stateRows } = await sb
+        .from(stateTable)
+        .select("company_db, last_run_at");
+      const lastRun = new Map<string, number>();
+      for (const s of (stateRows || []) as Array<{ company_db: string; last_run_at: string | null }>) {
+        lastRun.set(s.company_db, s.last_run_at ? new Date(s.last_run_at).getTime() : 0);
+      }
+      companyDbs.sort((a, b) => (lastRun.get(a) ?? 0) - (lastRun.get(b) ?? 0));
+    }
+
+    for (let i = 0; i < companyDbs.length; i++) {
+      const companyDb = companyDbs[i];
+      const remainingMs = timeBudgetMs - (Date.now() - startedAt);
+      if (remainingMs <= 0) {
         results.push({ companyDb, synced: 0, skipped: "time_budget_exceeded" });
         continue;
       }
+      // Fatia justa do tempo restante entre as empresas ainda não processadas.
+      const share = Math.max(15_000, Math.floor(remainingMs / (companyDbs.length - i)));
       try {
-        results.push(await syncCompany(sb, companyDb, { backfill, fromDate, onlyCompany }));
+        results.push(await syncCompany(sb, companyDb, {
+          backfill,
+          fromDate,
+          onlyCompany,
+          timeBudgetMs: Math.min(share, remainingMs),
+        }));
       } catch (e) {
         results.push({ companyDb, synced: 0, error: (e as Error).message });
       }
@@ -330,10 +356,22 @@ export async function runIncrementalPager<T extends OdataDoc, R>(
     : ((stateRow as { last_doc_entry?: number | null } | null)?.last_doc_entry ?? 0);
   const totalPrev: number = Number((stateRow as { total_synced?: number | null } | null)?.total_synced ?? 0);
 
+  // Documentos que mudam depois de criados (NF paga, PC fechado) só voltam na
+  // varredura se a janela for por UpdateDate. Quando a entidade não expõe
+  // UpdateDate (ex.: Payments), mantém-se o avanço puro por DocEntry.
+  const hasUpdateCursor = !o.backfill && /(^|,)UpdateDate(,|$)/.test(o.select);
+  const runStartedIso = new Date().toISOString();
+  // Janela com 1 dia de folga para cobrir fuso/atrasos do Service Layer.
+  const windowDate = hasUpdateCursor && lastUpdate
+    ? new Date(new Date(lastUpdate).getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    : null;
+
   let totalSynced = 0;
   let cursorUpdate = lastUpdate;
+  // Em modo janela, o DocEntry é apenas ponteiro de retomada dentro da varredura.
   let cursorEntry = lastDocEntry;
   let lastError: string | null = null;
+  let sweepCompleted = false;
   const startedAt = Date.now();
 
   for (let page = 0; page < maxPages; page++) {
@@ -342,8 +380,10 @@ export async function runIncrementalPager<T extends OdataDoc, R>(
     if (o.backfill) {
       if (o.fromDate) filterParts.push(`DocDate ge '${o.fromDate}'`);
       if (cursorEntry) filterParts.push(`DocEntry gt ${cursorEntry}`);
+    } else if (hasUpdateCursor) {
+      if (windowDate) filterParts.push(`UpdateDate ge '${windowDate}'`);
+      if (cursorEntry) filterParts.push(`DocEntry gt ${cursorEntry}`);
     } else {
-      if (cursorUpdate) filterParts.push(`UpdateDate ge '${cursorUpdate.slice(0, 10)}'`);
       if (cursorEntry) filterParts.push(`DocEntry gt ${cursorEntry}`);
     }
     const filter = filterParts.length ? `&$filter=${encodeURIComponent(filterParts.join(" and "))}` : "";
@@ -356,7 +396,7 @@ export async function runIncrementalPager<T extends OdataDoc, R>(
     }
     const j = await r.json();
     const items: T[] = j.value || [];
-    if (items.length === 0) break;
+    if (items.length === 0) { sweepCompleted = true; break; }
 
     const rows = items.map(o.mapRow);
     const { error: upErr } = await o.sb.from(o.cacheTable).upsert(rows, { onConflict });
@@ -365,8 +405,10 @@ export async function runIncrementalPager<T extends OdataDoc, R>(
     totalSynced += rows.length;
     const last = items[items.length - 1];
     cursorEntry = last.DocEntry;
-    if (!o.backfill && last.UpdateDate) cursorUpdate = toIsoTimestamp(last.UpdateDate, last.UpdateTime);
-    if (items.length < pageSize) break;
+    if (!o.backfill && !hasUpdateCursor && last.UpdateDate) {
+      cursorUpdate = toIsoTimestamp(last.UpdateDate, last.UpdateTime);
+    }
+    if (items.length < pageSize) { sweepCompleted = true; break; }
   }
 
   const basePayload: Record<string, unknown> = {
@@ -378,6 +420,13 @@ export async function runIncrementalPager<T extends OdataDoc, R>(
   };
   if (o.backfill) {
     basePayload.last_error = lastError ? `backfill: ${lastError}` : null;
+  } else if (hasUpdateCursor) {
+    // Varredura concluída → avança a janela e zera o ponteiro de retomada.
+    // Interrompida (limite de páginas/tempo) → repete a mesma janela do ponto onde parou.
+    basePayload.last_update_date = sweepCompleted ? runStartedIso : lastUpdate;
+    basePayload.last_doc_entry = sweepCompleted ? 0 : cursorEntry;
+    basePayload.last_error = lastError;
+    cursorUpdate = sweepCompleted ? runStartedIso : lastUpdate;
   } else {
     basePayload.last_update_date = cursorUpdate;
     basePayload.last_doc_entry = cursorEntry;
