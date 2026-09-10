@@ -812,9 +812,21 @@ function ExpenseDetailModal({
 
 
 
-            {(showSubmit || showCancel || showRetrySap || showEdit || showApproval || showReactivate || showEmitNfse || showOpenNfse) && (
+            {(showSubmit || showCancel || showRetrySap || showEdit || showApproval || showReactivate || showEmitNfse || showOpenNfse || canSearchMastertax) && (
               <div className="border-t border-border pt-4 flex flex-col-reverse sm:flex-row sm:justify-end sm:flex-wrap gap-2 sm:gap-3">
                 <Button variant="outline" onClick={onClose} className="w-full sm:w-auto justify-center">Fechar</Button>
+                {canSearchMastertax && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setMastertaxOpen(true)}
+                    className="w-full sm:w-auto justify-center gap-1.5"
+                    title="Procurar na Master Tax a NF correspondente a este pedido"
+                  >
+                    <FileSearch className="w-4 h-4" aria-hidden="true" />
+                    Buscar NF na Master Tax
+                  </Button>
+                )}
+
                 {showOpenNfse && (
                   <Button
                     variant="outline"
