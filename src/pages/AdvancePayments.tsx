@@ -26,6 +26,18 @@ const ADVANCE_TO_PURCHASE_STATUS: Record<string, string> = {
   failed: "cancelado",
 };
 
+/**
+ * Situação real do documento no ERP (SAP). Retorna null quando o adiantamento
+ * ainda não existe no ERP — nesse caso mostramos o status do fluxo no Flow.
+ */
+function erpSituation(a: AdvancePayment): { status: string; label: string } | null {
+  if (!a.sap_doc_entry && !a.sap_doc_num) return null;
+  if (a.sap_cancelled) return { status: "cancelado", label: "Cancelado no ERP" };
+  if (a.sap_doc_status === "bost_Close") return { status: "finalizado", label: "Fechado no ERP" };
+  if (a.sap_doc_status === "bost_Open") return { status: "pc_lancado", label: "Aberto no ERP" };
+  return { status: "rascunho", label: "Situação não consultada" };
+}
+
 
 function fmtCurrency(v: number, ccy: string = "BRL") {
   const code = /^[A-Z]{3}$/.test(ccy) ? ccy : "BRL";
