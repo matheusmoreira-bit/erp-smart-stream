@@ -267,12 +267,16 @@ async function fetchMasterTaxRange(
   empresaId: string,
   de: string,
   ate: string,
-): Promise<{ notas: MtNota[]; error?: string }> {
+): Promise<{ notas: MtNota[]; error?: string; httpStatus?: number; rawRows: number }> {
   const notas: MtNota[] = [];
   const authHeader = creds.token.toLowerCase().startsWith("bearer ") ? creds.token : `Bearer ${creds.token}`;
   const limite = 50;
   let pagina = 1;
   let error: string | undefined;
+  let lastStatus: number | undefined;
+  let rawRows = 0;
+  let skipped = 0;
+
 
   while (true) {
     const params = new URLSearchParams({
