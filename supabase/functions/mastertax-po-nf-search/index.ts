@@ -526,7 +526,13 @@ Deno.serve(async (req) => {
     let parsedFields: any = null;
     try { parsedFields = match ? JSON.parse(match[0]) : null; } catch { parsedFields = null; }
     if (!parsedFields) return json(422, { error: "A IA não conseguiu ler os anexos. Preencha manualmente." });
-    return json(200, { ok: true, fields: parsedFields, analyzedFiles: used });
+    await saveAnalysis(sb, cacheKey, { fields: parsedFields, analyzedFiles: used }, {
+      model: AI_MODEL,
+      entityType: "expense",
+      entityId: expenseId,
+      companyDb,
+    });
+    return json(200, { ok: true, fields: parsedFields, analyzedFiles: used, cached: false });
   }
 
   let baseUrl = "";
