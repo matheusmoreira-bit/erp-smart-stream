@@ -48,7 +48,7 @@ const groups: { title: string; items: Entry[] }[] = [
       { label: "Compras", icon: ShoppingCart, path: "/compras", color: "text-emerald-400", moduleKey: "expenses" },
       { label: "Vendas", icon: Wallet, path: "/vendas", color: "text-emerald-400", moduleKey: "sales" },
       { label: "Aprovações", icon: ClipboardCheck, path: "/aprovacoes", color: "text-emerald-400", subModuleKeys: ["approvals", "approval_history"] },
-      { label: "Cartões", icon: CreditCard, path: "/cartoes/transacoes", color: "text-cyan-400", moduleKey: "pagcorp" },
+      
     ],
   },
   {
