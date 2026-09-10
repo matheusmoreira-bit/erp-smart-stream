@@ -99,7 +99,22 @@ Deno.serve(async (req) => {
     "Se houver várias parcelas, use o vencimento mais próximo e o valor total do documento.",
   ].join(" ");
 
+  // Cache: a mesma imagem nunca é reavaliada pela IA.
+  const db = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+  const cacheKey = {
+    scope: "expense_ocr_capture",
+    inputHash: await hashInput({ model: MODEL, mime: parsed.mime, image: parsed.base64 }),
+  };
+  if (body?.force_ai !== true) {
+    const hit = await getCachedAnalysis<Record<string, unknown>>(db, cacheKey);
+    if (hit) return json({ ok: true, data: hit.result, cached: true, analyzedAt: hit.analyzedAt });
+  }
+
   let aiRes: Response;
+
   try {
     aiRes = await fetch(GATEWAY_URL, {
       method: "POST",
