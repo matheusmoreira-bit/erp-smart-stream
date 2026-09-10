@@ -694,10 +694,11 @@ Deno.serve(async (req) => {
         window: { de, ate },
         cnpjFilter: requiredCnpj || null,
         valueRange: poTotal > 0 ? { min: minValor, max: maxValor, tolerance: VALUE_TOLERANCE } : null,
-
         candidates,
         masterTaxConfigured: !!mt,
+        masterTax: { ...masterTaxDiag, exibidas: candidates.length },
         warning: mtError || null,
+
       });
     }
 
