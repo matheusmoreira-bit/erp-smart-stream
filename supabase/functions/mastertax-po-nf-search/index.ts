@@ -334,7 +334,7 @@ function scoreCandidate(po: PoInfo, n: {
   nome_fornecedor: string;
   valor_total: number;
   data_emissao: string | null;
-}): { score: number; reasons: string[]; valorDiff: number; diasDiff: number | null } {
+}): { score: number; confidence: number; reasons: string[]; valorDiff: number; diasDiff: number | null } {
   const reasons: string[] = [];
   let score = 0;
 
@@ -363,7 +363,8 @@ function scoreCandidate(po: PoInfo, n: {
     else if (diasDiff <= 45) { score += 8; reasons.push("Emitida no mesmo período"); }
   }
 
-  return { score, reasons, valorDiff, diasDiff };
+  // Confiança em % (máximo teórico 105 pontos → limitado a 100).
+  return { score, confidence: Math.max(0, Math.min(100, score)), reasons, valorDiff, diasDiff };
 }
 
 /* ─────────── Handler ─────────── */
