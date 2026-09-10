@@ -140,6 +140,7 @@ export function useMastertaxPoSearch(companyDb: string | null | undefined) {
         company_db: companyDb,
         po_doc_entry: poDocEntry,
         window_days: windowDays,
+        cnpj_fornecedor: cnpjFornecedor?.replace(/\D/g, "") || undefined,
       });
       setResult(data);
       return data;
