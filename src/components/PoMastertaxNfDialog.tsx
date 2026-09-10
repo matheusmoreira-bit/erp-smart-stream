@@ -185,7 +185,7 @@ export function PoMastertaxNfDialog({ open, onClose, companyDb, poDocEntry, poLa
             <SearchX className="w-6 h-6" aria-hidden="true" />
             <p>Nenhuma nota compatível entre {formatDate(result.window.de)} e {formatDate(result.window.ate)}.</p>
             <p className="text-xs">
-              A busca considera apenas notas do mesmo CNPJ do fornecedor e com valor até 15% acima ou abaixo do pedido. Amplie o período para procurar em um intervalo maior.
+              A busca considera apenas notas do mesmo CNPJ do fornecedor, com valor até 15% acima ou abaixo do pedido, e ignora notas já lançadas, com esboço, canceladas ou vinculadas a outro pedido. Amplie o período para procurar em um intervalo maior.
             </p>
             {result.masterTax && (
               <p className="text-xs">
@@ -195,6 +195,18 @@ export function PoMastertaxNfDialog({ open, onClose, companyDb, poDocEntry, poLa
                   : ""}
                 {result.masterTax.descartadasPorValor > 0
                   ? ` · ${result.masterTax.descartadasPorValor} fora da faixa de valor`
+                  : ""}
+                {result.masterTax.descartadasJaLancadas
+                  ? ` · ${result.masterTax.descartadasJaLancadas} já lançada(s)`
+                  : ""}
+                {result.masterTax.descartadasComEsboco
+                  ? ` · ${result.masterTax.descartadasComEsboco} com esboço`
+                  : ""}
+                {result.masterTax.descartadasOutroPedido
+                  ? ` · ${result.masterTax.descartadasOutroPedido} vinculada(s) a outro pedido`
+                  : ""}
+                {result.masterTax.descartadasCanceladas
+                  ? ` · ${result.masterTax.descartadasCanceladas} cancelada(s)`
                   : ""}
                 .
               </p>
