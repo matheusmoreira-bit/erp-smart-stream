@@ -62,6 +62,7 @@ const groups: { title: string; items: Entry[] }[] = [
   {
     title: "Financeiro & Fiscal",
     items: [
+      { label: "Cartões Corporativos", icon: CreditCard, path: "/cartoes/transacoes", color: "text-cyan-400", moduleKey: "pagcorp" },
       { label: "Adiantamentos", icon: Wallet, path: "/financeiro/adiantamentos", color: "text-amber-400", moduleKey: "expenses" },
       { label: "Reconciliação", icon: Wallet, path: "/financeiro/reconciliacao", color: "text-cyan-400", moduleKey: "financial_review" },
       { label: "Previsão de Caixa", icon: Wallet, path: "/financeiro/previsao-caixa", color: "text-emerald-400", moduleKey: "financial_review" },
