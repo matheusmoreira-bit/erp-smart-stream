@@ -112,39 +112,15 @@ export function PoMastertaxNfDialog({ open, onClose, companyDb, poDocEntry, poLa
             </Select>
           </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="mt-cnpj" className="text-xs text-muted-foreground">CNPJ do fornecedor (opcional)</Label>
-            <Input
-              id="mt-cnpj"
-              inputMode="numeric"
-              placeholder="Somente números"
-              className="w-52"
-              value={cnpj}
-              disabled={loading || linking}
-              onChange={(e) => setCnpj(e.target.value.replace(/\D/g, "").slice(0, 14))}
-              onKeyDown={(e) => { if (e.key === "Enter") void runSearch(windowDays, cnpj); }}
-            />
-          </div>
-
           <Button
             variant="secondary"
-            onClick={() => void runSearch(windowDays, cnpj)}
+            onClick={() => void runSearch(windowDays)}
             disabled={loading || linking}
           >
-            Filtrar
+            Atualizar
           </Button>
-
-          {supplierTaxId && supplierTaxId !== cnpj && (
-            <Button
-              variant="ghost"
-              className="text-xs"
-              onClick={() => { setCnpj(supplierTaxId); void runSearch(windowDays, supplierTaxId); }}
-              disabled={loading || linking}
-            >
-              Usar CNPJ do pedido
-            </Button>
-          )}
         </div>
+
 
         {po && (
           <p className="text-xs text-muted-foreground">
