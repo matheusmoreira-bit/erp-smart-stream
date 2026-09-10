@@ -91,6 +91,11 @@ export interface AdvancePayment {
   reconciled_at?: string | null;
   reconciliation_error?: string | null;
   sap_incoming_payment_doc_entry?: number | null;
+  /** Aprovação (mesma etapa usada nas compras). */
+  approved_by?: string | null;
+  approved_by_name?: string | null;
+  approved_at?: string | null;
+  auto_approved?: boolean | null;
   created_at: string;
   updated_at: string;
   attachments?: AdvanceAttachment[];
