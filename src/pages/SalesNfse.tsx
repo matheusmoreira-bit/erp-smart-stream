@@ -1318,7 +1318,10 @@ export default function SalesNfse() {
 
   const emit = useCallback(async () => {
     if (!confirmOrder) return;
+    // Dupla confirmação obrigatória antes de transmitir ao ambiente fiscal
+    if (confirmStep !== 2 || !confirmAck) return;
     setEmitting(true);
+
     try {
       const payload =
         confirmOrder.source === "erp"
