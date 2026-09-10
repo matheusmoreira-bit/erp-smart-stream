@@ -77,7 +77,7 @@ export function DocKindOriginChip({
         <span
           className={cn(
             "flex shrink-0 items-center border-l px-1.5 text-[9px] font-bold uppercase tracking-tight leading-none",
-            tone.origin,
+            originSegmentClasses(originText, tone.origin),
           )}
         >
           {originText}
