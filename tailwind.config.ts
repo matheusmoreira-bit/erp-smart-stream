@@ -60,6 +60,14 @@ export default {
           foreground: "hsl(var(--cactus-amber-foreground))",
         },
         "cactus-green": "hsl(var(--cactus-green))",
+        "erp-sap": {
+          DEFAULT: "hsl(var(--erp-sap))",
+          foreground: "hsl(var(--erp-sap-foreground))",
+        },
+        "erp-omie": {
+          DEFAULT: "hsl(var(--erp-omie))",
+          foreground: "hsl(var(--erp-omie-foreground))",
+        },
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",

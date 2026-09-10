@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { originSegmentClasses } from "@/lib/erp-origin-styles";
 
 /**
  * Chip único que combina status do documento e origem (ERP Flow x ERP nativo).
@@ -81,7 +82,7 @@ export function StatusOriginChip({
         <span
           className={cn(
             "flex shrink-0 items-center border-l px-1.5 text-[9px] font-bold uppercase tracking-tight leading-none",
-            tone.origin,
+            originSegmentClasses(originText, tone.origin),
           )}
         >
           {originText}
