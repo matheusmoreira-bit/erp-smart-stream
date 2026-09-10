@@ -498,7 +498,7 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
         catch (e) {
           const suffix = creds.source === "fallback" ? " (usando credenciais padrão)" : "";
           const raw = e instanceof Error ? e.message : "Falha ao autenticar";
-          const msg = (ctrl.signal.aborted ? `Timeout após ${PER_COMPANY_TIMEOUT_MS}ms no login` : raw) + suffix;
+          const msg = (ctrl.signal.aborted ? `Timeout após ${PER_COMPANY_TIMEOUT_MS}ms no login` : explainLoginFailure(raw)) + suffix;
           console.error(`[sap-change-password] login failed`, { companyDb, sapCompanyDb: creds.sapCompanyDb, source: creds.source, msg });
           return { companyDB: companyDb, displayName, status: "error", message: msg };
         }
