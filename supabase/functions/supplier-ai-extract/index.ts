@@ -177,7 +177,9 @@ Deno.serve(async (req) => {
         : String(extracted.federal_tax_id).trim();
     }
 
-    return new Response(JSON.stringify({ supplier: extracted }), {
+    await saveAnalysis(admin, cacheKey, extracted, { model: AI_MODEL, entityType: "supplier_doc" });
+
+    return new Response(JSON.stringify({ supplier: extracted, cached: false }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
