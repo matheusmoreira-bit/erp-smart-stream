@@ -454,6 +454,31 @@ Deno.serve(async (req) => {
     const rows = (atts || []) as Array<{ file_name: string; file_path: string; mime_type: string | null; file_size: number | null }>;
     if (!rows.length) return json(404, { error: "Este pedido não tem anexos para a IA analisar." });
 
+    // Cache: mesma combinação de anexos não é reavaliada pela IA.
+    const AI_MODEL = "google/gemini-3.6-flash";
+    const cacheKey = {
+      scope: "nf_entrada_extract",
+      inputHash: await hashInput({
+        model: AI_MODEL,
+        expenseId,
+        files: rows.map((a) => [a.file_path, a.file_size ?? 0, a.mime_type ?? ""]).sort(),
+      }),
+    };
+    const force = body.force_ai === true;
+    if (!force) {
+      const hit = await getCachedAnalysis<{ fields: unknown; analyzedFiles: number }>(sb, cacheKey);
+      if (hit) {
+        return json(200, {
+          ok: true,
+          fields: hit.result.fields,
+          analyzedFiles: hit.result.analyzedFiles,
+          cached: true,
+          analyzedAt: hit.analyzedAt,
+        });
+      }
+    }
+
+
     // deno-lint-ignore no-explicit-any
     const content: any[] = [{
       type: "text",
