@@ -218,7 +218,6 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
       // Todo adiantamento (cliente ou fornecedor) passa por aprovação.
       // A autoaprovação, quando ligada, aprova logo após o envio.
       const status: AdvanceStatus = input.submit ? "pending" : "draft";
-      const status: AdvanceStatus = input.submit ? "pending" : "draft";
 
 
 
