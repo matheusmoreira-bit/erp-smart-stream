@@ -1823,6 +1823,28 @@ export default function SalesNfse() {
                           >
                             {emitted ? "Emitida" : "Emitir NFS-e"}
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 gap-1 text-destructive hover:text-destructive"
+                            disabled={!inv?.sap_invoice_doc_entry || erp.cancelled || cancelling}
+                            title={
+                              !inv?.sap_invoice_doc_entry
+                                ? "Nenhuma nota emitida no ERP para cancelar"
+                                : erp.cancelled
+                                  ? "Nota já cancelada no ERP"
+                                  : "Cancelar a nota no ERP"
+                            }
+                            onClick={() => {
+                              if (!inv?.sap_invoice_doc_entry) return;
+                              setCancelReason("");
+                              setCancelTarget({ order: o, inv });
+                            }}
+                          >
+                            <Ban className="w-3.5 h-3.5" />
+                            Cancelar
+                          </Button>
+
                         </div>
                       </td>
                     </tr>
