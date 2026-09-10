@@ -104,6 +104,13 @@
 
     --radius: 0.75rem;
 
+    /* Cores institucionais dos ERPs */
+    --erp-sap: 205 100% 45%;
+    --erp-sap-foreground: 0 0% 100%;
+    --erp-omie: 199 92% 62%;
+    --erp-omie-foreground: 220 20% 7%;
+
+
     --glass: 220 18% 12% / 0.6;
     --glass-border: 220 14% 22%;
 
