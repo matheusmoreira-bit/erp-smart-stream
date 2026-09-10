@@ -358,7 +358,7 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
         await fetchAll();
       }
     },
-    [fetchAll],
+    [fetchAll, session?.userName],
   );
 
   const reject = useCallback(
