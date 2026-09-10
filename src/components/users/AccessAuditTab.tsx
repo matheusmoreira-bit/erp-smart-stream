@@ -15,15 +15,28 @@ interface AuditRow {
   details: Record<string, unknown> | null;
 }
 
-const ACCESS_ACTIONS = [
+/** Prefixos de ação considerados eventos de acesso (mudanças + sessões). */
+const ACCESS_ACTION_PREFIXES = [
   "user_",
   "group_",
   "license_",
   "idp_",
-  "sap_user_",
+  "sap_user",
+  "sap_login",
+  "sap_auto_login",
+  "sap_managed_login",
+  "erp_identity_login",
+  "impersonation",
   "admin_",
   "management_segment",
+  "login",
+  "logout",
+  "access_",
+  "permission",
+  "role_",
 ];
+
+const ACCESS_ENTITY_TYPES = ["user", "erp_session", "user_sap_credentials", "sap_user_batch", "user_role"];
 
 const ACTION_LABEL: Record<string, string> = {
   user_created: "Usuário criado",
@@ -35,6 +48,15 @@ const ACTION_LABEL: Record<string, string> = {
   idp_divergence_resolved_block: "Divergência IdP resolvida (bloqueio)",
   idp_divergence_bulk_resolved: "Divergências IdP resolvidas em lote",
   management_segment_changed: "Gestão alterada",
+  sap_login: "Login no SAP",
+  sap_auto_login: "Login automático no SAP",
+  sap_managed_login: "Login gerenciado no SAP",
+  erp_identity_login: "Login no ERP Flow",
+  impersonation_start: "Início de personificação",
+  impersonation_stop: "Fim de personificação",
+  impersonation_action_blocked: "Ação bloqueada em personificação",
+  sap_provision_user_access: "Acesso SAP provisionado",
+  sap_users_replicate: "Usuários SAP replicados",
 };
 
 /** Trilha de auditoria das mudanças de acesso (quem mudou o quê, quando). */
@@ -45,9 +67,14 @@ export default function AccessAuditTab() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    const orFilter = [
+      ...ACCESS_ACTION_PREFIXES.map((p) => `action.ilike.${p}%`),
+      ...ACCESS_ENTITY_TYPES.map((t) => `entity_type.eq.${t}`),
+    ].join(",");
     const { data } = await supabase
       .from("audit_log")
       .select("id, created_at, actor_email, action, entity_type, entity_id, details")
+      .or(orFilter)
       .order("created_at", { ascending: false })
       .limit(400);
     setRows((data as AuditRow[] | null) ?? []);
@@ -60,16 +87,13 @@ export default function AccessAuditTab() {
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return rows
-      .filter((r) => ACCESS_ACTIONS.some((p) => r.action?.startsWith(p)) || r.entity_type === "user")
-      .filter((r) =>
-        !term
-          ? true
-          : [r.actor_email, r.action, r.entity_id, JSON.stringify(r.details ?? {})]
-              .join(" ")
-              .toLowerCase()
-              .includes(term),
-      );
+    if (!term) return rows;
+    return rows.filter((r) =>
+      [r.actor_email, r.action, r.entity_id, JSON.stringify(r.details ?? {})]
+        .join(" ")
+        .toLowerCase()
+        .includes(term),
+    );
   }, [rows, search]);
 
   return (
