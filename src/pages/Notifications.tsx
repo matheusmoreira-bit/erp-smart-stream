@@ -11,6 +11,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { NotificationDeliveriesTab } from "@/components/NotificationDeliveriesTab";
 import { NotificationSettingsTab } from "@/components/NotificationSettingsTab";
+import { NotificationEngineTab } from "@/components/NotificationEngineTab";
 import { OverdueRemindersTab } from "@/components/OverdueRemindersTab";
 import { PageTitle } from "@/components/PageTitle";
 import { DocumentMilestonesDialog } from "@/components/DocumentMilestonesDialog";
@@ -65,6 +66,9 @@ export default function NotificationsPage() {
             </TabsTrigger>
             <TabsTrigger value="deliveries" className="gap-2">
               <Send className="w-4 h-4" /> Todos os envios
+            </TabsTrigger>
+            <TabsTrigger value="engine" className="gap-2">
+              <Settings className="w-4 h-4" /> Motor
             </TabsTrigger>
             <TabsTrigger value="settings" className="gap-2">
               <SlidersHorizontal className="w-4 h-4" /> Configurações
@@ -176,6 +180,10 @@ export default function NotificationsPage() {
 
           <TabsContent value="deliveries">
             <NotificationDeliveriesTab />
+          </TabsContent>
+
+          <TabsContent value="engine">
+            <NotificationEngineTab />
           </TabsContent>
 
           <TabsContent value="settings">

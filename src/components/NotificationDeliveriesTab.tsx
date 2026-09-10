@@ -13,8 +13,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, RefreshCw, Search, Mail, MessageCircle, Bell, Layers } from "lucide-react";
+import { Loader2, RefreshCw, Search, Mail, MessageCircle, Bell, Layers, Eye } from "lucide-react";
 import { format } from "date-fns";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Delivery {
   id: string;
@@ -80,6 +86,7 @@ export function NotificationDeliveriesTab() {
   const [status, setStatus] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<Delivery[]>([]);
+  const [selected, setSelected] = useState<Delivery | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -216,7 +223,8 @@ export function NotificationDeliveriesTab() {
                   <th className="text-left px-3 py-2 font-medium">Destinatário</th>
                   <th className="text-left px-3 py-2 font-medium">Assunto</th>
                   <th className="text-left px-3 py-2 font-medium">Status</th>
-                  <th className="text-left px-3 py-2 font-medium">Detalhe</th>
+                  <th className="text-left px-3 py-2 font-medium">Erro</th>
+                  <th className="text-left px-3 py-2 font-medium">Conteúdo</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -247,6 +255,15 @@ export function NotificationDeliveriesTab() {
                       <td className="px-3 py-2 max-w-[220px] truncate text-destructive" title={r.error_message || ""}>
                         {r.error_message || ""}
                       </td>
+                      <td className="px-3 py-2">
+                        {r.source === "notification_dispatches" ? (
+                          <Button variant="outline" size="sm" onClick={() => setSelected(r)} className="gap-1">
+                            <Eye className="w-3.5 h-3.5" /> Ver
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -255,6 +272,58 @@ export function NotificationDeliveriesTab() {
           </div>
         )}
       </ScrollArea>
+
+      <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Conteúdo da notificação</DialogTitle>
+          </DialogHeader>
+          {selected && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                <div>
+                  <Label className="text-xs">Canal</Label>
+                  <p>{CHANNEL_LABEL[selected.channel] || selected.channel}</p>
+                </div>
+                <div>
+                  <Label className="text-xs">Destinatário</Label>
+                  <p className="break-all">{selected.recipient || "—"}</p>
+                </div>
+                <div>
+                  <Label className="text-xs">Status</Label>
+                  <StatusBadge status={selected.status} />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Assunto</Label>
+                <div className="mt-1 rounded-lg border border-border bg-muted/20 p-3 text-sm">
+                  {selected.subject || "—"}
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Corpo</Label>
+                <pre className="mt-1 rounded-lg border border-border bg-muted/20 p-3 text-sm whitespace-pre-wrap font-sans">
+                  {String(selected.metadata?.rendered_body || "—")}
+                </pre>
+              </div>
+              {selected.metadata?.rendered_html ? (
+                <div>
+                  <Label className="text-xs">HTML</Label>
+                  <pre className="mt-1 rounded-lg border border-border bg-muted/20 p-3 text-xs overflow-x-auto">
+                    {String(selected.metadata.rendered_html)}
+                  </pre>
+                </div>
+              ) : null}
+              <div>
+                <Label className="text-xs">Payload</Label>
+                <pre className="mt-1 rounded-lg border border-border bg-muted/20 p-3 text-xs overflow-x-auto">
+                  {JSON.stringify(selected.metadata?.payload_snapshot || {}, null, 2)}
+                </pre>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
