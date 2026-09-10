@@ -623,7 +623,7 @@ Deno.serve(async (req) => {
       }
 
       // Regras rígidas: mesmo CNPJ do fornecedor do pedido e valor dentro de ±15%.
-      const requiredCnpj = cnpjFilter || onlyDigits(po.supplierTaxId || "");
+      const requiredCnpj = supplierCnpj;
       const poTotal = Math.abs(Number(po.DocTotal || 0));
       const VALUE_TOLERANCE = 0.15;
       const minValor = poTotal > 0 ? Number((poTotal * (1 - VALUE_TOLERANCE)).toFixed(2)) : 0;
