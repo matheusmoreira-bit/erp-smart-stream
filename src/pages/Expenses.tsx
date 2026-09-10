@@ -380,10 +380,14 @@ function ExpenseDetailModal({
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [showPullback, setShowPullback] = useState(false);
+  const [mastertaxOpen, setMastertaxOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const statusLabel = useStatusLabel();
+  const { has: hasCap, isPrivileged: capPrivileged } = useMyCapabilities();
+  const { session: sapSession } = useSap();
   const isSalesDoc = mode === "sales";
   if (!expense) return null;
+
 
   const showSubmit = expense.status === "rascunho";
   const alreadyInSap = !!(expense.sap_doc_entry || expense.sap_doc_num);
