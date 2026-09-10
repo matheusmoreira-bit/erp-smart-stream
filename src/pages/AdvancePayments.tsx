@@ -220,7 +220,35 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
                     <span className="text-xs">Vence: {fmtDate(a.due_date)}</span>
                     <span className="text-xs">Solicitante: {a.requester_name || "—"}</span>
                     {(a.sap_doc_num || a.sap_doc_entry) && (
-                      <span className="text-xs text-success">SAP: #{a.sap_doc_num || a.sap_doc_entry}</span>
+                      <span className="text-xs text-success">
+                        ERP: nº {a.sap_doc_num || a.sap_doc_entry}
+                        {a.sap_doc_date ? ` · ${fmtDate(a.sap_doc_date)}` : ""}
+                      </span>
+                    )}
+                    {(a.sap_doc_num || a.sap_doc_entry) && (
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] ${
+                          a.sap_cancelled
+                            ? "border-destructive/40 text-destructive"
+                            : a.sap_doc_status === "bost_Close"
+                              ? "border-success/40 text-success"
+                              : "border-primary/40 text-primary"
+                        }`}
+                      >
+                        {a.sap_cancelled
+                          ? "Cancelado no ERP"
+                          : a.sap_doc_status === "bost_Close"
+                            ? "Fechado no ERP"
+                            : a.sap_doc_status === "bost_Open"
+                              ? "Aberto no ERP"
+                              : "Situação não consultada"}
+                      </Badge>
+                    )}
+                    {a.sap_status_synced_at && (
+                      <span className="text-[10px] text-muted-foreground">
+                        Consultado em {fmtDate(a.sap_status_synced_at)}
+                      </span>
                     )}
                     {isCustomerAdvance && a.reconciled_at && (
                       <span className="text-xs text-success">
