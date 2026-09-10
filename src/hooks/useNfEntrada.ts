@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { useSap } from "@/contexts/SapContext";
+
 
 
 export type NfEntradaStatus =
@@ -38,6 +40,12 @@ export interface NfEntradaImport {
   erp_invoice_posted: boolean | null;
   erp_invoice_doc_entry: string | null;
   erp_invoice_doc_num: string | null;
+  erp_invoice_doc_date: string | null;
+  erp_invoice_doc_status: string | null;
+  erp_invoice_cancelled: boolean | null;
+  erp_invoice_open_amount: number | null;
+  erp_invoice_status_synced_at: string | null;
+
   rejection_reason: string | null;
   xml_storage_path: string | null;
   pdf_storage_path: string | null;
@@ -180,10 +188,31 @@ export function useNfEntrada() {
     return data as { ok: boolean; draftId?: string; poEntry?: number; alreadyExists?: boolean };
   }, [fetchAll]);
 
+  /** Consulta no ERP (SAP) a situação real das NFs de entrada já lançadas. */
+  const syncErpStatus = useCallback(
+    async (id?: string) => {
+      if (!id && !companyDb) throw new Error("Selecione uma empresa antes de sincronizar.");
+      const res = await sapFunctionFetch("nf-entrada-erp-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(id ? { import_id: id } : { company_db: companyDb }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || data?.success === false) {
+        throw new Error(data?.error || `Falha ao sincronizar situação (${res.status})`);
+      }
+      await fetchAll();
+      return data as { synced: number };
+    },
+    [fetchAll, companyDb],
+  );
+
   return {
     items, loading, error, companyDb, companyTaxId, foreignCount,
     refresh: fetchAll, reprocess, rematchSap, recheckSap, cancel, pullNow, createInvoiceDraft,
+    syncErpStatus,
   };
+
 
 
 }

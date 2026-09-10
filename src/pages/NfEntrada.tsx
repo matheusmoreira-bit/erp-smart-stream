@@ -50,13 +50,24 @@ function DetailField({ label, value, mono }: { label: string; value: string | nu
   );
 }
 
+/** Situação real do documento no ERP (aberto, fechado ou cancelado). */
+function erpSituationLabel(it: { erp_invoice_doc_entry?: string | null; erp_invoice_doc_num?: string | null; erp_invoice_cancelled?: boolean | null; erp_invoice_doc_status?: string | null }) {
+  if (!it.erp_invoice_doc_entry && !it.erp_invoice_doc_num) return "Não lançada no ERP";
+  if (it.erp_invoice_cancelled) return "Cancelada no ERP";
+  if (it.erp_invoice_doc_status === "bost_Close") return "Fechada no ERP";
+  if (it.erp_invoice_doc_status === "bost_Open") return "Aberta no ERP";
+  return "Situação não consultada";
+}
+
+
 export default function NfEntrada() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const {
     items, loading, error, companyDb, foreignCount,
-    refresh, reprocess, rematchSap, recheckSap, cancel, pullNow, createInvoiceDraft,
+    refresh, reprocess, rematchSap, recheckSap, cancel, pullNow, createInvoiceDraft, syncErpStatus,
   } = useNfEntrada();
+
 
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -64,6 +75,21 @@ export default function NfEntrada() {
   const [logs, setLogs] = useState<NfEntradaLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [syncingErp, setSyncingErp] = useState(false);
+
+  /** Consulta no ERP a situação real (aberta, fechada, cancelada) das NFs lançadas. */
+  async function handleSyncErpStatus() {
+    setSyncingErp(true);
+    try {
+      const res = await syncErpStatus();
+      toast({ title: "Situação atualizada", description: `${res?.synced ?? 0} nota(s) consultada(s) no ERP.` });
+    } catch (e) {
+      toast({ title: "Falha ao consultar o ERP", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setSyncingErp(false);
+    }
+  }
+
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editItem, setEditItem] = useState<NfEntradaImport | null>(null);
   const [provisionItem, setProvisionItem] = useState<NfEntradaImport | null>(null);
@@ -295,6 +321,16 @@ export default function NfEntrada() {
             <Button variant="outline" size="sm" onClick={refresh}>
               <RefreshCw className="w-4 h-4" /> Atualizar
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSyncErpStatus}
+              disabled={syncingErp}
+              title="Consultar no ERP a situação das NFs já lançadas"
+            >
+              <RotateCw className={`w-4 h-4 ${syncingErp ? "animate-spin" : ""}`} /> Sincronizar ERP
+            </Button>
+
             <Button size="sm" onClick={handlePullNow}>
               <Download className="w-4 h-4" /> Buscar Master Tax agora
             </Button>
@@ -509,6 +545,13 @@ export default function NfEntrada() {
                             <DetailField label="Despesa" value={it.expense_id?.slice(0, 8) || null} mono />
                             <DetailField label="PO SAP (nº)" value={poLabel(it) ?? it.sap_po_draft_id} mono />
                             <DetailField label="NF SAP" value={it.erp_invoice_doc_num ?? it.sap_invoice_draft_id} mono />
+                            <DetailField label="Data no ERP" value={it.erp_invoice_doc_date ? formatDate(it.erp_invoice_doc_date) : null} />
+                            <DetailField label="Situação no ERP" value={erpSituationLabel(it)} />
+                            <DetailField
+                              label="Consultado no ERP"
+                              value={it.erp_invoice_status_synced_at ? new Date(it.erp_invoice_status_synced_at).toLocaleString("pt-BR") : "nunca"}
+                            />
+
                             <DetailField label="Origem do status" value={statusOrigin(it).label} />
                             <DetailField label="Base SAP" value={it.sap_company_db} mono />
                             <DetailField label="Destinatário (tomador)" value={it.nome_destinatario} />
