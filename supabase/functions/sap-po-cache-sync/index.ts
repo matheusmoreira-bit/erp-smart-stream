@@ -57,6 +57,7 @@ async function syncCompany(sb: Sb, companyDb: string, opts: RunnerOpts): Promise
       backfill: opts.backfill,
       fromDate: opts.fromDate,
       maxPages: opts.backfill ? 200 : 40,
+      timeBudgetMs: opts.timeBudgetMs,
       mapRow: (inv) => ({
         company_db: companyDb,
         doc_entry: inv.DocEntry,
@@ -82,4 +83,4 @@ async function syncCompany(sb: Sb, companyDb: string, opts: RunnerOpts): Promise
   }
 }
 
-Deno.serve((req) => runSapCacheWatcher(req, { watcherName: "sap-po-cache-sync", syncCompany }));
+Deno.serve((req) => runSapCacheWatcher(req, { watcherName: "sap-po-cache-sync", stateTable: "sap_purchase_order_sync_state", syncCompany }));
