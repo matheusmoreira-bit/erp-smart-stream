@@ -5236,10 +5236,15 @@ export type Database = {
           divergence_override_at: string | null
           divergence_override_by: string | null
           divergence_override_reason: string | null
+          erp_invoice_cancelled: boolean
           erp_invoice_checked_at: string | null
+          erp_invoice_doc_date: string | null
           erp_invoice_doc_entry: string | null
           erp_invoice_doc_num: string | null
+          erp_invoice_doc_status: string | null
+          erp_invoice_open_amount: number | null
           erp_invoice_posted: boolean
+          erp_invoice_status_synced_at: string | null
           expense_id: string | null
           id: string
           impostos: Json
@@ -5282,10 +5287,15 @@ export type Database = {
           divergence_override_at?: string | null
           divergence_override_by?: string | null
           divergence_override_reason?: string | null
+          erp_invoice_cancelled?: boolean
           erp_invoice_checked_at?: string | null
+          erp_invoice_doc_date?: string | null
           erp_invoice_doc_entry?: string | null
           erp_invoice_doc_num?: string | null
+          erp_invoice_doc_status?: string | null
+          erp_invoice_open_amount?: number | null
           erp_invoice_posted?: boolean
+          erp_invoice_status_synced_at?: string | null
           expense_id?: string | null
           id?: string
           impostos?: Json
@@ -5328,10 +5338,15 @@ export type Database = {
           divergence_override_at?: string | null
           divergence_override_by?: string | null
           divergence_override_reason?: string | null
+          erp_invoice_cancelled?: boolean
           erp_invoice_checked_at?: string | null
+          erp_invoice_doc_date?: string | null
           erp_invoice_doc_entry?: string | null
           erp_invoice_doc_num?: string | null
+          erp_invoice_doc_status?: string | null
+          erp_invoice_open_amount?: number | null
           erp_invoice_posted?: boolean
+          erp_invoice_status_synced_at?: string | null
           expense_id?: string | null
           id?: string
           impostos?: Json
