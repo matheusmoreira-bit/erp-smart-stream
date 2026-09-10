@@ -119,6 +119,22 @@ export interface CreateAdvanceInput {
 
 type AdvanceAttachmentInsert = TablesInsert<"advance_payment_attachments">;
 
+/**
+ * Fluxo de autoaprovação de adiantamentos.
+ * Lido do cadastro de recursos do sistema (global ou por empresa).
+ */
+export async function isAutoApprovalEnabled(companyDb?: string | null): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("feature_flags")
+    .select("enabled, scope, company_db")
+    .eq("key", "advance_auto_approval");
+  if (error || !data?.length) return false;
+  const perCompany = companyDb ? data.find((f) => f.company_db === companyDb) : undefined;
+  const global = data.find((f) => f.scope === "global" || !f.company_db);
+  return Boolean((perCompany ?? global)?.enabled);
+}
+
+
 async function callAdvanceToSap(advance_id: string) {
   const res = await sapFunctionFetch("advance-to-sap", {
     method: "POST",
