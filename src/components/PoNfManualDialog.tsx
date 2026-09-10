@@ -47,6 +47,8 @@ export function PoNfManualDialog({
 }: Props) {
   const [numero, setNumero] = useState("");
   const [serie, setSerie] = useState("");
+  const [subserie, setSubserie] = useState("");
+  const [modelo, setModelo] = useState("55");
   const [chave, setChave] = useState("");
   const [dataEmissao, setDataEmissao] = useState("");
   const [valor, setValor] = useState("");
@@ -58,7 +60,7 @@ export function PoNfManualDialog({
 
   useEffect(() => {
     if (!open) return;
-    setNumero(""); setSerie(""); setChave("");
+    setNumero(""); setSerie(""); setSubserie(""); setModelo("55"); setChave("");
     setDataEmissao(poDate ? String(poDate).slice(0, 10) : "");
     setValor(poTotal ? String(poTotal) : "");
     setCnpj(supplierTaxId || "");
@@ -101,6 +103,8 @@ export function PoNfManualDialog({
       await onSubmit({
         numero_nf: numero.trim(),
         serie: serie.trim() || undefined,
+        subserie: subserie.trim() || undefined,
+        modelo: modelo.trim() || undefined,
         chave_acesso: chaveDigits || undefined,
         data_emissao: dataEmissao,
         valor_total: valorNum,
@@ -153,6 +157,14 @@ export function PoNfManualDialog({
           <div className="space-y-1">
             <Label htmlFor="nf-serie">Série</Label>
             <Input id="nf-serie" value={serie} onChange={(e) => setSerie(e.target.value)} disabled={disabled} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="nf-subserie">Subsérie (opcional)</Label>
+            <Input id="nf-subserie" value={subserie} onChange={(e) => setSubserie(e.target.value)} disabled={disabled} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="nf-modelo">Modelo (opcional)</Label>
+            <Input id="nf-modelo" value={modelo} onChange={(e) => setModelo(e.target.value)} disabled={disabled} placeholder="55 (NF-e)" />
           </div>
           <div className="space-y-1">
             <Label htmlFor="nf-data">Data de emissão *</Label>
