@@ -36,6 +36,7 @@ interface Candidate {
   alreadyLinkedPoDocEntry?: string | null;
   alreadyPosted?: boolean;
   score: number;
+  confidence: number;
   reasons: string[];
   valorDiff: number;
   diasDiff: number | null;
@@ -129,11 +130,14 @@ interface PoInfo {
   DocumentStatus: string | null;
   DocumentLines: Array<Record<string, unknown>>;
   supplierTaxId: string;
+  supplierCountry: string;
+  supplierInternational: boolean;
+  DocCurrency: string | null;
 }
 
 async function loadPurchaseOrder(baseUrl: string, cookie: string, docEntry: number): Promise<PoInfo | null> {
   const r = await fetch(
-    `${baseUrl}/PurchaseOrders(${docEntry})?$select=DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocumentStatus,DocumentLines`,
+    `${baseUrl}/PurchaseOrders(${docEntry})?$select=DocEntry,DocNum,CardCode,CardName,DocDate,DocTotal,DocCurrency,DocumentStatus,DocumentLines`,
     { headers: { Cookie: cookie } },
   );
   if (r.status === 404) return null;
@@ -141,15 +145,25 @@ async function loadPurchaseOrder(baseUrl: string, cookie: string, docEntry: numb
   const po = await r.json();
 
   let supplierTaxId = "";
+  let supplierCountry = "";
   if (po.CardCode) {
     try {
       const bp = await fetch(
-        `${baseUrl}/BusinessPartners('${encodeURIComponent(po.CardCode)}')?$select=CardCode,CardName,FederalTaxID`,
+        `${baseUrl}/BusinessPartners('${encodeURIComponent(po.CardCode)}')?$select=CardCode,CardName,FederalTaxID,Country`,
         { headers: { Cookie: cookie } },
       );
-      if (bp.ok) supplierTaxId = onlyDigits((await bp.json())?.FederalTaxID);
+      if (bp.ok) {
+        const bpj = await bp.json();
+        supplierTaxId = onlyDigits(bpj?.FederalTaxID);
+        supplierCountry = String(bpj?.Country ?? "").toUpperCase();
+      }
     } catch { /* fornecedor sem CNPJ cadastrado — segue por nome/valor */ }
   }
+
+  // Fornecedor internacional: país diferente de BR, ou sem CNPJ/CPF válido.
+  const supplierInternational =
+    (!!supplierCountry && supplierCountry !== "BR") ||
+    (!supplierCountry && supplierTaxId.length !== 14 && supplierTaxId.length !== 11);
 
   return {
     DocEntry: Number(po.DocEntry),
@@ -161,6 +175,9 @@ async function loadPurchaseOrder(baseUrl: string, cookie: string, docEntry: numb
     DocumentStatus: po.DocumentStatus ?? null,
     DocumentLines: Array.isArray(po.DocumentLines) ? po.DocumentLines : [],
     supplierTaxId,
+    supplierCountry,
+    supplierInternational,
+    DocCurrency: po.DocCurrency ?? null,
   };
 }
 
