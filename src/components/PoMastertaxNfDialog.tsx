@@ -180,7 +180,11 @@ export function PoMastertaxNfDialog({ open, onClose, companyDb, poDocEntry, poLa
           <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
             <SearchX className="w-6 h-6" aria-hidden="true" />
             <p>Nenhuma nota compatível entre {formatDate(result.window.de)} e {formatDate(result.window.ate)}.</p>
-            <p className="text-xs">Amplie o período acima para procurar em um intervalo maior.</p>
+            <p className="text-xs">
+              {result.cnpjFilter
+                ? "Amplie o período ou limpe o CNPJ para ver mais notas."
+                : "Amplie o período acima para procurar em um intervalo maior."}
+            </p>
           </div>
         )}
 
