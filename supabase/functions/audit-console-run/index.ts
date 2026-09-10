@@ -509,8 +509,20 @@ Deno.serve(async (req) => {
     const from = dateFrom || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
     const to = dateTo || new Date().toISOString().slice(0, 10);
 
-    // block parallel runs for the same company
+    // block parallel runs for the same company (runs travados > 20 min são encerrados)
     const sb = admin();
+    const staleCutoff = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    await sb
+      .from("audit_console_runs")
+      .update({
+        status: "failed",
+        error_message: "Execução interrompida (timeout). Encerrada automaticamente.",
+        finished_at: new Date().toISOString(),
+      })
+      .eq("company_db", companyDB)
+      .in("status", ["pending", "running"])
+      .lt("started_at", staleCutoff);
+
     const { data: existing } = await sb
       .from("audit_console_runs")
       .select("id")
@@ -522,6 +534,7 @@ Deno.serve(async (req) => {
         status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
 
     const { data: run, error } = await sb
       .from("audit_console_runs")
