@@ -68,6 +68,12 @@ export const CAPABILITY_CATALOG: CapabilityDef[] = [
     category: "data_scope",
   },
   {
+    key: "documents_view_team_directorate",
+    label: "Ver lançamentos do time da própria diretoria",
+    hint: "Enxerga os documentos criados por colegas da mesma diretoria (mesmo CC de 2º nível no IdP), qualquer que seja o centro de custo usado no documento. Pode ser combinada com a opção acima.",
+    category: "data_scope",
+  },
+  {
     key: "cost_centers_lotus",
     label: "Ver centros de custo LOTUS",
     hint: "Exibe os centros de custo LOTUS BLANCA nos formulários (Contabilidade & Fiscal, CFO/Financeiro, Gente e Gestão e Admin).",
