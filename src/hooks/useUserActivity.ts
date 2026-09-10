@@ -58,7 +58,7 @@ export function getActionLabel(action: string): string {
   return ACTION_LABELS[action] || action;
 }
 
-const USR5_ROW_CAP = 20000;
+const USR5_ROW_CAP = 10000;
 
 /**
  * Atividade de login do SAP (USR5).
