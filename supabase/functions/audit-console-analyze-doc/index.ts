@@ -2,6 +2,7 @@
 // Receives uploaded NF (XML/PDF) or contract, extracts structured data via AI,
 // confronts against SAP data in the run, and generates divergences.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { hashInput, getCachedAnalysis, saveAnalysis } from "../_shared/ai-doc-cache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
