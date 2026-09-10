@@ -86,6 +86,19 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
     }
   }, [items]);
 
+  // Consulta automática (uma vez por sessão de tela) da situação real no ERP
+  // para documentos integrados que ainda não foram consultados.
+  const autoSyncRef = useRef(false);
+  useEffect(() => {
+    if (autoSyncRef.current || loading) return;
+    const pending = items.some((i) => (i.sap_doc_entry || i.sap_doc_num) && !i.sap_status_synced_at);
+    if (!pending) return;
+    autoSyncRef.current = true;
+    void syncSapStatus().catch(() => { /* silencioso: o botão permite tentar de novo */ });
+  }, [items, loading, syncSapStatus]);
+
+
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return items;
