@@ -222,5 +222,5 @@ export function useMastertaxPoSearch(companyDb: string | null | undefined) {
     setError(null);
   }, []);
 
-  return { search, link, reset, loading, linking, error, result };
+  return { search, link, unlink, manualPost, aiExtract, reset, loading, linking, error, result };
 }
