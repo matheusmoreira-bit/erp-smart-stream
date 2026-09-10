@@ -9,7 +9,10 @@
 // Credenciais Master Tax e SAP são lidas server-side em system_credentials.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+
+// CORS restrito por allowlist; inclui os cabeçalhos de sessão SAP usados pelo app.
+let corsHeaders: Record<string, string> = corsFor(new Request("http://localhost"));
 import { requireAdminOrSapModule, authErrorResponse } from "../_shared/auth.ts";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
 
@@ -349,7 +352,10 @@ function scoreCandidate(po: PoInfo, n: {
 /* ─────────── Handler ─────────── */
 
 Deno.serve(async (req) => {
+  corsHeaders = corsFor(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const foreign = rejectForeignOrigin(req);
+  if (foreign) return foreign;
 
   let caller: { email?: string | null; userName?: string | null } & Record<string, unknown>;
   try {
