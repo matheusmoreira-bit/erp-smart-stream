@@ -532,6 +532,7 @@ Deno.serve(async (req) => {
       const ate = isoDay(ateRaw > today ? today : ateRaw);
 
       // Notas já importadas na base (mesma empresa, dentro da janela).
+      const supplierCnpj = cnpjFilter || onlyDigits(po.supplierTaxId || "");
       const { data: localRows } = await sb
         .from("nf_entrada_imports")
         .select("id, chave_acesso, numero_nf, serie, cnpj_fornecedor, nome_fornecedor, data_emissao, valor_total, sap_matched_po_doc_entry, erp_invoice_posted, status")
@@ -539,6 +540,23 @@ Deno.serve(async (req) => {
         .gte("data_emissao", de)
         .lte("data_emissao", ate)
         .limit(500);
+
+      // Reforço: notas do mesmo fornecedor fora da janela também entram na análise.
+      let localByCnpj: typeof localRows = null;
+      if (supplierCnpj) {
+        const wideDe = isoDay(new Date(ref.getTime() - MAX_WINDOW_DAYS * 86_400_000));
+        const wideAte = isoDay(new Date(Math.min(ref.getTime() + MAX_WINDOW_DAYS * 86_400_000, today.getTime())));
+        const { data } = await sb
+          .from("nf_entrada_imports")
+          .select("id, chave_acesso, numero_nf, serie, cnpj_fornecedor, nome_fornecedor, data_emissao, valor_total, sap_matched_po_doc_entry, erp_invoice_posted, status")
+          .eq("sap_company_db", companyDb)
+          .eq("cnpj_fornecedor", supplierCnpj)
+          .gte("data_emissao", wideDe)
+          .lte("data_emissao", wideAte)
+          .limit(200);
+        localByCnpj = data;
+      }
+
 
       const byChave = new Map<string, Candidate>();
       for (const r of (localRows || []) as Array<Record<string, string | number | boolean | null>>) {
