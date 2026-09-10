@@ -380,6 +380,28 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
     [fetchAll],
   );
 
-  return { items, loading, error, refresh: fetchAll, create, approve, reject, retry, remove, reconcile };
+  /** Consulta no ERP (SAP) o status real dos adiantamentos já integrados. */
+  const syncSapStatus = useCallback(
+    async (id?: string) => {
+      const company = session?.companyDB;
+      if (!id && !company) throw new Error("Selecione uma empresa antes de sincronizar.");
+      const res = await sapFunctionFetch("advance-sap-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          id ? { advance_id: id } : { company_db: company, advance_type: advanceType },
+        ),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || data?.success === false) {
+        throw new Error(data?.error || `Falha ao sincronizar status (${res.status})`);
+      }
+      await fetchAll();
+      return data as { synced: number };
+    },
+    [fetchAll, session?.companyDB, advanceType],
+  );
+
+  return { items, loading, error, refresh: fetchAll, create, approve, reject, retry, remove, reconcile, syncSapStatus };
 
 }
