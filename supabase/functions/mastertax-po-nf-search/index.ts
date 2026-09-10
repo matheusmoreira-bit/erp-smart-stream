@@ -601,7 +601,13 @@ Deno.serve(async (req) => {
           mtRawRows += rawRows;
           mtNotas += notas.length;
           for (const n of notas) {
-            if (mt.cnpj && n.cnpj_destinatario && n.cnpj_destinatario !== mt.cnpj) { mtOutroDestinatario++; continue; }
+            // A consulta já é escopada por empresa_id da Master Tax; só descartamos
+            // quando o destinatário é de outro grupo (raiz de CNPJ diferente).
+            if (
+              mt.cnpj && n.cnpj_destinatario &&
+              n.cnpj_destinatario.slice(0, 8) !== mt.cnpj.slice(0, 8)
+            ) { mtOutroDestinatario++; continue; }
+
             if (byChave.has(n.chave_acesso)) continue;
 
             const s = scoreCandidate(po, n);
