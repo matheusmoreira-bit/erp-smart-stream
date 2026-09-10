@@ -272,9 +272,20 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
         }
       }
 
-      // Cliente: integra imediatamente, sem etapa de aprovação.
-      if (isCustomer && input.submit) {
+      // Autoaprovação: se o fluxo automático estiver ligado, aprova e integra na sequência.
+      if (input.submit && (await isAutoApprovalEnabled(input.company_db))) {
+        await (supabase as any)
+          .from("advance_payments")
+          .update({
+            status: "approved",
+            approved_by: uid,
+            approved_by_name: "Autoaprovação",
+            approved_at: new Date().toISOString(),
+            auto_approved: true,
+          })
+          .eq("id", row.id);
         try {
+          await (supabase as any).from("advance_payments").update({ status: "integrating" }).eq("id", row.id);
           await callAdvanceToSap(row.id);
         } catch (e) {
           await (supabase as any)
@@ -285,6 +296,7 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
           throw e;
         }
       }
+
 
       await fetchAll();
       return row as AdvancePayment;
