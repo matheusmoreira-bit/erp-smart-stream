@@ -680,13 +680,18 @@ export type Database = {
           requester_email: string | null
           requester_id: string
           requester_name: string | null
+          sap_cancelled: boolean
+          sap_doc_date: string | null
           sap_doc_entry: number | null
           sap_doc_num: number | null
+          sap_doc_status: string | null
           sap_incoming_payment_doc_entry: number | null
           sap_integrated_at: string | null
           sap_integration_error: string | null
           sap_integration_locked_at: string | null
           sap_integration_status: string | null
+          sap_open_amount: number | null
+          sap_status_synced_at: string | null
           status: string
           supplier_card_code: string
           supplier_cnpj: string | null
@@ -716,13 +721,18 @@ export type Database = {
           requester_email?: string | null
           requester_id: string
           requester_name?: string | null
+          sap_cancelled?: boolean
+          sap_doc_date?: string | null
           sap_doc_entry?: number | null
           sap_doc_num?: number | null
+          sap_doc_status?: string | null
           sap_incoming_payment_doc_entry?: number | null
           sap_integrated_at?: string | null
           sap_integration_error?: string | null
           sap_integration_locked_at?: string | null
           sap_integration_status?: string | null
+          sap_open_amount?: number | null
+          sap_status_synced_at?: string | null
           status?: string
           supplier_card_code: string
           supplier_cnpj?: string | null
@@ -752,13 +762,18 @@ export type Database = {
           requester_email?: string | null
           requester_id?: string
           requester_name?: string | null
+          sap_cancelled?: boolean
+          sap_doc_date?: string | null
           sap_doc_entry?: number | null
           sap_doc_num?: number | null
+          sap_doc_status?: string | null
           sap_incoming_payment_doc_entry?: number | null
           sap_integrated_at?: string | null
           sap_integration_error?: string | null
           sap_integration_locked_at?: string | null
           sap_integration_status?: string | null
+          sap_open_amount?: number | null
+          sap_status_synced_at?: string | null
           status?: string
           supplier_card_code?: string
           supplier_cnpj?: string | null
