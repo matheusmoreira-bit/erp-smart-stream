@@ -661,6 +661,10 @@ export type Database = {
         Row: {
           advance_type: string
           amount: number
+          approved_at: string | null
+          approved_by: string | null
+          approved_by_name: string | null
+          auto_approved: boolean
           company_db: string
           cost_center: string | null
           cost_center_name: string | null
@@ -702,6 +706,10 @@ export type Database = {
         Insert: {
           advance_type?: string
           amount: number
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_by_name?: string | null
+          auto_approved?: boolean
           company_db: string
           cost_center?: string | null
           cost_center_name?: string | null
@@ -743,6 +751,10 @@ export type Database = {
         Update: {
           advance_type?: string
           amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_by_name?: string | null
+          auto_approved?: boolean
           company_db?: string
           cost_center?: string | null
           cost_center_name?: string | null
