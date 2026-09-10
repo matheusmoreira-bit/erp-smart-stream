@@ -87,6 +87,7 @@ export const NAV_MODULES: NavModule[] = [
       { label: "Previsão de Caixa", path: "/financeiro/previsao-caixa", moduleKey: "financial_review" },
       { label: "Contas a Receber", path: "/vendas/recebimentos", moduleKey: "sales" },
       { label: "Reconciliação de Adiantamentos", path: "/financeiro/reconciliacao", moduleKey: "financial_review" },
+      { label: "Cartões Corporativos", path: "/cartoes/transacoes", moduleKey: "pagcorp" },
     ],
 
   },
