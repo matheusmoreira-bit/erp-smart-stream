@@ -99,7 +99,7 @@ export function useUserActivity(windowDays = 365) {
     } finally {
       if (!signal?.aborted) setIsLoading(false);
     }
-  }, [session]);
+  }, [session, windowDays]);
 
   const refresh = useCallback(() => fetch(true), [fetch]);
 
