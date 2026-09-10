@@ -91,14 +91,25 @@ Deno.serve(async (req) => {
     const mastertax = mtRaw || [];
 
     // Índices MasterTax por PC e por NF do SAP
+    // Obs.: as colunas sap_matched_po_doc_entry / erp_invoice_doc_entry são TEXT no banco,
+    // então precisam ser convertidas para número antes da comparação.
+    const toEntry = (v: unknown): number | null => {
+      if (typeof v === "number") return Number.isFinite(v) ? v : null;
+      if (typeof v === "string" && v.trim() !== "") {
+        const n = Number(v.trim());
+        return Number.isFinite(n) ? n : null;
+      }
+      return null;
+    };
     const mtByPo = new Map<number, typeof mastertax[number]>();
     const mtByNfEntry = new Map<number, typeof mastertax[number]>();
     for (const m of mastertax) {
-      if (typeof m.sap_matched_po_doc_entry === "number" && !m.sap_matched_po_is_draft) {
-        mtByPo.set(m.sap_matched_po_doc_entry, m);
-      }
-      if (typeof m.erp_invoice_doc_entry === "number") mtByNfEntry.set(m.erp_invoice_doc_entry, m);
+      const poEntry = toEntry(m.sap_matched_po_doc_entry);
+      const nfEntry = toEntry(m.erp_invoice_doc_entry);
+      if (poEntry !== null && !m.sap_matched_po_is_draft) mtByPo.set(poEntry, m);
+      if (nfEntry !== null) mtByNfEntry.set(nfEntry, m);
     }
+
 
     const colunaA: unknown[] = [];
     const colunaB: unknown[] = [];
