@@ -17,11 +17,16 @@ const MAX_TOTAL_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 const MAX_SINGLE_ATTACHMENT_BYTES = 15 * 1024 * 1024;
 
 const DEFAULT_ALLOWED_EMAIL_DOMAINS = [
+  "growth.gg",
   "anagaming.com.br",
   "cactuscorporation.com",
   "cactusgaming.com.br",
+  "cactusgaming.net",
   "cactusproviders.com.br",
   "opengaming.com.br",
+  "institutoconectacactus.org.br",
+  "banana.games",
+  "lotusblanca.net",
 ];
 
 interface AttachmentInput {

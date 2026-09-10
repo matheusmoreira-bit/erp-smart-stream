@@ -43,3 +43,4 @@
 - [Visibilidade das aprovações SAP](mem://features/sap-approvals-visibility.md) — sap-approvals-hana filtra no servidor: só o que o usuário aprova ou solicitou.
 - [PagCorp sem aprovação](mem://features/pagcorp-sem-aprovacao.md) — cartão corporativo (origin pagcorp ou observação "PagCorp") nasce aprovado, sem matriz de alçadas.
 - [Avisos de aprovação por WhatsApp](mem://features/whatsapp-flow-approval-watcher.md) — Watcher a cada 30min lê pendências do próprio ERP Flow (sem HANA) e envia digest por aprovador.
+- [Domínios de e-mail permitidos](mem://features/email-domains.md) — Migração para @growth.gg com domínios antigos coexistindo; allowlists de login e de envio SMTP.
