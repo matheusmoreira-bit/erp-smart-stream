@@ -185,10 +185,9 @@ export function PoMastertaxNfDialog({ open, onClose, companyDb, poDocEntry, poLa
             <SearchX className="w-6 h-6" aria-hidden="true" />
             <p>Nenhuma nota compatível entre {formatDate(result.window.de)} e {formatDate(result.window.ate)}.</p>
             <p className="text-xs">
-              {result.cnpjFilter
-                ? "Amplie o período ou limpe o CNPJ para ver mais notas."
-                : "Amplie o período acima para procurar em um intervalo maior."}
+              A busca considera apenas notas do mesmo CNPJ do fornecedor e com valor até 15% acima ou abaixo do pedido. Amplie o período para procurar em um intervalo maior.
             </p>
+
           </div>
         )}
 
