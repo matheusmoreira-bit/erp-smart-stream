@@ -27,6 +27,31 @@ const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
+/**
+ * Escala harmônica de largura dos modais: cada tamanho ganha um degrau extra
+ * para acomodar melhor tabelas, formulários e barras de botões.
+ * Tamanhos pequenos (xs/sm) e larguras arbitrárias são preservados.
+ */
+const WIDTH_UPSCALE: Record<string, string> = {
+  "max-w-md": "max-w-[min(34rem,calc(100vw-3rem))]",
+  "max-w-lg": "max-w-[min(40rem,calc(100vw-3rem))]",
+  "max-w-xl": "max-w-[min(44rem,calc(100vw-3rem))]",
+  "max-w-2xl": "max-w-[min(52rem,calc(100vw-3rem))]",
+  "max-w-3xl": "max-w-[min(58rem,calc(100vw-3rem))]",
+  "max-w-4xl": "max-w-[min(66rem,calc(100vw-3rem))]",
+  "max-w-5xl": "max-w-[min(74rem,calc(100vw-3rem))]",
+  "max-w-6xl": "max-w-[min(82rem,calc(100vw-3rem))]",
+  "max-w-7xl": "max-w-[min(92rem,calc(100vw-3rem))]",
+};
+
+function upscaleWidth(className?: string): string | undefined {
+  if (!className) return className;
+  return className
+    .split(/\s+/)
+    .map((c) => WIDTH_UPSCALE[c] ?? c)
+    .join(" ");
+}
+
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
@@ -40,8 +65,8 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-1.5rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-4 sm:p-6 shadow-lg duration-200 max-h-[calc(100dvh-1.5rem)] overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
-        className,
+        "fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-1.5rem)] max-w-[min(40rem,calc(100vw-3rem))] translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-4 sm:p-6 shadow-lg duration-200 max-h-[calc(100dvh-1.5rem)] overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
+        upscaleWidth(className),
       )}
       {...props}
     >
