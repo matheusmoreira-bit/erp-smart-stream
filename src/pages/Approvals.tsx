@@ -2061,7 +2061,7 @@ function MyRequestDetailModal({ doc, open, onClose }: { doc: MyRequestDoc | null
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3 flex-wrap">
-            <DocKindBadge doc={doc} /><span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span>
+            <DocKindBadge doc={doc} />
             <span className="font-mono">{docNumberLabel(doc)}</span>
             <StatusBadge status={doc.status} label={doc.statusLabel} />
             <span className="text-2xl font-bold font-mono ml-auto">{formatCurrency(doc.docTotal, doc.currency)}</span>
@@ -2282,7 +2282,7 @@ function MyRequestsTab() {
               {visibleRequests.map((doc) => (
                 <tr key={doc.approvalRequestId} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                   <td className="py-3 px-3">
-                    <div className="flex items-center gap-1.5 flex-wrap"><DocKindBadge doc={doc} /><span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span></div>
+                    <div className="flex items-center gap-1.5 flex-wrap"><DocKindBadge doc={doc} /></div>
                   </td>
                   <td className="py-3 px-3 font-mono text-xs text-foreground font-semibold">{docNumberLabel(doc)}</td>
                   <td className="py-3 px-3 text-right font-mono text-foreground font-medium">{formatCurrency(doc.docTotal, doc.currency)}</td>
@@ -4310,7 +4310,7 @@ export default function ApprovalsPage() {
                         </td>
                       )}
                       <td className="py-3 px-3">
-                        <div className="flex items-center gap-1.5 flex-wrap"><DocKindBadge doc={doc} /><span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">{doc.docTypeName}</span></div>
+                        <div className="flex items-center gap-1.5 flex-wrap"><DocKindBadge doc={doc} /></div>
                       </td>
                       <td className="py-3 px-3 font-mono text-xs text-foreground font-semibold">{docNumberLabel(doc)}</td>
                       <td className="py-3 px-3 text-right font-mono text-foreground font-medium">{formatCurrency(doc.docTotal, doc.currency)}</td>
