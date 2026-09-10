@@ -2362,7 +2362,7 @@ export default function ApprovalsPage() {
   const { hasAccess: canViewAllApprovals } = useModuleAccess("approvals_view_all");
   const { canViewAll: canViewAllByGroup } = useCanViewAllDocuments();
   // Grupo "Usuário Administrativo": vê todos os documentos da própria diretoria.
-  const { matches: inMyDirectorate } = useDirectorateScope();
+  const { matches: inMyDirectorate, matchesRequester: isMyDirectorateTeammate } = useDirectorateScope();
   // "Ver todas as aprovações" começa DESMARCADO por padrão para todos —
   // inclusive super-usuários/admins. Quem tem permissão pode ligar manualmente.
   // Apenas o grupo "Usuário" não enxerga a opção.
@@ -2937,7 +2937,11 @@ export default function ApprovalsPage() {
           // Aprovador original ainda vê o documento que delegou (mesmo sem "Ver todas").
           (a.delegatedFrom && approverMatches(a.delegatedFrom, sessionUserName)) ||
           // Diretoria do usuário administrativo (CC 1.6.% para quem é 1.6.1.2).
-          docCostCenters(a).some((c) => inMyDirectorate(c)),
+          docCostCenters(a).some((c) => inMyDirectorate(c)) ||
+          // Gestor com "ver lançamentos do time": documentos criados por
+          // colegas da mesma diretoria, em qualquer centro de custo.
+          isMyDirectorateTeammate(a.requesterCode) ||
+          isMyDirectorateTeammate(a.requester),
       );
 
 

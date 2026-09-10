@@ -1311,7 +1311,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   const companyLabel = getLabel(session?.companyDB || "");
   const { hasAccess: canViewAllExpenses } = useModuleAccess("expenses_view_all");
   const { canViewAll: canViewAllByGroup } = useCanViewAllDocuments();
-  const { matches: inMyDirectorate } = useDirectorateScope();
+  const { matches: inMyDirectorate, matchesRequester: isMyDirectorateTeammate } = useDirectorateScope();
   const isAdmin = isLovableAdmin || !!session?.isSuperUser || canViewAllExpenses || canViewAllByGroup;
   const userIdentifier = (session?.userName || "").toLowerCase();
   // Admin vê tudo por padrão; demais usuários só veem o que criaram ou aprovam.
@@ -1737,6 +1737,14 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     // quem o IdP marca como 1.6.1.2).
     if (inMyDirectorate(e.cost_center)) return true;
     if ((e.items || []).some((i) => inMyDirectorate(i?.cost_center))) return true;
+    // Gestor com "ver lançamentos do time": tudo criado por colegas da mesma
+    // diretoria, qualquer que seja o centro de custo do documento.
+    if (
+      isMyDirectorateTeammate(e.created_by_email) ||
+      isMyDirectorateTeammate(e.requester_email) ||
+      isMyDirectorateTeammate(e.requester_name)
+    )
+      return true;
     if (!userIdentifier) return false;
     return (
       owner === userIdentifier ||
