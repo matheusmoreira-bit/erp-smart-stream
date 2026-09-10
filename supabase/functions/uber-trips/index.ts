@@ -17,6 +17,9 @@ interface NormalizedTrip {
   source_label: string;
   employee_id: string;
   employee_name: string;
+  employee_first_name: string;
+  employee_last_name: string;
+
   email: string;
   requested_at_local: string | null;
   requested_date_local: string | null;
