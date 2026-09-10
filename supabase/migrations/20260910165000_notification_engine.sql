@@ -813,7 +813,14 @@ trigger_row AS (
 existing_trigger AS (
   SELECT id FROM trigger_row
   UNION ALL
-  SELECT id FROM public.notification_triggers WHERE event_key = 'document.pending_approval' ORDER BY created_at LIMIT 1
+  SELECT id
+  FROM (
+    SELECT id
+    FROM public.notification_triggers
+    WHERE event_key = 'document.pending_approval'
+    ORDER BY created_at
+    LIMIT 1
+  ) existing
 ),
 rule_row AS (
   INSERT INTO public.notification_rules (trigger_id, template_id, name, channel, priority, created_by)
