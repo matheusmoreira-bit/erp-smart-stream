@@ -76,6 +76,12 @@ export interface AdvancePayment {
   cost_center_name?: string | null;
   sap_doc_entry?: number | null;
   sap_doc_num?: number | null;
+  /** Dados do documento no ERP (SAP). */
+  sap_doc_date?: string | null;
+  sap_doc_status?: string | null;
+  sap_cancelled?: boolean | null;
+  sap_open_amount?: number | null;
+  sap_status_synced_at?: string | null;
   sap_integration_error?: string | null;
   sap_integrated_at?: string | null;
   /** Reconciliação (LCM) — recebimento em banco do adiantamento. */
