@@ -579,7 +579,7 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
             companyDB: companyDb,
             displayName,
             status: "error",
-            message: `PATCH aceito, mas login com a nova senha falhou (${raw}). Verifique se o usuário admin tem privilégio de Superuser nesta base.`,
+            message: `A senha foi aceita pelo SAP (PATCH ok), mas o login de validação falhou. ${explainLoginFailure(raw)}`,
           };
         } finally {
           if (verifySession) sapLogout(verifySession);
