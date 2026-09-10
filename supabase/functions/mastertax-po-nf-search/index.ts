@@ -902,6 +902,8 @@ Deno.serve(async (req) => {
       const nf = (body.nf || {}) as Record<string, unknown>;
       const numero = String(nf.numero_nf ?? "").trim();
       const serie = String(nf.serie ?? "").trim();
+      const subserie = String(nf.subserie ?? "").trim();
+      const modelo = String(nf.modelo ?? "").trim();
       const dataEmissao = String(nf.data_emissao ?? "").slice(0, 10);
       const valorTotal = Number(nf.valor_total ?? 0);
       const chaveManual = String(nf.chave_acesso ?? "").replace(/\D+/g, "");
@@ -969,6 +971,7 @@ Deno.serve(async (req) => {
         DocDate: dataEmissao,
         TaxDate: dataEmissao,
         NumAtCard: `${numero}${serie ? `/${serie}` : ""}`.slice(0, 100),
+        ...brFiscalFields({ numero, serie, subserie, modelo }),
         Comments: comments.slice(0, 250),
         DocumentLines: manualLines,
         ...(mode === "draft" ? { DocObjectCode: "oPurchaseInvoices" } : {}),
@@ -1124,6 +1127,10 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           DocObjectCode: "oPurchaseInvoices",
           CardCode: po.CardCode,
+          DocDate: row.data_emissao || undefined,
+          TaxDate: row.data_emissao || undefined,
+          NumAtCard: `${row.numero_nf ?? ""}${row.serie ? `/${row.serie}` : ""}`.slice(0, 100) || undefined,
+          ...brFiscalFields({ numero: row.numero_nf, serie: row.serie }),
           Comments: `NF Entrada chave ${chave} (vinculada ao PC #${po.DocNum ?? po.DocEntry})`,
           DocumentLines: lines,
         }),
@@ -1169,6 +1176,8 @@ Deno.serve(async (req) => {
         CardCode: po.CardCode,
         DocDate: row.data_emissao || undefined,
         TaxDate: row.data_emissao || undefined,
+        NumAtCard: `${row.numero_nf ?? ""}${row.serie ? `/${row.serie}` : ""}`.slice(0, 100) || undefined,
+        ...brFiscalFields({ numero: row.numero_nf, serie: row.serie }),
         Comments: `NF Entrada chave ${chave} (vinculada ao PC #${po.DocNum ?? po.DocEntry})`,
         DocumentLines: lines,
       }),
