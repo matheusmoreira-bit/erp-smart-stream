@@ -947,7 +947,7 @@ function ExpenseDetailModal({
           open={mastertaxOpen}
           onClose={() => setMastertaxOpen(false)}
           companyDb={expense.company_db || sapSession?.companyDB || null}
-          poDocEntry={expense.sap_doc_entry as string}
+          poDocEntry={expense.sap_doc_entry}
           poLabel={`#${expense.sap_doc_num || expense.sap_doc_entry}`}
           onDone={onSynced}
         />
