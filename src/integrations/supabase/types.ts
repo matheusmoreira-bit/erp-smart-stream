@@ -857,6 +857,54 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_document_analyses: {
+        Row: {
+          company_db: string | null
+          created_at: string
+          created_by: string | null
+          entity_id: string | null
+          entity_type: string | null
+          hit_count: number
+          id: string
+          input_hash: string
+          last_used_at: string
+          model: string | null
+          result: Json
+          scope: string
+          updated_at: string
+        }
+        Insert: {
+          company_db?: string | null
+          created_at?: string
+          created_by?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          hit_count?: number
+          id?: string
+          input_hash: string
+          last_used_at?: string
+          model?: string | null
+          result: Json
+          scope: string
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string | null
+          created_at?: string
+          created_by?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          hit_count?: number
+          id?: string
+          input_hash?: string
+          last_used_at?: string
+          model?: string | null
+          result?: Json
+          scope?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       api_keys: {
         Row: {
           created_at: string
