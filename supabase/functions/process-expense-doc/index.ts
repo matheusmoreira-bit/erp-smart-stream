@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { normalizeText as baseNormalizeText } from "../_shared/text-normalize.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { hashInput, getCachedAnalysis, saveAnalysis } from "../_shared/ai-doc-cache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -454,7 +456,24 @@ Regras IMPORTANTES:
 - Quando vários arquivos forem enviados juntos, is_invoice_equivalent deve ser TRUE se AO MENOS UM deles for Nota Fiscal, invoice ou equivalente, mesmo que os demais sejam apenas comprovantes ou documentos de apoio.
 - document_kind: use "invoice" para invoices internacionais, "nota_fiscal" para NFs BR, "receipt" para recibos, "comprovante_pagamento" para comprovantes bancários/PIX, "boleto" para boletos, "contrato" para contratos, "outro" para o resto.`;
 
-    const aiResponse = await fetch(
+    // Cache: o mesmo documento (mesmos arquivos + mesmo prompt/modelo) não é
+    // reavaliado pela IA — a análise anterior é reaproveitada.
+    const aiCacheDb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const aiCacheKey = {
+      scope: "expense_doc_extract",
+      inputHash: await hashInput({
+        provider: aiProvider,
+        model: aiProvider === "openai" ? OPENAI_AI_MODEL : LOVABLE_AI_MODEL,
+        prompt: systemPrompt,
+        parts: aiProvider === "openai" ? openAiContentParts : lovableContentParts,
+      }),
+    };
+    const aiCacheHit = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+      ? await getCachedAnalysis<unknown>(aiCacheDb, aiCacheKey)
+      : null;
+
+    const aiResponse = aiCacheHit ? null : await fetch(
+
       aiProvider === "openai"
         ? "https://api.openai.com/v1/responses"
         : "https://ai.gateway.lovable.dev/v1/chat/completions",
@@ -482,7 +501,7 @@ Regras IMPORTANTES:
       },
     );
 
-    if (!aiResponse.ok) {
+    if (aiResponse && !aiResponse.ok) {
       if (aiResponse.status === 429) {
         return new Response(JSON.stringify({ error: "Limite de requisições excedido, tente novamente em alguns segundos." }), {
           status: 429,
@@ -500,25 +519,37 @@ Regras IMPORTANTES:
       throw new Error("Erro ao processar documento com IA");
     }
 
-    const aiData = await aiResponse.json() as Record<string, unknown>;
-    const rawContent = aiProvider === "openai"
-      ? readOpenAiOutputText(aiData)
-      : readLovableOutputText(aiData);
-
     let parsed;
-    try {
-      const cleaned = rawContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      parsed = JSON.parse(cleaned);
-    } catch {
-      console.error("Failed to parse AI response:", rawContent);
-      return new Response(JSON.stringify({
-        error: "Não foi possível interpretar o documento. Tente novamente.",
-        raw: rawContent,
-      }), {
-        status: 422,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (aiCacheHit) {
+      parsed = aiCacheHit.result;
+    } else {
+      const aiData = await aiResponse!.json() as Record<string, unknown>;
+      const rawContent = aiProvider === "openai"
+        ? readOpenAiOutputText(aiData)
+        : readLovableOutputText(aiData);
+
+      try {
+        const cleaned = rawContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        parsed = JSON.parse(cleaned);
+      } catch {
+        console.error("Failed to parse AI response:", rawContent);
+        return new Response(JSON.stringify({
+          error: "Não foi possível interpretar o documento. Tente novamente.",
+          raw: rawContent,
+        }), {
+          status: 422,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+        await saveAnalysis(aiCacheDb, aiCacheKey, parsed, {
+          model: aiProvider === "openai" ? OPENAI_AI_MODEL : LOVABLE_AI_MODEL,
+          entityType: "expense_doc",
+          companyDb: companyDB || null,
+        });
+      }
     }
+
 
     // Post-process: check company match and totals divergence
     const docs = Array.isArray(parsed) ? parsed : [parsed];

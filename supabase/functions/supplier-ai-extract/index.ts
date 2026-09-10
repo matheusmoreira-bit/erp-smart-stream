@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
+import { hashInput, getCachedAnalysis, saveAnalysis } from "../_shared/ai-doc-cache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -109,6 +110,20 @@ Deno.serve(async (req) => {
       },
     }];
 
+    // Cache: o mesmo documento não é reavaliado pela IA.
+    const AI_MODEL = "google/gemini-2.5-flash";
+    const cacheKey = {
+      scope: "supplier_extract",
+      inputHash: await hashInput({ model: AI_MODEL, content: userContent }),
+    };
+    const cached = await getCachedAnalysis<Record<string, unknown>>(admin, cacheKey);
+    if (cached) {
+      return new Response(JSON.stringify({ supplier: cached.result, cached: true, analyzedAt: cached.analyzedAt }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -116,7 +131,7 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: AI_MODEL,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: userContent },
@@ -163,7 +178,9 @@ Deno.serve(async (req) => {
         : String(extracted.federal_tax_id).trim();
     }
 
-    return new Response(JSON.stringify({ supplier: extracted }), {
+    await saveAnalysis(admin, cacheKey, extracted, { model: AI_MODEL, entityType: "supplier_doc" });
+
+    return new Response(JSON.stringify({ supplier: extracted, cached: false }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

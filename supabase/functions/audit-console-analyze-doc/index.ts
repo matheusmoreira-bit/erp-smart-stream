@@ -2,6 +2,7 @@
 // Receives uploaded NF (XML/PDF) or contract, extracts structured data via AI,
 // confronts against SAP data in the run, and generates divergences.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { hashInput, getCachedAnalysis, saveAnalysis } from "../_shared/ai-doc-cache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,9 +40,19 @@ interface ExtractedNf {
   items?: Array<{ description?: string; quantity?: number; unit_price?: number; total?: number }>;
 }
 
+const AI_MODEL = "google/gemini-3-flash-preview";
+
 async function extractFromText(text: string, docType: string): Promise<ExtractedNf> {
   if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY ausente");
   const trimmed = text.slice(0, 18000);
+  // Cache: o mesmo conteúdo de documento não é reavaliado pela IA.
+  const db = admin();
+  const cacheKey = {
+    scope: "audit_console_doc_extract",
+    inputHash: await hashInput({ model: AI_MODEL, docType, text: trimmed }),
+  };
+  const hit = await getCachedAnalysis<ExtractedNf>(db, cacheKey);
+  if (hit) return hit.result;
   const system = docType === "contract"
     ? "Você é um analista jurídico. Extraia dos contratos os campos abaixo em JSON estrito."
     : "Você é um analista fiscal. Extraia da nota fiscal os campos abaixo em JSON estrito.";
@@ -49,7 +60,7 @@ async function extractFromText(text: string, docType: string): Promise<Extracted
     method: "POST",
     headers: { "Content-Type": "application/json", "Lovable-API-Key": LOVABLE_API_KEY },
     body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
+      model: AI_MODEL,
       messages: [
         { role: "system", content: `${system}\nResponda APENAS com JSON no formato: {"vendor_name":string|null,"vendor_document":string|null,"total":number|null,"issue_date":"YYYY-MM-DD"|null,"payment_terms":string|null,"invoice_number":string|null,"items":[{"description":string,"quantity":number,"unit_price":number,"total":number}]}` },
         { role: "user", content: `Documento (${docType}):\n${trimmed}` },
@@ -60,8 +71,11 @@ async function extractFromText(text: string, docType: string): Promise<Extracted
   const body = await resp.json();
   const content = body.choices?.[0]?.message?.content ?? "{}";
   const m = content.match(/\{[\s\S]*\}/);
-  return m ? JSON.parse(m[0]) : {};
+  const parsed: ExtractedNf = m ? JSON.parse(m[0]) : {};
+  await saveAnalysis(db, cacheKey, parsed, { model: AI_MODEL, entityType: "audit_console_doc" });
+  return parsed;
 }
+
 
 function parseNfXml(xml: string): Partial<ExtractedNf> {
   // Lightweight regex parsing of NFe — good enough as a hint; AI fills gaps.

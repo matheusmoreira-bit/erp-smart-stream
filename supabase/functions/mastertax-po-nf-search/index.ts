@@ -15,6 +15,7 @@ import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 let corsHeaders: Record<string, string> = corsFor(new Request("http://localhost"));
 import { requireAdminOrSapModule, authErrorResponse } from "../_shared/auth.ts";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
+import { hashInput, getCachedAnalysis, saveAnalysis } from "../_shared/ai-doc-cache.ts";
 
 const DEFAULT_MASTERTAX_URL = "https://api.mastertax.app";
 const MAX_WINDOW_DAYS = 180;
@@ -414,6 +415,7 @@ Deno.serve(async (req) => {
     reason?: string;
     expense_id?: string;
     nf?: Record<string, unknown>;
+    force_ai?: boolean;
   } = {};
   try { body = await req.json(); } catch { /* ignore */ }
 
@@ -454,6 +456,31 @@ Deno.serve(async (req) => {
     const rows = (atts || []) as Array<{ file_name: string; file_path: string; mime_type: string | null; file_size: number | null }>;
     if (!rows.length) return json(404, { error: "Este pedido não tem anexos para a IA analisar." });
 
+    // Cache: mesma combinação de anexos não é reavaliada pela IA.
+    const AI_MODEL = "google/gemini-3.6-flash";
+    const cacheKey = {
+      scope: "nf_entrada_extract",
+      inputHash: await hashInput({
+        model: AI_MODEL,
+        expenseId,
+        files: rows.map((a) => [a.file_path, a.file_size ?? 0, a.mime_type ?? ""]).sort(),
+      }),
+    };
+    const force = body.force_ai === true;
+    if (!force) {
+      const hit = await getCachedAnalysis<{ fields: unknown; analyzedFiles: number }>(sb, cacheKey);
+      if (hit) {
+        return json(200, {
+          ok: true,
+          fields: hit.result.fields,
+          analyzedFiles: hit.result.analyzedFiles,
+          cached: true,
+          analyzedAt: hit.analyzedAt,
+        });
+      }
+    }
+
+
     // deno-lint-ignore no-explicit-any
     const content: any[] = [{
       type: "text",
@@ -483,7 +510,7 @@ Deno.serve(async (req) => {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-3.6-flash",
+        model: AI_MODEL,
         messages: [
           { role: "system", content: "Você extrai dados fiscais de notas brasileiras e responde só JSON." },
           { role: "user", content },
@@ -501,7 +528,13 @@ Deno.serve(async (req) => {
     let parsedFields: any = null;
     try { parsedFields = match ? JSON.parse(match[0]) : null; } catch { parsedFields = null; }
     if (!parsedFields) return json(422, { error: "A IA não conseguiu ler os anexos. Preencha manualmente." });
-    return json(200, { ok: true, fields: parsedFields, analyzedFiles: used });
+    await saveAnalysis(sb, cacheKey, { fields: parsedFields, analyzedFiles: used }, {
+      model: AI_MODEL,
+      entityType: "expense",
+      entityId: expenseId,
+      companyDb,
+    });
+    return json(200, { ok: true, fields: parsedFields, analyzedFiles: used, cached: false });
   }
 
   let baseUrl = "";
