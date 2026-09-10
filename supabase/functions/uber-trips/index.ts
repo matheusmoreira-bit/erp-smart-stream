@@ -17,6 +17,9 @@ interface NormalizedTrip {
   source_label: string;
   employee_id: string;
   employee_name: string;
+  employee_first_name: string;
+  employee_last_name: string;
+
   email: string;
   requested_at_local: string | null;
   requested_date_local: string | null;
@@ -184,6 +187,9 @@ function normalizeTrip(row: Record<string, unknown>, source: string, sourceLabel
     source_label: sourceLabel,
     employee_id: clean(row["ID do funcionário"]),
     employee_name: [firstName, lastName].filter(Boolean).join(" ").trim(),
+    employee_first_name: firstName,
+    employee_last_name: lastName,
+
     email: clean(row["E-mail"]).toLowerCase(),
     requested_at_local: localDateTime(requestedDateLocal, requestedTimeLocal),
     requested_date_local: requestedDateLocal || null,
@@ -320,6 +326,8 @@ function indexMappings(rows: UserMapping[]) {
   const byEmail = new Map<string, UserMapping>();
   const byName = new Map<string, UserMapping>();
   const byEmployeeId = new Map<string, UserMapping>();
+  // Lista de nomes completos normalizados (com espaços) para o match {{Nome}}%{{Sobrenome}}%
+  const fullNames: Array<{ name: string; row: UserMapping }> = [];
   for (const row of rows) {
     if (row.status && /inactive|inativo|disabled|desabilitado|bloqueado|blocked/i.test(row.status)) continue;
     const employeeIdKey = clean(row.employee_id).toLowerCase();
@@ -332,9 +340,44 @@ function indexMappings(rows: UserMapping[]) {
       const key = compactNameKey(name);
       if (key && !byName.has(key)) byName.set(key, row);
     }
+    for (const name of [row.idp_display_name, row.sap_user_name]) {
+      const normalized = normalizeText(name);
+      if (normalized) fullNames.push({ name: normalized, row });
+    }
   }
-  return { byEmail, byName, byEmployeeId };
+  return { byEmail, byName, byEmployeeId, fullNames };
 }
+
+/**
+ * Match do tipo {{Nome}}%{{Sobrenome}}%: o nome completo do colaborador (Okta)
+ * deve COMEÇAR com o primeiro nome vindo da Uber e CONTER o sobrenome depois dele.
+ * Retorna apenas quando há exatamente um colaborador correspondente (evita rateio errado).
+ */
+function matchByFirstLastName(
+  fullNames: Array<{ name: string; row: UserMapping }>,
+  firstName: string,
+  lastName: string,
+): UserMapping | null {
+  const first = normalizeText(firstName);
+  const last = normalizeText(lastName);
+  if (!first || !last) return null;
+
+  const hits: UserMapping[] = [];
+  const seen = new Set<UserMapping>();
+  for (const entry of fullNames) {
+    if (!entry.name.startsWith(`${first} `) && entry.name !== first) continue;
+    const rest = entry.name.slice(first.length).trim();
+    if (!rest) continue;
+    // "contém o sobrenome" respeitando limites de palavra
+    const containsLast = rest === last || rest.startsWith(`${last} `) || rest.includes(` ${last}`) || rest.endsWith(` ${last}`);
+    if (!containsLast) continue;
+    if (seen.has(entry.row)) continue;
+    seen.add(entry.row);
+    hits.push(entry.row);
+  }
+  return hits.length === 1 ? hits[0] : null;
+}
+
 
 async function upsertUserMappings(
   admin: ReturnType<typeof createClient>,
@@ -553,6 +596,8 @@ Deno.serve(async (req) => {
         (trip.employee_id ? mappings.byEmployeeId.get(trip.employee_id.toLowerCase()) : null)
         || (trip.email ? mappings.byEmail.get(trip.email) : null)
         || mappings.byName.get(compactNameKey(trip.employee_name))
+        || matchByFirstLastName(mappings.fullNames, trip.employee_first_name, trip.employee_last_name)
+
         || null;
 
       const oktaCc = clean(oktaUser?.cost_center_code);
