@@ -499,7 +499,7 @@ Regras IMPORTANTES:
       },
     );
 
-    if (!aiResponse.ok) {
+    if (aiResponse && !aiResponse.ok) {
       if (aiResponse.status === 429) {
         return new Response(JSON.stringify({ error: "Limite de requisições excedido, tente novamente em alguns segundos." }), {
           status: 429,
@@ -517,25 +517,37 @@ Regras IMPORTANTES:
       throw new Error("Erro ao processar documento com IA");
     }
 
-    const aiData = await aiResponse.json() as Record<string, unknown>;
-    const rawContent = aiProvider === "openai"
-      ? readOpenAiOutputText(aiData)
-      : readLovableOutputText(aiData);
-
     let parsed;
-    try {
-      const cleaned = rawContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      parsed = JSON.parse(cleaned);
-    } catch {
-      console.error("Failed to parse AI response:", rawContent);
-      return new Response(JSON.stringify({
-        error: "Não foi possível interpretar o documento. Tente novamente.",
-        raw: rawContent,
-      }), {
-        status: 422,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (aiCacheHit) {
+      parsed = aiCacheHit.result;
+    } else {
+      const aiData = await aiResponse!.json() as Record<string, unknown>;
+      const rawContent = aiProvider === "openai"
+        ? readOpenAiOutputText(aiData)
+        : readLovableOutputText(aiData);
+
+      try {
+        const cleaned = rawContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        parsed = JSON.parse(cleaned);
+      } catch {
+        console.error("Failed to parse AI response:", rawContent);
+        return new Response(JSON.stringify({
+          error: "Não foi possível interpretar o documento. Tente novamente.",
+          raw: rawContent,
+        }), {
+          status: 422,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+        await saveAnalysis(aiCacheDb, aiCacheKey, parsed, {
+          model: aiProvider === "openai" ? OPENAI_AI_MODEL : LOVABLE_AI_MODEL,
+          entityType: "expense_doc",
+          companyDb: companyDB || null,
+        });
+      }
     }
+
 
     // Post-process: check company match and totals divergence
     const docs = Array.isArray(parsed) ? parsed : [parsed];
