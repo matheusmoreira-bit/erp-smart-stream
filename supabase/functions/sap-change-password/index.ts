@@ -150,6 +150,31 @@ function isSamePasswordError(message: string): boolean {
   );
 }
 
+/**
+ * Traduz falhas de login do Service Layer/SLD em causas acionáveis.
+ * -304 "Fail to NONE-SSO login from SLD" NÃO indica falta de Superuser:
+ * o SLD recusou login por usuário/senha para essa conta (conta vinculada a
+ * SSO/Windows, sem licença nessa base, bloqueada ou senha não aplicada).
+ */
+function explainLoginFailure(raw: string): string {
+  const m = (raw || "").toLowerCase();
+  if (m.includes("-304") || m.includes("none-sso")) {
+    return (
+      "O SAP (SLD) recusou o login por usuário e senha desta conta. " +
+      "Verifique nesta base: (1) o campo \"Vincular com a conta do Microsoft Windows\" no cadastro do usuário — se preenchido, o login só ocorre por SSO; " +
+      "(2) se o usuário possui licença atribuída nesta empresa; (3) se a conta não está bloqueada/expirada."
+    );
+  }
+  if (m.includes("-306")) {
+    return "O SAP recusou a credencial (código -306): usuário sem licença/permissão de acesso ao Service Layer nesta base.";
+  }
+  if (m.includes("invalid") && m.includes("password")) {
+    return "Usuário ou senha inválidos no SAP para esta base.";
+  }
+  return raw;
+}
+
+
 interface ResultRow {
   companyDB: string;
   displayName: string;
@@ -473,7 +498,7 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
         catch (e) {
           const suffix = creds.source === "fallback" ? " (usando credenciais padrão)" : "";
           const raw = e instanceof Error ? e.message : "Falha ao autenticar";
-          const msg = (ctrl.signal.aborted ? `Timeout após ${PER_COMPANY_TIMEOUT_MS}ms no login` : raw) + suffix;
+          const msg = (ctrl.signal.aborted ? `Timeout após ${PER_COMPANY_TIMEOUT_MS}ms no login` : explainLoginFailure(raw)) + suffix;
           console.error(`[sap-change-password] login failed`, { companyDb, sapCompanyDb: creds.sapCompanyDb, source: creds.source, msg });
           return { companyDB: companyDb, displayName, status: "error", message: msg };
         }
@@ -554,7 +579,7 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
             companyDB: companyDb,
             displayName,
             status: "error",
-            message: `PATCH aceito, mas login com a nova senha falhou (${raw}). Verifique se o usuário admin tem privilégio de Superuser nesta base.`,
+            message: `A senha foi aceita pelo SAP (PATCH ok), mas o login de validação falhou. ${explainLoginFailure(raw)}`,
           };
         } finally {
           if (verifySession) sapLogout(verifySession);
