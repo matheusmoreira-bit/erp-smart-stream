@@ -12,6 +12,19 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { toast } from "sonner";
 import { PageTitle } from "@/components/PageTitle";
 import { copyDocLink, readDocParam } from "@/lib/doc-deep-link";
+import { StatusOriginChip } from "@/components/StatusOriginChip";
+import { DocKindOriginChip } from "@/components/DocKindOriginChip";
+
+/** Mapeia o status do adiantamento para o mesmo vocabulário visual das compras. */
+const ADVANCE_TO_PURCHASE_STATUS: Record<string, string> = {
+  draft: "rascunho",
+  pending: "pendente_aprovacao",
+  approved: "aprovado",
+  rejected: "rejeitado",
+  integrating: "pc_lancado",
+  integrated: "finalizado",
+  failed: "cancelado",
+};
 
 
 function fmtCurrency(v: number, ccy: string = "BRL") {
