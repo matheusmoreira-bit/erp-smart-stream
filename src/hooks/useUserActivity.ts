@@ -58,7 +58,14 @@ export function getActionLabel(action: string): string {
   return ACTION_LABELS[action] || action;
 }
 
-export function useUserActivity() {
+const USR5_ROW_CAP = 20000;
+
+/**
+ * Atividade de login do SAP (USR5).
+ * A view é enorme e o HanaAPI devolve as primeiras linhas (mais antigas) quando
+ * nenhum filtro é enviado — por isso restringimos por data no servidor.
+ */
+export function useUserActivity(windowDays = 365) {
   const { session } = useSap();
   const [records, setRecords] = useState<Usr5Record[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -69,7 +76,20 @@ export function useUserActivity() {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await sapQueryView<Usr5Record>(session, "USR5", undefined, !forceRefresh);
+      const days = windowDays > 0 ? windowDays : 365;
+      const cutoff = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+      let result;
+      try {
+        result = await sapQueryView<Usr5Record>(
+          session,
+          "USR5",
+          { Date__gte: cutoff, limit: USR5_ROW_CAP },
+          !forceRefresh,
+        );
+      } catch {
+        // Se o filtro por data não for suportado pela view, ao menos limitamos o volume.
+        result = await sapQueryView<Usr5Record>(session, "USR5", { limit: USR5_ROW_CAP }, !forceRefresh);
+      }
       if (signal?.aborted) return;
       setRecords(result.data);
     } catch (e) {
