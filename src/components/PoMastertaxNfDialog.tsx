@@ -39,19 +39,20 @@ interface Props {
 export function PoMastertaxNfDialog({ open, onClose, companyDb, poDocEntry, poLabel, onDone }: Props) {
   const { search, link, reset, loading, linking, error, result } = useMastertaxPoSearch(companyDb);
   const [windowDays, setWindowDays] = useState("90");
+  const [cnpj, setCnpj] = useState("");
   const [selected, setSelected] = useState<string>("");
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const runSearch = useCallback(async (days: string) => {
+  const runSearch = useCallback(async (days: string, cnpjValue: string) => {
     setSelected("");
     setActionError(null);
-    const data = await search(poDocEntry, Number(days));
+    const data = await search(poDocEntry, Number(days), cnpjValue);
     if (data?.candidates?.length) setSelected(data.candidates[0].chave_acesso);
   }, [search, poDocEntry]);
 
   useEffect(() => {
-    if (open) void runSearch(windowDays);
-    else reset();
+    if (open) void runSearch(windowDays, cnpj);
+    else { reset(); setCnpj(""); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, poDocEntry]);
 
