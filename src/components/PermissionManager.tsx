@@ -697,39 +697,46 @@ function GroupsView({
           <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <IosList>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {groups.map((g) => {
             const enabled = Object.entries(g.modulePerms).filter(([, p]) => p.view);
             const moduleCount = enabled.filter(([k]) => !capKeys.has(k)).length;
             const capCount = enabled.filter(([k]) => capKeys.has(k)).length;
             const members = memberCount.get(g.id)?.size ?? 0;
             return (
-              <IosRow key={g.id} onClick={() => onOpen(g)}>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-medium text-foreground truncate">{g.name}</p>
-                    {g.name === "Usuário" && (
-                      <Badge variant="secondary" className="text-[10px]">Padrão</Badge>
+              <button
+                key={g.id}
+                onClick={() => onOpen(g)}
+                className="group text-left rounded-2xl border border-border bg-card p-4 transition-colors hover:bg-muted/40 hover:border-cactus-amber/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium text-foreground truncate">{g.name}</p>
+                      {g.name === "Usuário" && (
+                        <Badge variant="secondary" className="text-[10px]">Padrão</Badge>
+                      )}
+                      {members === 0 && (
+                        <Badge variant="outline" className="text-[10px]">Sem usuários</Badge>
+                      )}
+                    </div>
+                    {g.description && (
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">{g.description}</p>
                     )}
-                    {members === 0 && (
-                      <Badge variant="outline" className="text-[10px]">Sem usuários</Badge>
-                    )}
+                    <p className="text-[11px] text-muted-foreground mt-2">
+                      {members} {members === 1 ? "usuário" : "usuários"} · {moduleCount}{" "}
+                      {moduleCount === 1 ? "tela" : "telas"} · {capCount}{" "}
+                      {capCount === 1 ? "capacidade" : "capacidades"}
+                    </p>
                   </div>
-                  {g.description && (
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">{g.description}</p>
-                  )}
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    {members} {members === 1 ? "usuário" : "usuários"} · {moduleCount}{" "}
-                    {moduleCount === 1 ? "tela" : "telas"} · {capCount}{" "}
-                    {capCount === 1 ? "capacidade" : "capacidades"}
-                  </p>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 transition-transform group-hover:translate-x-0.5" />
                 </div>
-                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-              </IosRow>
+              </button>
             );
           })}
-        </IosList>
+        </div>
       )}
+
     </div>
   );
 }
@@ -753,63 +760,102 @@ export default function PermissionManager() {
   const goRoot = () => setView({ name: "root" });
   const goGroups = () => setView({ name: "groups" });
 
+  const sections = [
+    {
+      key: "groups" as const,
+      title: "Grupos",
+      desc: "Defina o que cada grupo enxerga e faz no sistema",
+      meta: `${groups.length} ${groups.length === 1 ? "grupo" : "grupos"}`,
+      icon: Shield,
+      tone: "amber" as const,
+      onClick: goGroups,
+    },
+    {
+      key: "users" as const,
+      title: "Usuários",
+      desc: "Atribuir grupo a cada usuário do ERP Flow",
+      meta: "Atribuição por usuário",
+      icon: Users,
+      tone: "amber" as const,
+      onClick: () => setView({ name: "users" }),
+    },
+    {
+      key: "sap-mapping" as const,
+      title: "Mapeamento SAP × ERP Flow",
+      desc: "Vincular grupos do SAP às ações por empresa",
+      meta: "Por empresa",
+      icon: Building2,
+      tone: "amber" as const,
+      onClick: () => setView({ name: "sap-mapping" }),
+    },
+    {
+      key: "enforcement" as const,
+      title: "Enforcement v2",
+      desc: "Shadow log e ativação do bloqueio por empresa",
+      meta: "Segurança",
+      icon: Shield,
+      tone: "destructive" as const,
+      onClick: () => setView({ name: "enforcement" }),
+    },
+  ];
+
   return (
-    <div className="max-w-2xl mx-auto pb-6">
+    <div className="w-full max-w-6xl mx-auto pb-8">
       {view.name === "root" && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 px-1">
-            <Shield className="w-5 h-5 text-cactus-amber" />
-            <h3 className="text-lg font-semibold text-foreground">Permissões</h3>
-          </div>
-          <p className="text-xs text-muted-foreground px-1">
-            Controle o que cada grupo enxerga e faz. Toda atribuição vale para todas as empresas.
-          </p>
-          <IosList>
-            <IosRow onClick={goGroups}>
-              <div className="w-9 h-9 rounded-xl bg-cactus-amber/15 flex items-center justify-center shrink-0">
-                <Shield className="w-4 h-4 text-cactus-amber" />
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-border bg-card px-5 py-4 sm:px-6 sm:py-5">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-cactus-amber/15 flex items-center justify-center shrink-0">
+                <Shield className="w-5 h-5 text-cactus-amber" />
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground">Grupos</p>
-                <p className="text-xs text-muted-foreground">
-                  {groups.length} {groups.length === 1 ? "grupo" : "grupos"}
+              <div className="min-w-0">
+                <h3 className="text-lg font-semibold text-foreground">Permissões</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Controle o que cada grupo enxerga e faz. Toda atribuição vale para todas as empresas.
                 </p>
               </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground" />
-            </IosRow>
-            <IosRow onClick={() => setView({ name: "users" })}>
-              <div className="w-9 h-9 rounded-xl bg-cactus-amber/15 flex items-center justify-center shrink-0">
-                <Users className="w-4 h-4 text-cactus-amber" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground">Usuários</p>
-                <p className="text-xs text-muted-foreground">Atribuir grupo a cada usuário</p>
-              </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground" />
-            </IosRow>
-            <IosRow onClick={() => setView({ name: "sap-mapping" })}>
-              <div className="w-9 h-9 rounded-xl bg-cactus-amber/15 flex items-center justify-center shrink-0">
-                <Building2 className="w-4 h-4 text-cactus-amber" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground">Mapeamento SAP × ERP Flow</p>
-                <p className="text-xs text-muted-foreground">Vincular grupos do SAP às ações por empresa</p>
-              </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground" />
-            </IosRow>
-            <IosRow onClick={() => setView({ name: "enforcement" })}>
-              <div className="w-9 h-9 rounded-xl bg-destructive/15 flex items-center justify-center shrink-0">
-                <Shield className="w-4 h-4 text-destructive" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground">Enforcement v2</p>
-                <p className="text-xs text-muted-foreground">Shadow log e ativação por empresa</p>
-              </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground" />
-            </IosRow>
-          </IosList>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            {sections.map((s) => {
+              const Icon = s.icon;
+              return (
+                <button
+                  key={s.key}
+                  onClick={s.onClick}
+                  className="group text-left rounded-2xl border border-border bg-card p-5 transition-colors hover:bg-muted/40 hover:border-cactus-amber/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={cn(
+                        "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                        s.tone === "destructive" ? "bg-destructive/15" : "bg-cactus-amber/15",
+                      )}
+                    >
+                      <Icon
+                        className={cn(
+                          "w-5 h-5",
+                          s.tone === "destructive" ? "text-destructive" : "text-cactus-amber",
+                        )}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground">{s.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{s.desc}</p>
+                      <Badge variant="secondary" className="mt-3 text-[10px]">
+                        {s.meta}
+                      </Badge>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
+
 
       {view.name === "groups" && (
         <GroupsView
