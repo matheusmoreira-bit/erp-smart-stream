@@ -194,10 +194,12 @@ export function useAdvancePayments(advanceType: AdvanceType = "supplier") {
       const uid = userData?.user?.id;
       if (!uid) throw new Error("Usuário não autenticado.");
 
-      // Adiantamento de cliente não passa por aprovação: ao enviar, já integra ao ERP.
+      // Todo adiantamento (cliente ou fornecedor) passa por aprovação.
+      // A autoaprovação, quando ligada, aprova logo após o envio.
       const type = input.advance_type || advanceType;
-      const isCustomer = type === "customer";
-      const status: AdvanceStatus = input.submit ? (isCustomer ? "integrating" : "pending") : "draft";
+      const status: AdvanceStatus = input.submit ? "pending" : "draft";
+
+
 
 
       const items = input.items || [];
