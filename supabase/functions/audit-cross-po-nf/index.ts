@@ -152,8 +152,8 @@ Deno.serve(async (req) => {
     const colunaC = mastertax
       .filter((m) => !usadosMt.has(m.id))
       .filter((m) => {
-        const temPc = typeof m.sap_matched_po_doc_entry === "number" && !m.sap_matched_po_is_draft;
-        const lancada = !!m.erp_invoice_posted || typeof m.erp_invoice_doc_entry === "number";
+        const temPc = toEntry(m.sap_matched_po_doc_entry) !== null && !m.sap_matched_po_is_draft;
+        const lancada = !!m.erp_invoice_posted || toEntry(m.erp_invoice_doc_entry) !== null;
         return !temPc || !lancada;
       })
       .map((m) => ({
@@ -167,12 +167,13 @@ Deno.serve(async (req) => {
         cnpj_fornecedor: m.cnpj_fornecedor,
         card_name: m.nome_fornecedor,
         card_code: m.sap_matched_card_code,
-        po_doc_entry: typeof m.sap_matched_po_doc_entry === "number" ? m.sap_matched_po_doc_entry : null,
-        nf_doc_entry: m.erp_invoice_doc_entry ?? null,
-        motivo: typeof m.sap_matched_po_doc_entry !== "number"
+        po_doc_entry: toEntry(m.sap_matched_po_doc_entry),
+        nf_doc_entry: toEntry(m.erp_invoice_doc_entry),
+        motivo: toEntry(m.sap_matched_po_doc_entry) === null
           ? "Nota capturada sem pedido de compra vinculado"
           : "Nota vinculada a PC, mas sem NF de Entrada lançada no SAP",
       }));
+
 
     return json({
       ok: true,
