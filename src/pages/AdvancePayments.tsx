@@ -152,6 +152,17 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
             <Button variant="ghost" size="icon" onClick={refresh} className="h-10 w-10 sm:h-9 sm:w-9" aria-label="Atualizar">
               <RefreshCw className="w-4 h-4" />
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleSyncStatus()}
+              disabled={syncing || loading}
+              className="h-10 sm:h-9 gap-1.5"
+              title="Consultar no ERP a situação dos adiantamentos já integrados"
+            >
+              {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4" />}
+              <span className="hidden sm:inline">Sincronizar ERP</span>
+            </Button>
             <Button size="sm" onClick={() => setCreateOpen(true)} className="h-10 sm:h-9">
               <Plus className="w-4 h-4 sm:mr-1" /> <span className="hidden sm:inline">Novo</span>
             </Button>
