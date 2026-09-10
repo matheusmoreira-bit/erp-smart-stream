@@ -315,7 +315,7 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
                   >
                     <Link2 className="w-4 h-4" />
                   </Button>
-                  {!isCustomerAdvance && a.status === "pending" && (
+                  {a.status === "pending" && (
                     <>
                       <Button size="icon" variant="outline" onClick={() => handleApprove(a)} disabled={busyId === a.id} aria-label="Aprovar" className="h-10 w-10 sm:h-9 sm:w-9">
                         {busyId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
