@@ -91,14 +91,25 @@ Deno.serve(async (req) => {
     const mastertax = mtRaw || [];
 
     // Índices MasterTax por PC e por NF do SAP
+    // Obs.: as colunas sap_matched_po_doc_entry / erp_invoice_doc_entry são TEXT no banco,
+    // então precisam ser convertidas para número antes da comparação.
+    const toEntry = (v: unknown): number | null => {
+      if (typeof v === "number") return Number.isFinite(v) ? v : null;
+      if (typeof v === "string" && v.trim() !== "") {
+        const n = Number(v.trim());
+        return Number.isFinite(n) ? n : null;
+      }
+      return null;
+    };
     const mtByPo = new Map<number, typeof mastertax[number]>();
     const mtByNfEntry = new Map<number, typeof mastertax[number]>();
     for (const m of mastertax) {
-      if (typeof m.sap_matched_po_doc_entry === "number" && !m.sap_matched_po_is_draft) {
-        mtByPo.set(m.sap_matched_po_doc_entry, m);
-      }
-      if (typeof m.erp_invoice_doc_entry === "number") mtByNfEntry.set(m.erp_invoice_doc_entry, m);
+      const poEntry = toEntry(m.sap_matched_po_doc_entry);
+      const nfEntry = toEntry(m.erp_invoice_doc_entry);
+      if (poEntry !== null && !m.sap_matched_po_is_draft) mtByPo.set(poEntry, m);
+      if (nfEntry !== null) mtByNfEntry.set(nfEntry, m);
     }
+
 
     const colunaA: unknown[] = [];
     const colunaB: unknown[] = [];
@@ -141,8 +152,8 @@ Deno.serve(async (req) => {
     const colunaC = mastertax
       .filter((m) => !usadosMt.has(m.id))
       .filter((m) => {
-        const temPc = typeof m.sap_matched_po_doc_entry === "number" && !m.sap_matched_po_is_draft;
-        const lancada = !!m.erp_invoice_posted || typeof m.erp_invoice_doc_entry === "number";
+        const temPc = toEntry(m.sap_matched_po_doc_entry) !== null && !m.sap_matched_po_is_draft;
+        const lancada = !!m.erp_invoice_posted || toEntry(m.erp_invoice_doc_entry) !== null;
         return !temPc || !lancada;
       })
       .map((m) => ({
@@ -156,12 +167,13 @@ Deno.serve(async (req) => {
         cnpj_fornecedor: m.cnpj_fornecedor,
         card_name: m.nome_fornecedor,
         card_code: m.sap_matched_card_code,
-        po_doc_entry: typeof m.sap_matched_po_doc_entry === "number" ? m.sap_matched_po_doc_entry : null,
-        nf_doc_entry: m.erp_invoice_doc_entry ?? null,
-        motivo: typeof m.sap_matched_po_doc_entry !== "number"
+        po_doc_entry: toEntry(m.sap_matched_po_doc_entry),
+        nf_doc_entry: toEntry(m.erp_invoice_doc_entry),
+        motivo: toEntry(m.sap_matched_po_doc_entry) === null
           ? "Nota capturada sem pedido de compra vinculado"
           : "Nota vinculada a PC, mas sem NF de Entrada lançada no SAP",
       }));
+
 
     return json({
       ok: true,
