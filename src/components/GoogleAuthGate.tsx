@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 
 const ALLOWED_DOMAINS = [
+  "growth.gg",
   "cactuscorporation.com",
   "anagaming.com.br",
   "cactusgaming.net",
