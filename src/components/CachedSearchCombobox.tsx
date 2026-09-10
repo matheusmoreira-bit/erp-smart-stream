@@ -210,6 +210,12 @@ export function CachedSearchCombobox({
             onFocus={() => {
               if (!hasResolvedValue || pinnedAction) setIsOpen(true);
             }}
+            onClick={() => {
+              // Reabre a lista mesmo quando o input já está focado
+              // (ex.: adicionar vários projetos no rateio).
+              if (!hasResolvedValue || pinnedAction) setIsOpen(true);
+            }}
+
 
             placeholder={isLoading ? "Carregando..." : placeholder}
             className={`h-9 min-w-0 truncate pl-8 pr-8 text-sm ${
