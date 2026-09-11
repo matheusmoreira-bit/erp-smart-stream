@@ -50,6 +50,13 @@
       "when": 1789132166042,
       "tag": "0006_notification_engine_email_whatsapp_rules_v2",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789132642449,
+      "tag": "0007_improve_notification_templates_copy",
+      "breakpoints": true
     }
   ]
 }
