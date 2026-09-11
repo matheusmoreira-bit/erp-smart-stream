@@ -388,15 +388,20 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
         });
       }
 
-      const queryParams = new URLSearchParams();
-      if (params) {
-        for (const [key, value] of Object.entries(params)) {
-          if (value !== undefined && value !== null) queryParams.set(key, String(value));
+      const buildUrl = (dropSelect: boolean) => {
+        const qp = new URLSearchParams();
+        if (params) {
+          for (const [key, value] of Object.entries(params)) {
+            if (value === undefined || value === null) continue;
+            if (dropSelect && key === "$select") continue;
+            qp.set(key, String(value));
+          }
         }
-      }
+        const qs = qp.toString();
+        return `${SAP_BASE_URL}/${endpoint}${qs ? `?${qs}` : ""}`;
+      };
 
-      const queryString = queryParams.toString();
-      const fullUrl = `${SAP_BASE_URL}/${endpoint}${queryString ? `?${queryString}` : ""}`;
+      const fullUrl = buildUrl(false);
 
       const cacheKey = `${sessionId}:${fullUrl}`;
       const cached = getCached(cacheKey);
@@ -407,12 +412,15 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
       }
 
       const cookies = `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
-      let sapResp: Response;
-      try {
-        sapResp = await fetchWithTimeout(fullUrl, {
+      const doFetch = (url: string) =>
+        fetchWithTimeout(url, {
           method: "GET",
           headers: { "Content-Type": "application/json", Cookie: cookies },
         });
+
+      let sapResp: Response;
+      try {
+        sapResp = await doFetch(fullUrl);
       } catch (e) {
         if (isAbortError(e)) {
           return new Response(JSON.stringify({ data: null, fromCache: false, timedOut: true }), {
@@ -424,16 +432,35 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
 
       if (!sapResp.ok) {
         const errorText = await sapResp.text();
-        console.error("SAP query error:", sapResp.status, errorText);
-        let errorMsg = "Erro na consulta SAP B1";
-        try {
-          const parsed = JSON.parse(errorText);
-          errorMsg = parsed?.error?.message?.value || errorMsg;
-        } catch { /* ignore */ }
-        return new Response(JSON.stringify({ data: null, fromCache: false, sapStatus: sapResp.status, warning: errorMsg }), {
-          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        // Campo customizado inexistente nesta base → repete sem $select para
+        // que a lista/registro ainda seja devolvido (todos os campos padrão).
+        if (isInvalidSelectError(sapResp.status, errorText) && params && (params as any)["$select"]) {
+          console.warn("SAP query: $select inválido nesta base, refazendo sem $select.");
+          try {
+            sapResp = await doFetch(buildUrl(true));
+          } catch (e) {
+            if (isAbortError(e)) {
+              return new Response(JSON.stringify({ data: null, fromCache: false, timedOut: true }), {
+                status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+              });
+            }
+            throw e;
+          }
+        }
+        if (!sapResp.ok) {
+          const finalText = sapResp.bodyUsed ? errorText : await sapResp.text();
+          console.error("SAP query error:", sapResp.status, finalText);
+          let errorMsg = "Erro na consulta SAP B1";
+          try {
+            const parsed = JSON.parse(finalText);
+            errorMsg = parsed?.error?.message?.value || errorMsg;
+          } catch { /* ignore */ }
+          return new Response(JSON.stringify({ data: null, fromCache: false, sapStatus: sapResp.status, warning: errorMsg }), {
+            status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
       }
+
 
       const data = await sapResp.json();
       setCache(cacheKey, data);
