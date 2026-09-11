@@ -198,7 +198,7 @@ Deno.serve(async (req) => {
   try {
     const { data: dispatches, error } = await admin
       .from("notification_dispatches")
-      .select("id, channel, rendered_subject, rendered_body, rendered_html, metadata, payload_snapshot, event_key")
+      .select("id, channel, rendered_subject, rendered_body, rendered_html, metadata, payload_snapshot, event_key, company_db, source_module, source_entity_type, source_entity_id")
       .eq("status", "pending")
       .in("channel", ["email", "whatsapp"])
       .lte("scheduled_at", new Date().toISOString())
