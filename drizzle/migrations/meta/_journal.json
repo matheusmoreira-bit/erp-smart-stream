@@ -43,6 +43,13 @@
       "when": 1789131272983,
       "tag": "0005_allow_return_approval_action",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789132166042,
+      "tag": "0006_notification_engine_email_whatsapp_rules_v2",
+      "breakpoints": true
     }
   ]
 }
