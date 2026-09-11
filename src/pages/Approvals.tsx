@@ -3356,6 +3356,9 @@ export default function ApprovalsPage() {
             .filter(Boolean)
             .join(" — ") || remarks;
 
+          if (action === "return") {
+            throw new Error("Devolver está disponível apenas para documentos do fluxo interno.");
+          }
           const result = await decideSapApprovalRequest(
             session as SapSession,
             code,
