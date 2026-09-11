@@ -10,6 +10,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { filterHealthAlertRecipients } from "../_shared/health-alert-optout.ts";
+import { emitNotificationEvent } from "../_shared/notification-engine.ts";
 
 const PROVIDER_LABEL: Record<string, string> = {
   sap_sl: "SAP Service Layer",
@@ -259,6 +260,25 @@ Deno.serve(withEdgeMetrics("integration-health-alerts", async (req) => {
         details.push(r.detail);
         ok = ok || r.ok;
       }
+
+      await emitNotificationEvent(sb, {
+        eventKey: "integration.health_degraded",
+        sourceModule: "integration",
+        sourceEntityType: cfg.provider,
+        sourceEntityId: `${cfg.provider}:${p.kind}`,
+        idempotencyKey: `integration_health:${cfg.provider}:${p.kind}:${new Date().toISOString().slice(0, 13)}`,
+        payload: {
+          title: `Degradação detectada — ${label}`,
+          provider: cfg.provider,
+          kind: p.kind,
+          severity: p.severity,
+          message,
+          total,
+          errors: Number(snap.errors ?? 0),
+          error_rate: errorRate,
+          link: "/integracoes",
+        },
+      });
 
       await sb.from("integration_health_alerts").insert({
         provider: cfg.provider,

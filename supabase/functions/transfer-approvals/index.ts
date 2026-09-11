@@ -5,6 +5,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireAdminOrSapAdmin, authErrorResponse } from "../_shared/auth.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { emitNotificationEvent } from "../_shared/notification-engine.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -117,6 +118,25 @@ Deno.serve(async (req) => {
 
         // In-app notification for the new approver
         const toIdentifier = norm(toUserEmail || toUser || targetApprover).replace(/\s+/g, ".");
+        await emitNotificationEvent(sb, {
+          eventKey: "approval.transferred",
+          sourceModule: "approvals",
+          sourceEntityType: "expense",
+          sourceEntityId: String(r.id),
+          companyDb,
+          idempotencyKey: `approval_transfer:${r.id}:${targetApprover}`,
+          payload: {
+            title: "Aprovação transferida para você",
+            approver: toUserEmail || toIdentifier,
+            approver_email: toUserEmail || null,
+            requester_name: r.requester_name ?? null,
+            cost_center: r.cost_center ?? null,
+            total_amount: r.total_amount ?? null,
+            doc_type: r.doc_type ?? null,
+            transferred_from: r.current_approver ?? null,
+            link: "/aprovacoes",
+          },
+        });
         await sb.from("notifications").insert({
           user_identifier: toIdentifier,
           title: "Aprovação transferida para você",
