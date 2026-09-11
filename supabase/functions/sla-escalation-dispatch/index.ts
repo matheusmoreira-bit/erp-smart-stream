@@ -212,9 +212,19 @@ Deno.serve(async (req) => {
         };
       }
 
+      // 4.4 Delegação administrativa: não há gestor seguinte nem substituto.
+      let delegationReason: string | null = null;
       if (!target) {
-        results.push({ expense_id: doc.id, skipped: "sem_destino" });
-        continue;
+        delegationReason = doc.approval_rule_id
+          ? "Não há próximo nível de aprovação na alçada aplicável"
+          : "Documento sem regra de alçada com próximo nível definido";
+        target = {
+          name: ADMIN_DELEGATE_NAME,
+          email: ADMIN_DELEGATE_EMAIL,
+          kind: "admin_delegation",
+          levelTo: doc.current_level_order,
+          substitutionId: null,
+        };
       }
 
       const newApprover = target.name || target.email;
@@ -222,6 +232,7 @@ Deno.serve(async (req) => {
         results.push({ expense_id: doc.id, skipped: "destino_igual" });
         continue;
       }
+
 
       const entry = {
         expense_id: doc.id,
