@@ -71,6 +71,13 @@
       "when": 1789135841931,
       "tag": "0009_sap_po_nf_cp_cache",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789137109438,
+      "tag": "0010_tighten_multitenant_rls_and_storage",
+      "breakpoints": true
     }
   ]
 }
