@@ -56,10 +56,28 @@ export function PoNfCpChain({ companyDb, poDocEntry }: Props) {
                 </div>
               </div>
               <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5 font-mono">
-                {l.id_pedido_compra && <span>Pedido {l.id_pedido_compra}</span>}
+                {l.id_pedido_compra && (
+                  <span>
+                    Pedido {l.id_pedido_compra}
+                    {fmtDate(l.data_criacao_pedido) ? ` · ${fmtDate(l.data_criacao_pedido)}` : ""}
+                  </span>
+                )}
                 {l.numero_nota_fiscal && <span>Nota {l.numero_nota_fiscal}</span>}
-                {l.id_nf_entrada && <span>Entrada {l.id_nf_entrada}</span>}
-                {l.id_contas_pagar ? <span>A pagar {l.id_contas_pagar}</span> : <span>Sem conta a pagar</span>}
+                {l.id_nf_entrada && (
+                  <span>
+                    Entrada {l.id_nf_entrada}
+                    {fmtDate(l.data_criacao_nf) ? ` · ${fmtDate(l.data_criacao_nf)}` : ""}
+                  </span>
+                )}
+                {l.id_contas_pagar ? (
+                  <span>
+                    A pagar {l.id_contas_pagar}
+                    {fmtDate(l.data_pagamento) ? ` · ${fmtDate(l.data_pagamento)}` : ""}
+                  </span>
+                ) : (
+                  <span>Sem conta a pagar</span>
+                )}
+                {fmtDate(l.data_vencimento_parcela) && <span>Vence {fmtDate(l.data_vencimento_parcela)}</span>}
               </div>
               {l.referencia_valor && (
                 <p className="text-[11px] text-muted-foreground">{l.referencia_valor}</p>
