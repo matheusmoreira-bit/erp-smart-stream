@@ -5,10 +5,10 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/report-ai-chat`;
 
 interface ReportAiChatProps {
   /** A text summary of the current report data to provide context to the AI */
@@ -61,11 +61,10 @@ export function ReportAiChat({ reportContext }: ReportAiChatProps) {
     };
 
     try {
-      const resp = await fetch(CHAT_URL, {
+      const resp = await sapFunctionFetch("report-ai-chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
           messages: newMessages,

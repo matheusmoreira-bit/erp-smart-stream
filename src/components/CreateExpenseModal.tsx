@@ -82,6 +82,7 @@ import { PagCorpCardMappingBanner } from "@/components/PagCorpCardMappingBanner"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { saveDraft, deleteDraft } from "@/hooks/useDocumentDrafts";
 import { supabase } from "@/integrations/supabase/client";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { useMergedSupplierOptions, type CrossCompanyMatch, type EnrichedSupplierOption } from "@/hooks/useMergedSupplierOptions";
 import { useCompanies } from "@/hooks/useCompanies";
 import { onlyDigits, formatCnpjCpf } from "@/lib/supplier-search";
@@ -1467,17 +1468,11 @@ export function CreateExpenseModal({
         missIndexes.forEach((i) => formData.append("files", filesToProcess[i]));
         formData.append("company_db", sapSession?.companyDB || "");
 
-        const resp = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-expense-doc`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            },
-            body: formData,
-            signal: controller.signal,
-          },
-        );
+        const resp = await sapFunctionFetch("process-expense-doc", {
+          method: "POST",
+          body: formData,
+          signal: controller.signal,
+        });
 
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({} as any));

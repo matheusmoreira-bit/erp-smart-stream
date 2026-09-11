@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { normalizeText as baseNormalizeText } from "../_shared/text-normalize.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { hashInput, getCachedAnalysis, saveAnalysis } from "../_shared/ai-doc-cache.ts";
+import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -289,6 +290,15 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    // Exige sessão real (Lovable Cloud ou SAP). A chave anon pública não basta.
+    try {
+      await requireUserOrSapSession(req);
+    } catch (err) {
+      const resp = authErrorResponse(err, corsHeaders);
+      if (resp) return resp;
+      throw err;
+    }
+
     const formData = await req.formData();
     const files = formData.getAll("files") as File[];
     const companyDB = formData.get("company_db") as string || "";
