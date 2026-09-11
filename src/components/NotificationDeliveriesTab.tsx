@@ -36,6 +36,18 @@ interface Delivery {
   metadata: Record<string, unknown> | null;
 }
 
+interface DeliveryAttempt {
+  id: string;
+  created_at: string;
+  attempt_no: number;
+  channel: string;
+  status: string;
+  error_message: string | null;
+  recipient_address: string | null;
+  recipient_name: string | null;
+  duration_ms: number | null;
+}
+
 const CHANNEL_LABEL: Record<string, string> = {
   in_app: "In-App",
   email: "E-mail",
