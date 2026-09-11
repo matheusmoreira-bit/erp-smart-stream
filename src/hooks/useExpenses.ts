@@ -1497,6 +1497,29 @@ export function useExpenses(
   );
 
 
+  /** Devolve o documento ao solicitante (volta para rascunho, com motivo). */
+  const returnExpense = useCallback(
+    async (expenseId: string, remarks: string, idempotencyKey?: string, opts?: { skipRefresh?: boolean }) => {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
+      const resp = await sapFunctionFetch("expense-approval-action", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ expense_id: expenseId, action: "return", remarks }),
+      });
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok || !payload?.ok) {
+        const stage = payload?.stage ? ` [etapa: ${payload.stage}]` : "";
+        const rid = payload?.requestId ? ` (req ${String(payload.requestId).slice(0, 8)})` : "";
+        const base = payload?.error || `Falha ao devolver (HTTP ${resp.status})`;
+        throw new Error(`${base}${stage}${rid}`);
+      }
+      if (!opts?.skipRefresh) await fetchExpenses();
+      return { replayed: !!payload.replayed };
+    },
+    [fetchExpenses]
+  );
+
   useEffect(() => {
     fetchExpenses();
   }, [fetchExpenses]);
@@ -1524,6 +1547,7 @@ export function useExpenses(
     reactivateExpense,
     approveExpense,
     rejectExpense,
+    returnExpense,
     retrySapIntegration,
     addAttachments,
   };
