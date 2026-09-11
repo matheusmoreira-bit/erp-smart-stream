@@ -125,30 +125,18 @@ export function useApprovalsFeed() {
   }, [companyDb, key]);
 
 
-  // Troca de empresa: repinta do cache daquela empresa antes de revalidar.
+  // Abertura da tela / troca de empresa: sempre recarrega da fonte.
   useEffect(() => {
-    const cached = key ? readCache(key) : null;
-    if (cached) {
-      setState(cached);
-      setIsLoading(false);
-    } else {
-      setState(EMPTY);
-      setIsLoading(Boolean(companyDb));
-    }
+    clearLegacyCache(key);
+    setState(EMPTY);
+    setIsLoading(Boolean(companyDb));
     void load();
   }, [key, companyDb, load]);
 
   /** Remove um documento da lista sem esperar o servidor (ação otimista). */
-  const removeLocal = useCallback(
-    (id: string) => {
-      setState((prev) => {
-        const next = { ...prev, docs: prev.docs.filter((d) => d.id !== id) };
-        if (key) writeCache(key, next);
-        return next;
-      });
-    },
-    [key],
-  );
+  const removeLocal = useCallback((id: string) => {
+    setState((prev) => ({ ...prev, docs: prev.docs.filter((d) => d.id !== id) }));
+  }, []);
 
   return {
     docs: state.docs,
