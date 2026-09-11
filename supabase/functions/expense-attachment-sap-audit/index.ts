@@ -9,7 +9,7 @@
 // Somente admins (Cloud) ou super-usuários SAP.
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { ensureCopyToTargetDocument } from "../_shared/sap-attach-copy.ts";
+import { ensureCopyToTargetDocument, repairCopyToTargetDocument } from "../_shared/sap-attach-copy.ts";
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
