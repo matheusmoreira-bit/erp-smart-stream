@@ -349,8 +349,8 @@ export function NotificationEngineTab() {
         .select()
         .single();
       if (error) throw error;
-      setTemplates((prev) => [data, ...prev]);
-      setSelectedTemplateId(data.id);
+      setTemplates((prev) => [data as TemplateRow, ...prev]);
+      setSelectedTemplateId((data as TemplateRow).id);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao criar modelo");
     }
@@ -370,8 +370,8 @@ export function NotificationEngineTab() {
         .select()
         .single();
       if (error) throw error;
-      setTriggers((prev) => [data, ...prev]);
-      setSelectedTriggerId(data.id);
+      setTriggers((prev) => [data as TriggerRow, ...prev]);
+      setSelectedTriggerId((data as TriggerRow).id);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao criar gatilho");
     }
@@ -398,8 +398,8 @@ export function NotificationEngineTab() {
         .select()
         .single();
       if (error) throw error;
-      setRules((prev) => [data, ...prev]);
-      setSelectedRuleId(data.id);
+      setRules((prev) => [data as RuleRow, ...prev]);
+      setSelectedRuleId((data as RuleRow).id);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao criar regra");
     }
@@ -414,7 +414,7 @@ export function NotificationEngineTab() {
         .select()
         .single();
       if (error) throw error;
-      setRecipients((prev) => [...prev, data]);
+      setRecipients((prev) => [...prev, data as RecipientRow]);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao adicionar destinatário");
     }
