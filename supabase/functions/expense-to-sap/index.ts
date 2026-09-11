@@ -1628,10 +1628,49 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     // moeda) são preservados; todo o resto — inclusive a coleção completa de
     // linhas com LineNum — é reenviado para espelhar o documento aprovado.
     const patchDocEntry = isPatchMode ? Number(expense.sap_doc_entry) : 0;
+    const expenseCode = String(expenseId).slice(0, 8).toUpperCase();
+    let adoptedExistingDocument = false;
     const sendDocument = async (): Promise<{ docEntry: number; docNum: number; response: any }> => {
       if (!isPatchMode) {
-        return await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, sapEndpoint);
+        // Trava de idempotência (1/2): o documento já existe no SAP com este
+        // código? Então adotamos em vez de criar uma segunda via.
+        const preexisting = await findSapDocumentByExpenseCode(
+          sap.baseUrl,
+          sap.cookies,
+          sapEndpoint,
+          String(expense.supplier_code || ""),
+          expenseCode,
+        );
+        if (preexisting) {
+          adoptedExistingDocument = true;
+          console.log(`[expense-to-sap] documento ${expenseCode} já existia no SAP (DocEntry ${preexisting.docEntry}) — adotado`);
+          return { ...preexisting, response: { adopted: true, ...preexisting } };
+        }
+        try {
+          return await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, sapEndpoint);
+        } catch (postError) {
+          // Trava de idempotência (2/2): timeout ou queda de conexão pode ter
+          // perdido a resposta DEPOIS de o SAP gravar o pedido. Antes de
+          // devolver erro (e permitir novo disparo), conferimos no SAP.
+          await new Promise((r) => setTimeout(r, 4000));
+          const created = await findSapDocumentByExpenseCode(
+            sap.baseUrl,
+            sap.cookies,
+            sapEndpoint,
+            String(expense.supplier_code || ""),
+            expenseCode,
+          );
+          if (created) {
+            adoptedExistingDocument = true;
+            console.warn(
+              `[expense-to-sap] POST falhou (${(postError as Error).message}) mas o SAP criou o DocEntry ${created.docEntry} — adotado`,
+            );
+            return { ...created, response: { adopted: true, recoveredFromError: true, ...created } };
+          }
+          throw postError;
+        }
       }
+
       const patchPayload: Record<string, unknown> = { ...sapPayload };
       delete patchPayload.BPL_IDAssignedToInvoice;
       delete patchPayload.DocDate;
