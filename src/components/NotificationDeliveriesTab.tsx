@@ -125,6 +125,27 @@ export function NotificationDeliveriesTab() {
     }
   }, [from, to, session?.companyDB]);
 
+  const resend = useCallback(async (dispatchIds: string[]) => {
+    if (!dispatchIds.length) return;
+    setResending(true);
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke("notification-dispatch-resend", {
+        body: { dispatch_ids: dispatchIds },
+      });
+      if (fnError) throw fnError;
+      const requeued = Number((data as { requeued?: number } | null)?.requeued ?? 0);
+      if (requeued > 0) toast.success(`${requeued} aviso(s) na fila para novo envio`);
+      else toast.info("Nada para reenviar neste envio");
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível reenviar");
+    } finally {
+      setResending(false);
+    }
+  }, [load]);
+
+
+
   useEffect(() => {
     const dispatchId = selected?.metadata?.dispatch_id as string | undefined;
     if (!dispatchId) {
