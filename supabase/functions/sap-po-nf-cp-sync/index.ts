@@ -36,6 +36,15 @@ function toNum(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Converte datas da view HANA ("2026-04-29 00:00:00.000") em ISO. */
+function toDate(v: unknown): string | null {
+  const s = toStr(v);
+  if (!s) return null;
+  const iso = s.includes("T") ? s : s.replace(" ", "T");
+  const d = new Date(/(Z|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : `${iso}Z`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 function mapRow(raw: Record<string, unknown>, companyDb: string) {
   const idPedido = toStr(pick(raw, "ID_Pedido_Compra", "ID Pedido Compra", "idPedidoCompra"));
   const idNf = toStr(pick(raw, "ID_NF_Entrada", "ID NF Entrada", "idNfEntrada"));
@@ -46,6 +55,10 @@ function mapRow(raw: Record<string, unknown>, companyDb: string) {
   const valor = toNum(pick(raw, "Valor", "valor"));
   const referencia = toStr(pick(raw, "Referencia_do_Valor", "Referência do Valor", "Referencia do Valor"));
   const status = toStr(pick(raw, "Status_Geral", "Status Geral", "status"));
+  const dtPedido = toDate(pick(raw, "Data_Criacao_Pedido", "Data Criacao Pedido", "Data Criação Pedido"));
+  const dtNf = toDate(pick(raw, "Data_Criacao_NF", "Data Criacao NF", "Data Criação NF"));
+  const dtVenc = toDate(pick(raw, "Data_Vencimento_Parcela", "Data Vencimento Parcela"));
+  const dtPagto = toDate(pick(raw, "Data_Pagamento", "Data Pagamento"));
 
   if (!idPedido && !idNf && !idCp) return null;
 
@@ -63,6 +76,10 @@ function mapRow(raw: Record<string, unknown>, companyDb: string) {
     valor,
     referencia_valor: referencia,
     status_geral: status,
+    data_criacao_pedido: dtPedido,
+    data_criacao_nf: dtNf,
+    data_vencimento_parcela: dtVenc,
+    data_pagamento: dtPagto,
     raw_json: raw as unknown as Record<string, unknown>,
     synced_at: new Date().toISOString(),
   };
