@@ -179,6 +179,44 @@ async function postSapDocument(
   return { docEntry: body.DocEntry, docNum: body.DocNum, response: body };
 }
 
+/**
+ * Idempotência anti-duplicidade.
+ *
+ * Todo documento criado pelo Flow leva no campo Comments o código de 8
+ * caracteres da despesa ("7FC648BB - ..."). Isso permite perguntar ao SAP se o
+ * documento JÁ existe antes de criar outro — e, principalmente, depois de uma
+ * falha de rede/timeout, em que o SAP gravou o pedido mas a resposta se perdeu.
+ */
+async function findSapDocumentByExpenseCode(
+  sapBaseUrl: string,
+  cookies: string,
+  endpoint: string,
+  cardCode: string,
+  expenseCode: string,
+): Promise<{ docEntry: number; docNum: number } | null> {
+  const code = String(expenseCode || "").trim().toUpperCase();
+  if (!/^[0-9A-F]{8}$/.test(code)) return null;
+  const card = String(cardCode || "").replace(/'/g, "''");
+  const filter = encodeURIComponent(
+    `CardCode eq '${card}' and startswith(Comments,'${code}') and Cancelled eq 'tNO'`,
+  );
+  const url =
+    `${sapBaseUrl}/${endpoint}?$select=DocEntry,DocNum,Comments,Cancelled&$filter=${filter}&$orderby=DocEntry desc&$top=5`;
+  try {
+    const res = await fetch(url, { headers: { Cookie: cookies, Prefer: "odata.maxpagesize=5" } });
+    if (!res.ok) return null;
+    const body = await res.json().catch(() => ({}));
+    const rows: any[] = Array.isArray(body?.value) ? body.value : [];
+    const match = rows.find((r) => Number(r?.DocEntry) > 0);
+    if (!match) return null;
+    return { docEntry: Number(match.DocEntry), docNum: Number(match.DocNum) || 0 };
+  } catch (e) {
+    console.warn("[expense-to-sap] lookup idempotente falhou:", (e as Error).message);
+    return null;
+  }
+}
+
+
 function sapFlagNo(value: unknown): boolean {
   return String(value ?? "").toLowerCase() === "tno" || value === false;
 }
