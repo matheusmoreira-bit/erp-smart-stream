@@ -2313,6 +2313,17 @@ export function CreateExpenseModal({
       toast.error("Informe a data de vencimento");
       return;
     }
+    {
+      const todayRef = new Date();
+      todayRef.setHours(0, 0, 0, 0);
+      const dueRef = new Date(`${dueDate}T00:00:00`);
+      const diff = Math.round((dueRef.getTime() - todayRef.getTime()) / 86400000);
+      if (Number.isFinite(diff) && diff < 0) {
+        setOverdueBlockDays(Math.abs(diff));
+        setOverdueBlockOpen(true);
+        return;
+      }
+    }
     if (!isSales && !isOmie && paymentTermsOptions.length > 0 && !paymentTerms) {
       toast.error("Informe a forma de pagamento");
       return;
