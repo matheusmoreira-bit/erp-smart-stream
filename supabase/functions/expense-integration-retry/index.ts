@@ -205,6 +205,14 @@ Deno.serve(async (req) => {
       continue;
     }
 
+    // Erros transitórios de concorrência (documento já sendo integrado por
+    // outro processo) se resolvem sozinhos na próxima tentativa — não geram
+    // alerta para não poluir o plantão.
+    if (isTransientConcurrencyError(errMsg)) {
+      results.push({ id: exp.id, ok: false, error: errMsg, notified: false });
+      continue;
+    }
+
     // Falhou. Notificar admin (com cooldown por doc).
     let notified = false;
     try {
