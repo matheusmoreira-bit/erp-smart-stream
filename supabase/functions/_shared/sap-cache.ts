@@ -318,6 +318,12 @@ export interface IncrementalPagerOpts<T extends OdataDoc, R> {
   entity: string;
   /** Valor do $select (sem "$select="). */
   select: string;
+  /**
+   * $select alternativo usado quando a base rejeita algum campo do $select
+   * principal (campos de localização/UDF ausentes → HTTP 400). Evita que a
+   * sincronização inteira falhe por causa de um campo opcional.
+   */
+  fallbackSelect?: string;
   /** Tabela de state (cursor incremental). */
   stateTable: string;
   /** Tabela de cache alvo do upsert. */
@@ -373,6 +379,8 @@ export async function runIncrementalPager<T extends OdataDoc, R>(
   let lastError: string | null = null;
   let sweepCompleted = false;
   const startedAt = Date.now();
+  let select = o.select;
+  let selectFallbackUsed = false;
 
   for (let page = 0; page < maxPages; page++) {
     if (Date.now() - startedAt > timeBudgetMs) { lastError = "time_budget_exceeded"; break; }
@@ -387,11 +395,19 @@ export async function runIncrementalPager<T extends OdataDoc, R>(
       if (cursorEntry) filterParts.push(`DocEntry gt ${cursorEntry}`);
     }
     const filter = filterParts.length ? `&$filter=${encodeURIComponent(filterParts.join(" and "))}` : "";
-    const url = `${o.baseUrl}/${o.entity}?$select=${o.select}&$orderby=DocEntry asc&$top=${pageSize}${filter}`;
+    const url = `${o.baseUrl}/${o.entity}?$select=${select}&$orderby=DocEntry asc&$top=${pageSize}${filter}`;
 
     const r = await sapFetch(url, { headers: { Cookie: o.cookie, Prefer: "odata.maxpagesize=" + pageSize } });
     if (!r.ok) {
-      lastError = `${o.entity} ${r.status}: ${(await r.text()).slice(0, 200)}`;
+      const errText = (await r.text()).slice(0, 300);
+      // Campo opcional inexistente nesta base: refaz a página com o $select reduzido.
+      if (r.status === 400 && o.fallbackSelect && !selectFallbackUsed) {
+        selectFallbackUsed = true;
+        select = o.fallbackSelect;
+        page--;
+        continue;
+      }
+      lastError = `${o.entity} ${r.status}: ${errText}`;
       break;
     }
     const j = await r.json();

@@ -30,7 +30,18 @@ interface SapPurchaseInvoice extends OdataDoc {
   DocumentStatus?: string;
   Cancelled?: string;
   DocumentLines?: Array<{ BaseType?: number; BaseEntry?: number; BaseLine?: number }>;
+  SequenceSerial?: number | string | null;
+  SeriesString?: string | null;
+  SubSeriesString?: string | null;
+  SequenceModel?: number | string | null;
+  FolioNumber?: number | string | null;
 }
+
+const asText = (v: unknown): string | null => {
+  if (v === null || v === undefined) return null;
+  const t = String(v).trim();
+  return t === "" ? null : t;
+};
 
 function extractBasePo(inv: SapPurchaseInvoice): number | null {
   for (const l of inv.DocumentLines || []) {
@@ -39,7 +50,10 @@ function extractBasePo(inv: SapPurchaseInvoice): number | null {
   return null;
 }
 
-const SELECT = "DocEntry,DocNum,Series,CardCode,CardName,DocDate,DocDueDate,TaxDate,DocTotal,PaidToDate,DocCurrency,DocumentStatus,Cancelled,UpdateDate,UpdateTime,DocumentLines";
+const BASE_SELECT = "DocEntry,DocNum,Series,CardCode,CardName,DocDate,DocDueDate,TaxDate,DocTotal,PaidToDate,DocCurrency,DocumentStatus,Cancelled,UpdateDate,UpdateTime,DocumentLines";
+// Campos fiscais (localização Brasil). Nem toda base os expõe: se o Service
+// Layer recusar, o pager repete a página com BASE_SELECT.
+const SELECT = `${BASE_SELECT},SequenceSerial,SeriesString,SubSeriesString,SequenceModel,FolioNumber`;
 
 async function syncCompany(sb: Sb, companyDb: string, opts: RunnerOpts): Promise<WatcherResult> {
   // NF de Entrada mantém comportamento original: aceita qualquer usuário SAP configurado.
@@ -62,6 +76,7 @@ async function syncCompany(sb: Sb, companyDb: string, opts: RunnerOpts): Promise
       baseUrl,
       entity: "PurchaseInvoices",
       select: SELECT,
+      fallbackSelect: BASE_SELECT,
       stateTable: "sap_nf_entrada_sync_state",
       cacheTable: "sap_nf_entrada_cache",
       maxPages: 20,
@@ -82,6 +97,11 @@ async function syncCompany(sb: Sb, companyDb: string, opts: RunnerOpts): Promise
         document_status: inv.DocumentStatus ?? null,
         cancelled: inv.Cancelled ?? null,
         base_po_doc_entry: extractBasePo(inv),
+        sequence_serial: asText(inv.SequenceSerial),
+        series_string: asText(inv.SeriesString),
+        sub_series_string: asText(inv.SubSeriesString),
+        sequence_model: asText(inv.SequenceModel),
+        folio_number: asText(inv.FolioNumber),
         // raw_json intentionally omitted: campo não é lido em lugar nenhum e inflava a tabela.
         sap_update_date: toIsoTimestamp(inv.UpdateDate, inv.UpdateTime),
         synced_at: new Date().toISOString(),
