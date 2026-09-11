@@ -76,6 +76,10 @@ function mapRow(raw: Record<string, unknown>, companyDb: string) {
     valor,
     referencia_valor: referencia,
     status_geral: status,
+    data_criacao_pedido: dtPedido,
+    data_criacao_nf: dtNf,
+    data_vencimento_parcela: dtVenc,
+    data_pagamento: dtPagto,
     raw_json: raw as unknown as Record<string, unknown>,
     synced_at: new Date().toISOString(),
   };
