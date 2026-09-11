@@ -231,6 +231,18 @@ Deno.serve(async (req) => {
         await admin.from("notification_dispatches")
           .update({ status: "skipped", error_message: "Sem destinatários pendentes", updated_at: new Date().toISOString() })
           .eq("id", d.id);
+        await logAttempt(admin, {
+          dispatch_id: d.id,
+          event_key: d.event_key,
+          channel: d.channel,
+          attempt_no: attempts,
+          status: "skipped",
+          error_message: "Sem destinatários pendentes",
+          company_db: (d as any).company_db ?? null,
+          source_module: (d as any).source_module ?? null,
+          source_entity_type: (d as any).source_entity_type ?? null,
+          source_entity_id: (d as any).source_entity_id ?? null,
+        });
         stats.skipped++;
         continue;
       }
