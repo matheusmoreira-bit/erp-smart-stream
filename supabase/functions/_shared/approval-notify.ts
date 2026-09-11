@@ -10,6 +10,7 @@
 
 import { pushToRecipient } from "./web-push.ts";
 import { getChannelSettings } from "./notification-channels.ts";
+import { detailsToPayload, emitNotificationEvent } from "./notification-engine.ts";
 
 
 const DEFAULT_TTL_HOURS = 72;
@@ -377,6 +378,34 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
     const baseChannels = await getChannelSettings(admin, input.companyDb, "approval_pending");
 
     const refId = `${input.expenseId}:${input.levelOrder ?? 0}`;
+
+    // Motor de notificações (paralelo aos canais legados).
+    await emitNotificationEvent(admin, {
+      eventKey: isSales ? "sales_order.pending_approval" : "document.pending_approval",
+      sourceModule: "approvals",
+      sourceEntityType: input.docType ?? "expense",
+      sourceEntityId: input.expenseId,
+      companyDb: input.companyDb ?? null,
+      idempotencyKey: `approval_pending:${refId}`,
+      payload: {
+        title,
+        summary: subtitle,
+        approver_email: email || null,
+        approver_name: input.approverName ?? null,
+        approver: email || identifier,
+        requester_name: input.requesterName ?? null,
+        supplier_name: input.supplierName ?? null,
+        company_db: input.companyDb ?? null,
+        company_name: companyName ?? null,
+        level_order: input.levelOrder ?? null,
+        total_amount: input.totalAmount ?? null,
+        currency: input.currency ?? null,
+        doc_type: input.docType ?? null,
+        amount_label: amount,
+        link: `/aprovacoes?doc=${encodeURIComponent(`internal:${input.expenseId}`)}`,
+        ...detailsToPayload(details),
+      },
+    });
     const docLink = `/aprovacoes?doc=${encodeURIComponent(`internal:${input.expenseId}`)}`;
     const bodyText = [subtitle, ...details.filter((d) => d.value).map((d) => `${d.label}: ${d.value}`)].join(" · ");
     const appUrl = appPublicUrl();

@@ -45,6 +45,7 @@ export interface DeprovisionResult {
 
 /** Mesma normalização de `public.canonical_user_key` (login sem sufixos .ext). */
 export { canonicalUserKey } from "./text-normalize.ts";
+import { emitNotificationEvent } from "./notification-engine.ts";
 
 function sameUser(a: string | null | undefined, b: string | null | undefined): boolean {
   const ka = canonicalUserKey(a);
@@ -220,6 +221,26 @@ export async function logDeprovision(
   } catch (e) {
     console.warn("[idp-deprovision] falha ao gravar log:", e instanceof Error ? e.message : String(e));
   }
+
+  await emitNotificationEvent(admin, {
+    eventKey: "identity.user_deprovisioned",
+    sourceModule: "identity",
+    sourceEntityType: "user",
+    sourceEntityId: res.userKey,
+    companyDb: target.companyDb || null,
+    idempotencyKey: `deprovision:${res.userKey}:${target.reason}`,
+    payload: {
+      title: "Usuário desprovisionado no IdP",
+      user_key: res.userKey,
+      email: target.email || null,
+      sap_user_code: target.sapUserCode || null,
+      idp_provider: target.idpProvider || null,
+      reason: target.reason,
+      approval_rules_orphaned: res.approvalRulesOrphaned,
+      orphan_rules: res.orphanRules,
+      link: "/regras-aprovacao",
+    },
+  });
 
   // Aviso para o time de administração quando o desligado ainda é aprovador
   // em regras ativas — a matriz precisa de reatribuição manual.
