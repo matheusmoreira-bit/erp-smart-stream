@@ -36,6 +36,8 @@ export interface NfEntradaLink {
   sap_invoice_draft_id: string | null;
   created_at: string;
   updated_at: string;
+  /** Data real do documento (emissão / lançamento no ERP), quando conhecida. */
+  doc_date?: string | null;
   ap_links: NfApLink[];
   due_date?: string | null;
   payment_date?: string | null;
