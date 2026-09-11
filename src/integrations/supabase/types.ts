@@ -9607,6 +9607,22 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      enqueue_notification_event: {
+        Args: {
+          p_company_db?: string
+          p_event_key: string
+          p_idempotency_key?: string
+          p_payload?: Json
+          p_source_entity_id?: string
+          p_source_entity_type?: string
+          p_source_module?: string
+        }
+        Returns: {
+          dispatches_created: number
+          event_id: string
+          recipients_created: number
+        }[]
+      }
       find_open_registration_duplicate:
         | {
             Args: { p_tax_id?: string; p_title?: string; p_type: string }
@@ -9982,6 +9998,10 @@ export type Database = {
         }
         Returns: number
       }
+      notification_conditions_match: {
+        Args: { p_conditions: Json; p_payload: Json }
+        Returns: boolean
+      }
       open_access_review_campaign: {
         Args: {
           _due_at?: string
@@ -10044,12 +10064,25 @@ export type Database = {
         Args: { _message?: string; _name: string; _status?: string }
         Returns: undefined
       }
+      render_notification_template: {
+        Args: { p_payload: Json; p_template: string }
+        Returns: string
+      }
       require_idp_binding_enabled: { Args: never; Returns: boolean }
       reserve_accounts_payable_file_sequence: {
         Args: { p_company_db: string }
         Returns: {
           bank_account_id: string
           file_sequence: number
+        }[]
+      }
+      resolve_notification_recipient: {
+        Args: { p_payload: Json; p_recipient_type: string; p_value: string }
+        Returns: {
+          channel_address: string
+          recipient_email: string
+          recipient_name: string
+          recipient_phone: string
         }[]
       }
       sap_user_has_module: {
