@@ -333,12 +333,24 @@ Deno.serve(async (req) => {
       if (status === "sent") stats.sent++;
       else if (status === "failed") stats.failed++;
 
+      // Backoff exponencial (5, 10, 20, 40 min) enquanto restarem tentativas.
+      const nextScheduledAt = status === "pending"
+        ? new Date(Date.now() + retryDelayMs(attempts)).toISOString()
+        : null;
+      stats.retrying += status === "pending" ? 1 : 0;
+
       await admin.from("notification_dispatches")
         .update({
           status,
           sent_at: status === "sent" ? new Date().toISOString() : null,
           error_message: lastError ? lastError.slice(0, 400) : null,
-          metadata: { ...(d.metadata as any || {}), attempts },
+          metadata: {
+            ...(d.metadata as any || {}),
+            attempts,
+            last_error: lastError ? lastError.slice(0, 400) : null,
+            next_retry_at: nextScheduledAt,
+          },
+          ...(nextScheduledAt ? { scheduled_at: nextScheduledAt } : {}),
           updated_at: new Date().toISOString(),
         })
         .eq("id", d.id);
