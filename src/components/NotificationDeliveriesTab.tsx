@@ -320,6 +320,48 @@ export function NotificationDeliveriesTab() {
                   {JSON.stringify(selected.metadata?.payload_snapshot || {}, null, 2)}
                 </pre>
               </div>
+              <div>
+                <Label className="text-xs">Histórico de tentativas</Label>
+                {attemptsLoading ? (
+                  <p className="mt-1 text-sm text-muted-foreground">Carregando tentativas...</p>
+                ) : attempts.length === 0 ? (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Nenhuma tentativa registrada para este envio.
+                  </p>
+                ) : (
+                  <div className="mt-1 rounded-lg border border-border overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted/40 text-muted-foreground uppercase tracking-wider">
+                        <tr>
+                          <th className="text-left px-2 py-1.5 font-medium">Data</th>
+                          <th className="text-left px-2 py-1.5 font-medium">Tentativa</th>
+                          <th className="text-left px-2 py-1.5 font-medium">Destinatário</th>
+                          <th className="text-left px-2 py-1.5 font-medium">Status</th>
+                          <th className="text-left px-2 py-1.5 font-medium">Motivo da falha</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {attempts.map((a) => (
+                          <tr key={a.id}>
+                            <td className="px-2 py-1.5 whitespace-nowrap text-muted-foreground">
+                              {format(new Date(a.created_at), "dd/MM/yyyy HH:mm:ss")}
+                            </td>
+                            <td className="px-2 py-1.5">#{a.attempt_no}</td>
+                            <td className="px-2 py-1.5 max-w-[180px] truncate" title={a.recipient_address || ""}>
+                              {a.recipient_address || a.recipient_name || "—"}
+                            </td>
+                            <td className="px-2 py-1.5"><StatusBadge status={a.status} /></td>
+                            <td className="px-2 py-1.5 text-destructive break-words">
+                              {a.error_message || "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
             </div>
           )}
         </DialogContent>
