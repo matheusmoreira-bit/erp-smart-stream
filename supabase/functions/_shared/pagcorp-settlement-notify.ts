@@ -8,6 +8,8 @@ const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "http://63.177.171.140/send
 const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || Deno.env.get("WHATSAPP_API_TOKEN") || "";
 
 /** Responsável pela baixa manual dos cartões corporativos. */
+import { emitNotificationEvent } from "./notification-engine.ts";
+
 export const PAGCORP_SETTLEMENT_OWNER = {
   identifier: "blenda.pinheiro.ext",
   phone: "5531996749771",
@@ -89,6 +91,24 @@ export async function notifyPagcorpSettlementPending(
       },
     });
   } catch { /* silencioso */ }
+
+  await emitNotificationEvent(sb as any, {
+    eventKey: "cards.settlement_pending",
+    sourceModule: "cards",
+    sourceEntityType: "pagcorp_settlement",
+    sourceEntityId: String(args.invoiceDocNum ?? args.poDocNum ?? ""),
+    companyDb: args.companyDb ?? null,
+    idempotencyKey: `pagcorp:settlement:${args.companyDb}:${args.invoiceDocNum ?? args.poDocNum ?? ""}`,
+    payload: {
+      title: "Nova NF de cartão aguardando baixa",
+      po_doc_num: args.poDocNum ?? null,
+      invoice_doc_num: args.invoiceDocNum ?? null,
+      vendor_name: args.vendorName ?? null,
+      amount: args.amount ?? null,
+      currency: args.currency ?? null,
+      link: "/cartoes/baixas",
+    },
+  });
 
   return wpp.ok;
 }
