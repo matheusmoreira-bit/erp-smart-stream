@@ -12,6 +12,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireUser, validateSapSession, AuthError } from "../_shared/auth.ts";
 import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { emitNotificationEvent } from "../_shared/notification-engine.ts";
 
 interface SubstituteRow {
   id: string;
@@ -245,6 +246,23 @@ Deno.serve(async (req) => {
 
     const period = `${new Date(s).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })} a ${new Date(e).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}`;
     const officialLabel = insertRow.official_name || officialEmail;
+    await emitNotificationEvent(admin, {
+      eventKey: "approval.substitute_assigned",
+      sourceModule: "approvals",
+      sourceEntityType: "approver_substitute",
+      sourceEntityId: String((created as SubstituteRow | null)?.id ?? ""),
+      companyDb: insertRow.company_db ?? null,
+      idempotencyKey: `substitute_assigned:${(created as SubstituteRow | null)?.id ?? ""}`,
+      payload: {
+        title: "Aprovador substituto definido",
+        substitute_email: substituteEmail,
+        official_email: officialEmail,
+        official_name: insertRow.official_name ?? null,
+        period,
+        reason: insertRow.reason ?? null,
+        link: "/aprovacoes",
+      },
+    });
     await admin.from("notifications").insert([
       {
         user_identifier: normalize(substituteEmail),
@@ -377,6 +395,24 @@ Deno.serve(async (req) => {
       reason: body.reason || null,
       selfService: !isAdminCaller,
       revokedBy: actorLabel,
+    },
+  });
+
+  await emitNotificationEvent(admin, {
+    eventKey: "approval.substitute_revoked",
+    sourceModule: "approvals",
+    sourceEntityType: "approver_substitute",
+    sourceEntityId: id,
+    companyDb: current.company_db ?? null,
+    idempotencyKey: `substitute_revoked:${id}`,
+    payload: {
+      title: "Substituição de alçada encerrada",
+      substitute_email: current.substitute_email,
+      official_email: current.official_email,
+      official_name: current.official_name ?? null,
+      revoked_at: revokedAt,
+      reason: body.reason || null,
+      link: "/aprovacoes",
     },
   });
 

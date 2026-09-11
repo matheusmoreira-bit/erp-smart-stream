@@ -24,6 +24,8 @@ export type SalesMilestone =
 /** Destinatários fixos dos marcos pós-aprovação do fluxo de vendas. */
 export const SALES_WATCHER_EMAILS = ["larissa.manzalli@cactusgaming.net"];
 
+import { detailsToPayload, emitNotificationEvent } from "./notification-engine.ts";
+
 const CATEGORY = "sales";
 
 const MILESTONE_TITLES: Record<SalesMilestone, string> = {
@@ -153,6 +155,23 @@ export async function notifySalesMilestone(admin: any, input: SalesNotifyInput):
     }));
     const { error } = await admin.from("notifications").insert(rows);
     if (error) console.warn("[sales-notify] insert falhou:", error.message);
+
+    await emitNotificationEvent(admin, {
+      eventKey: `sales.${input.milestone}`,
+      sourceModule: "sales",
+      sourceEntityType: "sales_order",
+      sourceEntityId: input.refId,
+      companyDb: input.companyDb ?? null,
+      idempotencyKey: `sales:${input.milestone}:${input.refId}`,
+      payload: {
+        title,
+        summary,
+        milestone: input.milestone,
+        link: input.link ?? null,
+        recipients: unique,
+        ...detailsToPayload(details),
+      },
+    });
 
     const emails = unique.filter(isEmail);
     await sendEmail(emails, `[ERP Flow] ${title}`, buildHtml(title, summary, details, input.link));

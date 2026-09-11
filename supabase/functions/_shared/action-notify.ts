@@ -11,6 +11,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { pushToRecipient } from "./web-push.ts";
+import { detailsToPayload, emitNotificationEvent } from "./notification-engine.ts";
 
 export interface ActionNotifyDetail {
   label: string;
@@ -133,6 +134,25 @@ async function dispatch(admin: any, input: ActionNotifyInput, kind: "requested" 
       body: bodyParts.join(" · ") || null,
       url: input.link || "/notificacoes",
       tag: refId,
+    });
+
+    // Motor de notificações (paralelo aos canais legados).
+    await emitNotificationEvent(admin, {
+      eventKey: `action.${input.actionKey}.${kind}`,
+      sourceModule: "action",
+      sourceEntityType: input.actionKey,
+      sourceEntityId: input.refId,
+      companyDb: input.companyDb ?? null,
+      idempotencyKey: refId,
+      payload: {
+        title: input.title,
+        summary: input.summary ?? null,
+        recipient,
+        recipient_name: input.recipientName ?? null,
+        link: input.link ?? null,
+        kind,
+        ...detailsToPayload(details),
+      },
     });
 
     if (input.email === false || !isEmail(recipient)) return;
