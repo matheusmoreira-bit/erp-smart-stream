@@ -111,7 +111,6 @@ export function useApprovalsFeed() {
           generatedAt: result.generatedAt,
         };
         setState(next);
-        if (key) writeCache(key, next);
 
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erro ao carregar aprovações");
