@@ -34,26 +34,15 @@ interface FeedState {
 const EMPTY: FeedState = { docs: [], privileged: false, generatedAt: null };
 
 function cacheKey(companyDb: string, user: string) {
-  // v2 invalida snapshots anteriores ao recorte server-side por ramificação.
+  // Mantido apenas para limpar snapshots antigos gravados por versões anteriores.
   return `approvals-feed:v2:${companyDb}:${user}`;
 }
 
-function readCache(key: string): FeedState | null {
+function clearLegacyCache(key: string) {
   try {
-    const raw = sessionStorage.getItem(key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as FeedState;
-    return Array.isArray(parsed?.docs) ? parsed : null;
+    if (key) sessionStorage.removeItem(key);
   } catch {
-    return null;
-  }
-}
-
-function writeCache(key: string, value: FeedState) {
-  try {
-    sessionStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    /* quota — cache é apenas otimização */
+    /* storage indisponível */
   }
 }
 
@@ -63,9 +52,9 @@ export function useApprovalsFeed() {
   const userKey = (session?.userName || "").toLowerCase();
   const key = companyDb ? cacheKey(companyDb, userKey) : "";
 
-  const [state, setState] = useState<FeedState>(() => (key && readCache(key)) || EMPTY);
-  // Só mostra "carregando" quando não há nada em cache para pintar.
-  const [isLoading, setIsLoading] = useState<boolean>(() => !(key && readCache(key)));
+  // Sem cache: a fila é sempre carregada da fonte ao abrir a tela.
+  const [state, setState] = useState<FeedState>(EMPTY);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef<Promise<void> | null>(null);
