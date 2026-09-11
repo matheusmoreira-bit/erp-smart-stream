@@ -5273,6 +5273,7 @@ export type Database = {
       }
       nf_entrada_imports: {
         Row: {
+          auto_captured: boolean
           chave_acesso: string
           cnpj_destinatario: string | null
           cnpj_fornecedor: string | null
@@ -5302,6 +5303,7 @@ export type Database = {
           match_candidates: Json | null
           match_resolved_at: string | null
           match_resolved_by: string | null
+          modelo: string | null
           nome_destinatario: string | null
           nome_fornecedor: string | null
           numero_nf: string | null
@@ -5319,11 +5321,13 @@ export type Database = {
           serie: string | null
           settlement_ap_count: number
           status: Database["public"]["Enums"]["nf_entrada_status"]
+          subserie: string | null
           updated_at: string
           valor_total: number | null
           xml_storage_path: string | null
         }
         Insert: {
+          auto_captured?: boolean
           chave_acesso: string
           cnpj_destinatario?: string | null
           cnpj_fornecedor?: string | null
@@ -5353,6 +5357,7 @@ export type Database = {
           match_candidates?: Json | null
           match_resolved_at?: string | null
           match_resolved_by?: string | null
+          modelo?: string | null
           nome_destinatario?: string | null
           nome_fornecedor?: string | null
           numero_nf?: string | null
@@ -5370,11 +5375,13 @@ export type Database = {
           serie?: string | null
           settlement_ap_count?: number
           status?: Database["public"]["Enums"]["nf_entrada_status"]
+          subserie?: string | null
           updated_at?: string
           valor_total?: number | null
           xml_storage_path?: string | null
         }
         Update: {
+          auto_captured?: boolean
           chave_acesso?: string
           cnpj_destinatario?: string | null
           cnpj_fornecedor?: string | null
@@ -5404,6 +5411,7 @@ export type Database = {
           match_candidates?: Json | null
           match_resolved_at?: string | null
           match_resolved_by?: string | null
+          modelo?: string | null
           nome_destinatario?: string | null
           nome_fornecedor?: string | null
           numero_nf?: string | null
@@ -5421,6 +5429,7 @@ export type Database = {
           serie?: string | null
           settlement_ap_count?: number
           status?: Database["public"]["Enums"]["nf_entrada_status"]
+          subserie?: string | null
           updated_at?: string
           valor_total?: number | null
           xml_storage_path?: string | null
@@ -7482,11 +7491,16 @@ export type Database = {
           doc_num: number | null
           doc_total: number | null
           document_status: string | null
+          folio_number: string | null
           id: string
           paid_to_date: number | null
           raw_json: Json
           sap_update_date: string | null
+          sequence_model: string | null
+          sequence_serial: string | null
           series: number | null
+          series_string: string | null
+          sub_series_string: string | null
           synced_at: string
           tax_date: string | null
           updated_at: string
@@ -7505,11 +7519,16 @@ export type Database = {
           doc_num?: number | null
           doc_total?: number | null
           document_status?: string | null
+          folio_number?: string | null
           id?: string
           paid_to_date?: number | null
           raw_json?: Json
           sap_update_date?: string | null
+          sequence_model?: string | null
+          sequence_serial?: string | null
           series?: number | null
+          series_string?: string | null
+          sub_series_string?: string | null
           synced_at?: string
           tax_date?: string | null
           updated_at?: string
@@ -7528,11 +7547,16 @@ export type Database = {
           doc_num?: number | null
           doc_total?: number | null
           document_status?: string | null
+          folio_number?: string | null
           id?: string
           paid_to_date?: number | null
           raw_json?: Json
           sap_update_date?: string | null
+          sequence_model?: string | null
+          sequence_serial?: string | null
           series?: number | null
+          series_string?: string | null
+          sub_series_string?: string | null
           synced_at?: string
           tax_date?: string | null
           updated_at?: string
