@@ -179,6 +179,44 @@ async function postSapDocument(
   return { docEntry: body.DocEntry, docNum: body.DocNum, response: body };
 }
 
+/**
+ * Idempotência anti-duplicidade.
+ *
+ * Todo documento criado pelo Flow leva no campo Comments o código de 8
+ * caracteres da despesa ("7FC648BB - ..."). Isso permite perguntar ao SAP se o
+ * documento JÁ existe antes de criar outro — e, principalmente, depois de uma
+ * falha de rede/timeout, em que o SAP gravou o pedido mas a resposta se perdeu.
+ */
+async function findSapDocumentByExpenseCode(
+  sapBaseUrl: string,
+  cookies: string,
+  endpoint: string,
+  cardCode: string,
+  expenseCode: string,
+): Promise<{ docEntry: number; docNum: number } | null> {
+  const code = String(expenseCode || "").trim().toUpperCase();
+  if (!/^[0-9A-F]{8}$/.test(code)) return null;
+  const card = String(cardCode || "").replace(/'/g, "''");
+  const filter = encodeURIComponent(
+    `CardCode eq '${card}' and startswith(Comments,'${code}') and Cancelled eq 'tNO'`,
+  );
+  const url =
+    `${sapBaseUrl}/${endpoint}?$select=DocEntry,DocNum,Comments,Cancelled&$filter=${filter}&$orderby=DocEntry desc&$top=5`;
+  try {
+    const res = await fetch(url, { headers: { Cookie: cookies, Prefer: "odata.maxpagesize=5" } });
+    if (!res.ok) return null;
+    const body = await res.json().catch(() => ({}));
+    const rows: any[] = Array.isArray(body?.value) ? body.value : [];
+    const match = rows.find((r) => Number(r?.DocEntry) > 0);
+    if (!match) return null;
+    return { docEntry: Number(match.DocEntry), docNum: Number(match.DocNum) || 0 };
+  } catch (e) {
+    console.warn("[expense-to-sap] lookup idempotente falhou:", (e as Error).message);
+    return null;
+  }
+}
+
+
 function sapFlagNo(value: unknown): boolean {
   return String(value ?? "").toLowerCase() === "tno" || value === false;
 }
@@ -1590,10 +1628,49 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     // moeda) são preservados; todo o resto — inclusive a coleção completa de
     // linhas com LineNum — é reenviado para espelhar o documento aprovado.
     const patchDocEntry = isPatchMode ? Number(expense.sap_doc_entry) : 0;
+    const expenseCode = String(expenseId).slice(0, 8).toUpperCase();
+    let adoptedExistingDocument = false;
     const sendDocument = async (): Promise<{ docEntry: number; docNum: number; response: any }> => {
       if (!isPatchMode) {
-        return await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, sapEndpoint);
+        // Trava de idempotência (1/2): o documento já existe no SAP com este
+        // código? Então adotamos em vez de criar uma segunda via.
+        const preexisting = await findSapDocumentByExpenseCode(
+          sap.baseUrl,
+          sap.cookies,
+          sapEndpoint,
+          String(expense.supplier_code || ""),
+          expenseCode,
+        );
+        if (preexisting) {
+          adoptedExistingDocument = true;
+          console.log(`[expense-to-sap] documento ${expenseCode} já existia no SAP (DocEntry ${preexisting.docEntry}) — adotado`);
+          return { ...preexisting, response: { adopted: true, ...preexisting } };
+        }
+        try {
+          return await postSapDocument(sap.baseUrl, sap.cookies, sapPayload, sapEndpoint);
+        } catch (postError) {
+          // Trava de idempotência (2/2): timeout ou queda de conexão pode ter
+          // perdido a resposta DEPOIS de o SAP gravar o pedido. Antes de
+          // devolver erro (e permitir novo disparo), conferimos no SAP.
+          await new Promise((r) => setTimeout(r, 4000));
+          const created = await findSapDocumentByExpenseCode(
+            sap.baseUrl,
+            sap.cookies,
+            sapEndpoint,
+            String(expense.supplier_code || ""),
+            expenseCode,
+          );
+          if (created) {
+            adoptedExistingDocument = true;
+            console.warn(
+              `[expense-to-sap] POST falhou (${(postError as Error).message}) mas o SAP criou o DocEntry ${created.docEntry} — adotado`,
+            );
+            return { ...created, response: { adopted: true, recoveredFromError: true, ...created } };
+          }
+          throw postError;
+        }
       }
+
       const patchPayload: Record<string, unknown> = { ...sapPayload };
       delete patchPayload.BPL_IDAssignedToInvoice;
       delete patchPayload.DocDate;
@@ -1755,6 +1832,8 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         sap_doc_num: sapResult.docNum,
         sap_attachment_entry: attachmentEntry,
         patched: isPatchMode,
+        adopted_existing_document: adoptedExistingDocument,
+
 
         stage_status: {
           attachment: attachmentStatus,

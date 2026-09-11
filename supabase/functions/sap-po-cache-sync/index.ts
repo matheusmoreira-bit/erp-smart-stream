@@ -30,7 +30,7 @@ interface SapPurchaseOrder extends OdataDoc {
   Cancelled?: string;
 }
 
-const SELECT = "DocEntry,DocNum,Series,CardCode,CardName,DocDate,DocDueDate,DocTotal,DocTotalFc,DocCurrency,DocumentStatus,Cancelled,UpdateDate,UpdateTime";
+const SELECT = "DocEntry,DocNum,Series,CardCode,CardName,DocDate,DocDueDate,DocTotal,DocTotalFc,DocCurrency,DocumentStatus,Cancelled,Comments,UpdateDate,UpdateTime";
 
 async function syncCompany(sb: Sb, companyDb: string, opts: RunnerOpts): Promise<WatcherResult> {
   const creds = await loadSapCreds(sb, companyDb, { requireApiuser: true });
@@ -72,6 +72,7 @@ async function syncCompany(sb: Sb, companyDb: string, opts: RunnerOpts): Promise
         doc_currency: inv.DocCurrency ?? null,
         document_status: inv.DocumentStatus ?? null,
         cancelled: inv.Cancelled ?? null,
+        comments: (inv as any).Comments ?? null,
         raw_json: inv as unknown as Record<string, unknown>,
         sap_update_date: toIsoTimestamp(inv.UpdateDate, inv.UpdateTime),
         synced_at: new Date().toISOString(),
