@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  const blocked = await blockIfIntegrationsDisabled(admin, corsHeaders);
+  const blocked = blockIfIntegrationsDisabled(corsHeaders);
   if (blocked) return blocked;
 
   const stats = { approvers: 0, docs: 0, sent: 0, errors: 0, skipped_no_email: 0 };
