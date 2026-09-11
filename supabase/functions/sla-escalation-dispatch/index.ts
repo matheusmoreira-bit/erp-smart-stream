@@ -302,7 +302,9 @@ Deno.serve(async (req) => {
           docType: doc.doc_type,
           resolution: {
             source: target.kind === "substitute" ? "substitute" : "sla_escalation",
-            reason: `SLA de ${hours}h úteis excedido — documento escalado de ${currentApprover || "—"} para ${target.name}`,
+            reason: delegationReason
+              ? `SLA de ${hours}h úteis excedido e sem gestor seguinte (${delegationReason}) — enviado para aprovação administrativa de ${ADMIN_DELEGATE_NAME}`
+              : `SLA de ${hours}h úteis excedido — documento escalado de ${currentApprover || "—"} para ${target.name}`,
             ruleId: (doc as any).approval_rule_id || null,
             costCenter: (doc as any).cost_center || null,
             project: (doc as any).project || null,
@@ -312,6 +314,7 @@ Deno.serve(async (req) => {
               level_to: target.levelTo,
               substitution_id: target.substitutionId,
               escalation_index: escCount + 1,
+              delegation_reason: delegationReason,
             },
           },
         });
