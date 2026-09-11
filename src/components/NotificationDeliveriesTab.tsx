@@ -104,6 +104,7 @@ export function NotificationDeliveriesTab() {
   const [attemptsLoading, setAttemptsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
