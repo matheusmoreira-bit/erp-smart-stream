@@ -604,11 +604,6 @@ const HANA_SCHEMA_OVERRIDES: Record<string, string> = {
   open_gaming_sa: "SBO_OPENGAMING",
 };
 
-async function readApprovalsCache(session: SapSession): Promise<{ docs: ApprovalDoc[]; updatedAt: string } | null> {
-  const data = await sapReadApprovalsCache<ApprovalDoc[]>(session);
-  if (!data.data || !data.updatedAt) return null;
-  return { docs: data.data, updatedAt: data.updatedAt };
-}
 
 async function writeApprovalsCache(session: SapSession, docs: ApprovalDoc[]): Promise<void> {
   await sapWriteApprovalsCache(session, docs, APPROVALS_CACHE_TTL_MS);
