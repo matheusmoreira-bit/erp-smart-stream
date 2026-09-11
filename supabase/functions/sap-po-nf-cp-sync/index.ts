@@ -36,6 +36,15 @@ function toNum(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Converte datas da view HANA ("2026-04-29 00:00:00.000") em ISO. */
+function toDate(v: unknown): string | null {
+  const s = toStr(v);
+  if (!s) return null;
+  const iso = s.includes("T") ? s : s.replace(" ", "T");
+  const d = new Date(/(Z|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : `${iso}Z`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 function mapRow(raw: Record<string, unknown>, companyDb: string) {
   const idPedido = toStr(pick(raw, "ID_Pedido_Compra", "ID Pedido Compra", "idPedidoCompra"));
   const idNf = toStr(pick(raw, "ID_NF_Entrada", "ID NF Entrada", "idNfEntrada"));
