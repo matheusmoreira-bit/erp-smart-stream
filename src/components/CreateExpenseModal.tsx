@@ -236,6 +236,8 @@ export function CreateExpenseModal({
   const [loadingCurrencies, setLoadingCurrencies] = useState(false);
   const [docDate, setDocDate] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [overdueBlockOpen, setOverdueBlockOpen] = useState(false);
+  const [overdueBlockDays, setOverdueBlockDays] = useState(0);
   const [paymentTerms, setPaymentTerms] = useState<SapSearchOption | null>(null);
   const [remarks, setRemarks] = useState("");
   const [items, setItems] = useState<(Omit<ExpenseItem, "id"> & { sapItem?: SapSearchOption | null; sapCostCenter?: SapSearchOption | null; sapProject?: SapSearchOption | null; searchHint?: string; projectSplit?: ProjectSplit | null })[]>([
