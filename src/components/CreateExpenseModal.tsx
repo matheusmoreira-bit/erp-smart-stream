@@ -236,6 +236,8 @@ export function CreateExpenseModal({
   const [loadingCurrencies, setLoadingCurrencies] = useState(false);
   const [docDate, setDocDate] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [overdueBlockOpen, setOverdueBlockOpen] = useState(false);
+  const [overdueBlockDays, setOverdueBlockDays] = useState(0);
   const [paymentTerms, setPaymentTerms] = useState<SapSearchOption | null>(null);
   const [remarks, setRemarks] = useState("");
   const [items, setItems] = useState<(Omit<ExpenseItem, "id"> & { sapItem?: SapSearchOption | null; sapCostCenter?: SapSearchOption | null; sapProject?: SapSearchOption | null; searchHint?: string; projectSplit?: ProjectSplit | null })[]>([
@@ -2310,6 +2312,17 @@ export function CreateExpenseModal({
     if (!dueDate) {
       toast.error("Informe a data de vencimento");
       return;
+    }
+    {
+      const todayRef = new Date();
+      todayRef.setHours(0, 0, 0, 0);
+      const dueRef = new Date(`${dueDate}T00:00:00`);
+      const diff = Math.round((dueRef.getTime() - todayRef.getTime()) / 86400000);
+      if (Number.isFinite(diff) && diff < 0) {
+        setOverdueBlockDays(Math.abs(diff));
+        setOverdueBlockOpen(true);
+        return;
+      }
     }
     if (!isSales && !isOmie && paymentTermsOptions.length > 0 && !paymentTerms) {
       toast.error("Informe a forma de pagamento");
@@ -5141,6 +5154,26 @@ export function CreateExpenseModal({
         })()}
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={overdueBlockOpen} onOpenChange={setOverdueBlockOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Nota vencida não pode ser lançada</AlertDialogTitle>
+          <AlertDialogDescription>
+            A data de vencimento informada já passou
+            {overdueBlockDays > 0
+              ? ` há ${overdueBlockDays} ${overdueBlockDays === 1 ? "dia" : "dias"}`
+              : ""}.
+            Notas vencidas devem ser renegociadas com o fornecedor antes de serem
+            submetidas. Ajuste a data de vencimento para uma data futura após a
+            renegociação.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogAction onClick={() => setOverdueBlockOpen(false)}>Entendi</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
 
   </>
   );
