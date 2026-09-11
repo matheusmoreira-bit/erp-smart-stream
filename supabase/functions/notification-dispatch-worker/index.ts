@@ -233,15 +233,21 @@ Deno.serve(async (req) => {
           if (d.channel === "email") {
             const to = [r.recipient_email, r.channel_address].find((v) => isEmail(v)) as string | undefined;
             if (!to) throw new Error("Destinatário sem e-mail válido");
-            const subject = (d.rendered_subject || "ERP Flow — notificação").slice(0, 200);
-            const html = d.rendered_html || fallbackHtml(subject, d.rendered_body || "");
-            await sendEmail([to.trim().toLowerCase()], subject, html);
+            const subject = cleanTemplate(d.rendered_subject || "").slice(0, 200) || "ERP Flow — notificação";
+            const inner = d.rendered_html
+              ? cleanTemplate(d.rendered_html)
+              : bodyToHtml(d.rendered_body || "");
+            await sendEmail([to.trim().toLowerCase()], subject, renderEmail(subject, inner));
           } else {
             let phone = normalizePhone(r.recipient_phone || (String(r.channel_address || "").includes("@") ? "" : r.channel_address));
             if (!phone) phone = await resolvePhone(admin, r.recipient_email || r.channel_address, r.recipient_name);
             if (!phone) throw new Error("Destinatário sem telefone");
-            const text = [d.rendered_subject ? `*${d.rendered_subject}*` : "", d.rendered_body || ""]
-              .filter(Boolean).join("\n");
+            const waTitle = cleanTemplate(d.rendered_subject || "").replace(/^ERP Flow\s*[—-]\s*/i, "");
+            const text = [
+              waTitle ? `*${waTitle}*` : "",
+              cleanTemplate(d.rendered_body || ""),
+              "_ERP Flow · mensagem automática_",
+            ].filter(Boolean).join("\n\n");
             await sendWhatsApp(phone, text);
           }
           anySent = true;
