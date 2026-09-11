@@ -734,31 +734,11 @@ export function useApprovals() {
     // reaproveita o cache montado com a sessão do admin.
     const skipCache = isImpersonating();
 
-
-    const force = !!opts?.force;
     setError(null);
 
-    // 1) Sempre hidrata pelo cache. Em refresh forçado apenas não encerramos
-    // cedo: os dados locais continuam visíveis durante a revalidação.
-    let cacheHadData = false;
-    if (!skipCache) {
-      try {
-        const cached = await readApprovalsCache(session as SapSession);
-        if (cached) {
-          cacheHadData = cached.docs.length > 0;
-          setApprovals(cached.docs);
-          setLastUpdatedAt(cached.updatedAt);
-          setIsLoading(false);
-          const age = Date.now() - new Date(cached.updatedAt).getTime();
-          if (!force && age < APPROVALS_CACHE_TTL_MS) return; // fresh, skip SAP
-          // stale: fall through to refresh in background
-        }
-      } catch (e) {
-        console.warn("approvals cache read failed:", e);
-      }
-    }
-
-    const hasData = approvals.length > 0 || cacheHadData;
+    // A fila de aprovações nunca é hidratada por cache: toda abertura da tela
+    // consulta a fonte (HANA/Service Layer) para evitar dados desatualizados.
+    const hasData = approvals.length > 0;
     if (!hasData) setIsLoading(true);
     setIsRefreshing(true);
     try {
