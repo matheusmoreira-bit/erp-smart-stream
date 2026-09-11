@@ -229,10 +229,13 @@ Deno.serve(async (req) => {
 
       for (const r of list) {
         stats.recipients++;
+        const startedAt = Date.now();
+        let usedAddress: string | null = r.recipient_email || r.channel_address || r.recipient_phone || null;
         try {
           if (d.channel === "email") {
             const to = [r.recipient_email, r.channel_address].find((v) => isEmail(v)) as string | undefined;
             if (!to) throw new Error("Destinatário sem e-mail válido");
+            usedAddress = to.trim().toLowerCase();
             const subject = cleanTemplate(d.rendered_subject || "").slice(0, 200) || "ERP Flow — notificação";
             const inner = d.rendered_html
               ? cleanTemplate(d.rendered_html)
@@ -242,6 +245,7 @@ Deno.serve(async (req) => {
             let phone = normalizePhone(r.recipient_phone || (String(r.channel_address || "").includes("@") ? "" : r.channel_address));
             if (!phone) phone = await resolvePhone(admin, r.recipient_email || r.channel_address, r.recipient_name);
             if (!phone) throw new Error("Destinatário sem telefone");
+            usedAddress = phone;
             const waTitle = cleanTemplate(d.rendered_subject || "").replace(/^ERP Flow\s*[—-]\s*/i, "");
             const text = [
               waTitle ? `*${waTitle}*` : "",
@@ -254,6 +258,22 @@ Deno.serve(async (req) => {
           await admin.from("notification_dispatch_recipients")
             .update({ status: "sent", sent_at: new Date().toISOString(), error_message: null, updated_at: new Date().toISOString() })
             .eq("id", r.id);
+          await logAttempt(admin, {
+            dispatch_id: d.id,
+            recipient_id: r.id,
+            event_key: d.event_key,
+            channel: d.channel,
+            attempt_no: attempts,
+            status: "sent",
+            error_message: null,
+            recipient_address: usedAddress,
+            recipient_name: r.recipient_name,
+            company_db: (d as any).company_db ?? null,
+            source_module: (d as any).source_module ?? null,
+            source_entity_type: (d as any).source_entity_type ?? null,
+            source_entity_id: (d as any).source_entity_id ?? null,
+            duration_ms: Date.now() - startedAt,
+          });
         } catch (e) {
           lastError = e instanceof Error ? e.message : String(e);
           const finalFail = attempts >= MAX_ATTEMPTS;
@@ -264,8 +284,25 @@ Deno.serve(async (req) => {
               updated_at: new Date().toISOString(),
             })
             .eq("id", r.id);
+          await logAttempt(admin, {
+            dispatch_id: d.id,
+            recipient_id: r.id,
+            event_key: d.event_key,
+            channel: d.channel,
+            attempt_no: attempts,
+            status: finalFail ? "failed" : "retry_scheduled",
+            error_message: lastError.slice(0, 400),
+            recipient_address: usedAddress,
+            recipient_name: r.recipient_name,
+            company_db: (d as any).company_db ?? null,
+            source_module: (d as any).source_module ?? null,
+            source_entity_type: (d as any).source_entity_type ?? null,
+            source_entity_id: (d as any).source_entity_id ?? null,
+            duration_ms: Date.now() - startedAt,
+          });
         }
       }
+
 
       const allDone = !lastError;
       const giveUp = attempts >= MAX_ATTEMPTS;
