@@ -78,6 +78,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { VirtualExpensesTable } from "@/components/VirtualExpensesTable";
 import { ShieldAlert } from "lucide-react";
 import { PoNfEntradaActions } from "@/components/PoNfEntradaActions";
+import { PoNfCpChain } from "@/components/PoNfCpChain";
 
 import {
   Dialog,
@@ -790,6 +791,13 @@ function ExpenseDetailModal({
                   </div>
                 )}
               </div>
+            )}
+
+            {!!expense.sap_doc_entry && (
+              <PoNfCpChain
+                companyDb={expense.company_db || sapSession?.companyDB || null}
+                poDocEntry={expense.sap_doc_entry}
+              />
             )}
 
             <SegmentFallbackAlert expenseId={expense.id} />

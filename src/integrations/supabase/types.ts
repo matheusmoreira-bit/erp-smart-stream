@@ -8109,6 +8109,90 @@ export type Database = {
         }
         Relationships: []
       }
+      sap_po_nf_cp_cache: {
+        Row: {
+          cod_fornecedor: string | null
+          company_db: string
+          created_at: string
+          id: string
+          id_contas_pagar: string | null
+          id_nf_entrada: string | null
+          id_pedido_compra: string | null
+          link_key: string
+          nome_fornecedor: string | null
+          numero_nota_fiscal: string | null
+          raw_json: Json | null
+          referencia_valor: string | null
+          status_geral: string | null
+          synced_at: string
+          valor: number | null
+        }
+        Insert: {
+          cod_fornecedor?: string | null
+          company_db: string
+          created_at?: string
+          id?: string
+          id_contas_pagar?: string | null
+          id_nf_entrada?: string | null
+          id_pedido_compra?: string | null
+          link_key: string
+          nome_fornecedor?: string | null
+          numero_nota_fiscal?: string | null
+          raw_json?: Json | null
+          referencia_valor?: string | null
+          status_geral?: string | null
+          synced_at?: string
+          valor?: number | null
+        }
+        Update: {
+          cod_fornecedor?: string | null
+          company_db?: string
+          created_at?: string
+          id?: string
+          id_contas_pagar?: string | null
+          id_nf_entrada?: string | null
+          id_pedido_compra?: string | null
+          link_key?: string
+          nome_fornecedor?: string | null
+          numero_nota_fiscal?: string | null
+          raw_json?: Json | null
+          referencia_valor?: string | null
+          status_geral?: string | null
+          synced_at?: string
+          valor?: number | null
+        }
+        Relationships: []
+      }
+      sap_po_nf_cp_sync_state: {
+        Row: {
+          company_db: string
+          last_batch_count: number
+          last_error: string | null
+          last_run_at: string | null
+          last_status: string | null
+          total_synced: number
+          updated_at: string
+        }
+        Insert: {
+          company_db: string
+          last_batch_count?: number
+          last_error?: string | null
+          last_run_at?: string | null
+          last_status?: string | null
+          total_synced?: number
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string
+          last_batch_count?: number
+          last_error?: string | null
+          last_run_at?: string | null
+          last_status?: string | null
+          total_synced?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sap_purchase_order_cache: {
         Row: {
           cancelled: string | null

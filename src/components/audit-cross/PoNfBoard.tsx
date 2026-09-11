@@ -6,13 +6,14 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { KanbanColumn } from "@/components/audit-cross/KanbanColumn";
 import { useAuditPoNf, type PoNfRow } from "@/hooks/useAuditPoNf";
+import { usePoNfCpLinksByPo, type PoNfCpLink } from "@/hooks/usePoNfCpChain";
 
 const fmtMoney = (v?: number | null) =>
   typeof v === "number" ? v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—";
 
 const fmtDate = (v?: string | null) => (v ? new Date(`${v}T00:00:00`).toLocaleDateString("pt-BR") : "—");
 
-function RowCard({ r }: { r: PoNfRow }) {
+function RowCard({ r, cp = [] }: { r: PoNfRow; cp?: PoNfCpLink[] }) {
   return (
     <div className="rounded-md border bg-card p-3 text-xs space-y-1">
       <div className="flex items-start justify-between gap-2">
@@ -27,6 +28,17 @@ function RowCard({ r }: { r: PoNfRow }) {
         {r.mastertax_numero && <span>MasterTax {r.mastertax_numero}</span>}
         {r.data_emissao && <span>Emissão {fmtDate(r.data_emissao)}</span>}
       </div>
+      {cp.length > 0 && (
+        <div className="border-t pt-1 space-y-0.5">
+          {cp.map((l) => (
+            <div key={l.id} className="flex flex-wrap gap-x-2 text-[11px] text-muted-foreground">
+              <span>{l.id_contas_pagar ? `A pagar ${l.id_contas_pagar}` : "Sem conta a pagar"}</span>
+              {l.numero_nota_fiscal && <span>Nota {l.numero_nota_fiscal}</span>}
+              {l.status_geral && <span className="font-medium text-foreground">{l.status_geral}</span>}
+            </div>
+          ))}
+        </div>
+      )}
       {r.motivo && <div className="text-[11px] text-muted-foreground italic">{r.motivo}</div>}
     </div>
   );
@@ -75,6 +87,13 @@ export function PoNfBoard({ companyDb, inicio, fim }: Props) {
     ambos: filterRows(data?.ambos || []),
     mastertax: filterRows(data?.mastertax || []),
   }), [data, search]);
+
+  const poIds = useMemo(
+    () => [...(data?.erp || []), ...(data?.ambos || []), ...(data?.mastertax || [])].map((r) => r.po_doc_entry),
+    [data],
+  );
+  const { map: cpByPo } = usePoNfCpLinksByPo(companyDb, poIds);
+  const cpFor = (r: PoNfRow) => (r.po_doc_entry != null ? cpByPo[String(r.po_doc_entry)] : undefined);
 
   const sum = (rows: PoNfRow[]) =>
     rows.reduce((acc, r) => acc + Number(r.po_total ?? r.mastertax_valor ?? r.nf_total ?? 0), 0);
@@ -147,7 +166,7 @@ export function PoNfBoard({ companyDb, inicio, fim }: Props) {
           total={sum(cols.erp)}
           emptyLabel={loading ? "Carregando…" : data ? "Nenhum pedido pendente no período." : "Execute o cruzamento."}
         >
-          {cols.erp.map((r, i) => <RowCard key={`a-${r.po_doc_entry}-${i}`} r={r} />)}
+          {cols.erp.map((r, i) => <RowCard key={`a-${r.po_doc_entry}-${i}`} r={r} cp={cpFor(r)} />)}
         </KanbanColumn>
 
         <KanbanColumn
@@ -158,7 +177,7 @@ export function PoNfBoard({ companyDb, inicio, fim }: Props) {
           total={sum(cols.ambos)}
           emptyLabel={loading ? "Carregando…" : data ? "Nenhum caso conciliado no período." : "Execute o cruzamento."}
         >
-          {cols.ambos.map((r, i) => <RowCard key={`b-${r.po_doc_entry}-${i}`} r={r} />)}
+          {cols.ambos.map((r, i) => <RowCard key={`b-${r.po_doc_entry}-${i}`} r={r} cp={cpFor(r)} />)}
         </KanbanColumn>
 
         <KanbanColumn
@@ -169,7 +188,7 @@ export function PoNfBoard({ companyDb, inicio, fim }: Props) {
           total={sum(cols.mastertax)}
           emptyLabel={loading ? "Carregando…" : data ? "Nenhuma nota órfã no período." : "Execute o cruzamento."}
         >
-          {cols.mastertax.map((r, i) => <RowCard key={`c-${r.mastertax_id}-${i}`} r={r} />)}
+          {cols.mastertax.map((r, i) => <RowCard key={`c-${r.mastertax_id}-${i}`} r={r} cp={cpFor(r)} />)}
         </KanbanColumn>
       </div>
     </div>
