@@ -92,6 +92,13 @@
       "when": 1789137171582,
       "tag": "0012_revoke_anon_execute_on_public_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789137272977,
+      "tag": "0013_tighten_notification_and_collaborator_reads",
+      "breakpoints": true
     }
   ]
 }
