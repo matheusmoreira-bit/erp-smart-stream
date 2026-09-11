@@ -773,7 +773,7 @@ function ApprovalDetailModal({
   doc: ApprovalDoc | null;
   open: boolean;
   onClose: () => void;
-  onAction: (code: number, action: "approve" | "reject", remarks: string, opts?: { idempotencyKey?: string }) => Promise<void>;
+  onAction: (code: number, action: "approve" | "reject" | "return", remarks: string, opts?: { idempotencyKey?: string }) => Promise<void>;
   onRetryRefresh: () => Promise<void>;
   onDelegate: (doc: ApprovalDoc) => void;
   onReprocessApproval: (doc: ApprovalDoc) => void;
@@ -793,7 +793,7 @@ function ApprovalDetailModal({
   onBehalfOf?: { name: string; email: string } | null;
 }) {
   const [remarks, setRemarks] = useState("");
-  const [riskConfirm, setRiskConfirm] = useState<{ action: "approve" | "reject"; idempotencyKey: string } | null>(null);
+  const [riskConfirm, setRiskConfirm] = useState<{ action: "approve" | "reject" | "return"; idempotencyKey: string } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<"mutation" | "refresh" | null>(null);
   const [downloadingName, setDownloadingName] = useState<string | null>(null);
@@ -955,7 +955,7 @@ function ApprovalDetailModal({
     !approverMatches(doc.currentApprover, currentUserName) &&
     !approverMatches(doc.currentApprover, currentUserEmail || "");
 
-  const handleAction = (action: "approve" | "reject") => {
+  const handleAction = (action: "approve" | "reject" | "return") => {
     // Sempre confirmar antes de aprovar/rejeitar — mostra resumo do que
     // está sendo decidido e destaca quando é super-usuário agindo em
     // documento de outro aprovador.
@@ -1634,6 +1634,20 @@ function ApprovalDetailModal({
                 )}
                 {canApprove ? (
                   <>
+                    {doc.approvalRequestId <= 0 && (
+                      <Button
+                        variant="outline"
+                        onClick={() => handleAction("return")}
+                        disabled={isActioning || !remarks.trim()}
+                        title={remarks.trim()
+                          ? "Devolver ao solicitante para correção"
+                          : "Escreva o motivo no campo de observações para devolver"}
+                        className="gap-1.5 border-amber-500/40 text-amber-600 dark:text-amber-300 hover:bg-amber-500/10 w-full sm:w-auto"
+                      >
+                        {isActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                        Devolver
+                      </Button>
+                    )}
                     <Button
                       variant="destructive"
                       onClick={() => handleAction("reject")}
@@ -1699,17 +1713,27 @@ function ApprovalDetailModal({
             <AlertDialogTitle className="flex items-center gap-2">
               {riskConfirm?.action === "approve" ? (
                 <CheckCircle className="w-5 h-5 text-emerald-500" />
+              ) : riskConfirm?.action === "return" ? (
+                <Undo2 className="w-5 h-5 text-amber-500" />
               ) : (
                 <XCircle className="w-5 h-5 text-destructive" />
               )}
-              Confirmar {riskConfirm?.action === "approve" ? "aprovação" : "rejeição"}
+              Confirmar {riskConfirm?.action === "approve"
+                ? "aprovação"
+                : riskConfirm?.action === "return"
+                  ? "devolução"
+                  : "rejeição"}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3 text-sm">
                 <p>
                   Você está prestes a{" "}
                   <strong>
-                    {riskConfirm?.action === "approve" ? "aprovar" : "rejeitar"}
+                    {riskConfirm?.action === "approve"
+                      ? "aprovar"
+                      : riskConfirm?.action === "return"
+                        ? "devolver ao solicitante"
+                        : "rejeitar"}
                   </strong>{" "}
                   o documento abaixo. Confirme os dados antes de prosseguir.
                 </p>
@@ -1808,7 +1832,9 @@ function ApprovalDetailModal({
                   ? "bg-amber-600 hover:bg-amber-700 text-white"
                   : riskConfirm?.action === "reject"
                     ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-                    : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                    : riskConfirm?.action === "return"
+                      ? "bg-amber-600 hover:bg-amber-700 text-white"
+                      : "bg-emerald-600 hover:bg-emerald-700 text-white"
               }`}
             >
               {isActioning ? (
@@ -1817,6 +1843,8 @@ function ApprovalDetailModal({
                 <RefreshCw className="w-4 h-4" />
               ) : riskConfirm?.action === "approve" ? (
                 <CheckCircle className="w-4 h-4" />
+              ) : riskConfirm?.action === "return" ? (
+                <Undo2 className="w-4 h-4" />
               ) : (
                 <XCircle className="w-4 h-4" />
               )}
@@ -1828,7 +1856,11 @@ function ApprovalDetailModal({
                     ? "Atualizar novamente"
                     : actionError
                       ? "Tentar novamente"
-                      : `Sim, ${riskConfirm?.action === "approve" ? "aprovar" : "rejeitar"}`}
+                      : `Sim, ${riskConfirm?.action === "approve"
+                        ? "aprovar"
+                        : riskConfirm?.action === "return"
+                          ? "devolver"
+                          : "rejeitar"}`}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -2344,7 +2376,7 @@ export default function ApprovalsPage() {
   const isLoadingPurchase = isLoadingFeed;
   const isLoadingSales = isLoadingFeed;
   // `useExpenses` fica apenas para as mutações — sem nenhuma leitura no mount.
-  const { approveExpense, rejectExpense } = useExpenses("purchase", { enabled: false });
+  const { approveExpense, rejectExpense, returnExpense } = useExpenses("purchase", { enabled: false });
   const expenses = feedDocs;
   const refreshExpenses = () => refreshFeed();
   const removeExpenseLocal = (internalId: string) => {
@@ -3133,7 +3165,7 @@ export default function ApprovalsPage() {
 
   const handleApprovalAction = async (
     code: number,
-    action: "approve" | "reject",
+    action: "approve" | "reject" | "return",
     remarks: string,
     opts?: { idempotencyKey?: string },
   ) => {
@@ -3279,20 +3311,28 @@ export default function ApprovalsPage() {
         if (internalDoc) {
           const result = action === "approve"
             ? await approveExpense(internalDoc, remarks, opts?.idempotencyKey, { skipRefresh: true })
-            : await rejectExpense(internalDoc, remarks, opts?.idempotencyKey, { skipRefresh: true });
+            : action === "return"
+              ? await returnExpense(internalDoc, remarks, opts?.idempotencyKey, { skipRefresh: true })
+              : await rejectExpense(internalDoc, remarks, opts?.idempotencyKey, { skipRefresh: true });
           // Retry idempotente: o servidor detectou a mesma Idempotency-Key
           // e reentregou a resposta original — avisamos o usuário para que
           // ele saiba que a ação NÃO foi processada duas vezes.
           if (result?.replayed) {
             toast.info(
-              action === "approve"
+              action === "return"
+                ? "Esta devolução já havia sido registrada anteriormente — nenhuma ação duplicada foi processada."
+                : action === "approve"
                 ? "Esta aprovação já havia sido registrada anteriormente — nenhuma ação duplicada foi processada."
                 : "Esta rejeição já havia sido registrada anteriormente — nenhuma ação duplicada foi processada.",
               { duration: 6000 },
             );
           } else {
             toast.success(
-              action === "approve" ? "Despesa interna aprovada!" : "Despesa interna rejeitada.",
+              action === "approve"
+                ? "Despesa interna aprovada!"
+                : action === "return"
+                  ? "Documento devolvido ao solicitante para correção."
+                  : "Despesa interna rejeitada.",
             );
           }
         } else {
@@ -3316,6 +3356,9 @@ export default function ApprovalsPage() {
             .filter(Boolean)
             .join(" — ") || remarks;
 
+          if (action === "return") {
+            throw new Error("Devolver está disponível apenas para documentos do fluxo interno.");
+          }
           const result = await decideSapApprovalRequest(
             session as SapSession,
             code,

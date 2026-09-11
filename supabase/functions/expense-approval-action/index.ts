@@ -234,9 +234,13 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     stageLog("parse_body", "warn", { requestId, reason: "missing_expense_id" });
     return json(400, { error: "expense_id é obrigatório.", stage: "parse_body", requestId });
   }
-  if (action !== "approve" && action !== "reject") {
+  if (action !== "approve" && action !== "reject" && action !== "return") {
     stageLog("parse_body", "warn", { requestId, reason: "invalid_action", received: action });
-    return json(400, { error: "action deve ser 'approve' ou 'reject'.", stage: "parse_body", requestId });
+    return json(400, { error: "action deve ser 'approve', 'reject' ou 'return'.", stage: "parse_body", requestId });
+  }
+  if (action === "return" && !remarks) {
+    stageLog("parse_body", "warn", { requestId, reason: "missing_return_reason" });
+    return json(400, { error: "Informe o motivo da devolução ao solicitante.", stage: "parse_body", requestId });
   }
 
   stageLog("parse_body", "info", { requestId, expenseId, action, hasRemarks: !!remarks });
@@ -896,7 +900,7 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
   };
 
   const writeAuditLog = async (
-    decision: "approved" | "rejected",
+    decision: "approved" | "rejected" | "returned",
     levelOrder: number,
     opts?: { step?: string; segment?: AuditSegCtx | null; metadata?: Record<string, unknown> },
   ) => {
@@ -945,6 +949,93 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
 
 
   // ── Execute ────────────────────────────────────────────────────────────
+  // Devolver ao solicitante: o documento volta para rascunho, com o motivo
+  // registrado, e o solicitante pode corrigir e reenviar (reinicia o fluxo).
+  if (action === "return") {
+    const note = `DEVOLVIDO ao solicitante por ${actor}: ${remarks}`;
+    const { error: retErr } = await admin
+      .from("expenses")
+      .update({
+        status: "rascunho",
+        remarks: note,
+        current_level_order: 1,
+        current_approver: null,
+      })
+      .eq("id", expenseId);
+    if (retErr) {
+      stageLog("update_return", "error", { requestId, expenseId, error: retErr.message });
+      return await respond(500, {
+        error: `Falha ao devolver a despesa: ${retErr.message}`,
+        stage: "update_return",
+      });
+    }
+
+    if (segmentRows.length > 0) {
+      await admin
+        .from("expense_approval_segments")
+        .update({
+          status: "bloqueado",
+          current_approver: null,
+          current_approver_email: null,
+          decided_by: actor,
+          decided_at: new Date().toISOString(),
+          resolution_note: `Devolvida ao solicitante por ${actor}: ${remarks}`,
+        })
+        .eq("expense_id", expenseId)
+        .eq("status", "pendente");
+    }
+
+    await admin.from("expense_approval_log").insert({
+      expense_id: expenseId,
+      decision: "returned",
+      approver_name: actor,
+      approver_email: actorEmail,
+      level_order: currentLevel,
+      remarks: mergedRemarks,
+      substitution_id: substitution?.id ?? null,
+      substituted_for_email: substitution?.official_email ?? null,
+      substituted_for_name: substitution?.official_name ?? null,
+      action_role: actionRole,
+    } as any);
+
+    await writeAuditLog("returned", currentLevel, {
+      step: "return_document",
+      metadata: { reason: remarks },
+    });
+
+    await notifyActionCompleted(admin, {
+      actionKey: "approval",
+      refId: `${expenseId}:returned:${Date.now()}`,
+      recipient: (exp as any).requester_email || (exp as any).requester_name,
+      companyDb: (exp as any).company_db,
+      title: "Seu documento foi devolvido para correção",
+      summary: `${actor} devolveu o documento para ajustes. Corrija os dados e envie novamente para aprovação.`,
+      link: "/compras",
+      details: [
+        { label: "Fornecedor/Cliente", value: (exp as any).supplier_name },
+        { label: "Valor", value: `${(exp as any).currency || "BRL"} ${Number((exp as any).total_amount || 0).toFixed(2)}` },
+        { label: "Empresa", value: (exp as any).company_db },
+        { label: "Motivo da devolução", value: remarks },
+      ],
+    });
+
+    stageLog("update_return", "info", { requestId, expenseId, currentLevel });
+    return await respond(200, {
+      ok: true,
+      action: "return",
+      finalized: true,
+      expense: {
+        id: expenseId,
+        requester_name: (exp as any).requester_name,
+        requester_email: (exp as any).requester_email,
+        supplier_name: (exp as any).supplier_name,
+        total_amount: (exp as any).total_amount,
+        currency: (exp as any).currency,
+        company_db: (exp as any).company_db,
+      },
+    });
+  }
+
   if (action === "reject") {
     // Rótulo humano de cada trilha (padrão x reembolso) para o motivo
     // consolidado.
