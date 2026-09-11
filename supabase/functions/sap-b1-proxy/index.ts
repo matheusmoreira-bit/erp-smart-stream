@@ -561,9 +561,10 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
         if (!sapResp.ok) {
           const errText = await sapResp.text().catch(() => "");
           if (
-            sapResp.status === 400 && !dropSelect && params && (params as any)["$select"] &&
-            /Property '[^']+' of '[^']+'\s*is invalid/i.test(errText)
+            !dropSelect && params && (params as any)["$select"] &&
+            isInvalidSelectError(sapResp.status, errText)
           ) {
+
             console.warn("SAP queryAll: $select inválido nesta base, refazendo sem $select.");
             dropSelect = true;
             continue; // repete a mesma página sem o $select
