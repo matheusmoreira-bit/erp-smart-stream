@@ -159,6 +159,18 @@ Deno.serve(async (req) => {
     console.warn("[retry] failed to load admin phone", e);
   }
 
+  const isTransientConcurrencyError = (msg: string): boolean => {
+    const m = (msg || "").toLowerCase();
+    return (
+      m.includes("já está sendo integrada") ||
+      m.includes("ja esta sendo integrada") ||
+      m.includes("outro processo") ||
+      m.includes("integration already in progress") ||
+      m.includes("lock") ||
+      m.includes("409")
+    );
+  };
+
   for (const exp of candidates || []) {
     if (manualCancellationIds.has(String(exp.id))) {
       results.push({ id: exp.id, ok: false, error: "integração cancelada manualmente" });
@@ -202,6 +214,14 @@ Deno.serve(async (req) => {
 
     if (ok) {
       results.push({ id: exp.id, ok: true });
+      continue;
+    }
+
+    // Erros transitórios de concorrência (documento já sendo integrado por
+    // outro processo) se resolvem sozinhos na próxima tentativa — não geram
+    // alerta para não poluir o plantão.
+    if (isTransientConcurrencyError(errMsg)) {
+      results.push({ id: exp.id, ok: false, error: errMsg, notified: false });
       continue;
     }
 
