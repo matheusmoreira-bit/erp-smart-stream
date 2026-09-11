@@ -4,8 +4,17 @@
 // Por que existe: cada função de integração tinha sua própria versão do PATCH,
 // com nomes de campo divergentes (CopyToTargetDocument x CopyToTargetDoc) e sem
 // verificação — quando o PATCH falhava silenciosamente o anexo ficava sem a flag.
-// Aqui centralizamos: descobre as linhas reais, aplica o PATCH, confere o
-// resultado e tenta variações/por linha enquanto houver linha pendente.
+//
+// Regras aplicadas aqui (a marcação é obrigatória):
+//  - o PATCH sempre reenvia TODAS as linhas do anexo marcadas com tYES
+//    (o Service Layer trata Attachments2_Lines como coleção completa; enviar
+//    apenas as pendentes fazia o SL descartar/ignorar o PATCH em algumas
+//    versões, deixando as caixas desmarcadas);
+//  - depois de cada tentativa o resultado é conferido lendo o anexo de volta;
+//  - as linhas ainda pendentes são tentadas uma a uma, nas duas variantes de
+//    nome de campo, com algumas rodadas de repetição;
+//  - se ainda assim sobrar linha sem a flag, o erro é logado como erro (não
+//    como aviso) para aparecer na observabilidade da integração.
 
 type Line = {
   Line?: number;
@@ -21,6 +30,9 @@ type Line = {
 type Lines = Line[];
 
 const FIELD_VARIANTS = ["CopyToTargetDocument", "CopyToTargetDoc"] as const;
+const MAX_ROUNDS = 3;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function isFlagged(l: { CopyToTargetDocument?: string; CopyToTargetDoc?: string }) {
   return l?.CopyToTargetDocument === "tYES" || l?.CopyToTargetDoc === "tYES";
@@ -38,6 +50,21 @@ async function fetchLines(baseUrl: string, cookies: string, absoluteEntry: numbe
   } catch {
     return null;
   }
+}
+
+/** Logo após o POST as linhas podem demorar a aparecer; tentamos algumas vezes. */
+async function fetchLinesWithRetry(
+  baseUrl: string,
+  cookies: string,
+  absoluteEntry: number,
+  attempts = 3,
+): Promise<Lines | null> {
+  for (let i = 1; i <= attempts; i++) {
+    const lines = await fetchLines(baseUrl, cookies, absoluteEntry);
+    if (lines && lines.length > 0) return lines;
+    if (i < attempts) await sleep(500 * i);
+  }
+  return null;
 }
 
 /**
@@ -73,7 +100,7 @@ async function patchLines(
         Attachments2_Lines: lineNumbers.map((line) => buildLinePayload(known, line, field)),
       }),
     });
-    if (!res.ok) {
+    if (!res.ok && res.status !== 204) {
       const txt = (await res.text().catch(() => "")).replace(/\s+/g, " ");
       console.warn(`Attachments2 PATCH ${field} falhou [${res.status}]: ${txt.slice(0, 400)}`);
       return false;
@@ -85,8 +112,15 @@ async function patchLines(
   }
 }
 
+function allLineNumbers(lines: Lines | null, count: number): number[] {
+  if (lines && lines.length > 0) {
+    return lines.map((l, idx) => (typeof l?.Line === "number" ? l.Line : idx));
+  }
+  return Array.from({ length: Math.max(count, 1) }, (_, idx) => idx);
+}
+
 /**
- * Marca CopyToTargetDocument = tYES em todas as linhas do anexo `absoluteEntry`.
+ * Marca CopyToTargetDocument = tYES em TODAS as linhas do anexo `absoluteEntry`.
  * @param postBody corpo retornado pelo POST /Attachments2 (opcional)
  * @param count quantidade de arquivos enviados (fallback quando não há linhas)
  * @returns true se todas as linhas ficaram marcadas (ou não foi possível verificar após sucesso do PATCH)
@@ -104,39 +138,61 @@ export async function ensureCopyToTargetDocument(
     ? ((postBody as { Attachments2_Lines: Lines }).Attachments2_Lines)
     : null;
 
-  let lines = (await fetchLines(baseUrl, cookies, absoluteEntry)) ?? fromPost;
-  let lineNumbers = lines && lines.length > 0
-    ? lines.map((l, idx) => (typeof l?.Line === "number" ? l.Line : idx))
-    : Array.from({ length: Math.max(count, 1) }, (_, idx) => idx);
+  let lines = (await fetchLinesWithRetry(baseUrl, cookies, absoluteEntry)) ?? fromPost;
+  let unverified = false;
 
-  for (const field of FIELD_VARIANTS) {
-    const ok = await patchLines(baseUrl, cookies, absoluteEntry, lineNumbers, field, lines);
+  for (let round = 1; round <= MAX_ROUNDS; round++) {
+    for (const field of FIELD_VARIANTS) {
+      // Sempre reenviamos a coleção COMPLETA marcada, nunca só as pendentes.
+      const everyLine = allLineNumbers(lines, count);
+      const ok = await patchLines(baseUrl, cookies, absoluteEntry, everyLine, field, lines);
 
-    const after = await fetchLines(baseUrl, cookies, absoluteEntry);
-    if (!after) {
-      // Sem como verificar: considera bom se o PATCH respondeu OK.
-      if (ok) return true;
-      continue;
+      let after = await fetchLines(baseUrl, cookies, absoluteEntry);
+      if (!after) {
+        unverified = unverified || ok;
+      } else {
+        let pending = after.filter((l) => !isFlagged(l));
+        if (pending.length === 0) return true;
+
+        // Algumas versões do SL ignoram o PATCH em lote quando já há linhas
+        // marcadas: tentamos linha a linha as que sobraram.
+        for (const ln of pending.map((l, idx) => (typeof l?.Line === "number" ? l.Line : idx))) {
+          await patchLines(baseUrl, cookies, absoluteEntry, [ln], field, after);
+        }
+        after = (await fetchLines(baseUrl, cookies, absoluteEntry)) ?? after;
+        pending = after.filter((l) => !isFlagged(l));
+        if (pending.length === 0) return true;
+        lines = after;
+      }
     }
-    const pending = after.filter((l) => !isFlagged(l));
-    if (pending.length === 0) return true;
-
-    lines = after;
-    lineNumbers = pending.map((l, idx) => (typeof l?.Line === "number" ? l.Line : idx));
-
-    // Última tentativa da variante: linha a linha (algumas versões do SL
-    // ignoram o PATCH em lote quando há linhas já marcadas).
-    for (const ln of lineNumbers) {
-      await patchLines(baseUrl, cookies, absoluteEntry, [ln], field, lines);
-    }
-    const final = await fetchLines(baseUrl, cookies, absoluteEntry);
-    if (!final || final.every(isFlagged)) return true;
-    lines = final;
-    lineNumbers = final.filter((l) => !isFlagged(l)).map((l, idx) => (typeof l?.Line === "number" ? l.Line : idx));
+    if (round < MAX_ROUNDS) await sleep(800 * round);
   }
 
-  console.warn(
-    `Attachments2(${absoluteEntry}): não foi possível marcar CopyToTargetDocument em ${lineNumbers.length} linha(s).`,
+  const final = await fetchLines(baseUrl, cookies, absoluteEntry);
+  if (final && final.length > 0 && final.every(isFlagged)) return true;
+  if (!final && unverified) return true;
+
+  const pendingCount = final ? final.filter((l) => !isFlagged(l)).length : allLineNumbers(lines, count).length;
+  console.error(
+    `Attachments2(${absoluteEntry}): "Copiar para documento de destino" NÃO ficou marcado em ${pendingCount} linha(s).`,
   );
   return false;
+}
+
+/**
+ * Reaplica a marcação em um anexo já existente (usado em varreduras de
+ * correção). Retorna o estado final das linhas para relatório.
+ */
+export async function repairCopyToTargetDocument(
+  baseUrl: string,
+  cookies: string,
+  absoluteEntry: number,
+): Promise<{ ok: boolean; totalLines: number; pendingLines: number }> {
+  const ok = await ensureCopyToTargetDocument(baseUrl, cookies, absoluteEntry);
+  const lines = (await fetchLines(baseUrl, cookies, absoluteEntry)) ?? [];
+  return {
+    ok,
+    totalLines: lines.length,
+    pendingLines: lines.filter((l) => !isFlagged(l)).length,
+  };
 }

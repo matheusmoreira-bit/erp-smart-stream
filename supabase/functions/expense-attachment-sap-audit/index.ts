@@ -9,7 +9,7 @@
 // Somente admins (Cloud) ou super-usuários SAP.
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { ensureCopyToTargetDocument } from "../_shared/sap-attach-copy.ts";
+import { ensureCopyToTargetDocument, repairCopyToTargetDocument } from "../_shared/sap-attach-copy.ts";
 import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
@@ -140,6 +140,48 @@ Deno.serve(async (req) => {
     }
     await fetch(`${conn.baseUrl}/Logout`, { method: "POST", headers: { Cookie: conn.cookies } }).catch(() => {});
     return json(200, { doc: docBody, attachment_entry: ae, lines });
+  }
+
+  // Modo correção: reaplica "Copiar para documento de destino" nos anexos já
+  // integrados de uma empresa (obrigatório para todos os anexos).
+  if (body?.fix_copy_flag) {
+    const companyDb = String(body?.company_db || "").trim();
+    if (!companyDb) return json(400, { error: "company_db é obrigatório para fix_copy_flag" });
+    const max = Math.min(Number(body?.limit) || 200, 1000);
+
+    const { data: rows, error: rowsErr } = await admin
+      .from("expenses")
+      .select("id, sap_attachment_entry")
+      .eq("company_db", companyDb)
+      .not("sap_attachment_entry", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(max);
+    if (rowsErr) return json(500, { error: rowsErr.message });
+
+    const { data: credRows3 } = await admin
+      .from("system_credentials")
+      .select("credential_key, credential_value")
+      .eq("system_name", "sap")
+      .eq("company_db", companyDb);
+    const creds3: Record<string, string> = {};
+    for (const r of credRows3 || []) creds3[(r as any).credential_key] = (r as any).credential_value;
+
+    const conn = await loginSap(creds3, companyDb);
+    const fixed: unknown[] = [];
+    const failed: unknown[] = [];
+    const seen = new Set<number>();
+    try {
+      for (const r of (rows || []) as any[]) {
+        const ae = Number(r.sap_attachment_entry) || 0;
+        if (!ae || seen.has(ae)) continue;
+        seen.add(ae);
+        const res = await repairCopyToTargetDocument(conn.baseUrl, conn.cookies, ae);
+        (res.ok ? fixed : failed).push({ expense_id: r.id, attachment_entry: ae, ...res });
+      }
+    } finally {
+      await fetch(`${conn.baseUrl}/Logout`, { method: "POST", headers: { Cookie: conn.cookies } }).catch(() => {});
+    }
+    return json(200, { ok: true, company_db: companyDb, checked: seen.size, fixed, failed });
   }
 
   const onlyCompany = String(body?.company_db || "").trim();
