@@ -15,6 +15,11 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+// Aprovação administrativa de último recurso quando não existe gestor seguinte.
+const ADMIN_DELEGATE_NAME = Deno.env.get("SLA_ADMIN_DELEGATE_NAME") || "juliana.gavineli";
+const ADMIN_DELEGATE_EMAIL = Deno.env.get("SLA_ADMIN_DELEGATE_EMAIL") ||
+  "juliana.gavineli@anagaming.com.br";
+
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
     status,
@@ -212,9 +217,19 @@ Deno.serve(async (req) => {
         };
       }
 
+      // 4.4 Delegação administrativa: não há gestor seguinte nem substituto.
+      let delegationReason: string | null = null;
       if (!target) {
-        results.push({ expense_id: doc.id, skipped: "sem_destino" });
-        continue;
+        delegationReason = doc.approval_rule_id
+          ? "Não há próximo nível de aprovação na alçada aplicável"
+          : "Documento sem regra de alçada com próximo nível definido";
+        target = {
+          name: ADMIN_DELEGATE_NAME,
+          email: ADMIN_DELEGATE_EMAIL,
+          kind: "admin_delegation",
+          levelTo: doc.current_level_order,
+          substitutionId: null,
+        };
       }
 
       const newApprover = target.name || target.email;
@@ -222,6 +237,7 @@ Deno.serve(async (req) => {
         results.push({ expense_id: doc.id, skipped: "destino_igual" });
         continue;
       }
+
 
       const entry = {
         expense_id: doc.id,
@@ -240,7 +256,9 @@ Deno.serve(async (req) => {
         pending_since: pendingSince.toISOString(),
         sla_deadline: deadline.toISOString(),
         escalation_index: escCount + 1,
-        notes: `SLA de ${hours}h úteis excedido`,
+        notes: delegationReason
+          ? `SLA de ${hours}h úteis excedido — aprovação administrativa delegada a ${ADMIN_DELEGATE_NAME}: ${delegationReason}`
+          : `SLA de ${hours}h úteis excedido`,
       };
 
       if (dryRun) {
@@ -289,7 +307,9 @@ Deno.serve(async (req) => {
           docType: doc.doc_type,
           resolution: {
             source: target.kind === "substitute" ? "substitute" : "sla_escalation",
-            reason: `SLA de ${hours}h úteis excedido — documento escalado de ${currentApprover || "—"} para ${target.name}`,
+            reason: delegationReason
+              ? `SLA de ${hours}h úteis excedido e sem gestor seguinte (${delegationReason}) — enviado para aprovação administrativa de ${ADMIN_DELEGATE_NAME}`
+              : `SLA de ${hours}h úteis excedido — documento escalado de ${currentApprover || "—"} para ${target.name}`,
             ruleId: (doc as any).approval_rule_id || null,
             costCenter: (doc as any).cost_center || null,
             project: (doc as any).project || null,
@@ -299,6 +319,7 @@ Deno.serve(async (req) => {
               level_to: target.levelTo,
               substitution_id: target.substitutionId,
               escalation_index: escCount + 1,
+              delegation_reason: delegationReason,
             },
           },
         });
