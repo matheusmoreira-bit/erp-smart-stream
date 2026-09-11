@@ -34,26 +34,15 @@ interface FeedState {
 const EMPTY: FeedState = { docs: [], privileged: false, generatedAt: null };
 
 function cacheKey(companyDb: string, user: string) {
-  // v2 invalida snapshots anteriores ao recorte server-side por ramificação.
+  // Mantido apenas para limpar snapshots antigos gravados por versões anteriores.
   return `approvals-feed:v2:${companyDb}:${user}`;
 }
 
-function readCache(key: string): FeedState | null {
+function clearLegacyCache(key: string) {
   try {
-    const raw = sessionStorage.getItem(key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as FeedState;
-    return Array.isArray(parsed?.docs) ? parsed : null;
+    if (key) sessionStorage.removeItem(key);
   } catch {
-    return null;
-  }
-}
-
-function writeCache(key: string, value: FeedState) {
-  try {
-    sessionStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    /* quota — cache é apenas otimização */
+    /* storage indisponível */
   }
 }
 
@@ -63,9 +52,9 @@ export function useApprovalsFeed() {
   const userKey = (session?.userName || "").toLowerCase();
   const key = companyDb ? cacheKey(companyDb, userKey) : "";
 
-  const [state, setState] = useState<FeedState>(() => (key && readCache(key)) || EMPTY);
-  // Só mostra "carregando" quando não há nada em cache para pintar.
-  const [isLoading, setIsLoading] = useState<boolean>(() => !(key && readCache(key)));
+  // Sem cache: a fila é sempre carregada da fonte ao abrir a tela.
+  const [state, setState] = useState<FeedState>(EMPTY);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef<Promise<void> | null>(null);
@@ -122,7 +111,6 @@ export function useApprovalsFeed() {
           generatedAt: result.generatedAt,
         };
         setState(next);
-        if (key) writeCache(key, next);
 
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erro ao carregar aprovações");
@@ -137,30 +125,18 @@ export function useApprovalsFeed() {
   }, [companyDb, key]);
 
 
-  // Troca de empresa: repinta do cache daquela empresa antes de revalidar.
+  // Abertura da tela / troca de empresa: sempre recarrega da fonte.
   useEffect(() => {
-    const cached = key ? readCache(key) : null;
-    if (cached) {
-      setState(cached);
-      setIsLoading(false);
-    } else {
-      setState(EMPTY);
-      setIsLoading(Boolean(companyDb));
-    }
+    clearLegacyCache(key);
+    setState(EMPTY);
+    setIsLoading(Boolean(companyDb));
     void load();
   }, [key, companyDb, load]);
 
   /** Remove um documento da lista sem esperar o servidor (ação otimista). */
-  const removeLocal = useCallback(
-    (id: string) => {
-      setState((prev) => {
-        const next = { ...prev, docs: prev.docs.filter((d) => d.id !== id) };
-        if (key) writeCache(key, next);
-        return next;
-      });
-    },
-    [key],
-  );
+  const removeLocal = useCallback((id: string) => {
+    setState((prev) => ({ ...prev, docs: prev.docs.filter((d) => d.id !== id) }));
+  }, []);
 
   return {
     docs: state.docs,
