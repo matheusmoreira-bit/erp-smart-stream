@@ -5830,6 +5830,66 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_delivery_attempts: {
+        Row: {
+          attempt_no: number
+          channel: string
+          company_db: string | null
+          created_at: string
+          dispatch_id: string | null
+          duration_ms: number | null
+          error_message: string | null
+          event_key: string | null
+          id: string
+          metadata: Json
+          recipient_address: string | null
+          recipient_id: string | null
+          recipient_name: string | null
+          source_entity_id: string | null
+          source_entity_type: string | null
+          source_module: string | null
+          status: string
+        }
+        Insert: {
+          attempt_no?: number
+          channel: string
+          company_db?: string | null
+          created_at?: string
+          dispatch_id?: string | null
+          duration_ms?: number | null
+          error_message?: string | null
+          event_key?: string | null
+          id?: string
+          metadata?: Json
+          recipient_address?: string | null
+          recipient_id?: string | null
+          recipient_name?: string | null
+          source_entity_id?: string | null
+          source_entity_type?: string | null
+          source_module?: string | null
+          status: string
+        }
+        Update: {
+          attempt_no?: number
+          channel?: string
+          company_db?: string | null
+          created_at?: string
+          dispatch_id?: string | null
+          duration_ms?: number | null
+          error_message?: string | null
+          event_key?: string | null
+          id?: string
+          metadata?: Json
+          recipient_address?: string | null
+          recipient_id?: string | null
+          recipient_name?: string | null
+          source_entity_id?: string | null
+          source_entity_type?: string | null
+          source_module?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       notification_dispatch_recipients: {
         Row: {
           channel_address: string | null
@@ -9886,6 +9946,20 @@ export type Database = {
           source: string
           status: string
           subject: string
+        }[]
+      }
+      get_notification_delivery_attempts: {
+        Args: { p_dispatch_id: string }
+        Returns: {
+          attempt_no: number
+          channel: string
+          created_at: string
+          duration_ms: number
+          error_message: string
+          id: string
+          recipient_address: string
+          recipient_name: string
+          status: string
         }[]
       }
       get_pg_slow_queries: {

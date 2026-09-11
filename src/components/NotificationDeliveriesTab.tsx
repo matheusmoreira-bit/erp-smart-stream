@@ -36,6 +36,18 @@ interface Delivery {
   metadata: Record<string, unknown> | null;
 }
 
+interface DeliveryAttempt {
+  id: string;
+  created_at: string;
+  attempt_no: number;
+  channel: string;
+  status: string;
+  error_message: string | null;
+  recipient_address: string | null;
+  recipient_name: string | null;
+  duration_ms: number | null;
+}
+
 const CHANNEL_LABEL: Record<string, string> = {
   in_app: "In-App",
   email: "E-mail",
@@ -87,6 +99,8 @@ export function NotificationDeliveriesTab() {
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<Delivery[]>([]);
   const [selected, setSelected] = useState<Delivery | null>(null);
+  const [attempts, setAttempts] = useState<DeliveryAttempt[]>([]);
+  const [attemptsLoading, setAttemptsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -108,6 +122,28 @@ export function NotificationDeliveriesTab() {
       setLoading(false);
     }
   }, [from, to, session?.companyDB]);
+
+  useEffect(() => {
+    const dispatchId = selected?.metadata?.dispatch_id as string | undefined;
+    if (!dispatchId) {
+      setAttempts([]);
+      return;
+    }
+    let active = true;
+    setAttemptsLoading(true);
+    supabase
+      .rpc("get_notification_delivery_attempts", { p_dispatch_id: dispatchId })
+      .then(({ data, error: rpcError }) => {
+        if (!active) return;
+        if (rpcError) setAttempts([]);
+        else setAttempts((data as DeliveryAttempt[]) || []);
+      })
+      .then(undefined, () => active && setAttempts([]))
+      .then(() => active && setAttemptsLoading(false));
+    return () => {
+      active = false;
+    };
+  }, [selected]);
 
   useEffect(() => {
     load();
@@ -320,6 +356,48 @@ export function NotificationDeliveriesTab() {
                   {JSON.stringify(selected.metadata?.payload_snapshot || {}, null, 2)}
                 </pre>
               </div>
+              <div>
+                <Label className="text-xs">Histórico de tentativas</Label>
+                {attemptsLoading ? (
+                  <p className="mt-1 text-sm text-muted-foreground">Carregando tentativas...</p>
+                ) : attempts.length === 0 ? (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Nenhuma tentativa registrada para este envio.
+                  </p>
+                ) : (
+                  <div className="mt-1 rounded-lg border border-border overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted/40 text-muted-foreground uppercase tracking-wider">
+                        <tr>
+                          <th className="text-left px-2 py-1.5 font-medium">Data</th>
+                          <th className="text-left px-2 py-1.5 font-medium">Tentativa</th>
+                          <th className="text-left px-2 py-1.5 font-medium">Destinatário</th>
+                          <th className="text-left px-2 py-1.5 font-medium">Status</th>
+                          <th className="text-left px-2 py-1.5 font-medium">Motivo da falha</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {attempts.map((a) => (
+                          <tr key={a.id}>
+                            <td className="px-2 py-1.5 whitespace-nowrap text-muted-foreground">
+                              {format(new Date(a.created_at), "dd/MM/yyyy HH:mm:ss")}
+                            </td>
+                            <td className="px-2 py-1.5">#{a.attempt_no}</td>
+                            <td className="px-2 py-1.5 max-w-[180px] truncate" title={a.recipient_address || ""}>
+                              {a.recipient_address || a.recipient_name || "—"}
+                            </td>
+                            <td className="px-2 py-1.5"><StatusBadge status={a.status} /></td>
+                            <td className="px-2 py-1.5 text-destructive break-words">
+                              {a.error_message || "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
             </div>
           )}
         </DialogContent>
