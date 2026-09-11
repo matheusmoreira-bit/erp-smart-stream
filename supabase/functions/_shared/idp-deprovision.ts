@@ -45,6 +45,7 @@ export interface DeprovisionResult {
 
 /** Mesma normalização de `public.canonical_user_key` (login sem sufixos .ext). */
 export { canonicalUserKey } from "./text-normalize.ts";
+import { canonicalUserKey } from "./text-normalize.ts";
 import { emitNotificationEvent } from "./notification-engine.ts";
 
 function sameUser(a: string | null | undefined, b: string | null | undefined): boolean {
