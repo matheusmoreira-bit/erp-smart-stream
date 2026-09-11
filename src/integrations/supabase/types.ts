@@ -8210,6 +8210,7 @@ export type Database = {
           cancelled: string | null
           card_code: string | null
           card_name: string | null
+          comments: string | null
           company_db: string
           created_at: string
           doc_currency: string | null
@@ -8231,6 +8232,7 @@ export type Database = {
           cancelled?: string | null
           card_code?: string | null
           card_name?: string | null
+          comments?: string | null
           company_db: string
           created_at?: string
           doc_currency?: string | null
@@ -8252,6 +8254,7 @@ export type Database = {
           cancelled?: string | null
           card_code?: string | null
           card_name?: string | null
+          comments?: string | null
           company_db?: string
           created_at?: string
           doc_currency?: string | null
@@ -9756,6 +9759,18 @@ export type Database = {
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
+      }
+      detect_duplicate_sap_purchase_orders: {
+        Args: { _days?: number }
+        Returns: {
+          card_code: string
+          company_db: string
+          doc_count: number
+          doc_entries: string
+          doc_nums: string
+          doc_total: number
+          expense_code: string
+        }[]
       }
       email_queue_dispatch: { Args: never; Returns: undefined }
       enable_audit_on: { Args: { _table: string }; Returns: undefined }
