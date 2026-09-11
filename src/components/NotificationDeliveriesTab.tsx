@@ -353,6 +353,20 @@ export function NotificationDeliveriesTab() {
                   <StatusBadge status={selected.status} />
                 </div>
               </div>
+              {selected.metadata?.dispatch_id &&
+              ["email", "whatsapp"].includes(selected.channel) &&
+              !OK_STATUS.has((selected.status || "").toLowerCase()) ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  disabled={resending}
+                  onClick={() => resend([String(selected.metadata?.dispatch_id)])}
+                >
+                  {resending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Reenviar agora
+                </Button>
+              ) : null}
               <div>
                 <Label className="text-xs">Assunto</Label>
                 <div className="mt-1 rounded-lg border border-border bg-muted/20 p-3 text-sm">
