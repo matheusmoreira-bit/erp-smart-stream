@@ -32,6 +32,7 @@ import { Loader2 } from "lucide-react";
 import { RelationsMapFlow, type RelationsFlowType } from "./RelationsMapFlow";
 import { useSalesRelationsLinks } from "@/hooks/useSalesRelationsLinks";
 import { isPendingApproval } from "@/lib/approval-authz";
+import { isSameAsRequester } from "@/lib/self-approval";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { resolveDocumentPaymentStatus } from "@/lib/relations-payment-status";
 import { useSap } from "@/contexts/SapContext";
