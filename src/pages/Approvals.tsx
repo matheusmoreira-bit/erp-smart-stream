@@ -2376,7 +2376,7 @@ export default function ApprovalsPage() {
   const isLoadingPurchase = isLoadingFeed;
   const isLoadingSales = isLoadingFeed;
   // `useExpenses` fica apenas para as mutações — sem nenhuma leitura no mount.
-  const { approveExpense, rejectExpense } = useExpenses("purchase", { enabled: false });
+  const { approveExpense, rejectExpense, returnExpense } = useExpenses("purchase", { enabled: false });
   const expenses = feedDocs;
   const refreshExpenses = () => refreshFeed();
   const removeExpenseLocal = (internalId: string) => {
@@ -3165,7 +3165,7 @@ export default function ApprovalsPage() {
 
   const handleApprovalAction = async (
     code: number,
-    action: "approve" | "reject",
+    action: "approve" | "reject" | "return",
     remarks: string,
     opts?: { idempotencyKey?: string },
   ) => {
@@ -3311,20 +3311,28 @@ export default function ApprovalsPage() {
         if (internalDoc) {
           const result = action === "approve"
             ? await approveExpense(internalDoc, remarks, opts?.idempotencyKey, { skipRefresh: true })
-            : await rejectExpense(internalDoc, remarks, opts?.idempotencyKey, { skipRefresh: true });
+            : action === "return"
+              ? await returnExpense(internalDoc, remarks, opts?.idempotencyKey, { skipRefresh: true })
+              : await rejectExpense(internalDoc, remarks, opts?.idempotencyKey, { skipRefresh: true });
           // Retry idempotente: o servidor detectou a mesma Idempotency-Key
           // e reentregou a resposta original — avisamos o usuário para que
           // ele saiba que a ação NÃO foi processada duas vezes.
           if (result?.replayed) {
             toast.info(
-              action === "approve"
+              action === "return"
+                ? "Esta devolução já havia sido registrada anteriormente — nenhuma ação duplicada foi processada."
+                : action === "approve"
                 ? "Esta aprovação já havia sido registrada anteriormente — nenhuma ação duplicada foi processada."
                 : "Esta rejeição já havia sido registrada anteriormente — nenhuma ação duplicada foi processada.",
               { duration: 6000 },
             );
           } else {
             toast.success(
-              action === "approve" ? "Despesa interna aprovada!" : "Despesa interna rejeitada.",
+              action === "approve"
+                ? "Despesa interna aprovada!"
+                : action === "return"
+                  ? "Documento devolvido ao solicitante para correção."
+                  : "Despesa interna rejeitada.",
             );
           }
         } else {
