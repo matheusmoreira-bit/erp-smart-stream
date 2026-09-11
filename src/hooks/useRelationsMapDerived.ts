@@ -36,6 +36,8 @@ export interface NfEntradaLink {
   sap_invoice_draft_id: string | null;
   created_at: string;
   updated_at: string;
+  /** Data real do documento (emissão / lançamento no ERP), quando conhecida. */
+  doc_date?: string | null;
   ap_links: NfApLink[];
   due_date?: string | null;
   payment_date?: string | null;
@@ -246,7 +248,7 @@ export function useNfEntradaLinks({
     const { data, error } = await supabase
       .from("nf_entrada_imports")
       .select(
-        "id,chave_acesso,numero_nf,serie,nome_fornecedor,valor_total,status,sap_invoice_draft_id,erp_invoice_doc_entry,erp_invoice_doc_num,created_at,updated_at,sap_matched_card_code",
+        "id,chave_acesso,numero_nf,serie,nome_fornecedor,valor_total,status,sap_invoice_draft_id,erp_invoice_doc_entry,erp_invoice_doc_num,erp_invoice_doc_date,data_emissao,created_at,updated_at,sap_matched_card_code",
       )
       .eq("sap_matched_po_doc_entry", String(sapDocEntry))
       .eq("sap_company_db", companyDb)
@@ -256,6 +258,8 @@ export function useNfEntradaLinks({
     const importRows = ((data || []) as Array<Omit<NfEntradaLink, "ap_links"> & {
       erp_invoice_doc_entry?: string | null;
       erp_invoice_doc_num?: string | null;
+      erp_invoice_doc_date?: string | null;
+      data_emissao?: string | null;
       sap_matched_card_code?: string | null;
     }>)
       // Guarda contra vínculos cruzados: o DocEntry pode colidir entre bases/
@@ -269,6 +273,8 @@ export function useNfEntradaLinks({
         ...r,
         sap_invoice_draft_id: r.erp_invoice_doc_entry || r.sap_invoice_draft_id,
         numero_nf: r.numero_nf || r.erp_invoice_doc_num || null,
+        // Data do documento: o `created_at` é só a data de captura no Flow.
+        doc_date: r.erp_invoice_doc_date || r.data_emissao || null,
       })) as Omit<NfEntradaLink, "ap_links">[];
 
 
@@ -322,6 +328,7 @@ export function useNfEntradaLinks({
         sap_invoice_draft_id: String(r.doc_entry),
         created_at: r.sap_update_date || r.doc_date || new Date().toISOString(),
         updated_at: r.sap_update_date || r.doc_date || new Date().toISOString(),
+        doc_date: r.doc_date || null,
         due_date: r.doc_due_date,
         paid_amount: r.paid_to_date,
       }));

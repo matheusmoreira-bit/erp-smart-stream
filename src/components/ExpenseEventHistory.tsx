@@ -78,8 +78,29 @@ const DECISION_META: Record<LogDecision, { label: string; icon: React.ComponentT
   edited: { label: "Pedido alterado", icon: Pencil, color: "text-primary" },
 };
 
-function formatDateTime(iso?: string | null): string {
+/** Valores vindos do ERP costumam ser data pura (sem hora). */
+function isDateOnly(value?: string | null): boolean {
+  return !!value && /^\d{4}-\d{2}-\d{2}$/.test(value.trim());
+}
+
+/**
+ * Converte uma data do ERP para instante ordenável. Datas puras viravam
+ * meia-noite UTC e apareciam no dia anterior às 21:00 no fuso de São Paulo,
+ * bagunçando a ordem do histórico.
+ */
+function toInstant(value?: string | null): string | null {
+  if (!value) return null;
+  return isDateOnly(value) ? `${value.trim()}T12:00:00-03:00` : value;
+}
+
+function formatDateOnly(iso: string): string {
+  const [y, m, d] = iso.trim().slice(0, 10).split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function formatDateTime(iso?: string | null, dateOnly?: boolean): string {
   if (!iso) return "—";
+  if (dateOnly || isDateOnly(iso)) return formatDateOnly(iso);
   try {
     return new Date(iso).toLocaleString("pt-BR", {
       dateStyle: "short",
@@ -106,7 +127,21 @@ interface TimelineItem {
   icon: React.ComponentType<{ className?: string }>;
   color: string;
   reconstructed?: boolean;
+  /** Origem só tem a data (sem hora) — não exibir horário fictício. */
+  dateOnly?: boolean;
+  /** Etapa lógica do fluxo, usada como desempate na ordenação. */
+  phase?: number;
 }
+
+/** Ordem lógica do fluxo: criação → aprovação → ERP → NF → contas a pagar → pago. */
+const PHASE = {
+  created: 0,
+  approval: 1,
+  integrated: 2,
+  nf: 3,
+  payable: 4,
+  paid: 5,
+} as const;
 
 export interface ExpenseEventHistoryExpense {
   id: string;
@@ -220,6 +255,9 @@ export function ExpenseEventHistory({ expense, refreshKey, flowType }: Props) {
       actor,
       icon: meta.icon,
       color: meta.color,
+      phase: row.decision === "created" ? PHASE.created
+        : row.decision === "integrated" ? PHASE.integrated
+        : PHASE.approval,
     });
   }
 
@@ -249,6 +287,9 @@ export function ExpenseEventHistory({ expense, refreshKey, flowType }: Props) {
       icon: meta.icon,
       color: meta.color,
       reconstructed: true,
+      phase: decision === "created" ? PHASE.created
+        : decision === "integrated" ? PHASE.integrated
+        : PHASE.approval,
     });
     seenDecisions.add(decision);
   };
@@ -294,9 +335,12 @@ export function ExpenseEventHistory({ expense, refreshKey, flowType }: Props) {
 
   for (const nf of docNfLinks) {
     const number = `${isSales ? "NF de saída" : "NF"} ${nf.numero_nf || "—"}${nf.serie ? `/${nf.serie}` : ""}`;
+    const nfWhen = toInstant(nf.doc_date) || nf.created_at;
     items.push({
       key: `nf-created:${nf.id}`,
-      when: nf.created_at,
+      when: nfWhen,
+      dateOnly: isDateOnly(nf.doc_date),
+      phase: PHASE.nf,
       label: `${number} vinculada`,
       detail: [
         nf.nome_fornecedor,
@@ -320,6 +364,7 @@ export function ExpenseEventHistory({ expense, refreshKey, flowType }: Props) {
       items.push({
         key: `nf-done:${nf.id}`,
         when: nf.updated_at,
+        phase: PHASE.nf,
         label: `${number} — ${nf.status}`,
         icon: nf.status === "completed" ? CheckCircle2 : AlertTriangle,
         color: nf.status === "completed" ? "text-success" : "text-destructive",
@@ -332,12 +377,14 @@ export function ExpenseEventHistory({ expense, refreshKey, flowType }: Props) {
     if (ap.data_registro) {
       items.push({
         key: `ap-created:${ap.id}`,
-        when: ap.data_registro,
+        when: toInstant(ap.data_registro) || ap.data_registro,
+        dateOnly: isDateOnly(ap.data_registro),
+        phase: PHASE.payable,
         label: `${label} lançado em contas a pagar`,
         detail: [
           ap.fornecedor,
           ap.valor_documento != null ? formatCurrency(ap.valor_documento, expense?.currency) : null,
-          ap.data_vencimento ? `Venc. ${formatDateTime(ap.data_vencimento).split(" ")[0]}` : null,
+          ap.data_vencimento ? `Venc. ${formatDateTime(ap.data_vencimento)}` : null,
         ]
           .filter(Boolean)
           .join(" · "),
@@ -348,7 +395,9 @@ export function ExpenseEventHistory({ expense, refreshKey, flowType }: Props) {
     if (ap.data_pagamento) {
       items.push({
         key: `ap-paid:${ap.id}`,
-        when: ap.data_pagamento,
+        when: toInstant(ap.data_pagamento) || ap.data_pagamento,
+        dateOnly: isDateOnly(ap.data_pagamento),
+        phase: PHASE.paid,
         label: `${label} pago`,
         detail:
           ap.valor_pago != null
@@ -361,7 +410,12 @@ export function ExpenseEventHistory({ expense, refreshKey, flowType }: Props) {
       // Fallback quando SAP indica pago mas não temos data (evita perder o evento)
       items.push({
         key: `ap-paid-nodate:${ap.id}`,
-        when: ap.data_vencimento || ap.data_registro || new Date().toISOString(),
+        when:
+          toInstant(ap.data_vencimento) ||
+          toInstant(ap.data_registro) ||
+          new Date().toISOString(),
+        dateOnly: isDateOnly(ap.data_vencimento || ap.data_registro),
+        phase: PHASE.paid,
         label: `${label} marcado como pago`,
         detail:
           ap.valor_pago != null
@@ -436,7 +490,32 @@ export function ExpenseEventHistory({ expense, refreshKey, flowType }: Props) {
     }
   }
 
-  items.sort((a, b) => new Date(a.when).getTime() - new Date(b.when).getTime());
+  // O evento "Integrado ao ERP" reconstruído usava a última atualização do
+  // pedido, que pode ser posterior à NF e ao pagamento. Ancoramos ele antes do
+  // primeiro evento vindo do ERP.
+  const integrated = items.find((i) => i.key === "fallback:integrated");
+  if (integrated) {
+    const downstream = items
+      .filter((i) => (i.phase ?? 9) >= PHASE.nf)
+      .map((i) => new Date(i.when).getTime())
+      .filter((t) => Number.isFinite(t));
+    if (downstream.length > 0) {
+      const earliest = Math.min(...downstream);
+      if (new Date(integrated.when).getTime() > earliest) {
+        integrated.when = new Date(earliest - 60_000).toISOString();
+      }
+    }
+  }
+
+  items.sort((a, b) => {
+    const ta = new Date(a.when).getTime();
+    const tb = new Date(b.when).getTime();
+    const sameDay = Math.abs(ta - tb) < 36 * 60 * 60 * 1000;
+    // Dentro de uma janela curta (ou com datas sem hora) a etapa do fluxo
+    // manda: o pedido nunca aparece pago antes de ser aprovado/lançado.
+    if (sameDay && (a.phase ?? 9) !== (b.phase ?? 9)) return (a.phase ?? 9) - (b.phase ?? 9);
+    return ta - tb;
+  });
 
   const busy =
     isLoading ||
@@ -488,7 +567,7 @@ export function ExpenseEventHistory({ expense, refreshKey, flowType }: Props) {
                     )}
                   </div>
                   <div className="text-[10px] text-muted-foreground font-mono shrink-0">
-                    {formatDateTime(it.when)}
+                    {formatDateTime(it.when, it.dateOnly)}
                   </div>
                 </div>
                 {it.actor && (
