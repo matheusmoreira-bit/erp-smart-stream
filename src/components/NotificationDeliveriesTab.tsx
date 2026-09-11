@@ -124,6 +124,28 @@ export function NotificationDeliveriesTab() {
   }, [from, to, session?.companyDB]);
 
   useEffect(() => {
+    const dispatchId = selected?.metadata?.dispatch_id as string | undefined;
+    if (!dispatchId) {
+      setAttempts([]);
+      return;
+    }
+    let active = true;
+    setAttemptsLoading(true);
+    supabase
+      .rpc("get_notification_delivery_attempts", { p_dispatch_id: dispatchId })
+      .then(({ data, error: rpcError }) => {
+        if (!active) return;
+        if (rpcError) setAttempts([]);
+        else setAttempts((data as DeliveryAttempt[]) || []);
+      })
+      .then(undefined, () => active && setAttempts([]))
+      .then(() => active && setAttemptsLoading(false));
+    return () => {
+      active = false;
+    };
+  }, [selected]);
+
+  useEffect(() => {
     load();
   }, [load]);
 
