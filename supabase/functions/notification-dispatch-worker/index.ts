@@ -37,12 +37,82 @@ function escapeHtml(s: string): string {
   ));
 }
 
-function fallbackHtml(subject: string, body: string): string {
-  const lines = body.split("\n").filter(Boolean).map((l) => `<p style="margin:0 0 8px">${escapeHtml(l)}</p>`);
-  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111">
-<h2 style="font-size:16px;margin:0 0 12px">${escapeHtml(subject)}</h2>
-${lines.join("\n")}
-</div>`;
+/** Remove placeholders não substituídos e linhas vazias resultantes. */
+function cleanTemplate(text: string): string {
+  return String(text || "")
+    .replace(/\{\{\s*[\w.]+\s*\}\}/g, "")
+    .split("\n")
+    .map((l) => l.replace(/[ \t]+$/g, ""))
+    .filter((l, i, arr) => !(l.trim() === "" && arr[i - 1]?.trim() === ""))
+    // descarta linhas do tipo "Rótulo:" que ficaram sem valor
+    .filter((l) => !/^\s*[^:]{1,40}:\s*$/.test(l))
+    .join("\n")
+    .trim();
+}
+
+const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+
+/** Converte o corpo texto em blocos HTML: linhas "Rótulo: valor" viram lista de detalhes. */
+function bodyToHtml(body: string): string {
+  const lines = cleanTemplate(body).split("\n").filter((l) => l.trim() !== "");
+  const paragraphs: string[] = [];
+  let details: string[] = [];
+  const flush = () => {
+    if (!details.length) return;
+    paragraphs.push(
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 18px;border-left:4px solid #0f766e;background:#f8fafc">` +
+        details.join("") +
+        `</table>`,
+    );
+    details = [];
+  };
+  for (const line of lines) {
+    const m = /^([^:]{1,40}):\s*(.+)$/.exec(line.trim());
+    if (m) {
+      details.push(
+        `<tr><td style="padding:8px 16px;font-family:${FONT};font-size:14px;color:#0f172a;line-height:1.5">` +
+          `<strong style="color:#334155">${escapeHtml(m[1].trim())}:</strong> ${escapeHtml(m[2].trim())}</td></tr>`,
+      );
+      continue;
+    }
+    flush();
+    paragraphs.push(
+      `<p style="margin:0 0 14px;font-family:${FONT};font-size:15px;line-height:1.6;color:#334155">${escapeHtml(line)}</p>`,
+    );
+  }
+  flush();
+  return paragraphs.join("\n");
+}
+
+/** Envelope visual padrão de todos os e-mails do motor de notificações. */
+function renderEmail(subject: string, content: string): string {
+  const title = escapeHtml(subject.replace(/^\[ERP Flow\]\s*/i, ""));
+  const stamp = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" });
+  return `<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${title}</title></head>
+<body style="margin:0;padding:0;background:#eef1f4;-webkit-text-size-adjust:100%">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef1f4;padding:28px 12px">
+<tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid #e2e8f0">
+  <tr><td style="padding:24px 32px 0;font-family:${FONT}">
+    <span style="font-size:15px;font-weight:800;letter-spacing:.5px;color:#0f172a">ERP</span><span style="font-size:15px;font-weight:800;letter-spacing:.5px;color:#0f766e"> FLOW</span>
+  </td></tr>
+  <tr><td style="padding:16px 32px 0"><hr style="border:none;border-top:1px solid #e2e8f0;margin:0"></td></tr>
+  <tr><td style="padding:26px 32px 0;font-family:${FONT}">
+    <h1 style="margin:0 0 20px;font-size:22px;line-height:1.3;color:#0f172a;text-align:center;font-weight:700">${title}</h1>
+  </td></tr>
+  <tr><td style="padding:0 32px">${content}</td></tr>
+  <tr><td style="padding:6px 32px 0;font-family:${FONT};font-size:14px;color:#0f172a;font-weight:700">Este é um e-mail automático informativo.</td></tr>
+  <tr><td style="padding:24px 32px 0"><hr style="border:none;border-top:1px solid #e2e8f0;margin:0"></td></tr>
+  <tr><td style="padding:16px 32px 28px;font-family:${FONT};font-size:12px;line-height:1.7;color:#94a3b8;text-align:center">
+    Notificação emitida em ${escapeHtml(stamp)}.<br>
+    <span style="color:#64748b;font-weight:600">ERP Flow — Cactus Corporation</span>
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
 }
 
 async function sendEmail(to: string[], subject: string, html: string) {
@@ -163,15 +233,21 @@ Deno.serve(async (req) => {
           if (d.channel === "email") {
             const to = [r.recipient_email, r.channel_address].find((v) => isEmail(v)) as string | undefined;
             if (!to) throw new Error("Destinatário sem e-mail válido");
-            const subject = (d.rendered_subject || "ERP Flow — notificação").slice(0, 200);
-            const html = d.rendered_html || fallbackHtml(subject, d.rendered_body || "");
-            await sendEmail([to.trim().toLowerCase()], subject, html);
+            const subject = cleanTemplate(d.rendered_subject || "").slice(0, 200) || "ERP Flow — notificação";
+            const inner = d.rendered_html
+              ? cleanTemplate(d.rendered_html)
+              : bodyToHtml(d.rendered_body || "");
+            await sendEmail([to.trim().toLowerCase()], subject, renderEmail(subject, inner));
           } else {
             let phone = normalizePhone(r.recipient_phone || (String(r.channel_address || "").includes("@") ? "" : r.channel_address));
             if (!phone) phone = await resolvePhone(admin, r.recipient_email || r.channel_address, r.recipient_name);
             if (!phone) throw new Error("Destinatário sem telefone");
-            const text = [d.rendered_subject ? `*${d.rendered_subject}*` : "", d.rendered_body || ""]
-              .filter(Boolean).join("\n");
+            const waTitle = cleanTemplate(d.rendered_subject || "").replace(/^ERP Flow\s*[—-]\s*/i, "");
+            const text = [
+              waTitle ? `*${waTitle}*` : "",
+              cleanTemplate(d.rendered_body || ""),
+              "_ERP Flow · mensagem automática_",
+            ].filter(Boolean).join("\n\n");
             await sendWhatsApp(phone, text);
           }
           anySent = true;
