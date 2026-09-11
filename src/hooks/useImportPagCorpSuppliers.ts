@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { authFetch } from "@/lib/auth-fetch";
+import { authFetch, sapFunctionFetch } from "@/lib/auth-fetch";
 import { createSupplier, type Supplier } from "@/hooks/useSuppliers";
 import type { SapSession } from "@/lib/sap-client";
 import { normalizeWords } from "@/lib/text-normalize";
@@ -247,19 +247,19 @@ export function useImportPagCorpSuppliers(
           if (aiName) {
             extracted = { card_name: aiName, federal_tax_id: aiDoc || null };
           } else {
-            const { data, error: fnErr } = await supabase.functions.invoke(
-              "supplier-ai-extract",
-              {
-                body: {
-                  description: txDesc,
-                  amount: txAmount,
-                  receipts: tx.receipts || [],
-                  attachments: (tx.attachments || []).slice(0, 5),
-                  hint: tx.accountName || tx.accountAlias,
-                },
-              },
-            );
-            if (fnErr) throw fnErr;
+            const resp = await sapFunctionFetch("supplier-ai-extract", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                description: txDesc,
+                amount: txAmount,
+                receipts: tx.receipts || [],
+                attachments: (tx.attachments || []).slice(0, 5),
+                hint: tx.accountName || tx.accountAlias,
+              }),
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(String((data as any)?.error || `HTTP ${resp.status}`));
             extracted = (data as any)?.supplier;
           }
 

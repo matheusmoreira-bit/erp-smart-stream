@@ -232,17 +232,20 @@ export function PagCorpIntegrateDialog({
       // Cache de sessão: mesmo conjunto de anexos não chama IA de novo
       const cacheKey = `supplier-ai-extract:${companyDb}:${hashUrls(urls)}:${tx.description}`;
       const data = await withAiCache(cacheKey, async () => {
-        const res = await supabase.functions.invoke("supplier-ai-extract", {
-          body: {
+        const res = await sapFunctionFetch("supplier-ai-extract", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
             description: tx.description,
             amount: tx.amount,
             receipts: tx.receipts || [],
             attachments: (tx.attachments || []).slice(0, 5),
             hint: tx.accountName || tx.accountAlias,
-          },
+          }),
         });
-        if (res.error) throw res.error;
-        return res.data;
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(String((payload as any)?.error || `HTTP ${res.status}`));
+        return payload;
       });
       const extracted = (data as any)?.supplier;
       if (!extracted?.federal_tax_id || !extracted?.card_name) {

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
+import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,6 +15,14 @@ serve(async (req) => {
   }
 
   try {
+    try {
+      await requireUserOrSapSession(req);
+    } catch (err) {
+      const resp = authErrorResponse(err, corsHeaders);
+      if (resp) return resp;
+      throw err;
+    }
+
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -27,6 +36,7 @@ serve(async (req) => {
     if (!rl.allowed) return rateLimitResponse(rl, corsHeaders);
 
     const { messages, reportContext } = await req.json();
+    const safeContext = String(reportContext ?? "").slice(0, 20000);
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
@@ -35,7 +45,7 @@ serve(async (req) => {
 O usuário está visualizando um relatório de análise de compras e pagamentos.
 
 Aqui está um resumo dos dados atuais do relatório:
-${reportContext}
+${safeContext}
 
 Responda sempre em português brasileiro. Seja objetivo e use dados concretos quando possível.
 Formate números como brasileiro (ex: 1.234,56). Use markdown para formatar suas respostas.

@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
 import { hashInput, getCachedAnalysis, saveAnalysis } from "../_shared/ai-doc-cache.ts";
+import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,9 +40,15 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Auth: this function is called from SAP-authenticated context where users
-    // don't have Supabase Auth sessions. We accept any caller with the project
-    // anon key (enforced by Supabase platform). No user JWT validation here.
+    // Auth: aceita sessão do Lovable Cloud (JWT) ou sessão SAP validada.
+    // A chave anon pública NÃO é aceita como autenticação.
+    try {
+      await requireUserOrSapSession(req);
+    } catch (err) {
+      const resp = authErrorResponse(err, corsHeaders);
+      if (resp) return resp;
+      throw err;
+    }
 
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,

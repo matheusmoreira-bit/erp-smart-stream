@@ -186,7 +186,7 @@ export async function classifyPagCorpDocuments(
     formData.append("company_db", companyDb);
     formData.append("cache_scope", "pagcorp");
     formData.append("pagcorp_expense_id", String(transaction.id));
-    const response = await publicFunctionFetch("process-expense-doc", {
+    const response = await sapFunctionFetch("process-expense-doc", {
       method: "POST",
       body: formData,
     });
