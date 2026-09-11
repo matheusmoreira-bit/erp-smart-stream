@@ -8114,6 +8114,10 @@ export type Database = {
           cod_fornecedor: string | null
           company_db: string
           created_at: string
+          data_criacao_nf: string | null
+          data_criacao_pedido: string | null
+          data_pagamento: string | null
+          data_vencimento_parcela: string | null
           id: string
           id_contas_pagar: string | null
           id_nf_entrada: string | null
@@ -8131,6 +8135,10 @@ export type Database = {
           cod_fornecedor?: string | null
           company_db: string
           created_at?: string
+          data_criacao_nf?: string | null
+          data_criacao_pedido?: string | null
+          data_pagamento?: string | null
+          data_vencimento_parcela?: string | null
           id?: string
           id_contas_pagar?: string | null
           id_nf_entrada?: string | null
@@ -8148,6 +8156,10 @@ export type Database = {
           cod_fornecedor?: string | null
           company_db?: string
           created_at?: string
+          data_criacao_nf?: string | null
+          data_criacao_pedido?: string | null
+          data_pagamento?: string | null
+          data_vencimento_parcela?: string | null
           id?: string
           id_contas_pagar?: string | null
           id_nf_entrada?: string | null
