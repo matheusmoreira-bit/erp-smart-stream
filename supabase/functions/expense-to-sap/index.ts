@@ -1832,6 +1832,8 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         sap_doc_num: sapResult.docNum,
         sap_attachment_entry: attachmentEntry,
         patched: isPatchMode,
+        adopted_existing_document: adoptedExistingDocument,
+
 
         stage_status: {
           attachment: attachmentStatus,

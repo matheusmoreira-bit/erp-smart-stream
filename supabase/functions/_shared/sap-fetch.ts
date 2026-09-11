@@ -70,7 +70,7 @@ export async function tryAcquireIntegrationLock(
   supabase: any,
   table: "expenses" | "advance_payments",
   id: string,
-  ttlMinutes = 5,
+  ttlMinutes = 15,
 ): Promise<boolean> {
   const cutoffIso = new Date(Date.now() - ttlMinutes * 60_000).toISOString();
   const nowIso = new Date().toISOString();
