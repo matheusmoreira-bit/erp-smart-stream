@@ -367,8 +367,16 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
       });
     }
 
+    // Algumas bases não possuem os campos customizados (UDFs, ex.: U_FGR_TaxId0)
+    // pedidos no $select. O Service Layer rejeita a consulta inteira com HTTP 400
+    // e a lista chega vazia na tela. Detectamos esse erro para repetir sem $select.
+    const isInvalidSelectError = (status: number, text: string) =>
+      status === 400 &&
+      /(Property '[^']*' of '[^']*'\s*is invalid|invalid property|no property|-\s*1004|Invalid field)/i.test(text);
+
     // QUERY
     if (action === "query") {
+
       if (!sessionId || !endpoint) {
         return new Response(JSON.stringify({ error: "sessionId e endpoint são obrigatórios" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
