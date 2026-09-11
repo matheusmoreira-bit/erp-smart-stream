@@ -5155,6 +5155,26 @@ export function CreateExpenseModal({
       </DialogContent>
     </Dialog>
 
+    <AlertDialog open={overdueBlockOpen} onOpenChange={setOverdueBlockOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Nota vencida não pode ser lançada</AlertDialogTitle>
+          <AlertDialogDescription>
+            A data de vencimento informada já passou
+            {overdueBlockDays > 0
+              ? ` há ${overdueBlockDays} ${overdueBlockDays === 1 ? "dia" : "dias"}`
+              : ""}.
+            Notas vencidas devem ser renegociadas com o fornecedor antes de serem
+            submetidas. Ajuste a data de vencimento para uma data futura após a
+            renegociação.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogAction onClick={() => setOverdueBlockOpen(false)}>Entendi</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
   </>
   );
 }
