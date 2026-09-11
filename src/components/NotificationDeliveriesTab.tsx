@@ -99,6 +99,8 @@ export function NotificationDeliveriesTab() {
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<Delivery[]>([]);
   const [selected, setSelected] = useState<Delivery | null>(null);
+  const [attempts, setAttempts] = useState<DeliveryAttempt[]>([]);
+  const [attemptsLoading, setAttemptsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
