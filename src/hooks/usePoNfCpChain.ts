@@ -13,11 +13,15 @@ export interface PoNfCpLink {
   valor: number | null;
   referencia_valor: string | null;
   status_geral: string | null;
+  data_criacao_pedido: string | null;
+  data_criacao_nf: string | null;
+  data_vencimento_parcela: string | null;
+  data_pagamento: string | null;
   synced_at: string | null;
 }
 
 const SELECT =
-  "id,company_db,id_pedido_compra,id_nf_entrada,numero_nota_fiscal,id_contas_pagar,cod_fornecedor,nome_fornecedor,valor,referencia_valor,status_geral,synced_at";
+  "id,company_db,id_pedido_compra,id_nf_entrada,numero_nota_fiscal,id_contas_pagar,cod_fornecedor,nome_fornecedor,valor,referencia_valor,status_geral,data_criacao_pedido,data_criacao_nf,data_vencimento_parcela,data_pagamento,synced_at";
 
 /** Elos Pedido de Compra -> NF de Entrada -> Contas a Pagar de um pedido específico. */
 export function usePoNfCpChain(companyDb: string | null | undefined, poDocEntry: number | string | null | undefined) {
