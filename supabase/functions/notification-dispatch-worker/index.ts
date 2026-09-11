@@ -211,7 +211,7 @@ Deno.serve(async (req) => {
   const blocked = blockIfIntegrationsDisabled(corsHeaders);
   if (blocked) return blocked;
 
-  const stats = { processed: 0, sent: 0, failed: 0, skipped: 0, recipients: 0 };
+  const stats = { processed: 0, sent: 0, failed: 0, skipped: 0, retrying: 0, recipients: 0 };
 
   try {
     const { data: dispatches, error } = await admin
