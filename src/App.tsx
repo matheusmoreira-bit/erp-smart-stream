@@ -77,6 +77,7 @@ import { MobileBottomNav } from "./components/MobileBottomNav.tsx";
 import { RequireAuth } from "./components/RequireAuth.tsx";
 import { ModuleRoute } from "./components/ModuleRoute.tsx";
 import { OfflineResilienceAgent } from "./components/OfflineResilienceAgent.tsx";
+import { AppVersionAgent } from "./components/AppVersionAgent.tsx";
 import Login from "./pages/Login.tsx";
 
 
@@ -96,6 +97,7 @@ const App = () => (
           <TestCompanyVisibilityGate />
           <BrowserRouter>
             <OfflineResilienceAgent />
+            <AppVersionAgent />
             <StickyHeaderMeasure />
             <ModuleSubmenu />
             <RequireAuth>

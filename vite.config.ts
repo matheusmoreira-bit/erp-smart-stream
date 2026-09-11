@@ -1,7 +1,30 @@
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+
+const BUILD_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+/**
+ * Publica /version.json com o identificador do build para o app detectar,
+ * em runtime, que existe uma versão mais nova publicada.
+ */
+function buildVersionPlugin(): Plugin {
+  const payload = JSON.stringify({ buildId: BUILD_ID, builtAt: new Date().toISOString() });
+  return {
+    name: "erp-build-version",
+    configureServer(server) {
+      server.middlewares.use("/version.json", (_req, res) => {
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader("Cache-Control", "no-store");
+        res.end(payload);
+      });
+    },
+    generateBundle() {
+      this.emitFile({ type: "asset", fileName: "version.json", source: payload });
+    },
+  };
+}
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -28,9 +51,14 @@ export default defineConfig(({ mode }) => {
         overlay: false,
       },
     },
-    plugins: [react(), mode === "development" && componentTagger()].filter(
-      Boolean,
-    ),
+    define: {
+      __APP_BUILD_ID__: JSON.stringify(BUILD_ID),
+    },
+    plugins: [
+      react(),
+      buildVersionPlugin(),
+      mode === "development" && componentTagger(),
+    ].filter(Boolean),
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
