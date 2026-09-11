@@ -15,6 +15,11 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+// Aprovação administrativa de último recurso quando não existe gestor seguinte.
+const ADMIN_DELEGATE_NAME = Deno.env.get("SLA_ADMIN_DELEGATE_NAME") || "juliana.gavineli";
+const ADMIN_DELEGATE_EMAIL = Deno.env.get("SLA_ADMIN_DELEGATE_EMAIL") ||
+  "juliana.gavineli@anagaming.com.br";
+
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
     status,
