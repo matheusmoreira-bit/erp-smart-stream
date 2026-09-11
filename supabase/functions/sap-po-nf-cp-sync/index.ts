@@ -55,6 +55,10 @@ function mapRow(raw: Record<string, unknown>, companyDb: string) {
   const valor = toNum(pick(raw, "Valor", "valor"));
   const referencia = toStr(pick(raw, "Referencia_do_Valor", "Referência do Valor", "Referencia do Valor"));
   const status = toStr(pick(raw, "Status_Geral", "Status Geral", "status"));
+  const dtPedido = toDate(pick(raw, "Data_Criacao_Pedido", "Data Criacao Pedido", "Data Criação Pedido"));
+  const dtNf = toDate(pick(raw, "Data_Criacao_NF", "Data Criacao NF", "Data Criação NF"));
+  const dtVenc = toDate(pick(raw, "Data_Vencimento_Parcela", "Data Vencimento Parcela"));
+  const dtPagto = toDate(pick(raw, "Data_Pagamento", "Data Pagamento"));
 
   if (!idPedido && !idNf && !idCp) return null;
 
