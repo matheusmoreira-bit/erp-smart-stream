@@ -32,6 +32,7 @@ import { Loader2 } from "lucide-react";
 import { RelationsMapFlow, type RelationsFlowType } from "./RelationsMapFlow";
 import { useSalesRelationsLinks } from "@/hooks/useSalesRelationsLinks";
 import { isPendingApproval } from "@/lib/approval-authz";
+import { isSameAsRequester } from "@/lib/self-approval";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { resolveDocumentPaymentStatus } from "@/lib/relations-payment-status";
 import { useSap } from "@/contexts/SapContext";
@@ -540,8 +541,27 @@ export function RelationsMap({ open, onClose, expense, title, flowType = "compra
     }
 
     if (levels.length > 0) {
-      return levels.map((lv) => {
-        const doneByLog = approvedNames.has(lv.approver_name.toLowerCase());
+      // Regra global: o solicitante nunca é aprovador do próprio documento —
+      // o backend escala para o próximo nível. O mapa precisa refletir a
+      // cadeia efetiva, e não a alçada crua cadastrada.
+      const effectiveLevels = levels.filter(
+        (lv) =>
+          !isSameAsRequester(
+            expense.requester_name,
+            expense.requester_email,
+            lv.approver_name,
+            lv.approver_email,
+          ),
+      );
+      const approvedEmails = new Set(
+        log
+          .filter((l) => l.decision === "approved" && l.approver_email)
+          .map((l) => String(l.approver_email).toLowerCase()),
+      );
+      const rows: ChainRow[] = effectiveLevels.map((lv) => {
+        const doneByLog =
+          approvedNames.has(lv.approver_name.toLowerCase()) ||
+          (!!lv.approver_email && approvedEmails.has(lv.approver_email.toLowerCase()));
         const done = doneByLog || isFinalized;
         const isCurrent =
           stillPending &&
@@ -550,6 +570,49 @@ export function RelationsMap({ open, onClose, expense, title, flowType = "compra
           expense.current_approver.toLowerCase() === lv.approver_name.toLowerCase();
         return { ...lv, done, isCurrent, source: "rule" as const };
       });
+
+      const known = (name: string | null, email: string | null) =>
+        rows.some(
+          (r) =>
+            (!!name && r.approver_name.toLowerCase() === name.toLowerCase()) ||
+            (!!email && (r.approver_email || "").toLowerCase() === email.toLowerCase()),
+        );
+
+      // Aprovadores reais que decidiram fora da alçada cadastrada (escalonamento
+      // ou substituto) precisam aparecer na cadeia.
+      log
+        .filter((l) => l.decision === "approved" || l.decision === "rejected")
+        .forEach((l) => {
+          const name = l.approver_name || l.approver_email;
+          if (!name || known(l.approver_name, l.approver_email)) return;
+          rows.push({
+            level_order: l.level_order ?? rows.length + 1,
+            approver_name: name,
+            approver_email: l.approver_email,
+            done: l.decision === "approved",
+            rejected: l.decision === "rejected",
+            isCurrent: false,
+            decidedAt: l.decided_at,
+            remarks: l.remarks,
+            source: "rule" as const,
+          });
+        });
+
+      if (stillPending && expense.current_approver && !known(expense.current_approver, null)) {
+        rows.push({
+          level_order: rows.reduce((m, r) => Math.max(m, r.level_order), 0) + 1,
+          approver_name: expense.current_approver,
+          approver_email: null,
+          done: false,
+          isCurrent: true,
+          source: "rule" as const,
+        });
+      }
+
+      if (rows.length > 0) {
+        rows.sort((a, b) => a.level_order - b.level_order);
+        return rows;
+      }
     }
     // Fallback: reconstrói a partir do SAP approval_history
     if (sapHistory.length === 0 && !expense.current_approver) return [];
