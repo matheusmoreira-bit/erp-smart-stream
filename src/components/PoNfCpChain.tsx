@@ -5,6 +5,8 @@ import { usePoNfCpChain, type PoNfCpLink } from "@/hooks/usePoNfCpChain";
 const fmtMoney = (v?: number | null) =>
   typeof v === "number" ? v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—";
 
+const fmtDate = (v?: string | null) => (v ? new Date(v).toLocaleDateString("pt-BR") : null);
+
 export function statusVariant(status?: string | null): "default" | "secondary" | "destructive" | "outline" {
   const s = (status || "").toLowerCase();
   if (s.includes("pago") || s.includes("liquidad")) return "default";
