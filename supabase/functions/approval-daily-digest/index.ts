@@ -153,13 +153,27 @@ Deno.serve(async (req) => {
     const emailByCode = new Map<string, { email: string; name: string | null }>();
     if (codes.length > 0) {
       const { data: dir } = await admin
-        .from("sap_user_emails")
-        .select("user_code, email, display_name")
+        .from("sap_user_directory")
+        .select("user_key, sap_user_code, display_name, is_active")
         .limit(5000);
-      for (const row of ((dir || []) as Array<{ user_code: string | null; email: string | null; display_name: string | null }>)) {
-        const code = String(row.user_code || "").trim().toLowerCase();
-        if (code && row.email && isEmail(row.email)) {
-          emailByCode.set(code, { email: row.email.trim().toLowerCase(), name: row.display_name });
+      const dirRows = ((dir || []) as Array<{ user_key: string | null; sap_user_code: string | null; display_name: string | null; is_active: boolean | null }>)
+        .filter((r) => r.is_active !== false);
+      const keys = dirRows.map((r) => r.user_key).filter(Boolean) as string[];
+      const { data: mails } = keys.length
+        ? await admin.from("sap_user_emails").select("user_key, email, is_primary").in("user_key", keys)
+        : { data: [] as Array<{ user_key: string; email: string; is_primary: boolean | null }> };
+      const mailByKey = new Map<string, string>();
+      for (const m of ((mails || []) as Array<{ user_key: string; email: string; is_primary: boolean | null }>)) {
+        if (!m.email || !isEmail(m.email)) continue;
+        const existing = mailByKey.get(m.user_key);
+        if (!existing || m.is_primary) mailByKey.set(m.user_key, m.email.trim().toLowerCase());
+      }
+      for (const row of dirRows) {
+        const email = row.user_key ? mailByKey.get(row.user_key) : undefined;
+        if (!email) continue;
+        for (const alias of [row.sap_user_code, row.display_name]) {
+          const code = String(alias || "").trim().toLowerCase();
+          if (code && !emailByCode.has(code)) emailByCode.set(code, { email, name: row.display_name });
         }
       }
     }
