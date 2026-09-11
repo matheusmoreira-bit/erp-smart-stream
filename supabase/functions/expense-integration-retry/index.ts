@@ -159,6 +159,18 @@ Deno.serve(async (req) => {
     console.warn("[retry] failed to load admin phone", e);
   }
 
+  const isTransientConcurrencyError = (msg: string): boolean => {
+    const m = (msg || "").toLowerCase();
+    return (
+      m.includes("já está sendo integrada") ||
+      m.includes("ja esta sendo integrada") ||
+      m.includes("outro processo") ||
+      m.includes("integration already in progress") ||
+      m.includes("lock") ||
+      m.includes("409")
+    );
+  };
+
   for (const exp of candidates || []) {
     if (manualCancellationIds.has(String(exp.id))) {
       results.push({ id: exp.id, ok: false, error: "integração cancelada manualmente" });
