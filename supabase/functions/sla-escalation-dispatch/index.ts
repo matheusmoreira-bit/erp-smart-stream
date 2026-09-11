@@ -251,7 +251,9 @@ Deno.serve(async (req) => {
         pending_since: pendingSince.toISOString(),
         sla_deadline: deadline.toISOString(),
         escalation_index: escCount + 1,
-        notes: `SLA de ${hours}h úteis excedido`,
+        notes: delegationReason
+          ? `SLA de ${hours}h úteis excedido — aprovação administrativa delegada a ${ADMIN_DELEGATE_NAME}: ${delegationReason}`
+          : `SLA de ${hours}h úteis excedido`,
       };
 
       if (dryRun) {
