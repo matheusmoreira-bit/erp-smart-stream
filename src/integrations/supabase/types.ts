@@ -5830,6 +5830,204 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_dispatch_recipients: {
+        Row: {
+          channel_address: string | null
+          created_at: string
+          dispatch_id: string
+          error_message: string | null
+          id: string
+          metadata: Json
+          provider_message_id: string | null
+          recipient_email: string | null
+          recipient_name: string | null
+          recipient_phone: string | null
+          recipient_type: string | null
+          recipient_user_id: string | null
+          sent_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          channel_address?: string | null
+          created_at?: string
+          dispatch_id: string
+          error_message?: string | null
+          id?: string
+          metadata?: Json
+          provider_message_id?: string | null
+          recipient_email?: string | null
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          recipient_type?: string | null
+          recipient_user_id?: string | null
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          channel_address?: string | null
+          created_at?: string
+          dispatch_id?: string
+          error_message?: string | null
+          id?: string
+          metadata?: Json
+          provider_message_id?: string | null
+          recipient_email?: string | null
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          recipient_type?: string | null
+          recipient_user_id?: string | null
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_dispatch_recipients_dispatch_id_fkey"
+            columns: ["dispatch_id"]
+            isOneToOne: false
+            referencedRelation: "notification_dispatches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_dispatches: {
+        Row: {
+          channel: string
+          company_db: string | null
+          created_at: string
+          error_message: string | null
+          event_id: string | null
+          event_key: string
+          id: string
+          idempotency_key: string | null
+          metadata: Json
+          payload_snapshot: Json
+          rendered_body: string | null
+          rendered_html: string | null
+          rendered_subject: string | null
+          rule_id: string | null
+          scheduled_at: string
+          sent_at: string | null
+          source_entity_id: string | null
+          source_entity_type: string | null
+          source_module: string | null
+          status: string
+          template_id: string | null
+          template_version: number | null
+          updated_at: string
+        }
+        Insert: {
+          channel: string
+          company_db?: string | null
+          created_at?: string
+          error_message?: string | null
+          event_id?: string | null
+          event_key: string
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          payload_snapshot?: Json
+          rendered_body?: string | null
+          rendered_html?: string | null
+          rendered_subject?: string | null
+          rule_id?: string | null
+          scheduled_at?: string
+          sent_at?: string | null
+          source_entity_id?: string | null
+          source_entity_type?: string | null
+          source_module?: string | null
+          status?: string
+          template_id?: string | null
+          template_version?: number | null
+          updated_at?: string
+        }
+        Update: {
+          channel?: string
+          company_db?: string | null
+          created_at?: string
+          error_message?: string | null
+          event_id?: string | null
+          event_key?: string
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          payload_snapshot?: Json
+          rendered_body?: string | null
+          rendered_html?: string | null
+          rendered_subject?: string | null
+          rule_id?: string | null
+          scheduled_at?: string
+          sent_at?: string | null
+          source_entity_id?: string | null
+          source_entity_type?: string | null
+          source_module?: string | null
+          status?: string
+          template_id?: string | null
+          template_version?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_dispatches_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "notification_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_dispatches_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "notification_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_dispatches_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "notification_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_events: {
+        Row: {
+          company_db: string | null
+          created_at: string
+          event_key: string
+          id: string
+          idempotency_key: string | null
+          payload_json: Json
+          source_entity_id: string | null
+          source_entity_type: string | null
+          source_module: string | null
+        }
+        Insert: {
+          company_db?: string | null
+          created_at?: string
+          event_key: string
+          id?: string
+          idempotency_key?: string | null
+          payload_json?: Json
+          source_entity_id?: string | null
+          source_entity_type?: string | null
+          source_module?: string | null
+        }
+        Update: {
+          company_db?: string | null
+          created_at?: string
+          event_key?: string
+          id?: string
+          idempotency_key?: string | null
+          payload_json?: Json
+          source_entity_id?: string | null
+          source_entity_type?: string | null
+          source_module?: string | null
+        }
+        Relationships: []
+      }
       notification_governance: {
         Row: {
           block_self_approval: boolean
@@ -5910,6 +6108,153 @@ export type Database = {
           whatsapp?: boolean
         }
         Relationships: []
+      }
+      notification_rule_audit_log: {
+        Row: {
+          action: string
+          actor_email: string | null
+          after_data: Json | null
+          before_data: Json | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string
+          id: string
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          after_data?: Json | null
+          before_data?: Json | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          after_data?: Json | null
+          before_data?: Json | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      notification_rule_recipients: {
+        Row: {
+          active: boolean
+          created_at: string
+          filters_json: Json
+          id: string
+          recipient_type: string
+          rule_id: string
+          updated_at: string
+          value: string | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          filters_json?: Json
+          id?: string
+          recipient_type: string
+          rule_id: string
+          updated_at?: string
+          value?: string | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          filters_json?: Json
+          id?: string
+          recipient_type?: string
+          rule_id?: string
+          updated_at?: string
+          value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_rule_recipients_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "notification_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_rules: {
+        Row: {
+          active: boolean
+          channel: string
+          conditions_json: Json
+          created_at: string
+          created_by: string | null
+          fallback_rule_id: string | null
+          id: string
+          name: string
+          priority: number
+          recipient_strategy: string
+          template_id: string
+          trigger_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          active?: boolean
+          channel?: string
+          conditions_json?: Json
+          created_at?: string
+          created_by?: string | null
+          fallback_rule_id?: string | null
+          id?: string
+          name: string
+          priority?: number
+          recipient_strategy?: string
+          template_id: string
+          trigger_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          active?: boolean
+          channel?: string
+          conditions_json?: Json
+          created_at?: string
+          created_by?: string | null
+          fallback_rule_id?: string | null
+          id?: string
+          name?: string
+          priority?: number
+          recipient_strategy?: string
+          template_id?: string
+          trigger_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_rules_fallback_rule_id_fkey"
+            columns: ["fallback_rule_id"]
+            isOneToOne: false
+            referencedRelation: "notification_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_rules_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "notification_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_rules_trigger_id_fkey"
+            columns: ["trigger_id"]
+            isOneToOne: false
+            referencedRelation: "notification_triggers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notification_send_runs: {
         Row: {
@@ -6004,6 +6349,105 @@ export type Database = {
           weekdays_only?: boolean
           window_end_hour?: number | null
           window_start_hour?: number | null
+        }
+        Relationships: []
+      }
+      notification_templates: {
+        Row: {
+          active: boolean
+          body_template: string
+          channel: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          html_template: string | null
+          id: string
+          name: string
+          subject_template: string | null
+          updated_at: string
+          updated_by: string | null
+          variables_schema: Json
+          version: number
+        }
+        Insert: {
+          active?: boolean
+          body_template?: string
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          html_template?: string | null
+          id?: string
+          name: string
+          subject_template?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          variables_schema?: Json
+          version?: number
+        }
+        Update: {
+          active?: boolean
+          body_template?: string
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          html_template?: string | null
+          id?: string
+          name?: string
+          subject_template?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          variables_schema?: Json
+          version?: number
+        }
+        Relationships: []
+      }
+      notification_triggers: {
+        Row: {
+          active: boolean
+          company_db: string | null
+          conditions_json: Json
+          created_at: string
+          created_by: string | null
+          debounce_seconds: number
+          description: string | null
+          event_key: string
+          id: string
+          name: string
+          source_module: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          active?: boolean
+          company_db?: string | null
+          conditions_json?: Json
+          created_at?: string
+          created_by?: string | null
+          debounce_seconds?: number
+          description?: string | null
+          event_key: string
+          id?: string
+          name: string
+          source_module?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          active?: boolean
+          company_db?: string | null
+          conditions_json?: Json
+          created_at?: string
+          created_by?: string | null
+          debounce_seconds?: number
+          description?: string | null
+          event_key?: string
+          id?: string
+          name?: string
+          source_module?: string | null
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
@@ -9163,6 +9607,22 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      enqueue_notification_event: {
+        Args: {
+          p_company_db?: string
+          p_event_key: string
+          p_idempotency_key?: string
+          p_payload?: Json
+          p_source_entity_id?: string
+          p_source_entity_type?: string
+          p_source_module?: string
+        }
+        Returns: {
+          dispatches_created: number
+          event_id: string
+          recipients_created: number
+        }[]
+      }
       find_open_registration_duplicate:
         | {
             Args: { p_tax_id?: string; p_title?: string; p_type: string }
@@ -9538,6 +9998,10 @@ export type Database = {
         }
         Returns: number
       }
+      notification_conditions_match: {
+        Args: { p_conditions: Json; p_payload: Json }
+        Returns: boolean
+      }
       open_access_review_campaign: {
         Args: {
           _due_at?: string
@@ -9600,12 +10064,25 @@ export type Database = {
         Args: { _message?: string; _name: string; _status?: string }
         Returns: undefined
       }
+      render_notification_template: {
+        Args: { p_payload: Json; p_template: string }
+        Returns: string
+      }
       require_idp_binding_enabled: { Args: never; Returns: boolean }
       reserve_accounts_payable_file_sequence: {
         Args: { p_company_db: string }
         Returns: {
           bank_account_id: string
           file_sequence: number
+        }[]
+      }
+      resolve_notification_recipient: {
+        Args: { p_payload: Json; p_recipient_type: string; p_value: string }
+        Returns: {
+          channel_address: string
+          recipient_email: string
+          recipient_name: string
+          recipient_phone: string
         }[]
       }
       sap_user_has_module: {
