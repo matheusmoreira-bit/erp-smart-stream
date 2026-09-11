@@ -19,6 +19,13 @@ const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "http://63.177.171.140/send
 const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || Deno.env.get("WHATSAPP_API_TOKEN") || "";
 const MAX_ATTEMPTS = 5;
 const BATCH = 40;
+const RETRY_BASE_MS = 5 * 60 * 1000;
+const RETRY_MAX_MS = 60 * 60 * 1000;
+
+/** Backoff exponencial limitado entre tentativas de envio. */
+function retryDelayMs(attempt: number): number {
+  return Math.min(RETRY_BASE_MS * Math.pow(2, Math.max(0, attempt - 1)), RETRY_MAX_MS);
+}
 
 function isEmail(v: string | null | undefined): boolean {
   return !!v && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
