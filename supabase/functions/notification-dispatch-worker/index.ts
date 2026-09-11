@@ -178,6 +178,17 @@ async function resolvePhone(admin: any, email: string | null, name: string | nul
   return "";
 }
 
+// Log append-only de cada tentativa de envio (sucesso e falha) para auditoria.
+async function logAttempt(admin: any, row: Record<string, unknown>) {
+  try {
+    const { error } = await admin.from("notification_delivery_attempts").insert(row);
+    if (error) throw new Error(error.message);
+  } catch (e) {
+    console.warn("[notification-dispatch-worker] logAttempt:", e instanceof Error ? e.message : String(e));
+  }
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
