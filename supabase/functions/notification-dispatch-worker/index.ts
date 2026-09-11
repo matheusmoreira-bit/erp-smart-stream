@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
     { auth: { persistSession: false } },
   );
 
-  const blocked = await blockIfIntegrationsDisabled(admin, corsHeaders);
+  const blocked = blockIfIntegrationsDisabled(corsHeaders);
   if (blocked) return blocked;
 
   const stats = { processed: 0, sent: 0, failed: 0, skipped: 0, recipients: 0 };
