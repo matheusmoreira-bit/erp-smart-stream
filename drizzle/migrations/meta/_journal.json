@@ -71,6 +71,34 @@
       "when": 1789135841931,
       "tag": "0009_sap_po_nf_cp_cache",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789137109438,
+      "tag": "0010_tighten_multitenant_rls_and_storage",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789137138367,
+      "tag": "0011_refine_nf_entrada_storage_read_policy",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1789137171582,
+      "tag": "0012_revoke_anon_execute_on_public_functions",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789137272977,
+      "tag": "0013_tighten_notification_and_collaborator_reads",
+      "breakpoints": true
     }
   ]
 }
