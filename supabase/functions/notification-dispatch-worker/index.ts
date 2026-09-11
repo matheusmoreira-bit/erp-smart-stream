@@ -19,6 +19,13 @@ const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "http://63.177.171.140/send
 const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || Deno.env.get("WHATSAPP_API_TOKEN") || "";
 const MAX_ATTEMPTS = 5;
 const BATCH = 40;
+const RETRY_BASE_MS = 5 * 60 * 1000;
+const RETRY_MAX_MS = 60 * 60 * 1000;
+
+/** Backoff exponencial limitado entre tentativas de envio. */
+function retryDelayMs(attempt: number): number {
+  return Math.min(RETRY_BASE_MS * Math.pow(2, Math.max(0, attempt - 1)), RETRY_MAX_MS);
+}
 
 function isEmail(v: string | null | undefined): boolean {
   return !!v && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
@@ -204,7 +211,7 @@ Deno.serve(async (req) => {
   const blocked = blockIfIntegrationsDisabled(corsHeaders);
   if (blocked) return blocked;
 
-  const stats = { processed: 0, sent: 0, failed: 0, skipped: 0, recipients: 0 };
+  const stats = { processed: 0, sent: 0, failed: 0, skipped: 0, retrying: 0, recipients: 0 };
 
   try {
     const { data: dispatches, error } = await admin
@@ -333,12 +340,24 @@ Deno.serve(async (req) => {
       if (status === "sent") stats.sent++;
       else if (status === "failed") stats.failed++;
 
+      // Backoff exponencial (5, 10, 20, 40 min) enquanto restarem tentativas.
+      const nextScheduledAt = status === "pending"
+        ? new Date(Date.now() + retryDelayMs(attempts)).toISOString()
+        : null;
+      stats.retrying += status === "pending" ? 1 : 0;
+
       await admin.from("notification_dispatches")
         .update({
           status,
           sent_at: status === "sent" ? new Date().toISOString() : null,
           error_message: lastError ? lastError.slice(0, 400) : null,
-          metadata: { ...(d.metadata as any || {}), attempts },
+          metadata: {
+            ...(d.metadata as any || {}),
+            attempts,
+            last_error: lastError ? lastError.slice(0, 400) : null,
+            next_retry_at: nextScheduledAt,
+          },
+          ...(nextScheduledAt ? { scheduled_at: nextScheduledAt } : {}),
           updated_at: new Date().toISOString(),
         })
         .eq("id", d.id);

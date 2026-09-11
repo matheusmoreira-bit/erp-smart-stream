@@ -13,8 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, RefreshCw, Search, Mail, MessageCircle, Bell, Layers, Eye } from "lucide-react";
+import { Loader2, RefreshCw, Search, Mail, MessageCircle, Bell, Layers, Eye, Send } from "lucide-react";
 import { format } from "date-fns";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -103,6 +104,7 @@ export function NotificationDeliveriesTab() {
   const [attemptsLoading, setAttemptsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -122,6 +124,27 @@ export function NotificationDeliveriesTab() {
       setLoading(false);
     }
   }, [from, to, session?.companyDB]);
+
+  const resend = useCallback(async (dispatchIds: string[]) => {
+    if (!dispatchIds.length) return;
+    setResending(true);
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke("notification-dispatch-resend", {
+        body: { dispatch_ids: dispatchIds },
+      });
+      if (fnError) throw fnError;
+      const requeued = Number((data as { requeued?: number } | null)?.requeued ?? 0);
+      if (requeued > 0) toast.success(`${requeued} aviso(s) na fila para novo envio`);
+      else toast.info("Nada para reenviar neste envio");
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível reenviar");
+    } finally {
+      setResending(false);
+    }
+  }, [load]);
+
+
 
   useEffect(() => {
     const dispatchId = selected?.metadata?.dispatch_id as string | undefined;
@@ -330,6 +353,20 @@ export function NotificationDeliveriesTab() {
                   <StatusBadge status={selected.status} />
                 </div>
               </div>
+              {selected.metadata?.dispatch_id &&
+              ["email", "whatsapp"].includes(selected.channel) &&
+              !OK_STATUS.has((selected.status || "").toLowerCase()) ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  disabled={resending}
+                  onClick={() => resend([String(selected.metadata?.dispatch_id)])}
+                >
+                  {resending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Reenviar agora
+                </Button>
+              ) : null}
               <div>
                 <Label className="text-xs">Assunto</Label>
                 <div className="mt-1 rounded-lg border border-border bg-muted/20 p-3 text-sm">
