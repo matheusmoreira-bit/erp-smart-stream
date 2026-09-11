@@ -20,6 +20,10 @@ function esc(v: unknown): string {
     .replace(/"/g, "&quot;");
 }
 
+function normalizeKey(v: string): string {
+  return v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 function isEmail(v: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 }
@@ -140,11 +144,16 @@ Deno.serve(async (req) => {
     // Aprovador atual pode vir como e-mail ou como user code do SAP.
     const byApprover = new Map<string, PendingDoc[]>();
     for (const d of pending) {
-      const key = String(d.current_approver).trim().toLowerCase();
-      if (!key || key === "administrador") continue;
-      const list = byApprover.get(key) || [];
-      list.push(d);
-      byApprover.set(key, list);
+      // O campo pode conter vários aprovadores paralelos separados por "/".
+      const parts = String(d.current_approver)
+        .split("/")
+        .map((v) => normalizeKey(v))
+        .filter((v) => v && v !== "administrador");
+      for (const key of parts) {
+        const list = byApprover.get(key) || [];
+        list.push(d);
+        byApprover.set(key, list);
+      }
     }
     stats.approvers = byApprover.size;
 
@@ -171,8 +180,14 @@ Deno.serve(async (req) => {
       for (const row of dirRows) {
         const email = row.user_key ? mailByKey.get(row.user_key) : undefined;
         if (!email) continue;
-        for (const alias of [row.sap_user_code, row.display_name]) {
-          const code = String(alias || "").trim().toLowerCase();
+        const aliases: Array<string | null> = [row.sap_user_code, row.display_name, row.user_key];
+        const dn = String(row.display_name || "").trim();
+        if (dn.includes(" ")) {
+          const p = dn.split(/\s+/);
+          aliases.push(`${p[0]} ${p[p.length - 1]}`);
+        }
+        for (const alias of aliases) {
+          const code = normalizeKey(String(alias || ""));
           if (code && !emailByCode.has(code)) emailByCode.set(code, { email, name: row.display_name });
         }
       }
