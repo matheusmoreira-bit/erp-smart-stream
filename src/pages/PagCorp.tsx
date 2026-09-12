@@ -1768,6 +1768,8 @@ export default function PagCorp() {
                       const inGroup = !!opts.inGroup;
                       const aiEligible = isPagCorpAiEligible(t);
                       const isExpanded = expandedTransactions.has(String(t.id));
+                      const stage = settleStage(t);
+                      const canSettleSelect = t.integrated && !t.isReversed && t.postingType !== "journal_entry" && stage !== "settled";
                       return (
                       <Fragment key={String(t.id)}>
                       <TableRow
@@ -1776,14 +1778,10 @@ export default function PagCorp() {
                           if (target.closest("button, a, input, [role='menuitem'], [role='checkbox']")) return;
                           toggleTransaction(t.id);
                         }}
-                        className={
-                          inGroup
-                            ? "border-border border-l-2 border-l-success/60 bg-success/5 cursor-pointer"
-                            : "border-border cursor-pointer"
-                        }
+                        className={`border-border cursor-pointer ${inGroup ? "border-l-2 border-l-border pl-2 " : ""}${STAGE_ROW_CLASS[stage]}`}
                         data-state={isSelected ? "selected" : undefined}
                       >
-                        <TableCell className="w-20">
+                        <TableCell className="w-24">
                           <div className="flex items-center gap-2">
                             <Button
                               type="button"
@@ -1808,8 +1806,16 @@ export default function PagCorp() {
                                 aria-label="Selecionar"
                               />
                             )}
+                            {canSettleSelect && !inGroup && (
+                              <Checkbox
+                                checked={settleSelected.has(t.id)}
+                                onCheckedChange={() => toggleSettleSelect(t.id)}
+                                aria-label="Selecionar para baixa"
+                              />
+                            )}
                           </div>
                         </TableCell>
+
                         <TableCell className={`text-sm text-foreground whitespace-nowrap ${inGroup ? "pl-6" : ""}`}>
                           {formatDate(t.date)}
                         </TableCell>
