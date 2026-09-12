@@ -14,6 +14,27 @@ export { SapCircuitOpenError, getCircuitState, listCircuits, resetCircuit } from
 
 const FUNCTION_URL = "sap-b1-proxy";
 
+/**
+ * Avisos técnicos (lentidão / retentativas do ERP) são diagnóstico: só
+ * administradores devem vê-los. Cacheado de forma síncrona para não atrasar
+ * as chamadas — usuários comuns simplesmente nunca veem o toast.
+ */
+let diagnosticsAdmin = false;
+let diagnosticsAdminChecked = false;
+function refreshDiagnosticsAdmin() {
+  if (diagnosticsAdminChecked) return;
+  diagnosticsAdminChecked = true;
+  import("@/lib/auth-cache")
+    .then(({ getIsCloudAdmin }) => getIsCloudAdmin())
+    .then((v) => { diagnosticsAdmin = !!v; })
+    .catch(() => { diagnosticsAdmin = false; });
+}
+function diagnosticToast(fn: () => string | number | undefined): string | number | undefined {
+  refreshDiagnosticsAdmin();
+  if (!diagnosticsAdmin) return undefined;
+  return fn();
+}
+
 
 // Timeout & retry configuration for SAP calls.
 const REQUEST_TIMEOUT_MS = 45_000; // hard cap per attempt
@@ -193,9 +214,9 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
   const scheduleSlowToast = () => {
     if (typeof window === "undefined") return undefined;
     return setTimeout(() => {
-      slowToastId = toast.loading("Carregando dados…", {
-        duration: Infinity,
-      });
+      slowToastId = diagnosticToast(() =>
+        toast.loading("Carregando dados…", { duration: Infinity }),
+      );
     }, SLOW_WARNING_MS);
   };
   const dismissSlowToast = (timerId: ReturnType<typeof setTimeout> | undefined) => {
@@ -221,10 +242,12 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
       lastError = aborted ? new SapTimeoutError() : err;
       if (attempt < maxAttempts && canRetry) {
         const wait = BACKOFF_BASE_MS * Math.pow(3, attempt - 1) + Math.floor(Math.random() * 300);
-        toast.message(
-          aborted
-            ? `SAP não respondeu a tempo. Tentando novamente (${attempt + 1}/${maxAttempts})…`
-            : `Falha de rede ao chamar SAP. Tentando novamente (${attempt + 1}/${maxAttempts})…`,
+        diagnosticToast(() =>
+          toast.message(
+            aborted
+              ? `SAP não respondeu a tempo. Tentando novamente (${attempt + 1}/${maxAttempts})…`
+              : `Falha de rede ao chamar SAP. Tentando novamente (${attempt + 1}/${maxAttempts})…`,
+          ),
         );
         await sleep(wait);
         continue;
@@ -280,8 +303,10 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
       lastError = new Error(message);
       if (transient && canRetry && attempt < maxAttempts) {
         const wait = BACKOFF_BASE_MS * Math.pow(3, attempt - 1) + Math.floor(Math.random() * 300);
-        toast.message(
-          `SAP retornou erro temporário (${resp.status}). Tentando novamente (${attempt + 1}/${maxAttempts})…`,
+        diagnosticToast(() =>
+          toast.message(
+            `SAP retornou erro temporário (${resp.status}). Tentando novamente (${attempt + 1}/${maxAttempts})…`,
+          ),
         );
         await sleep(wait);
         continue;
