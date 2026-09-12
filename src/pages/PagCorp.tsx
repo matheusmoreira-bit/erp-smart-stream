@@ -599,13 +599,15 @@ export default function PagCorp() {
         }
       }
       toast.success(
-        `Reprocessamento concluído — baixados: ${settled}, aguardando: ${awaiting}, erros: ${errors}${
+        `Baixa em lote concluída — baixados: ${settled}, aguardando: ${awaiting}, erros: ${errors}${
           skipped ? `, ignorados: ${skipped}` : ""
         }.`,
       );
+      setSettleSelected(new Set());
       await fetchTransactions(startDate, endDate, session?.companyDB);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha no reprocessamento em lote.");
+      toast.error(e instanceof Error ? e.message : "Falha na baixa em lote.");
+
     } finally {
       setBatchReprocessing(false);
     }
