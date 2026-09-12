@@ -63,11 +63,14 @@ Deno.serve(async (req) => {
 
   const expired = new Date(rec.expires_at).getTime() < Date.now();
 
-  const { data: exp } = await admin
+  const { data: exp, error: expErr } = await admin
     .from("expenses")
-    .select("id, status, doc_type, company_db, supplier_name, total_amount, currency, requester_name, current_approver, current_level_order, due_date, description")
+    .select("id, status, doc_type, company_db, supplier_name, total_amount, currency, requester_name, current_approver, current_level_order, due_date, remarks")
+
     .eq("id", rec.expense_id)
     .maybeSingle();
+
+  if (expErr) console.error("approval-link: falha ao carregar o pedido", expErr.message);
 
   const summary = exp
     ? {
@@ -81,9 +84,10 @@ Deno.serve(async (req) => {
         requesterName: exp.requester_name,
         levelOrder: rec.level_order,
         dueDate: (exp as any).due_date ?? null,
-        description: (exp as any).description ?? null,
+        description: (exp as any).remarks ?? null,
       }
     : null;
+
 
   if (action === "info") {
     return json(200, {

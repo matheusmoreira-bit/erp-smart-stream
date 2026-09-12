@@ -1176,7 +1176,7 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   if (items) {
     const { data: prev } = await admin
       .from("expense_items")
-      .select("item_code, item_name, description, quantity, line_total, cost_center, project")
+      .select("item_code, description, quantity, line_total, cost_center, project")
       .eq("expense_id", expenseId);
     previousItems = (prev || []) as Array<Record<string, unknown>>;
   }
