@@ -14,6 +14,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { linkNfToAp } from "../_shared/link-nf-ap.ts";
+import { requireSchedulerAdminOrUserSession } from "../_shared/automation-auth.ts";
 
 const corsHeaders = {
   ...baseCorsHeaders,
@@ -516,6 +517,9 @@ async function runCompany(sb: Sb, companyDb: string, daysBack: number, limit: nu
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const auth = await requireSchedulerAdminOrUserSession(req, corsHeaders);
+  if (!auth.ok) return auth.response;
+
   const startedAt = Date.now();
   const sb = createClient(SUPABASE_URL, SERVICE_KEY);
   const requestId = crypto.randomUUID();

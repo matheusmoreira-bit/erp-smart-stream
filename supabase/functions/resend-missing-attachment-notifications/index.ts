@@ -54,9 +54,13 @@ async function getSignedLinks(
 }
 
 import { weekendBlockResponse } from "../_shared/weekend-guard.ts";
+import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const auth = await requireSchedulerOrAdmin(req, corsHeaders);
+  if (!auth.ok) return auth.response;
+
 
   try {
     const body = await req.json().catch(() => ({}));

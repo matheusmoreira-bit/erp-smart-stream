@@ -7,6 +7,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { fetchHanaView } from "../_shared/hana-views.ts";
+import { requireSchedulerAdminOrUserSession } from "../_shared/automation-auth.ts";
 
 const corsHeaders = {
   ...baseCorsHeaders,
@@ -160,6 +161,9 @@ async function loadCreds(sb: any, companyDb: string): Promise<Record<string, str
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const auth = await requireSchedulerAdminOrUserSession(req, corsHeaders);
+  if (!auth.ok) return auth.response;
+
   try {
     const url = new URL(req.url);
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
