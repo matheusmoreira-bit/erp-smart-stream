@@ -647,13 +647,14 @@ export default function PagCorp() {
       list = list.filter((t) => t.hasAccountability && t.accountabilityApproved);
     }
 
-    if (settlementFilter === "not_integrated") {
-      list = list.filter((t) => !t.integrated);
-    } else if (settlementFilter === "integrated_pending") {
-      list = list.filter((t) => t.integrated && t.settlementStatus !== "settled");
-    } else if (settlementFilter === "settled") {
-      list = list.filter((t) => t.settlementStatus === "settled");
+    if (settlementFilter !== "all") {
+      list = list.filter((t) => settleStage(t) === settlementFilter);
     }
+
+    if (balanceFilter !== "all") {
+      list = list.filter((t) => balanceKind(t) === balanceFilter);
+    }
+
 
     if (search.trim()) {
       const q = search.toLowerCase();
