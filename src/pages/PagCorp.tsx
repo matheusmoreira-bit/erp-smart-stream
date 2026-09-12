@@ -2047,10 +2047,11 @@ export default function PagCorp() {
                                               onClick={() => handleAutoSettle(t)}
                                               title={t.settlementError || undefined}
                                             >
-                                              <Sparkles className="w-4 h-4 mr-2" />
-                                              {settlementLabel}
+                                              <DownloadCloud className="w-4 h-4 mr-2" />
+                                              Baixar
                                             </DropdownMenuItem>
                                           )}
+
                                         </>
                                       )}
                                     </DropdownMenuContent>
