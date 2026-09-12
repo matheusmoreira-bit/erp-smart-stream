@@ -119,7 +119,62 @@ function formatDateTime(dateStr?: string | null) {
   });
 }
 
+/** Estágio consolidado da integração/baixa de uma transação. */
+type SettleStage = "not_integrated" | "integrated" | "nf" | "settled";
+
+function settleStage(t: PagCorpTransaction): SettleStage {
+  if (!t.integrated) return "not_integrated";
+  if (t.settlementStatus === "settled" || t.paymentFoundInSap === true) return "settled";
+  if (t.settlementStatus === "awaiting_settlement" || t.nfFoundInSap === true) return "nf";
+  return "integrated";
+}
+
+/** Estágio do grupo consolidado: o menos avançado entre as transações. */
+function groupSettleStage(txs: PagCorpTransaction[]): SettleStage {
+  const order: SettleStage[] = ["not_integrated", "integrated", "nf", "settled"];
+  return txs.reduce<SettleStage>((acc, t) => {
+    const s = settleStage(t);
+    return order.indexOf(s) < order.indexOf(acc) ? s : acc;
+  }, "settled");
+}
+
+const STAGE_LABEL: Record<SettleStage, string> = {
+  not_integrated: "Não integrado",
+  integrated: "Integrado",
+  nf: "NF lançada",
+  settled: "Baixado",
+};
+
+/** Cor da linha por estágio: branco → cinza → azul → verde. */
+const STAGE_ROW_CLASS: Record<SettleStage, string> = {
+  not_integrated: "bg-card",
+  integrated: "bg-muted/60",
+  nf: "bg-info/10",
+  settled: "bg-success/10",
+};
+
+const BALANCE_LABEL = { brl: "Real", usd: "Dólar" } as const;
+
+/** Saldo usado na transação, derivado da Classificação vinda do PagCorp. */
+function balanceKind(t: PagCorpTransaction): "brl" | "usd" {
+  const raw = String((t as { eventClassification?: string }).eventClassification || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return raw.includes("saldo dolar") ? "usd" : "brl";
+}
+
+/** Número do pedido no SAP (unitário ou consolidado). */
+function sapDocLabel(t: PagCorpTransaction): string {
+  const links = t.integrationLinks?.length ? t.integrationLinks : [];
+  if (links.length > 1) return links.map((l) => `#${l.docNum ?? l.docEntry ?? "—"}`).join(", ");
+  const num = links[0]?.docNum ?? t.sapDocNum ?? t.sapDocEntry;
+  if (num == null) return "—";
+  return `${t.postingType === "journal_entry" ? "LCM" : "PC"} #${num}`;
+}
+
 function transactionText(t: PagCorpTransaction, ...keys: string[]): string | null {
+
   for (const key of keys) {
     const value = t[key];
     if (typeof value === "string" && value.trim()) return value.trim();
