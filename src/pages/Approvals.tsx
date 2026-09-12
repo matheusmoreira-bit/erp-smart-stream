@@ -3715,13 +3715,19 @@ export default function ApprovalsPage() {
 
 
 
+            {!isLoadingFeed && isLoading && (
+              <span className="text-xs text-muted-foreground hidden md:inline-flex items-center gap-1">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Buscando aprovações do ERP…
+              </span>
+            )}
             {lastUpdatedAt && (
               <span className="text-xs text-muted-foreground hidden md:inline">
                 Cache: {new Date(lastUpdatedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
               </span>
             )}
-            <Button variant="ghost" size="icon" onClick={refresh} disabled={isLoading} className="text-muted-foreground hover:text-foreground h-10 w-10 sm:h-9 sm:w-9" title="Recarregar" aria-label="Recarregar">
-              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+            <Button variant="ghost" size="icon" onClick={() => { void refreshFeed(); refresh(); }} disabled={isLoadingFeed} className="text-muted-foreground hover:text-foreground h-10 w-10 sm:h-9 sm:w-9" title="Recarregar" aria-label="Recarregar">
+              <RefreshCw className={`w-4 h-4 ${isLoadingFeed || isLoading ? "animate-spin" : ""}`} />
             </Button>
             <div className="hidden sm:flex items-center gap-2 sm:gap-4">
             <Button
