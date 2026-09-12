@@ -4220,10 +4220,18 @@ export default function ApprovalsPage() {
         )}
 
 
-        {isLoading ? (
+        {/* A tela pinta assim que a fila do ERP Flow chega. As aprovações
+            originadas no SAP (minoria hoje) continuam carregando em segundo
+            plano e entram na lista quando ficam prontas. */}
+        {isLoadingFeed ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
             <Loader2 className="w-8 h-8 text-primary animate-spin" />
             <p className="text-sm text-muted-foreground">Carregando aprovações...</p>
+          </div>
+        ) : filtered.length === 0 && isLoading ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-4">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            <p className="text-sm text-muted-foreground">Buscando aprovações no ERP...</p>
           </div>
         ) : filtered.length === 0 ? (
           <div className="glass-card p-12 text-center">
