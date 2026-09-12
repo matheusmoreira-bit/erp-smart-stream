@@ -70,6 +70,8 @@ Deno.serve(async (req) => {
     .eq("id", rec.expense_id)
     .maybeSingle();
 
+  if (expErr) console.error("approval-link: falha ao carregar o pedido", expErr.message);
+
   const summary = exp
     ? {
         id: exp.id,
@@ -82,9 +84,10 @@ Deno.serve(async (req) => {
         requesterName: exp.requester_name,
         levelOrder: rec.level_order,
         dueDate: (exp as any).due_date ?? null,
-        description: (exp as any).description ?? null,
+        description: (exp as any).remarks ?? null,
       }
     : null;
+
 
   if (action === "info") {
     return json(200, {
