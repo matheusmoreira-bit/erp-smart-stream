@@ -67,9 +67,9 @@ Deno.serve(async (req) => {
     const weekendBlock = await weekendBlockResponse(req, corsHeaders, body);
     if (weekendBlock) return weekendBlock;
     const dryRun = Boolean(body.dry_run);
-    const recipients: string[] = Array.isArray(body.recipients) && body.recipients.length > 0
-      ? body.recipients
-      : DEFAULT_RECIPIENTS;
+    // Destinatários fixos: nunca aceitar lista vinda do cliente — os e-mails
+    // contêm links assinados de documentos internos.
+    const recipients: string[] = DEFAULT_RECIPIENTS;
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
