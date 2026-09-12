@@ -1551,19 +1551,20 @@ export default function PagCorp() {
             Integrar em lote{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
           </Button>
           <Button
-            onClick={handleBatchReprocessSettlement}
-            disabled={batchReprocessing}
+            onClick={handleBatchSettle}
+            disabled={batchReprocessing || settleSelected.size === 0}
             variant="outline"
             className="gap-2"
-            title="Reprocessa a baixa de todas as transações filtradas cuja NF de entrada já foi lançada"
+            title="Baixa as transações/PCs selecionados"
           >
             {batchReprocessing ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <DownloadCloud className="w-4 h-4" />
             )}
-            Reprocessar baixa em lote
+            Baixar em lote{settleSelected.size > 0 ? ` (${settleSelected.size})` : ""}
           </Button>
+
           <Button
             onClick={() => setPresentationDialogOpen(true)}
             variant="outline"
