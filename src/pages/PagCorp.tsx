@@ -1840,6 +1840,15 @@ export default function PagCorp() {
                         <TableCell className="text-sm font-medium text-right text-foreground whitespace-nowrap">
                           {formatCurrency(t.amount, t.currency)}
                         </TableCell>
+                        <TableCell className="text-center whitespace-nowrap">
+                          <Badge variant="outline" className="text-[10px]">
+                            {BALANCE_LABEL[balanceKind(t)]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center text-sm font-mono whitespace-nowrap">
+                          {sapDocLabel(t)}
+                        </TableCell>
+
                         <TableCell className="text-center">
                           {(() => {
                             const receiptCount =
