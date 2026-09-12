@@ -134,6 +134,13 @@
       "when": 1789180314914,
       "tag": "0018_tighten_definer_execute_notifications_credentials",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1789180744949,
+      "tag": "0019_tighten_company_access_fallback",
+      "breakpoints": true
     }
   ]
 }
