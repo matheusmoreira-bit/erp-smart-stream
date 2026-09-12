@@ -214,9 +214,9 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
   const scheduleSlowToast = () => {
     if (typeof window === "undefined") return undefined;
     return setTimeout(() => {
-      slowToastId = toast.loading("Carregando dados…", {
-        duration: Infinity,
-      });
+      slowToastId = diagnosticToast(() =>
+        toast.loading("Carregando dados…", { duration: Infinity }),
+      );
     }, SLOW_WARNING_MS);
   };
   const dismissSlowToast = (timerId: ReturnType<typeof setTimeout> | undefined) => {
