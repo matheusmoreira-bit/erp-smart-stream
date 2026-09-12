@@ -119,7 +119,62 @@ function formatDateTime(dateStr?: string | null) {
   });
 }
 
+/** Estágio consolidado da integração/baixa de uma transação. */
+type SettleStage = "not_integrated" | "integrated" | "nf" | "settled";
+
+function settleStage(t: PagCorpTransaction): SettleStage {
+  if (!t.integrated) return "not_integrated";
+  if (t.settlementStatus === "settled" || t.paymentFoundInSap === true) return "settled";
+  if (t.settlementStatus === "awaiting_settlement" || t.nfFoundInSap === true) return "nf";
+  return "integrated";
+}
+
+/** Estágio do grupo consolidado: o menos avançado entre as transações. */
+function groupSettleStage(txs: PagCorpTransaction[]): SettleStage {
+  const order: SettleStage[] = ["not_integrated", "integrated", "nf", "settled"];
+  return txs.reduce<SettleStage>((acc, t) => {
+    const s = settleStage(t);
+    return order.indexOf(s) < order.indexOf(acc) ? s : acc;
+  }, "settled");
+}
+
+const STAGE_LABEL: Record<SettleStage, string> = {
+  not_integrated: "Não integrado",
+  integrated: "Integrado",
+  nf: "NF lançada",
+  settled: "Baixado",
+};
+
+/** Cor da linha por estágio: branco → cinza → azul → verde. */
+const STAGE_ROW_CLASS: Record<SettleStage, string> = {
+  not_integrated: "bg-card",
+  integrated: "bg-muted/60",
+  nf: "bg-info/10",
+  settled: "bg-success/10",
+};
+
+const BALANCE_LABEL = { brl: "Real", usd: "Dólar" } as const;
+
+/** Saldo usado na transação, derivado da Classificação vinda do PagCorp. */
+function balanceKind(t: PagCorpTransaction): "brl" | "usd" {
+  const raw = String((t as { eventClassification?: string }).eventClassification || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return raw.includes("saldo dolar") ? "usd" : "brl";
+}
+
+/** Número do pedido no SAP (unitário ou consolidado). */
+function sapDocLabel(t: PagCorpTransaction): string {
+  const links = t.integrationLinks?.length ? t.integrationLinks : [];
+  if (links.length > 1) return links.map((l) => `#${l.docNum ?? l.docEntry ?? "—"}`).join(", ");
+  const num = links[0]?.docNum ?? t.sapDocNum ?? t.sapDocEntry;
+  if (num == null) return "—";
+  return `${t.postingType === "journal_entry" ? "LCM" : "PC"} #${num}`;
+}
+
 function transactionText(t: PagCorpTransaction, ...keys: string[]): string | null {
+
   for (const key of keys) {
     const value = t[key];
     if (typeof value === "string" && value.trim()) return value.trim();
@@ -312,8 +367,25 @@ export default function PagCorp() {
   const [endDate, setEndDate] = useState(today.toISOString().slice(0, 10));
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "review" | "done">("all");
-  const [settlementFilter, setSettlementFilter] = useState<"all" | "not_integrated" | "integrated_pending" | "settled">("all");
+  const [settlementFilter, setSettlementFilter] = useState<"all" | SettleStage>("all");
+  const [balanceFilter, setBalanceFilter] = useState<"all" | "brl" | "usd">("all");
+  const [settleSelected, setSettleSelected] = useState<Set<string | number>>(new Set());
+  const toggleSettleSelect = (id: string | number) =>
+    setSettleSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const toggleSettleGroup = (txs: PagCorpTransaction[]) =>
+    setSettleSelected((prev) => {
+      const next = new Set(prev);
+      const allIn = txs.every((t) => next.has(t.id));
+      txs.forEach((t) => (allIn ? next.delete(t.id) : next.add(t.id)));
+      return next;
+    });
   const [cardFilter, setCardFilter] = useState<string>("all");
+
   const [reprocessingGroup, setReprocessingGroup] = useState<string | null>(null);
   const [batchReprocessing, setBatchReprocessing] = useState(false);
   const [validateDialog, setValidateDialog] = useState<{ open: boolean; tx: PagCorpTransaction | null }>({ open: false, tx: null });
@@ -547,29 +619,24 @@ export default function PagCorp() {
     }
   };
 
-  // Reprocessa a baixa em lote para todas as transações filtradas que já tenham
-  // a NF de entrada lançada (settlementStatus = 'awaiting_settlement') ou que
-  // estejam em 'error' retentável. Cada integrationLogId gera 1 chamada ao
-  // watcher (o watcher já cobre todas as linhas daquele PC).
-  const handleBatchReprocessSettlement = async () => {
+  // Baixa em lote das transações selecionadas. Cada integrationLogId gera 1
+  // chamada ao watcher (o watcher já cobre todas as linhas daquele PC).
+  const handleBatchSettle = async () => {
     const eligible = filteredTransactions.filter(
-      (t) =>
-        t.integrationLogId &&
-        t.settlementStatus &&
-        t.settlementStatus !== "settled" &&
-        (t.settlementStatus === "awaiting_settlement" || t.settlementStatus === "error"),
+      (t) => settleSelected.has(t.id) && t.integrationLogId && settleStage(t) !== "settled",
     );
     const uniqueLogIds = Array.from(
       new Set(eligible.map((t) => t.integrationLogId as string)),
     );
     if (uniqueLogIds.length === 0) {
-      toast.info("Nenhuma transação com NF de entrada lançada aguardando baixa.");
+      toast.info("Selecione ao menos uma transação integrada para baixar.");
       return;
     }
     const confirmed = window.confirm(
-      `Reprocessar a baixa de ${uniqueLogIds.length} grupo(s) (${eligible.length} transações)?`,
+      `Baixar ${uniqueLogIds.length} pedido(s) (${eligible.length} transações)?`,
     );
     if (!confirmed) return;
+
 
     setBatchReprocessing(true);
     let settled = 0;
@@ -604,13 +671,15 @@ export default function PagCorp() {
         }
       }
       toast.success(
-        `Reprocessamento concluído — baixados: ${settled}, aguardando: ${awaiting}, erros: ${errors}${
+        `Baixa em lote concluída — baixados: ${settled}, aguardando: ${awaiting}, erros: ${errors}${
           skipped ? `, ignorados: ${skipped}` : ""
         }.`,
       );
+      setSettleSelected(new Set());
       await fetchTransactions(startDate, endDate, session?.companyDB);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha no reprocessamento em lote.");
+      toast.error(e instanceof Error ? e.message : "Falha na baixa em lote.");
+
     } finally {
       setBatchReprocessing(false);
     }
@@ -647,13 +716,14 @@ export default function PagCorp() {
       list = list.filter((t) => t.hasAccountability && t.accountabilityApproved);
     }
 
-    if (settlementFilter === "not_integrated") {
-      list = list.filter((t) => !t.integrated);
-    } else if (settlementFilter === "integrated_pending") {
-      list = list.filter((t) => t.integrated && t.settlementStatus !== "settled");
-    } else if (settlementFilter === "settled") {
-      list = list.filter((t) => t.settlementStatus === "settled");
+    if (settlementFilter !== "all") {
+      list = list.filter((t) => settleStage(t) === settlementFilter);
     }
+
+    if (balanceFilter !== "all") {
+      list = list.filter((t) => balanceKind(t) === balanceFilter);
+    }
+
 
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -682,7 +752,7 @@ export default function PagCorp() {
       const tb = b.date ? new Date(b.date).getTime() : 0;
       return tb - ta;
     });
-  }, [transactions, search, statusFilter, settlementFilter, cardFilter, showNondeductible]);
+  }, [transactions, search, statusFilter, settlementFilter, balanceFilter, cardFilter, showNondeductible]);
 
   /**
    * Constrói a lista de renderização com agrupamento visual:
@@ -1503,13 +1573,28 @@ export default function PagCorp() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="not_integrated">Não integrado</SelectItem>
-                <SelectItem value="integrated_pending">Integrado — aguardando baixa</SelectItem>
+                <SelectItem value="integrated">Integrado</SelectItem>
+                <SelectItem value="nf">NF lançada</SelectItem>
                 <SelectItem value="settled">Baixado</SelectItem>
               </SelectContent>
             </Select>
           </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">Saldo utilizado</label>
+            <Select value={balanceFilter} onValueChange={(v) => setBalanceFilter(v as typeof balanceFilter)}>
+              <SelectTrigger className="w-44 bg-card">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="brl">Saldo em Real</SelectItem>
+                <SelectItem value="usd">Saldo em Dólar</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Cartão</label>
             <Select value={cardFilter} onValueChange={setCardFilter}>
@@ -1551,19 +1636,20 @@ export default function PagCorp() {
             Integrar em lote{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
           </Button>
           <Button
-            onClick={handleBatchReprocessSettlement}
-            disabled={batchReprocessing}
+            onClick={handleBatchSettle}
+            disabled={batchReprocessing || settleSelected.size === 0}
             variant="outline"
             className="gap-2"
-            title="Reprocessa a baixa de todas as transações filtradas cuja NF de entrada já foi lançada"
+            title="Baixa as transações/PCs selecionados"
           >
             {batchReprocessing ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <DownloadCloud className="w-4 h-4" />
             )}
-            Reprocessar baixa em lote
+            Baixar em lote{settleSelected.size > 0 ? ` (${settleSelected.size})` : ""}
           </Button>
+
           <Button
             onClick={() => setPresentationDialogOpen(true)}
             variant="outline"
@@ -1746,7 +1832,7 @@ export default function PagCorp() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-border hover:bg-transparent">
-                    <TableHead className="w-20">
+                    <TableHead className="w-24">
                       <Checkbox
                         checked={allSelected}
                         onCheckedChange={toggleSelectAll}
@@ -1757,8 +1843,11 @@ export default function PagCorp() {
                     <TableHead className="text-muted-foreground">Descrição</TableHead>
                     <TableHead className="text-muted-foreground">Portador</TableHead>
                     <TableHead className="text-muted-foreground text-right">Valor</TableHead>
+                    <TableHead className="text-muted-foreground text-center">Saldo</TableHead>
+                    <TableHead className="text-muted-foreground text-center">Pedido SAP</TableHead>
                     <TableHead className="text-muted-foreground text-center">Prestação</TableHead>
                     <TableHead className="text-muted-foreground text-center">Ações</TableHead>
+
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1768,6 +1857,8 @@ export default function PagCorp() {
                       const inGroup = !!opts.inGroup;
                       const aiEligible = isPagCorpAiEligible(t);
                       const isExpanded = expandedTransactions.has(String(t.id));
+                      const stage = settleStage(t);
+                      const canSettleSelect = t.integrated && !t.isReversed && t.postingType !== "journal_entry" && stage !== "settled";
                       return (
                       <Fragment key={String(t.id)}>
                       <TableRow
@@ -1776,14 +1867,10 @@ export default function PagCorp() {
                           if (target.closest("button, a, input, [role='menuitem'], [role='checkbox']")) return;
                           toggleTransaction(t.id);
                         }}
-                        className={
-                          inGroup
-                            ? "border-border border-l-2 border-l-success/60 bg-success/5 cursor-pointer"
-                            : "border-border cursor-pointer"
-                        }
+                        className={`border-border cursor-pointer ${inGroup ? "border-l-2 border-l-border pl-2 " : ""}${STAGE_ROW_CLASS[stage]}`}
                         data-state={isSelected ? "selected" : undefined}
                       >
-                        <TableCell className="w-20">
+                        <TableCell className="w-24">
                           <div className="flex items-center gap-2">
                             <Button
                               type="button"
@@ -1808,8 +1895,16 @@ export default function PagCorp() {
                                 aria-label="Selecionar"
                               />
                             )}
+                            {canSettleSelect && !inGroup && (
+                              <Checkbox
+                                checked={settleSelected.has(t.id)}
+                                onCheckedChange={() => toggleSettleSelect(t.id)}
+                                aria-label="Selecionar para baixa"
+                              />
+                            )}
                           </div>
                         </TableCell>
+
                         <TableCell className={`text-sm text-foreground whitespace-nowrap ${inGroup ? "pl-6" : ""}`}>
                           {formatDate(t.date)}
                         </TableCell>
@@ -1840,6 +1935,15 @@ export default function PagCorp() {
                         <TableCell className="text-sm font-medium text-right text-foreground whitespace-nowrap">
                           {formatCurrency(t.amount, t.currency)}
                         </TableCell>
+                        <TableCell className="text-center whitespace-nowrap">
+                          <Badge variant="outline" className="text-[10px]">
+                            {BALANCE_LABEL[balanceKind(t)]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center text-sm font-mono whitespace-nowrap">
+                          {sapDocLabel(t)}
+                        </TableCell>
+
                         <TableCell className="text-center">
                           {(() => {
                             const receiptCount =
@@ -1915,14 +2019,15 @@ export default function PagCorp() {
                                 // NF/baixa lançadas manualmente também contam.
                                 const settled = st === "settled" || t.paymentFoundInSap === true;
                                 const settlementLabel = settled
-                                  ? `Baixa ${t.settlementPaymentDocNum ? `#${t.settlementPaymentDocNum}` : "OK"}`
+                                  ? `Baixado ${t.settlementPaymentDocNum ? `#${t.settlementPaymentDocNum}` : "OK"}`
                                   : st === "awaiting_invoice"
                                     ? "Aguardando NF"
                                     : st === "awaiting_settlement"
-                                      ? "Tentar baixa"
+                                      ? "Pronto para baixar"
                                       : st === "error"
-                                        ? "Reprocessar baixa"
-                                        : "Baixa automática";
+                                        ? "Erro na baixa"
+                                        : "Pendente";
+
 
                                 // Progressão: Integrado → NF lançada → Baixado
                                 const nfDone = settled || st === "awaiting_settlement" || t.nfFoundInSap === true;
@@ -2047,10 +2152,11 @@ export default function PagCorp() {
                                               onClick={() => handleAutoSettle(t)}
                                               title={t.settlementError || undefined}
                                             >
-                                              <Sparkles className="w-4 h-4 mr-2" />
-                                              {settlementLabel}
+                                              <DownloadCloud className="w-4 h-4 mr-2" />
+                                              Baixar
                                             </DropdownMenuItem>
                                           )}
+
                                         </>
                                       )}
                                     </DropdownMenuContent>
@@ -2162,7 +2268,7 @@ export default function PagCorp() {
                       </TableRow>
                       {isExpanded && (
                         <TableRow className={inGroup ? "border-border bg-success/[0.03]" : "border-border bg-muted/20"}>
-                          <TableCell colSpan={7} className="px-6 py-4">
+                          <TableCell colSpan={9} className="px-6 py-4">
                             <PagCorpTransactionDetails
                               transaction={t}
                               onOpenAttachments={openAttachments}
@@ -2193,41 +2299,49 @@ export default function PagCorp() {
                       const expanded = expandedGroups.has(item.key);
                       const settledCount = txs.filter((t) => t.settlementStatus === "settled").length;
 
+                      const groupStage = groupSettleStage(txs);
+                      const groupSelected = txs.every((t) => settleSelected.has(t.id));
+
                       const header = (
                         <TableRow
                           key={`group-${item.key}`}
-                          className="border-border bg-success/10 hover:bg-success/15 cursor-pointer"
+                          className={`border-border cursor-pointer hover:bg-muted/40 ${STAGE_ROW_CLASS[groupStage]}`}
                           onClick={() => toggleGroup(item.key)}
                         >
-                          <TableCell className="w-20">
-                            {expanded ? (
-                              <ChevronDown className="w-4 h-4 text-success" />
-                            ) : (
-                              <ChevronRight className="w-4 h-4 text-success" />
-                            )}
+                          <TableCell className="w-24">
+                            <div className="flex items-center gap-2">
+                              {expanded ? (
+                                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                              )}
+                              {!isJournalEntryGroup && (
+                                <Checkbox
+                                  checked={groupSelected}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onCheckedChange={() => toggleSettleGroup(txs)}
+                                  aria-label="Selecionar grupo para baixa"
+                                />
+                              )}
+                            </div>
                           </TableCell>
-                          <TableCell colSpan={6} className="py-2">
+                          <TableCell colSpan={8} className="py-2">
                             <div className="flex flex-wrap items-center gap-2 text-sm">
-                              <Layers className="w-4 h-4 text-success shrink-0" />
+                              <Layers className="w-4 h-4 text-muted-foreground shrink-0" />
                               <span className="font-semibold text-foreground">
                                 {isJournalEntryGroup ? "LCM em lote" : "PC consolidado"}
                                 {docNum != null ? ` #${docNum}` : docEntry != null ? ` (DocEntry ${docEntry})` : ""}
                               </span>
-                              <Badge variant="secondary" className="bg-success/20 text-success border-success/30">
+                              <Badge variant="secondary">
                                 {txs.length} transações
                               </Badge>
                               <span className="text-muted-foreground">•</span>
                               <span className="font-medium text-foreground tabular-nums">{totalsStr}</span>
-                              {!isJournalEntryGroup && settledCount > 0 && (
-                                <>
-                                  <span className="text-muted-foreground">•</span>
-                                  <span className="text-xs text-success inline-flex items-center gap-1">
-                                    <CheckCircle2 className="w-3 h-3" />
-                                    {settledCount === txs.length
-                                      ? "Baixa emitida"
-                                      : `${settledCount}/${txs.length} baixados`}
-                                  </span>
-                                </>
+                              <Badge variant="outline" className="text-[10px]">{STAGE_LABEL[groupStage]}</Badge>
+                              {!isJournalEntryGroup && settledCount > 0 && settledCount < txs.length && (
+                                <span className="text-xs text-muted-foreground">
+                                  {settledCount}/{txs.length} baixados
+                                </span>
                               )}
                               <div className="ml-auto flex items-center gap-2">
                                 {!isJournalEntryGroup && settledCount < txs.length && (
@@ -2244,9 +2358,9 @@ export default function PagCorp() {
                                     {reprocessingGroup === item.key ? (
                                       <Loader2 className="w-3 h-3 animate-spin" />
                                     ) : (
-                                      <RefreshCw className="w-3 h-3" />
+                                      <DownloadCloud className="w-3 h-3" />
                                     )}
-                                    {settledCount > 0 ? "Reprocessar baixa" : "Processar baixa"}
+                                    Baixar
                                   </Button>
                                 )}
                                 <span className="text-xs text-muted-foreground">
@@ -2260,6 +2374,7 @@ export default function PagCorp() {
 
                       if (!expanded) return [header];
                       return [header, ...txs.map((t) => renderTxRow(t, { inGroup: true }))];
+
                     });
                   })()}
                 </TableBody>
