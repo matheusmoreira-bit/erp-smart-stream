@@ -303,8 +303,10 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
       lastError = new Error(message);
       if (transient && canRetry && attempt < maxAttempts) {
         const wait = BACKOFF_BASE_MS * Math.pow(3, attempt - 1) + Math.floor(Math.random() * 300);
-        toast.message(
-          `SAP retornou erro temporário (${resp.status}). Tentando novamente (${attempt + 1}/${maxAttempts})…`,
+        diagnosticToast(() =>
+          toast.message(
+            `SAP retornou erro temporário (${resp.status}). Tentando novamente (${attempt + 1}/${maxAttempts})…`,
+          ),
         );
         await sleep(wait);
         continue;
