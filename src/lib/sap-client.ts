@@ -14,6 +14,27 @@ export { SapCircuitOpenError, getCircuitState, listCircuits, resetCircuit } from
 
 const FUNCTION_URL = "sap-b1-proxy";
 
+/**
+ * Avisos técnicos (lentidão / retentativas do ERP) são diagnóstico: só
+ * administradores devem vê-los. Cacheado de forma síncrona para não atrasar
+ * as chamadas — usuários comuns simplesmente nunca veem o toast.
+ */
+let diagnosticsAdmin = false;
+let diagnosticsAdminChecked = false;
+function refreshDiagnosticsAdmin() {
+  if (diagnosticsAdminChecked) return;
+  diagnosticsAdminChecked = true;
+  import("@/lib/auth-cache")
+    .then(({ getIsCloudAdmin }) => getIsCloudAdmin())
+    .then((v) => { diagnosticsAdmin = !!v; })
+    .catch(() => { diagnosticsAdmin = false; });
+}
+function diagnosticToast(fn: () => string | number | undefined): string | number | undefined {
+  refreshDiagnosticsAdmin();
+  if (!diagnosticsAdmin) return undefined;
+  return fn();
+}
+
 
 // Timeout & retry configuration for SAP calls.
 const REQUEST_TIMEOUT_MS = 45_000; // hard cap per attempt
