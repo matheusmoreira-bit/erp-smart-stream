@@ -127,6 +127,13 @@
       "when": 1789149816852,
       "tag": "0017_po_duplicate_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789180314914,
+      "tag": "0018_tighten_definer_execute_notifications_credentials",
+      "breakpoints": true
     }
   ]
 }
