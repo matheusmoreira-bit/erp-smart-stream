@@ -242,10 +242,12 @@ async function callProxy(body: Record<string, unknown>, opts: SapCallOptions = {
       lastError = aborted ? new SapTimeoutError() : err;
       if (attempt < maxAttempts && canRetry) {
         const wait = BACKOFF_BASE_MS * Math.pow(3, attempt - 1) + Math.floor(Math.random() * 300);
-        toast.message(
-          aborted
-            ? `SAP não respondeu a tempo. Tentando novamente (${attempt + 1}/${maxAttempts})…`
-            : `Falha de rede ao chamar SAP. Tentando novamente (${attempt + 1}/${maxAttempts})…`,
+        diagnosticToast(() =>
+          toast.message(
+            aborted
+              ? `SAP não respondeu a tempo. Tentando novamente (${attempt + 1}/${maxAttempts})…`
+              : `Falha de rede ao chamar SAP. Tentando novamente (${attempt + 1}/${maxAttempts})…`,
+          ),
         );
         await sleep(wait);
         continue;
