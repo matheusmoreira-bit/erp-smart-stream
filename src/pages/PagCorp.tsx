@@ -1915,14 +1915,15 @@ export default function PagCorp() {
                                 // NF/baixa lançadas manualmente também contam.
                                 const settled = st === "settled" || t.paymentFoundInSap === true;
                                 const settlementLabel = settled
-                                  ? `Baixa ${t.settlementPaymentDocNum ? `#${t.settlementPaymentDocNum}` : "OK"}`
+                                  ? `Baixado ${t.settlementPaymentDocNum ? `#${t.settlementPaymentDocNum}` : "OK"}`
                                   : st === "awaiting_invoice"
                                     ? "Aguardando NF"
                                     : st === "awaiting_settlement"
-                                      ? "Tentar baixa"
+                                      ? "Pronto para baixar"
                                       : st === "error"
-                                        ? "Reprocessar baixa"
-                                        : "Baixa automática";
+                                        ? "Erro na baixa"
+                                        : "Pendente";
+
 
                                 // Progressão: Integrado → NF lançada → Baixado
                                 const nfDone = settled || st === "awaiting_settlement" || t.nfFoundInSap === true;
