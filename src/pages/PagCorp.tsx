@@ -547,29 +547,24 @@ export default function PagCorp() {
     }
   };
 
-  // Reprocessa a baixa em lote para todas as transações filtradas que já tenham
-  // a NF de entrada lançada (settlementStatus = 'awaiting_settlement') ou que
-  // estejam em 'error' retentável. Cada integrationLogId gera 1 chamada ao
-  // watcher (o watcher já cobre todas as linhas daquele PC).
-  const handleBatchReprocessSettlement = async () => {
+  // Baixa em lote das transações selecionadas. Cada integrationLogId gera 1
+  // chamada ao watcher (o watcher já cobre todas as linhas daquele PC).
+  const handleBatchSettle = async () => {
     const eligible = filteredTransactions.filter(
-      (t) =>
-        t.integrationLogId &&
-        t.settlementStatus &&
-        t.settlementStatus !== "settled" &&
-        (t.settlementStatus === "awaiting_settlement" || t.settlementStatus === "error"),
+      (t) => settleSelected.has(t.id) && t.integrationLogId && settleStage(t) !== "settled",
     );
     const uniqueLogIds = Array.from(
       new Set(eligible.map((t) => t.integrationLogId as string)),
     );
     if (uniqueLogIds.length === 0) {
-      toast.info("Nenhuma transação com NF de entrada lançada aguardando baixa.");
+      toast.info("Selecione ao menos uma transação integrada para baixar.");
       return;
     }
     const confirmed = window.confirm(
-      `Reprocessar a baixa de ${uniqueLogIds.length} grupo(s) (${eligible.length} transações)?`,
+      `Baixar ${uniqueLogIds.length} pedido(s) (${eligible.length} transações)?`,
     );
     if (!confirmed) return;
+
 
     setBatchReprocessing(true);
     let settled = 0;
