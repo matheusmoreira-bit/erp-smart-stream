@@ -2162,7 +2162,7 @@ export default function PagCorp() {
                       </TableRow>
                       {isExpanded && (
                         <TableRow className={inGroup ? "border-border bg-success/[0.03]" : "border-border bg-muted/20"}>
-                          <TableCell colSpan={7} className="px-6 py-4">
+                          <TableCell colSpan={9} className="px-6 py-4">
                             <PagCorpTransactionDetails
                               transaction={t}
                               onOpenAttachments={openAttachments}
