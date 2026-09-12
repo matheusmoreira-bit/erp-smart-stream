@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PageTitle } from "@/components/PageTitle";
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
+import { ModulesNavSheet } from "@/components/ModulesNavSheet";
+
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 
 
@@ -80,16 +82,20 @@ export function PageHeader({
             <div className="hidden h-8 w-px bg-border sm:block" />
 
             {showBack && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate(backTo)}
-                className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground"
-                aria-label="Voltar"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
+              <>
+                <ModulesNavSheet />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => navigate(backTo)}
+                  className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground"
+                  aria-label="Voltar"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </Button>
+              </>
             )}
+
 
             {icon ? <div className="hidden rounded-md bg-primary/10 p-2 sm:block">{icon}</div> : null}
             <div className="min-w-0">
