@@ -1746,7 +1746,7 @@ export default function PagCorp() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-border hover:bg-transparent">
-                    <TableHead className="w-20">
+                    <TableHead className="w-24">
                       <Checkbox
                         checked={allSelected}
                         onCheckedChange={toggleSelectAll}
@@ -1757,8 +1757,11 @@ export default function PagCorp() {
                     <TableHead className="text-muted-foreground">Descrição</TableHead>
                     <TableHead className="text-muted-foreground">Portador</TableHead>
                     <TableHead className="text-muted-foreground text-right">Valor</TableHead>
+                    <TableHead className="text-muted-foreground text-center">Saldo</TableHead>
+                    <TableHead className="text-muted-foreground text-center">Pedido SAP</TableHead>
                     <TableHead className="text-muted-foreground text-center">Prestação</TableHead>
                     <TableHead className="text-muted-foreground text-center">Ações</TableHead>
+
                   </TableRow>
                 </TableHeader>
                 <TableBody>
