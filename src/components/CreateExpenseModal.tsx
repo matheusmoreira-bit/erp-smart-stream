@@ -2714,11 +2714,16 @@ export function CreateExpenseModal({
         },
         preview,
         draftId,
+        strict: true,
       });
       if (id) {
+        setDraftId(id);
         onDraftSaved?.(id);
         toast.success("Esboço salvo. Você pode retomar mais tarde.");
+      } else {
+        throw new Error("Esboço não retornou identificador");
       }
+
     } catch (e) {
       console.error("Falha ao salvar esboço:", e);
       toast.error("Não foi possível salvar o esboço.");
