@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PageTitle } from "@/components/PageTitle";
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
+import { ModulesNavSheet } from "@/components/ModulesNavSheet";
+
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
 
 
