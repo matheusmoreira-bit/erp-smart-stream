@@ -1503,13 +1503,28 @@ export default function PagCorp() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="not_integrated">Não integrado</SelectItem>
-                <SelectItem value="integrated_pending">Integrado — aguardando baixa</SelectItem>
+                <SelectItem value="integrated">Integrado</SelectItem>
+                <SelectItem value="nf">NF lançada</SelectItem>
                 <SelectItem value="settled">Baixado</SelectItem>
               </SelectContent>
             </Select>
           </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">Saldo utilizado</label>
+            <Select value={balanceFilter} onValueChange={(v) => setBalanceFilter(v as typeof balanceFilter)}>
+              <SelectTrigger className="w-44 bg-card">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="brl">Saldo em Real</SelectItem>
+                <SelectItem value="usd">Saldo em Dólar</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Cartão</label>
             <Select value={cardFilter} onValueChange={setCardFilter}>
