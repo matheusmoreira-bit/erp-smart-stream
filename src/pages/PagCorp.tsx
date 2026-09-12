@@ -312,8 +312,25 @@ export default function PagCorp() {
   const [endDate, setEndDate] = useState(today.toISOString().slice(0, 10));
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "review" | "done">("all");
-  const [settlementFilter, setSettlementFilter] = useState<"all" | "not_integrated" | "integrated_pending" | "settled">("all");
+  const [settlementFilter, setSettlementFilter] = useState<"all" | SettleStage>("all");
+  const [balanceFilter, setBalanceFilter] = useState<"all" | "brl" | "usd">("all");
+  const [settleSelected, setSettleSelected] = useState<Set<string | number>>(new Set());
+  const toggleSettleSelect = (id: string | number) =>
+    setSettleSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const toggleSettleGroup = (txs: PagCorpTransaction[]) =>
+    setSettleSelected((prev) => {
+      const next = new Set(prev);
+      const allIn = txs.every((t) => next.has(t.id));
+      txs.forEach((t) => (allIn ? next.delete(t.id) : next.add(t.id)));
+      return next;
+    });
   const [cardFilter, setCardFilter] = useState<string>("all");
+
   const [reprocessingGroup, setReprocessingGroup] = useState<string | null>(null);
   const [batchReprocessing, setBatchReprocessing] = useState(false);
   const [validateDialog, setValidateDialog] = useState<{ open: boolean; tx: PagCorpTransaction | null }>({ open: false, tx: null });
