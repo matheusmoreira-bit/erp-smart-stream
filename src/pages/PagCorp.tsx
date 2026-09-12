@@ -2193,41 +2193,49 @@ export default function PagCorp() {
                       const expanded = expandedGroups.has(item.key);
                       const settledCount = txs.filter((t) => t.settlementStatus === "settled").length;
 
+                      const groupStage = groupSettleStage(txs);
+                      const groupSelected = txs.every((t) => settleSelected.has(t.id));
+
                       const header = (
                         <TableRow
                           key={`group-${item.key}`}
-                          className="border-border bg-success/10 hover:bg-success/15 cursor-pointer"
+                          className={`border-border cursor-pointer hover:bg-muted/40 ${STAGE_ROW_CLASS[groupStage]}`}
                           onClick={() => toggleGroup(item.key)}
                         >
-                          <TableCell className="w-20">
-                            {expanded ? (
-                              <ChevronDown className="w-4 h-4 text-success" />
-                            ) : (
-                              <ChevronRight className="w-4 h-4 text-success" />
-                            )}
+                          <TableCell className="w-24">
+                            <div className="flex items-center gap-2">
+                              {expanded ? (
+                                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                              )}
+                              {!isJournalEntryGroup && (
+                                <Checkbox
+                                  checked={groupSelected}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onCheckedChange={() => toggleSettleGroup(txs)}
+                                  aria-label="Selecionar grupo para baixa"
+                                />
+                              )}
+                            </div>
                           </TableCell>
-                          <TableCell colSpan={6} className="py-2">
+                          <TableCell colSpan={8} className="py-2">
                             <div className="flex flex-wrap items-center gap-2 text-sm">
-                              <Layers className="w-4 h-4 text-success shrink-0" />
+                              <Layers className="w-4 h-4 text-muted-foreground shrink-0" />
                               <span className="font-semibold text-foreground">
                                 {isJournalEntryGroup ? "LCM em lote" : "PC consolidado"}
                                 {docNum != null ? ` #${docNum}` : docEntry != null ? ` (DocEntry ${docEntry})` : ""}
                               </span>
-                              <Badge variant="secondary" className="bg-success/20 text-success border-success/30">
+                              <Badge variant="secondary">
                                 {txs.length} transações
                               </Badge>
                               <span className="text-muted-foreground">•</span>
                               <span className="font-medium text-foreground tabular-nums">{totalsStr}</span>
-                              {!isJournalEntryGroup && settledCount > 0 && (
-                                <>
-                                  <span className="text-muted-foreground">•</span>
-                                  <span className="text-xs text-success inline-flex items-center gap-1">
-                                    <CheckCircle2 className="w-3 h-3" />
-                                    {settledCount === txs.length
-                                      ? "Baixa emitida"
-                                      : `${settledCount}/${txs.length} baixados`}
-                                  </span>
-                                </>
+                              <Badge variant="outline" className="text-[10px]">{STAGE_LABEL[groupStage]}</Badge>
+                              {!isJournalEntryGroup && settledCount > 0 && settledCount < txs.length && (
+                                <span className="text-xs text-muted-foreground">
+                                  {settledCount}/{txs.length} baixados
+                                </span>
                               )}
                               <div className="ml-auto flex items-center gap-2">
                                 {!isJournalEntryGroup && settledCount < txs.length && (
@@ -2244,9 +2252,9 @@ export default function PagCorp() {
                                     {reprocessingGroup === item.key ? (
                                       <Loader2 className="w-3 h-3 animate-spin" />
                                     ) : (
-                                      <RefreshCw className="w-3 h-3" />
+                                      <DownloadCloud className="w-3 h-3" />
                                     )}
-                                    {settledCount > 0 ? "Reprocessar baixa" : "Processar baixa"}
+                                    Baixar
                                   </Button>
                                 )}
                                 <span className="text-xs text-muted-foreground">
@@ -2260,6 +2268,7 @@ export default function PagCorp() {
 
                       if (!expanded) return [header];
                       return [header, ...txs.map((t) => renderTxRow(t, { inGroup: true }))];
+
                     });
                   })()}
                 </TableBody>
