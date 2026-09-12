@@ -8,6 +8,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 
 const FACILITIES_FALLBACK = "compras@anagaming.com.br";
 const OPEN_STATUSES = ["aberto", "em_andamento", "aguardando_solicitante", "pendente_solicitante"];
@@ -85,6 +86,9 @@ function buildHtml(req: Req, overdue: boolean, deltaLabel: string): string {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const auth = await requireSchedulerOrAdmin(req, corsHeaders);
+  if (!auth.ok) return auth.response;
+
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
