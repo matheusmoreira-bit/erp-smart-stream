@@ -57,20 +57,26 @@ export async function saveDraft(params: {
   payload: any;
   preview: string;
   draftId?: string | null;
+  /** When true, throws on failure so the UI can warn the user. */
+  strict?: boolean;
 }): Promise<string | null> {
-  const { docType, companyDb, payload, preview, draftId } = params;
+  const { docType, companyDb, payload, preview, draftId, strict } = params;
   try {
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData.user?.id;
-    if (!userId) return null;
+    if (!userId) throw new Error("Sessão expirada. Entre novamente para salvar o esboço.");
 
     if (draftId) {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("document_drafts")
         .update({ payload, preview, expires_at: NON_EXPIRING_DRAFT_DATE })
-        .eq("id", draftId);
+        .eq("id", draftId)
+        .eq("user_id", userId)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
-      return draftId;
+      if ((data as any)?.id) return (data as any).id as string;
+      // Draft no longer exists — fall through and recreate it.
     }
 
     // Upsert by (user_id, company_db, doc_type)
@@ -93,9 +99,11 @@ export async function saveDraft(params: {
     return (data as any)?.id || null;
   } catch (e) {
     console.warn("saveDraft failed:", e);
+    if (strict) throw e;
     return null;
   }
 }
+
 
 export async function deleteDraft(id: string) {
   try {
