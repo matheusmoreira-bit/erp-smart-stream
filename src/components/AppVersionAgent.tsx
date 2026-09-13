@@ -110,15 +110,14 @@ export function AppVersionAgent() {
   }, []);
 
   // Troca de tela é o momento seguro para aplicar a atualização: nenhum
-  // formulário aberto é perdido no meio do preenchimento.
-  const firstRender = useRef(true);
+  // formulário aberto é perdido no meio do preenchimento. Por isso o reload só
+  // acontece quando a rota realmente muda — nunca ao detectar a nova versão.
+  const lastPathRef = useRef(location.pathname);
   useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false;
-      return;
-    }
-    if (stale) hardReload();
-  }, [location.pathname, stale]);
+    if (lastPathRef.current === location.pathname) return;
+    lastPathRef.current = location.pathname;
+    if (staleRef.current) hardReload();
+  }, [location.pathname]);
 
   if (!stale) return null;
 
