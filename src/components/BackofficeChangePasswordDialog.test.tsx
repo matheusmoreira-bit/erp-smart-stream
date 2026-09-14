@@ -25,7 +25,7 @@ describe("BackofficeChangePasswordDialog", () => {
     ]);
   });
 
-  it("habilita provisionamento apenas para senha aleatoria ou conhecida", async () => {
+  it("permite provisionar a senha redefinida quando ha e-mail alvo", async () => {
     render(
       <BackofficeChangePasswordDialog
         open
@@ -38,9 +38,6 @@ describe("BackofficeChangePasswordDialog", () => {
     );
 
     const provision = screen.getByRole("switch", { name: "Provisionar senha" });
-    expect(provision).toBeDisabled();
-
-    fireEvent.click(screen.getByRole("radio", { name: /Senha aleatória/i }));
     expect(provision).toBeEnabled();
     fireEvent.click(provision);
     fireEvent.click(screen.getByRole("button", { name: "Redefinir e provisionar" }));
