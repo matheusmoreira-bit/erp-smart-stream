@@ -126,6 +126,17 @@ async function scopeRowsToCaller(
 }
 
 
+/**
+ * Circuito curto por empresa: quando a HanaAPI não responde, cada chamada
+ * custava ~60s (dois IPs x timeout) e travava a tela de aprovações. Após uma
+ * falha de infraestrutura, as próximas chamadas da mesma base respondem
+ * imediatamente com `hanaUnavailable` durante o cooldown.
+ */
+const HANA_COOLDOWN_MS = 3 * 60_000;
+const hanaCooldown = new Map<string, { until: number; detail: string }>();
+/** Timeout por IP: 2 IPs => teto de ~24s em vez de 60s+. */
+const HANA_TIMEOUT_MS = 12_000;
+
 Deno.serve(withEdgeMetrics("sap-approvals-hana", async (req, _mctx) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
