@@ -213,6 +213,9 @@ Deno.serve(async (req) => {
       const poStatusChanged = row.sap_purchase_order_status !== poStatus;
       if (poStatusChanged || newExpenseStatus) patch.sap_integration_last_attempt_at = now;
       await sb.from("expenses").update(patch).eq("id", row.id);
+      if (newExpenseStatus === "finalizado" && row.doc_type !== "sales") {
+        await notifyExpensePaid(sb, { id: row.id });
+      }
       results.push({ id: row.id, docEntry, poStatus, expenseStatus: newExpenseStatus, source } as typeof results[number] & { source?: string });
     };
 
