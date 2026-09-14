@@ -215,7 +215,9 @@ Deno.serve(withEdgeMetrics("sap-approvals-hana", async (req, _mctx) => {
         view: "VW_APROVACOES_DETALHADAS",
         sessionId: effectiveSessionId,
         hanaApiUrl: creds.hana_api_url || null,
+        timeoutMs: HANA_TIMEOUT_MS,
       });
+      hanaCooldown.delete(companyDb);
       let scoped: HanaRow[];
       try {
         scoped = await scopeRowsToCaller(sb, req, (rows || []) as HanaRow[]);
