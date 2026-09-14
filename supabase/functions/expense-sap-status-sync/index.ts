@@ -351,6 +351,9 @@ Deno.serve(async (req) => {
               patch.sap_integration_last_attempt_at = now;
             }
             await sb.from("expenses").update(patch).eq("id", row.id);
+            if (newExpenseStatus === "finalizado" && row.doc_type !== "sales") {
+              await notifyExpensePaid(sb, { id: row.id });
+            }
             results.push({ id: row.id, docEntry, poStatus, expenseStatus: newExpenseStatus });
           } catch (e) {
             const msg = (e as Error).message;
