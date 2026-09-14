@@ -158,6 +158,20 @@ Deno.serve(withEdgeMetrics("sap-approvals-hana", async (req, _mctx) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // Base em cooldown: responde na hora, sem login técnico nem espera de rede.
+    const cooling = hanaCooldown.get(companyDb);
+    if (cooling && cooling.until > Date.now()) {
+      return new Response(
+        JSON.stringify({
+          schema: schemaOverride || HANA_SCHEMA_OVERRIDES[companyDb] || companyDb,
+          data: [],
+          hanaUnavailable: true,
+          detail: cooling.detail,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { data: credsRows } = await sb
       .from("system_credentials")
