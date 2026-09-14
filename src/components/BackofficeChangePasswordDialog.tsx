@@ -16,9 +16,7 @@ import { PasswordPolicyChecklist } from "@/components/PasswordPolicyChecklist";
 import { checkPasswordPolicy, generateStrongPassword } from "@/lib/password-policy";
 import { toast } from "sonner";
 
-const DEFAULT_RESET_PASSWORD = "Sap@2025";
-
-type PasswordMode = "default" | "random" | "known";
+type PasswordMode = "random" | "known";
 
 interface CompanyOption {
   company_db: string;
@@ -43,30 +41,30 @@ export function BackofficeChangePasswordDialog({
   const [otherCompanies, setOtherCompanies] = useState<CompanyOption[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [summary, setSummary] = useState<MultiCompanyPasswordResult[] | null>(null);
-  const [mode, setMode] = useState<PasswordMode>("default");
-  const [password, setPassword] = useState<string>(DEFAULT_RESET_PASSWORD);
+  const [mode, setMode] = useState<PasswordMode>("random");
+  const [password, setPassword] = useState<string>("");
   const [showPassword, setShowPassword] = useState(false);
   const [provision, setProvision] = useState(false);
   const policy = useMemo(() => checkPasswordPolicy(password, userCode), [password, userCode]);
-  const canProvision = mode !== "default" && !!targetEmail;
+  const canProvision = !!targetEmail;
 
   useEffect(() => {
     if (!open) return;
-    setMode("default");
-    setPassword(DEFAULT_RESET_PASSWORD);
-    setShowPassword(false);
+    setMode("random");
+    setPassword(generateStrongPassword(20, userCode));
+    setShowPassword(true);
     setProvision(false);
     listSapTargetCompanies(currentCompanyDb).then((cs) => {
       setOtherCompanies(cs.map((c) => ({ company_db: c.company_db, display_name: c.display_name })));
     });
-  }, [open, currentCompanyDb]);
+  }, [open, currentCompanyDb, userCode]);
 
   const reset = () => {
     setSelected(new Set());
     setSummary(null);
-    setMode("default");
-    setPassword(DEFAULT_RESET_PASSWORD);
-    setShowPassword(false);
+    setMode("random");
+    setPassword(generateStrongPassword(20, userCode));
+    setShowPassword(true);
     setProvision(false);
   };
 
@@ -74,13 +72,7 @@ export function BackofficeChangePasswordDialog({
     setMode(next);
     setProvision(false);
     setShowPassword(next === "random");
-    setPassword(
-      next === "default"
-        ? DEFAULT_RESET_PASSWORD
-        : next === "random"
-          ? generateStrongPassword(20, userCode)
-          : "",
-    );
+    setPassword(next === "random" ? generateStrongPassword(20, userCode) : "");
   };
 
   const toggle = (db: string) => {
@@ -97,7 +89,7 @@ export function BackofficeChangePasswordDialog({
       toast.error("Informe uma senha");
       return;
     }
-    if (mode !== "default" && !policy.valid) {
+    if (!policy.valid) {
       toast.error(`A senha não atende à política: ${policy.failed[0]?.label || "revise a senha"}`);
       return;
     }
@@ -190,10 +182,6 @@ export function BackofficeChangePasswordDialog({
                 className="grid gap-2"
               >
                 <label className="flex cursor-pointer items-start gap-2 text-sm">
-                  <RadioGroupItem value="default" className="mt-0.5" />
-                  <span><strong>Senha padrão</strong><span className="block text-xs text-muted-foreground">Sap@2025</span></span>
-                </label>
-                <label className="flex cursor-pointer items-start gap-2 text-sm">
                   <RadioGroupItem value="random" className="mt-0.5" />
                   <span><strong>Senha aleatória</strong><span className="block text-xs text-muted-foreground">Gerada com política forte e exclusiva.</span></span>
                 </label>
@@ -207,10 +195,10 @@ export function BackofficeChangePasswordDialog({
                 <div className="relative flex-1">
                   <Input
                     id="new-password"
-                    type={showPassword || mode === "default" ? "text" : "password"}
+                    type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    readOnly={mode !== "known"}
+                    readOnly={mode === "random"}
                     className="pr-9 font-mono"
                     autoComplete="new-password"
                     placeholder={mode === "known" ? "Digite a nova senha" : undefined}
@@ -237,7 +225,7 @@ export function BackofficeChangePasswordDialog({
                     <RefreshCw className="h-4 w-4" />
                   </Button>
                 )}
-                {mode !== "default" && (
+                {(
                   <Button
                     type="button"
                     variant="outline"
@@ -258,7 +246,7 @@ export function BackofficeChangePasswordDialog({
                 )}
               </div>
 
-              {mode !== "default" && <PasswordPolicyChecklist password={password} userCode={userCode} />}
+              <PasswordPolicyChecklist password={password} userCode={userCode} />
 
               <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
                 <div>
@@ -305,7 +293,7 @@ export function BackofficeChangePasswordDialog({
             <Button
               type="submit"
               className="w-full"
-              disabled={loading || !password || (mode !== "default" && !policy.valid)}
+              disabled={loading || !password || !policy.valid}
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               {provision ? "Redefinir e provisionar" : "Redefinir senha"}
