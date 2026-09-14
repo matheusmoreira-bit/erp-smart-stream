@@ -11,6 +11,7 @@ import {
   deriveExpenseLifecycleStatus,
   type SapInvoiceLifecycle,
 } from "../_shared/expense-status-chain.ts";
+import { notifyExpensePaid } from "../_shared/expense-paid-notify.ts";
 
 interface ExpenseRow {
   id: string;
