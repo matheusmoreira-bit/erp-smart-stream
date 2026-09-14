@@ -238,6 +238,7 @@ Deno.serve(withEdgeMetrics("sap-approvals-hana", async (req, _mctx) => {
       // lista vazia com sinalização para o cliente cair no cache/Service Layer.
       if (/No route to host|tcp connect|error sending request|timed out|timeout|todos os IPs|aborted/i.test(msg)) {
         console.log(`[sap-approvals-hana] HANA indisponível (companyDb=${companyDb}): ${msg.slice(0, 160)}`);
+        hanaCooldown.set(companyDb, { until: Date.now() + HANA_COOLDOWN_MS, detail: msg.slice(0, 240) });
         return new Response(
           JSON.stringify({ schema, data: [], hanaUnavailable: true, detail: msg.slice(0, 240) }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } });
