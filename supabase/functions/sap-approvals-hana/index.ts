@@ -126,6 +126,17 @@ async function scopeRowsToCaller(
 }
 
 
+/**
+ * Circuito curto por empresa: quando a HanaAPI não responde, cada chamada
+ * custava ~60s (dois IPs x timeout) e travava a tela de aprovações. Após uma
+ * falha de infraestrutura, as próximas chamadas da mesma base respondem
+ * imediatamente com `hanaUnavailable` durante o cooldown.
+ */
+const HANA_COOLDOWN_MS = 3 * 60_000;
+const hanaCooldown = new Map<string, { until: number; detail: string }>();
+/** Timeout por IP: 2 IPs => teto de ~24s em vez de 60s+. */
+const HANA_TIMEOUT_MS = 12_000;
+
 Deno.serve(withEdgeMetrics("sap-approvals-hana", async (req, _mctx) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -145,6 +156,20 @@ Deno.serve(withEdgeMetrics("sap-approvals-hana", async (req, _mctx) => {
     if (!companyDb) {
       return new Response(JSON.stringify({ error: "company_db obrigatório" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // Base em cooldown: responde na hora, sem login técnico nem espera de rede.
+    const cooling = hanaCooldown.get(companyDb);
+    if (cooling && cooling.until > Date.now()) {
+      return new Response(
+        JSON.stringify({
+          schema: schemaOverride || HANA_SCHEMA_OVERRIDES[companyDb] || companyDb,
+          data: [],
+          hanaUnavailable: true,
+          detail: cooling.detail,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -190,7 +215,9 @@ Deno.serve(withEdgeMetrics("sap-approvals-hana", async (req, _mctx) => {
         view: "VW_APROVACOES_DETALHADAS",
         sessionId: effectiveSessionId,
         hanaApiUrl: creds.hana_api_url || null,
+        timeoutMs: HANA_TIMEOUT_MS,
       });
+      hanaCooldown.delete(companyDb);
       let scoped: HanaRow[];
       try {
         scoped = await scopeRowsToCaller(sb, req, (rows || []) as HanaRow[]);
@@ -211,6 +238,7 @@ Deno.serve(withEdgeMetrics("sap-approvals-hana", async (req, _mctx) => {
       // lista vazia com sinalização para o cliente cair no cache/Service Layer.
       if (/No route to host|tcp connect|error sending request|timed out|timeout|todos os IPs|aborted/i.test(msg)) {
         console.log(`[sap-approvals-hana] HANA indisponível (companyDb=${companyDb}): ${msg.slice(0, 160)}`);
+        hanaCooldown.set(companyDb, { until: Date.now() + HANA_COOLDOWN_MS, detail: msg.slice(0, 240) });
         return new Response(
           JSON.stringify({ schema, data: [], hanaUnavailable: true, detail: msg.slice(0, 240) }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } });
