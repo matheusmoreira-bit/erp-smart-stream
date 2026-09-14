@@ -2257,7 +2257,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     // Busca textual → cláusula `or` (sem vírgulas/parênteses, que são
     // separadores no PostgREST).
     let or: string | undefined;
-    const term = searchDebounced.trim().replace(/[(),*%]/g, " ").replace(/\s+/g, " ").trim();
+    const term = searchDebounced.trim().replace(/[(),*%#]/g, " ").replace(/\s+/g, " ").trim();
     if (term) {
       const pattern = `*${term.replace(/ /g, "*")}*`;
       const parts = [
@@ -2270,8 +2270,19 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
       if (/^\d+$/.test(term)) {
         parts.push(`sap_doc_num.eq.${term}`, `sap_doc_entry.eq.${term}`);
       }
+      // Código interno do documento (ex.: "EFA523EF" ou o id completo):
+      // o id é uuid, então buscamos por FAIXA de prefixo em vez de `ilike`.
+      const hex = term.replace(/-/g, "").toLowerCase();
+      if (/^[0-9a-f]{4,32}$/.test(hex)) {
+        const pad = (fill: string) => {
+          const full = (hex + fill.repeat(32)).slice(0, 32);
+          return `${full.slice(0, 8)}-${full.slice(8, 12)}-${full.slice(12, 16)}-${full.slice(16, 20)}-${full.slice(20)}`;
+        };
+        parts.push(`and(id.gte.${pad("0")},id.lte.${pad("f")})`);
+      }
       or = parts.join(",");
     }
+
 
     const orderColumn = ({
       status: "status",
