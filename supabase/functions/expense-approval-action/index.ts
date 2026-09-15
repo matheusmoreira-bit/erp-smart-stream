@@ -690,6 +690,65 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
         }].filter((t) => !requesterMatchesApprover(requesterIdName, requesterIdEmail, t.name, t.email))
       : currentLevelRowsNoSelf.map((row) => ({ name: row.approver_name, email: row.approver_email })));
 
+  // Override/segmento salvo apenas por NOME CURTO (ex.: "Erika Caroline",
+  // enquanto a pessoa é "Erika Caroline de Araujo" / erika.araujo@) impedia o
+  // casamento com a identidade de login. Enriquecemos o alvo com o e-mail
+  // conhecido: primeiro pela matriz de aprovação (mesmo nome), depois pelo
+  // diretório de usuários (nome do alvo como prefixo do nome completo).
+  const enrichTargets = async () => {
+    for (const t of designatedTargets) {
+      if (t.email || !t.name) continue;
+      const key = normalize(t.name);
+      const fromLevels = levels.find(
+        (l) => normalize(l.approver_name) === key && !!l.approver_email,
+      );
+      if (fromLevels) { t.email = fromLevels.approver_email; continue; }
+
+      const { data: lvlRows } = await admin
+        .from("approval_rule_levels")
+        .select("approver_name, approver_email, approval_rules!inner(company_db)")
+        .ilike("approver_name", t.name)
+        .not("approver_email", "is", null)
+        .limit(10);
+      const lvlHit = (lvlRows || []).find(
+        (r: any) =>
+          normalize(r.approver_name) === key &&
+          String(r.approval_rules?.company_db || "") === String((exp as any).company_db || ""),
+      );
+      if (lvlHit) { t.email = (lvlHit as any).approver_email; continue; }
+
+      const toks = tokenize(t.name);
+      if (toks.length < 2) continue;
+      const { data: dirRows } = await admin
+        .from("sap_user_directory")
+        .select("user_key, display_name")
+        .eq("is_active", true)
+        .ilike("display_name", `${t.name}%`)
+        .limit(10);
+      const cands = (dirRows || []).filter(
+        (d: any) => tokenize(String(d.display_name || "")).slice(0, toks.length).join(" ") === toks.join(" "),
+      );
+      if (cands.length !== 1) continue;
+      const { data: mails } = await admin
+        .from("sap_user_emails")
+        .select("email, is_primary")
+        .eq("user_key", (cands[0] as any).user_key)
+        .limit(5);
+      const mail = (mails || []).find((m: any) => m.is_primary) || (mails || [])[0];
+      if (mail) {
+        t.email = (mail as any).email;
+        stageLog("authorize", "info", {
+          requestId, expenseId, reason: "target_email_resolved_from_directory",
+          targetName: t.name,
+        });
+      }
+    }
+  };
+  try {
+    await enrichTargets();
+  } catch (e) {
+    stageLog("authorize", "warn", { requestId, phase: "enrich_targets", error: (e as Error).message });
+  }
 
   let isMatch = !!callerIdentity && designatedTargets.some((t) =>
     isDesignatedApprover(callerIdentity as string, t.name, t.email),
