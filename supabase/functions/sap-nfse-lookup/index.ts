@@ -19,6 +19,10 @@ const corsHeaders = {
 };
 
 const TAXONE_SCHEMA = "SBO_TaxOne";
+/** Timeout por consulta HANA e cooldown por empresa após falha de upstream. */
+const HANA_TIMEOUT_MS = 12_000;
+const HANA_COOLDOWN_MS = 3 * 60_000;
+const hanaCooldown = new Map<string, number>();
 /** DocType do addon fiscal: 13 = Invoices (NF de saída de serviço). */
 const DEFAULT_DOC_TYPE = 13;
 
