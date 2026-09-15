@@ -574,6 +574,44 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     return await respond(404, { error: "Despesa não encontrada.", stage: "load_expense" });
   }
   if ((exp as any).status !== "pendente_aprovacao") {
+    // Idempotência: se este mesmo usuário já registrou a decisão (clique duplo,
+    // reenvio do link, aba antiga), respondemos sucesso em vez de erro.
+    try {
+      const callerIds = [callerIdentity, callerEmail]
+        .map((v) => String(v || "").trim().toLowerCase())
+        .filter(Boolean);
+      if (callerIds.length > 0) {
+        const { data: priorLogs } = await admin
+          .from("expense_approval_log")
+          .select("decision, approver_name, approver_email, decided_at")
+          .eq("expense_id", expenseId)
+          .in("decision", ["approved", "rejected", "returned"])
+          .order("decided_at", { ascending: false })
+          .limit(20);
+        const mine = (priorLogs || []).find((l: any) =>
+          callerIds.some((id) =>
+            [l.approver_email, l.approver_name]
+              .map((v: unknown) => String(v || "").trim().toLowerCase())
+              .some((v) => v && (v === id || v.split("@")[0] === id.split("@")[0])),
+          ),
+        );
+        if (mine) {
+          stageLog("load_expense", "info", {
+            requestId, expenseId, reason: "already_decided_by_caller", decision: (mine as any).decision,
+          });
+          return await respond(200, {
+            success: true,
+            alreadyDecided: true,
+            decision: (mine as any).decision,
+            decidedAt: (mine as any).decided_at,
+            currentStatus: (exp as any).status,
+            message: "Sua decisão já havia sido registrada para este documento.",
+          });
+        }
+      }
+    } catch (e) {
+      stageLog("load_expense", "warn", { requestId, phase: "already_decided_check", error: (e as Error).message });
+    }
     stageLog("load_expense", "warn", {
       requestId, expenseId, reason: "invalid_status", currentStatus: (exp as any).status,
     });
@@ -583,6 +621,7 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
       currentStatus: (exp as any).status,
     });
   }
+
 
 
   const currentLevel = Number((exp as any).current_level_order || 1);
