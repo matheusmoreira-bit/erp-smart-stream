@@ -9,6 +9,7 @@ import { isManualCancellationPayload } from "../_shared/expense-integration-canc
 import { backoffMinutes, classifySapError, nextAttemptAt, shouldExhaustRetry, type SapRetryDocType } from "../_shared/sap-retry.ts";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
+import { listStandaloneCompanies } from "../_shared/standalone-mode.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -183,8 +184,15 @@ Deno.serve(async (req) => {
   }
 
   const results: Array<{ id: string; ok: boolean; action: string; error?: string }> = [];
+  // Empresas em modo standalone: a fila não é processada (o ERP está parado).
+  const standaloneCompanies = new Set(await listStandaloneCompanies());
 
   for (const row of claimed) {
+    if (row.company_db && standaloneCompanies.has(String(row.company_db))) {
+      await admin.from("sap_retry_queue").update({ status: "pending" }).eq("id", row.id);
+      results.push({ id: row.id, ok: false, action: "standalone_hold" });
+      continue;
+    }
     if (row.doc_type === "expense" && isManualCancellationPayload(row.payload)) {
       await admin.from("sap_retry_queue").update({
         status: "cancelled",

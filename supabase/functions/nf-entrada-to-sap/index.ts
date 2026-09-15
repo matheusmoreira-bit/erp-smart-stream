@@ -7,6 +7,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
+import { getStandaloneMode } from "../_shared/standalone-mode.ts";
 
 interface NfRow {
   id: string;
@@ -73,6 +74,10 @@ async function createPoDraft(baseUrl: string, cookie: string, body: Record<strin
 async function process(sb: ReturnType<typeof createClient>, row: NfRow): Promise<string> {
   if (row.sap_po_draft_id) return row.sap_po_draft_id;
   if (!row.sap_company_db) throw new Error("sap_company_db não definido");
+  {
+    const _sa = await getStandaloneMode(row.sap_company_db);
+    if (_sa) throw new Error(`Empresa em modo standalone: integração com o ERP pausada. O documento permanece na fila e será enviado quando o modo for desligado.`);
+  }
 
   // Resolver fornecedor (CardCode) por CNPJ no SAP
   const creds = await loadCredentials(sb, row.sap_company_db);
