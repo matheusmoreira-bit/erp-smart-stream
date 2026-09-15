@@ -27,6 +27,7 @@ import { CompanyIntegrationsSection } from "@/components/CompanyIntegrationsSect
 import { CustomFieldsEditor } from "@/components/CustomFieldsEditor";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { PageTitle } from "@/components/PageTitle";
+import { StandaloneModeCard } from "@/components/StandaloneModeCard";
 
 const TEST_ENDPOINTS: Record<string, string> = {
   mastertax: "mastertax-test",
@@ -469,6 +470,7 @@ export default function Credentials() {
 
       <main className="flex-1 px-6 py-8">
         <div className="max-w-4xl mx-auto space-y-6">
+          <StandaloneModeCard />
           <div className="glass-card p-4 flex items-start gap-3 border-warning/30">
             <Shield className="w-5 h-5 text-warning mt-0.5" />
             <div>
