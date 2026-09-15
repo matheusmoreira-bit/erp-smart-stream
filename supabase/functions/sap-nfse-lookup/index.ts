@@ -19,6 +19,10 @@ const corsHeaders = {
 };
 
 const TAXONE_SCHEMA = "SBO_TaxOne";
+/** Timeout por consulta HANA e cooldown por empresa após falha de upstream. */
+const HANA_TIMEOUT_MS = 12_000;
+const HANA_COOLDOWN_MS = 3 * 60_000;
+const hanaCooldown = new Map<string, number>();
 /** DocType do addon fiscal: 13 = Invoices (NF de saída de serviço). */
 const DEFAULT_DOC_TYPE = 13;
 
@@ -81,9 +85,11 @@ Deno.serve(async (req) => {
   if (!auth.ok) return auth.response;
 
 
+  let companyDbForCooldown: string | undefined;
   try {
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const companyDb: string | undefined = body?.company_db || req.headers.get("x-company-db") || undefined;
+    companyDbForCooldown = companyDb;
     const docType = Number(body?.doc_type ?? DEFAULT_DOC_TYPE);
     const docEntries: number[] = Array.isArray(body?.doc_entries)
       ? (body.doc_entries as unknown[]).map((n) => Number(n)).filter((n) => Number.isFinite(n))
@@ -96,6 +102,15 @@ Deno.serve(async (req) => {
     }
     if (docEntries.length === 0) {
       return new Response(JSON.stringify({ map: {} }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Cooldown: após falha de upstream (SAP/HANA fora do ar), responde de
+    // imediato com fallback em vez de esperar timeouts a cada chamada.
+    const cooldownUntil = hanaCooldown.get(companyDb) ?? 0;
+    if (Date.now() < cooldownUntil) {
+      return new Response(JSON.stringify({ map: {}, unavailable: true, reason: "hana_cooldown" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -124,6 +139,7 @@ Deno.serve(async (req) => {
         sessionId: session.sessionId,
         hanaApiUrl: creds.hana_api_url,
         limit: 200,
+        timeoutMs: HANA_TIMEOUT_MS,
         filters: { CompanyDb__eq: schema },
       });
       const entityIds = entities
@@ -145,6 +161,7 @@ Deno.serve(async (req) => {
           sessionId: session.sessionId,
           hanaApiUrl: creds.hana_api_url,
           limit: CHUNK * entityIds.length,
+          timeoutMs: HANA_TIMEOUT_MS,
           filters: {
             EntityId__in: entityIds.join(","),
             DocType__eq: docType,
@@ -175,13 +192,18 @@ Deno.serve(async (req) => {
       await sapLogout(baseUrl, session);
     }
 
+    hanaCooldown.delete(companyDb);
     return new Response(JSON.stringify({ map }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    console.error("[sap-nfse-lookup]", (e as Error)?.message);
-    return new Response(JSON.stringify({ error: String((e as Error)?.message || e), map: {} }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const message = String((e as Error)?.message || e);
+    console.error("[sap-nfse-lookup]", message);
+    if (companyDbForCooldown) hanaCooldown.set(companyDbForCooldown, Date.now() + HANA_COOLDOWN_MS);
+    // Indisponibilidade do SAP/HANA não é erro do Flow: o chamador mantém o
+    // fallback (número do RPS) em vez de quebrar a tela.
+    return new Response(JSON.stringify({ map: {}, unavailable: true, error: message }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

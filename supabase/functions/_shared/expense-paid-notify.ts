@@ -192,7 +192,7 @@ async function alreadySent(sb: any, row: PaidExpenseRow, email: string): Promise
 
 async function record(sb: any, row: PaidExpenseRow, email: string, subject: string, html: string, result: { ok: boolean; error?: string }) {
   try {
-    await sb.from("po_notification_sent").insert({
+    const { error } = await sb.from("po_notification_sent").insert({
       company_db: row.company_db,
       po_doc_entry: row.sap_doc_entry ?? -1,
       po_doc_num: row.sap_doc_num ?? null,
@@ -203,6 +203,7 @@ async function record(sb: any, row: PaidExpenseRow, email: string, subject: stri
       status: result.ok ? "sent" : "error",
       error_message: result.ok ? null : (result.error || "falha no envio")?.slice(0, 500),
     });
+    if (error) console.warn("[expense-paid-notify] registro recusado:", error.message || String(error));
   } catch (e) {
     console.warn("[expense-paid-notify] registro:", e instanceof Error ? e.message : String(e));
   }
