@@ -159,6 +159,7 @@ Deno.serve(async (req) => {
           sessionId: session.sessionId,
           hanaApiUrl: creds.hana_api_url,
           limit: CHUNK * entityIds.length,
+          timeoutMs: HANA_TIMEOUT_MS,
           filters: {
             EntityId__in: entityIds.join(","),
             DocType__eq: docType,
