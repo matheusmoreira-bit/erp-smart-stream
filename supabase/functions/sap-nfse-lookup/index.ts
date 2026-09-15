@@ -104,6 +104,15 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Cooldown: após falha de upstream (SAP/HANA fora do ar), responde de
+    // imediato com fallback em vez de esperar timeouts a cada chamada.
+    const cooldownUntil = hanaCooldown.get(companyDb) ?? 0;
+    if (Date.now() < cooldownUntil) {
+      return new Response(JSON.stringify({ map: {}, unavailable: true, reason: "hana_cooldown" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const creds = await loadCreds(sb, companyDb);
     if (!creds) {
