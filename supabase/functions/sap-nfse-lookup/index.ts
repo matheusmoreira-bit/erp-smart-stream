@@ -137,6 +137,7 @@ Deno.serve(async (req) => {
         sessionId: session.sessionId,
         hanaApiUrl: creds.hana_api_url,
         limit: 200,
+        timeoutMs: HANA_TIMEOUT_MS,
         filters: { CompanyDb__eq: schema },
       });
       const entityIds = entities
