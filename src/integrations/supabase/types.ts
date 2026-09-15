@@ -8764,6 +8764,42 @@ export type Database = {
         }
         Relationships: []
       }
+      standalone_mode: {
+        Row: {
+          company_db: string
+          created_at: string
+          enabled: boolean
+          ends_at: string | null
+          reason: string | null
+          snapshot_at: string | null
+          snapshot_summary: Json | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          enabled?: boolean
+          ends_at?: string | null
+          reason?: string | null
+          snapshot_at?: string | null
+          snapshot_summary?: Json | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          enabled?: boolean
+          ends_at?: string | null
+          reason?: string | null
+          snapshot_at?: string | null
+          snapshot_summary?: Json | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       submitted_document_hashes: {
         Row: {
           company_db: string | null

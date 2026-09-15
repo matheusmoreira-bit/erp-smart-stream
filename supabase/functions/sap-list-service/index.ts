@@ -14,6 +14,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { sapFetch } from "../_shared/sap-fetch.ts";
+import { getStandaloneMode, isStandaloneBypass } from "../_shared/standalone-mode.ts";
 
 const corsHeaders = {
   ...baseCorsHeaders,
@@ -103,6 +104,19 @@ Deno.serve(async (req) => {
     }
 
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    // Modo standalone: a empresa opera só com os cadastros já copiados para o
+    // banco do Flow. Nenhuma chamada ao Service Layer é feita.
+    if (!isStandaloneBypass(req)) {
+      const standalone = await getStandaloneMode(companyDb);
+      if (standalone) {
+        return new Response(
+          JSON.stringify({ rows: [], total: 0, code: "standalone", standalone: true, ends_at: standalone.ends_at }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
     const creds = await loadApiuserCreds(sb, companyDb);
     if (!creds) {
       return new Response(

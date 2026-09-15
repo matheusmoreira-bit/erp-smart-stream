@@ -14,6 +14,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { ensureCopyToTargetDocument } from "../_shared/sap-attach-copy.ts";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
+import { getStandaloneMode, standaloneResponse } from "../_shared/standalone-mode.ts";
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { buildPagCorpJournalTransactionPairs } from "../_shared/pagcorp-journal-entry.ts";
@@ -506,6 +507,10 @@ Deno.serve(async (req) => {
 
     if (rawList.length === 0) throw new Error("transaction(s) inválido(s)");
     if (!companyDb) throw new Error("companyDb obrigatório");
+    {
+      const _sa = await getStandaloneMode(companyDb);
+      if (_sa) return standaloneResponse(_sa, corsHeaders);
+    }
     if (postingType === "purchase_order" && !supplierCode) throw new Error("supplierCode (CardCode) obrigatório");
     if (postingType === "journal_entry" && (!journalEntry?.debitAccount || !journalEntry?.creditAccount)) {
       throw new Error("Contas de débito e crédito são obrigatórias para o Lançamento Contábil");

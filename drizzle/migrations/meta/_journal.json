@@ -148,6 +148,13 @@
       "when": 1789183576008,
       "tag": "0020_fix_document_drafts_grants_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1789480002823,
+      "tag": "0021_create_standalone_mode",
+      "breakpoints": true
     }
   ]
 }

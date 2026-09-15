@@ -8,6 +8,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { fetchHanaView } from "../_shared/hana-views.ts";
 import { requireSchedulerAdminOrUserSession } from "../_shared/automation-auth.ts";
+import { getStandaloneMode, isStandaloneBypass } from "../_shared/standalone-mode.ts";
 
 const corsHeaders = {
   ...baseCorsHeaders,
@@ -177,6 +178,24 @@ Deno.serve(async (req) => {
     }
 
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    // Modo standalone: responde apenas com o que já está no banco do Flow.
+    if (!isStandaloneBypass(req)) {
+      const standalone = await getStandaloneMode(companyDb);
+      if (standalone) {
+        const { data: stored } = await sb
+          .from("sap_cache")
+          .select("data")
+          .eq("cache_key", isSales ? "customers_hana_v1" : "suppliers_hana_v1")
+          .eq("company_db", companyDb)
+          .maybeSingle();
+        const rows = Array.isArray(stored?.data) ? (stored!.data as unknown[]) : [];
+        return new Response(
+          JSON.stringify({ rows, total: rows.length, cached: true, standalone: true }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
 
     // Cache server-side (service role) — o client não tem permissão de escrita
     // em sap_cache, então a gravação precisa acontecer aqui.

@@ -78,6 +78,7 @@ import { RequireAuth } from "./components/RequireAuth.tsx";
 import { ModuleRoute } from "./components/ModuleRoute.tsx";
 import { OfflineResilienceAgent } from "./components/OfflineResilienceAgent.tsx";
 import { AppVersionAgent } from "./components/AppVersionAgent.tsx";
+import { StandaloneModeBanner } from "./components/StandaloneModeBanner.tsx";
 import Login from "./pages/Login.tsx";
 
 
@@ -98,6 +99,7 @@ const App = () => (
           <BrowserRouter>
             <OfflineResilienceAgent />
             <AppVersionAgent />
+            <StandaloneModeBanner />
             <StickyHeaderMeasure />
             <ModuleSubmenu />
             <RequireAuth>

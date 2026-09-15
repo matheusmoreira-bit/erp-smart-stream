@@ -7,6 +7,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
+import { listStandaloneCompanies } from "../_shared/standalone-mode.ts";
 import { isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
@@ -128,12 +129,19 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Empresas em modo standalone: documentos ficam na fila (nenhuma tentativa
+  // de envio ao ERP enquanto o modo estiver ligado).
+  const standaloneCompanies = new Set(await listStandaloneCompanies());
+  const pending = (candidates || []).filter(
+    (row: any) => !standaloneCompanies.has(String(row.company_db || "")),
+  );
+
   const results: Array<{ id: string; ok: boolean; error?: string; notified?: boolean }> = [];
   let manualCancellationIds = new Set<string>();
   try {
     const manualCancellations = await listManualExpenseCancellations(
       admin,
-      (candidates || []).map((expense) => String(expense.id)),
+      pending.map((expense: any) => String(expense.id)),
     );
     manualCancellationIds = new Set(manualCancellations.keys());
   } catch (error) {
@@ -171,7 +179,7 @@ Deno.serve(async (req) => {
     );
   };
 
-  for (const exp of candidates || []) {
+  for (const exp of pending) {
     if (manualCancellationIds.has(String(exp.id))) {
       results.push({ id: exp.id, ok: false, error: "integração cancelada manualmente" });
       continue;

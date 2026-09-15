@@ -12,6 +12,7 @@ import {
   type SapInvoiceLifecycle,
 } from "../_shared/expense-status-chain.ts";
 import { notifyExpensePaid } from "../_shared/expense-paid-notify.ts";
+import { listStandaloneCompanies } from "../_shared/standalone-mode.ts";
 
 interface ExpenseRow {
   id: string;
@@ -146,9 +147,12 @@ Deno.serve(async (req) => {
     if (error) throw new Error(error.message);
 
     // Agrupar por company_db para reaproveitar sessão SAP
+    // Empresas em modo standalone ficam de fora: o ERP delas está parado.
+    const standaloneCompanies = new Set(await listStandaloneCompanies());
     const byCompany = new Map<string, ExpenseRow[]>();
     for (const r of (rows || []) as ExpenseRow[]) {
       if (!r.company_db || r.sap_doc_entry == null) continue;
+      if (standaloneCompanies.has(r.company_db)) continue;
       const arr = byCompany.get(r.company_db) || [];
       arr.push(r);
       byCompany.set(r.company_db, arr);

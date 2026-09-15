@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sapQueryAll } from "@/lib/sap-client";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
+import { getStandaloneMode } from "@/lib/standalone-mode";
 import { assertCircuitClosed, recordCircuitFailure, recordCircuitSuccess } from "@/lib/sap-circuit-breaker";
 import { useSap } from "@/contexts/SapContext";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
@@ -332,6 +333,9 @@ export function useSapCachedList({
 
     try {
       const companyDB = session?.companyDB;
+      // Modo standalone: a empresa opera só com os cadastros já copiados para
+      // o banco do Flow — nenhuma chamada ao ERP é feita.
+      const standalone = !!(await getStandaloneMode(companyDB));
       // 1. Try Supabase cache first — REQUIRE company_db to avoid leaking
       //    cached data from another company's SAP base.
       if (companyDB) {
@@ -358,10 +362,10 @@ export function useSapCachedList({
             cachedData = filterActiveRows(endpoint, cachedData, cacheKey);
             setOptions(cachedData.map(mapRowRef.current));
             hadRenderedData = cachedData.length > 0;
-            setIsStale(isExpired);
+            setIsStale(standalone ? false : isExpired);
 
             // Cache válido (ou sem sessão para revalidar): encerra aqui.
-            if ((!forceRefresh && !isExpired) || !session) {
+            if ((!forceRefresh && !isExpired) || !session || standalone) {
               lastLoadedAtRef.current = Date.now();
               setIsLoading(false);
               return;
@@ -373,6 +377,15 @@ export function useSapCachedList({
           }
         }
       }
+
+      if (standalone) {
+        // Sem cadastro copiado para esta lista: a tela mostra vazio, mas o ERP
+        // continua intocado enquanto o modo standalone estiver ligado.
+        lastLoadedAtRef.current = Date.now();
+        setIsLoading(false);
+        return;
+      }
+
 
 
       // 2. Em empresas Omie, `Items` representa o catálogo combinado de

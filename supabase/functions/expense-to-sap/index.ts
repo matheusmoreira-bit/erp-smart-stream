@@ -9,6 +9,7 @@ import { PDFDocument, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
 import { requireUserOrSapSession } from "../_shared/auth.ts";
 import { tryAcquireIntegrationLock, releaseIntegrationLock } from "../_shared/sap-fetch.ts";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
+import { getStandaloneMode, standaloneResponse } from "../_shared/standalone-mode.ts";
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { normalizeExpenseItems } from "../_shared/expense-items.ts";
@@ -809,6 +810,11 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     const integrationSystem = expenseErpType === "omie" ? "omie" : "sap_b1";
     const integrationPause = await getIntegrationPause(integrationSystem);
     if (integrationPause) return pauseResponse(integrationPause, corsHeaders);
+
+    // Modo standalone da empresa: nada é enviado ao ERP; o documento continua
+    // na fila e o worker de retry reenvia quando o modo for desligado.
+    const standalone = await getStandaloneMode(expense.company_db as string);
+    if (standalone) return standaloneResponse(standalone, corsHeaders);
 
     if (await isExpenseIntegrationCancelled(supabase, expenseId)) {
       return new Response(

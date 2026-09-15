@@ -5,6 +5,7 @@ import { ensureCopyToTargetDocument } from "../_shared/sap-attach-copy.ts";
 import { requireUserOrSapSession } from "../_shared/auth.ts";
 import { tryAcquireIntegrationLock, releaseIntegrationLock } from "../_shared/sap-fetch.ts";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
+import { getStandaloneMode, standaloneResponse } from "../_shared/standalone-mode.ts";
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
@@ -118,6 +119,10 @@ Deno.serve(async (req) => {
     }
 
     const companyDb: string = adv.company_db;
+    {
+      const _sa = await getStandaloneMode(companyDb);
+      if (_sa) return standaloneResponse(_sa, corsHeaders);
+    }
     const creds = await getSapCreds(supabase, companyDb);
     const baseUrl = getSapBaseUrl(creds);
 
