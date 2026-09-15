@@ -203,6 +203,7 @@ async function record(sb: any, row: PaidExpenseRow, email: string, subject: stri
       status: result.ok ? "sent" : "error",
       error_message: result.ok ? null : (result.error || "falha no envio")?.slice(0, 500),
     });
+    if (error) console.warn("[expense-paid-notify] registro recusado:", error.message || String(error));
   } catch (e) {
     console.warn("[expense-paid-notify] registro:", e instanceof Error ? e.message : String(e));
   }
