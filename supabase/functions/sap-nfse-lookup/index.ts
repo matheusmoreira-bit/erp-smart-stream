@@ -190,13 +190,18 @@ Deno.serve(async (req) => {
       await sapLogout(baseUrl, session);
     }
 
+    hanaCooldown.delete(companyDb);
     return new Response(JSON.stringify({ map }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    console.error("[sap-nfse-lookup]", (e as Error)?.message);
-    return new Response(JSON.stringify({ error: String((e as Error)?.message || e), map: {} }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const message = String((e as Error)?.message || e);
+    console.error("[sap-nfse-lookup]", message);
+    if (companyDbForCooldown) hanaCooldown.set(companyDbForCooldown, Date.now() + HANA_COOLDOWN_MS);
+    // Indisponibilidade do SAP/HANA não é erro do Flow: o chamador mantém o
+    // fallback (número do RPS) em vez de quebrar a tela.
+    return new Response(JSON.stringify({ map: {}, unavailable: true, error: message }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
