@@ -85,9 +85,11 @@ Deno.serve(async (req) => {
   if (!auth.ok) return auth.response;
 
 
+  let companyDbForCooldown: string | undefined;
   try {
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const companyDb: string | undefined = body?.company_db || req.headers.get("x-company-db") || undefined;
+    companyDbForCooldown = companyDb;
     const docType = Number(body?.doc_type ?? DEFAULT_DOC_TYPE);
     const docEntries: number[] = Array.isArray(body?.doc_entries)
       ? (body.doc_entries as unknown[]).map((n) => Number(n)).filter((n) => Number.isFinite(n))
