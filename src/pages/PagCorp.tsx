@@ -765,7 +765,7 @@ export default function PagCorp() {
       const tb = b.date ? new Date(b.date).getTime() : 0;
       return tb - ta;
     });
-  }, [transactions, search, statusFilter, settlementFilter, balanceFilter, cardFilter, showNondeductible]);
+  }, [transactions, search, statusFilter, settlementFilter, balanceFilter, cardFilter, kindFilter, showNondeductible]);
 
   /**
    * Constrói a lista de renderização com agrupamento visual:
@@ -1607,6 +1607,21 @@ export default function PagCorp() {
               </SelectContent>
             </Select>
           </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">Tipo</label>
+            <Select value={kindFilter} onValueChange={(v) => setKindFilter(v as typeof kindFilter)}>
+              <SelectTrigger className="w-40 bg-card">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="purchase">Compras</SelectItem>
+                <SelectItem value="withdrawal">Saques</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
 
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Cartão</label>
