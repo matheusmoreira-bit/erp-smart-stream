@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, BarChart3, Loader2, RefreshCw, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { ArrowLeft, BarChart3, ChevronDown, ChevronRight, Loader2, RefreshCw, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -60,6 +60,16 @@ export default function PagCorpAnalytics() {
   const [card, setCard] = useState<string>(ALL);
   const [holder, setHolder] = useState<string>(ALL);
   const [costCenter, setCostCenter] = useState<string>(ALL);
+  const [accountSearch, setAccountSearch] = useState("");
+  const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(() => new Set());
+
+  const toggleAccount = (key: string) =>
+    setExpandedAccounts((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   const { transactions, isLoading: loadingTx, fetchTransactions } = usePagCorp();
   const {
@@ -145,24 +155,49 @@ export default function PagCorpAnalytics() {
       if (ta !== tb) return ta - tb;
       return String(a.alias || a.account).localeCompare(String(b.alias || b.account), "pt-BR");
     };
-    const rows: { account: PagCorpAccountInfo; depth: number; subtotal: number; hasChildren: boolean }[] = [];
+    const rows: {
+      account: PagCorpAccountInfo;
+      depth: number;
+      subtotal: number;
+      hasChildren: boolean;
+      ancestors: string[];
+    }[] = [];
     const seen = new Set<string>();
-    const walk = (node: PagCorpAccountInfo, depth: number): number => {
+    const walk = (node: PagCorpAccountInfo, depth: number, ancestors: string[]): number => {
       const key = String(node.account);
       if (seen.has(key)) return 0;
       seen.add(key);
-      const row = { account: node, depth, subtotal: 0, hasChildren: false };
+      const row = { account: node, depth, subtotal: 0, hasChildren: false, ancestors };
       rows.push(row);
       const kids = (children.get(key) ?? []).sort(sortFn);
       row.hasChildren = kids.length > 0;
       let total = Number(node.available ?? 0);
-      kids.forEach((k) => { total += walk(k, depth + 1); });
+      kids.forEach((k) => { total += walk(k, depth + 1, [...ancestors, key]); });
       row.subtotal = total;
       return total;
     };
-    roots.sort(sortFn).forEach((r) => walk(r, 0));
+    roots.sort(sortFn).forEach((r) => walk(r, 0, []));
     return rows;
   }, [accounts]);
+
+  /** Linhas realmente exibidas: colapsadas por padrão, expandindo o que casa com a busca. */
+  const visibleAccountRows = useMemo(() => {
+    const term = accountSearch.trim().toLowerCase();
+    if (term) {
+      const matches = new Set<string>();
+      accountTree.forEach((r) => {
+        const a = r.account;
+        const hay = `${a.alias ?? ""} ${a.account} ${a.costCenter ?? ""} ${a.cards.map((c) => c.alias ?? "").join(" ")}`.toLowerCase();
+        if (hay.includes(term)) {
+          matches.add(String(a.account));
+          r.ancestors.forEach((p) => matches.add(p));
+        }
+      });
+      return accountTree.filter((r) => matches.has(String(r.account.account)));
+    }
+    return accountTree.filter((r) => r.ancestors.every((p) => expandedAccounts.has(p)));
+  }, [accountTree, accountSearch, expandedAccounts]);
+
 
 
   const filteredTx = useMemo(() => {
@@ -358,16 +393,42 @@ export default function PagCorpAnalytics() {
 
           {/* Hierarquia de contas */}
           <div className="glass-card overflow-hidden">
-            <div className="p-4 border-b border-border">
-              <h2 className="text-sm font-semibold">Hierarquia de contas</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Tesourarias e cartões conforme a estrutura da operadora.
-              </p>
+            <div className="p-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold">Hierarquia de contas</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Tesourarias e cartões conforme a estrutura da operadora.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={accountSearch}
+                  onChange={(e) => setAccountSearch(e.target.value)}
+                  placeholder="Buscar conta, código ou centro de custo"
+                  aria-label="Buscar conta"
+                  className="w-72"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setExpandedAccounts((prev) =>
+                      prev.size > 0
+                        ? new Set()
+                        : new Set(accountTree.filter((r) => r.hasChildren).map((r) => String(r.account.account))),
+                    )
+                  }
+                >
+                  {expandedAccounts.size > 0 ? "Recolher tudo" : "Expandir tudo"}
+                </Button>
+              </div>
             </div>
             {loadingAccounts ? (
               <div className="py-10 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
-            ) : accountTree.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-10 text-center">Sem contas disponíveis.</p>
+            ) : visibleAccountRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-10 text-center">
+                {accountSearch.trim() ? "Nenhuma conta encontrada para a busca." : "Sem contas disponíveis."}
+              </p>
             ) : (
               <Table>
                 <TableHeader>
@@ -380,9 +441,11 @@ export default function PagCorpAnalytics() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {accountTree.map((row) => {
+                  {visibleAccountRows.map((row) => {
                     const a = row.account;
                     const treasury = isTreasury(a);
+                    const key = String(a.account);
+                    const open = !!accountSearch.trim() || expandedAccounts.has(key);
                     return (
                       <TableRow key={a.account}>
                         <TableCell>
@@ -390,7 +453,19 @@ export default function PagCorpAnalytics() {
                             className="flex items-center gap-2"
                             style={{ paddingLeft: `${row.depth * 18}px` }}
                           >
-                            {row.depth > 0 && <span className="text-muted-foreground text-xs">└</span>}
+                            {row.hasChildren ? (
+                              <button
+                                type="button"
+                                onClick={() => toggleAccount(key)}
+                                aria-expanded={open}
+                                aria-label={open ? "Recolher conta" : "Expandir conta"}
+                                className="p-0.5 rounded hover:bg-muted text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              >
+                                {open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                              </button>
+                            ) : (
+                              <span className="w-5" />
+                            )}
                             <div>
                               <div className={treasury ? "font-semibold" : "font-medium"}>
                                 {a.alias || a.account}
