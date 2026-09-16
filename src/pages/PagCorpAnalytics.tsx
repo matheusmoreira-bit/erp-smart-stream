@@ -488,10 +488,6 @@ export default function PagCorpAnalytics() {
                 </TableBody>
               </Table>
             )}
-
-                </TableBody>
-              </Table>
-            )}
           </div>
 
 
