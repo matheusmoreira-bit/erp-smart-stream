@@ -60,6 +60,16 @@ export default function PagCorpAnalytics() {
   const [card, setCard] = useState<string>(ALL);
   const [holder, setHolder] = useState<string>(ALL);
   const [costCenter, setCostCenter] = useState<string>(ALL);
+  const [accountSearch, setAccountSearch] = useState("");
+  const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(() => new Set());
+
+  const toggleAccount = (key: string) =>
+    setExpandedAccounts((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   const { transactions, isLoading: loadingTx, fetchTransactions } = usePagCorp();
   const {
