@@ -129,3 +129,28 @@ export function extractPagCorpAccountability(
       || personLabel(firstValue([approval], ["actor", "decidedBy"])),
   };
 }
+
+/**
+ * Texto da prestação de contas já normalizado (ou null quando não houver).
+ */
+export function pagcorpAccountabilityText(transaction: unknown): string | null {
+  const record = asRecord(transaction);
+  if (!record) return null;
+  const direct = record.accountabilityDescription;
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
+  return extractPagCorpAccountability(record).description;
+}
+
+/**
+ * Descrição exibida ao usuário: descrição da transação concatenada com a
+ * descrição da prestação de contas, quando existir e não for redundante.
+ */
+export function pagcorpDisplayDescription(transaction: unknown): string {
+  const record = asRecord(transaction);
+  const base = typeof record?.description === "string" ? record.description.trim() : "";
+  const extra = pagcorpAccountabilityText(transaction);
+  if (!extra) return base || "—";
+  if (!base || base === "—") return extra;
+  if (base.toLowerCase().includes(extra.toLowerCase())) return base;
+  return `${base} - ${extra}`;
+}
