@@ -162,6 +162,13 @@ Deno.serve(async (req) => {
       results.push({ id: row.id, ok: true, draft: draftId });
     } catch (e) {
       const msg = (e as Error).message;
+      if (e instanceof StandalonePausedError) {
+        // Mantém o documento na fila (status inalterado) para reenvio automático
+        // assim que o modo standalone for desligado.
+        await sb.from("nf_entrada_imports").update({ last_error: msg }).eq("id", row.id);
+        results.push({ id: row.id, ok: false, error: msg, skipped: true });
+        continue;
+      }
       await sb.from("nf_entrada_imports").update({
         status: "integration_error",
         last_error: msg,
