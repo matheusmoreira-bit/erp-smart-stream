@@ -303,7 +303,84 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ── Contas + saldos (Analytics): ?action=accounts&companyDb=Y ──
+    if (action === "accounts") {
+      let creds: PagCorpCreds;
+      try {
+        creds = await getCredentials(companyDb);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.includes("não configurado") || msg.includes("not configured")) {
+          return new Response(
+            JSON.stringify({ accounts: [], notConfigured: true, message: msg }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+        throw e;
+      }
+      const apiToken = await getAuthToken(creds);
+      const accounts = await fetchAccounts(apiToken, creds.api_base_url, creds.account_id);
+      const balances = await fetchAvailable(apiToken, creds.api_base_url, creds.account_id);
+
+      const merged = accounts.map((a) => {
+        const key = String(a.account ?? "");
+        const b = balances.get(key);
+        return {
+          account: key,
+          parentAccount: a.parentAccount != null ? String(a.parentAccount) : null,
+          alias: a.alias ?? null,
+          accountType: a.accountType ?? null,
+          costCenter: a.costCenter ?? null,
+          status: a.status ?? null,
+          active: a.active ?? null,
+          cards: Array.isArray(a.cards) ? a.cards : [],
+          cardHolders: Array.isArray(a.cardHolders) ? a.cardHolders : [],
+          available: b ?? null,
+        };
+      });
+      // Contas que só vieram no endpoint de saldo.
+      for (const [acc, value] of balances) {
+        if (merged.some((m) => m.account === acc)) continue;
+        merged.push({
+          account: acc, parentAccount: null, alias: null, accountType: null, costCenter: null,
+          status: null, active: null, cards: [], cardHolders: [], available: value,
+        });
+      }
+
+      if (companyDb && merged.length) {
+        try {
+          const admin = createClient(
+            Deno.env.get("SUPABASE_URL")!,
+            Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+          );
+          const today = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+          await admin.from("pagcorp_balance_snapshots").upsert(
+            merged
+              .filter((m) => m.available != null)
+              .map((m) => ({
+                company_db: companyDb,
+                account: m.account,
+                alias: m.alias,
+                account_type: m.accountType,
+                parent_account: m.parentAccount,
+                cost_center: m.costCenter,
+                available: m.available,
+                snapshot_date: today,
+              })),
+            { onConflict: "company_db,account,snapshot_date" },
+          );
+        } catch (e) {
+          console.warn("[pagcorp accounts] snapshot failed:", e instanceof Error ? e.message : e);
+        }
+      }
+
+      return new Response(JSON.stringify({ accounts: merged, capturedAt: new Date().toISOString() }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const startDate = url.searchParams.get("startDate") || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+
     const endDate = url.searchParams.get("endDate") || new Date().toISOString().slice(0, 10);
 
     // Validate date format
