@@ -71,12 +71,14 @@ async function createPoDraft(baseUrl: string, cookie: string, body: Record<strin
   return String(j.DocEntry);
 }
 
+class StandalonePausedError extends Error {}
+
 async function process(sb: ReturnType<typeof createClient>, row: NfRow): Promise<string> {
   if (row.sap_po_draft_id) return row.sap_po_draft_id;
   if (!row.sap_company_db) throw new Error("sap_company_db não definido");
   {
     const _sa = await getStandaloneMode(row.sap_company_db);
-    if (_sa) throw new Error(`Empresa em modo standalone: integração com o ERP pausada. O documento permanece na fila e será enviado quando o modo for desligado.`);
+    if (_sa) throw new StandalonePausedError(`Empresa em modo standalone: integração com o ERP pausada. O documento permanece na fila e será enviado quando o modo for desligado.`);
   }
 
   // Resolver fornecedor (CardCode) por CNPJ no SAP
@@ -153,13 +155,20 @@ Deno.serve(async (req) => {
     rows = (data || []) as NfRow[];
   }
 
-  const results: Array<{ id: string; ok: boolean; draft?: string; error?: string }> = [];
+  const results: Array<{ id: string; ok: boolean; draft?: string; error?: string; skipped?: boolean }> = [];
   for (const row of rows) {
     try {
       const draftId = await process(sb, row);
       results.push({ id: row.id, ok: true, draft: draftId });
     } catch (e) {
       const msg = (e as Error).message;
+      if (e instanceof StandalonePausedError) {
+        // Mantém o documento na fila (status inalterado) para reenvio automático
+        // assim que o modo standalone for desligado.
+        await sb.from("nf_entrada_imports").update({ last_error: msg }).eq("id", row.id);
+        results.push({ id: row.id, ok: false, error: msg, skipped: true });
+        continue;
+      }
       await sb.from("nf_entrada_imports").update({
         status: "integration_error",
         last_error: msg,
