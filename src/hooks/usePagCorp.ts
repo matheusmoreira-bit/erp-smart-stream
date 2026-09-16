@@ -200,11 +200,42 @@ export interface PagCorpTransaction {
 
   isReversed?: boolean;
   isNondeductible?: boolean;
+  /** Saque em dinheiro (classificação PagCorp contém "saque"). Indedutível por padrão. */
+  isWithdrawal?: boolean;
   nondeductibleAtExpense?: boolean;
   nondeductibleSupplierCode?: string;
   nondeductibleSupplierName?: string;
   [key: string]: unknown;
 }
+
+/** Normaliza texto para comparação (sem acento, minúsculo, espaços simples). */
+function normText(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/** Saque: classificação da PagCorp contém "saque". */
+export function isPagCorpWithdrawal(t: { eventClassification?: unknown }): boolean {
+  return normText((t as { eventClassification?: unknown }).eventClassification).includes("saque");
+}
+
+/**
+ * Marca saques: por regra do negócio, saque é sempre indedutível.
+ * Aplicado tanto no fetch novo quanto na pintura vinda do cache.
+ */
+export function markPagCorpWithdrawals(items: PagCorpTransaction[]): void {
+  for (const t of items) {
+    if (isPagCorpWithdrawal(t)) {
+      t.isWithdrawal = true;
+      t.isNondeductible = true;
+    }
+  }
+}
+
 
 function enrichPagCorpAccountability(transaction: PagCorpTransaction): PagCorpTransaction {
   const details = extractPagCorpAccountability(transaction);
@@ -439,6 +470,7 @@ export function usePagCorp() {
           // publicar na tela para não disparar IA sobre status `pending`
           // armazenado em cache visual antigo.
           await applyIntegrationStatus(cached.data, companyDb);
+          markPagCorpWithdrawals(cached.data);
           setTransactions([...cached.data]);
         }
 
@@ -587,6 +619,9 @@ export function usePagCorp() {
       if (companyDb) {
         await applyIntegrationStatus(items, companyDb);
       }
+
+      // Saque é sempre indedutível (regra de negócio).
+      markPagCorpWithdrawals(items);
 
 
 

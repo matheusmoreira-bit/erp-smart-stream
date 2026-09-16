@@ -385,6 +385,7 @@ export default function PagCorp() {
       return next;
     });
   const [cardFilter, setCardFilter] = useState<string>("all");
+  const [kindFilter, setKindFilter] = useState<"all" | "purchase" | "withdrawal">("all");
 
   const [reprocessingGroup, setReprocessingGroup] = useState<string | null>(null);
   const [batchReprocessing, setBatchReprocessing] = useState(false);
@@ -689,7 +690,7 @@ export default function PagCorp() {
   const filteredTransactions = useMemo(() => {
     let list = transactions;
 
-    // Exibe somente compras reais — estornos, cancelamentos e outras classificações
+    // Exibe compras reais e saques — estornos, cancelamentos e outras classificações
     // administrativas (recarga, tarifa, ajuste etc.) são ocultados.
     const ALLOWED_CLASSIFICATIONS = new Set([
       "compra nacional",
@@ -699,13 +700,25 @@ export default function PagCorp() {
     list = list.filter((t) => {
       const raw = (t as { eventClassification?: string }).eventClassification;
       if (!raw) return true; // sem classificação: mantém (dados legados)
-      const norm = String(raw).replace(/\s+/g, " ").trim().toLowerCase();
-      return ALLOWED_CLASSIFICATIONS.has(norm);
+      const norm = String(raw)
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
+      return ALLOWED_CLASSIFICATIONS.has(norm) || norm.includes("saque");
     });
 
-    // Nondeductible visibility: off = hide nondeductible cards
+    if (kindFilter === "withdrawal") {
+      list = list.filter((t) => !!t.isWithdrawal);
+    } else if (kindFilter === "purchase") {
+      list = list.filter((t) => !t.isWithdrawal);
+    }
+
+    // Nondeductible visibility: off = hide nondeductible cards.
+    // Saques são indedutíveis por natureza, então continuam visíveis.
     if (!showNondeductible) {
-      list = list.filter((t) => !t.isNondeductible);
+      list = list.filter((t) => !t.isNondeductible || t.isWithdrawal);
     }
 
     if (statusFilter === "pending") {
@@ -752,7 +765,7 @@ export default function PagCorp() {
       const tb = b.date ? new Date(b.date).getTime() : 0;
       return tb - ta;
     });
-  }, [transactions, search, statusFilter, settlementFilter, balanceFilter, cardFilter, showNondeductible]);
+  }, [transactions, search, statusFilter, settlementFilter, balanceFilter, cardFilter, kindFilter, showNondeductible]);
 
   /**
    * Constrói a lista de renderização com agrupamento visual:
@@ -1596,6 +1609,21 @@ export default function PagCorp() {
           </div>
 
           <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">Tipo</label>
+            <Select value={kindFilter} onValueChange={(v) => setKindFilter(v as typeof kindFilter)}>
+              <SelectTrigger className="w-40 bg-card">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="purchase">Compras</SelectItem>
+                <SelectItem value="withdrawal">Saques</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+
+          <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground">Cartão</label>
             <Select value={cardFilter} onValueChange={setCardFilter}>
               <SelectTrigger className="w-56 bg-card">
@@ -1911,6 +1939,11 @@ export default function PagCorp() {
                         <TableCell className="text-sm text-foreground max-w-[250px]">
                           <div className="flex items-center gap-2">
                             <span className="truncate">{t.description}</span>
+                            {t.isWithdrawal && (
+                              <Badge variant="secondary" className="text-[10px] uppercase tracking-wide shrink-0">
+                                Saque
+                              </Badge>
+                            )}
                             {t.isNondeductible && (
                               <Badge variant="outline" className="text-[10px] uppercase tracking-wide gap-1 shrink-0">
                                 <ShieldOff className="w-3 h-3" />
