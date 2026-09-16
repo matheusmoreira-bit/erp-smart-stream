@@ -21,6 +21,7 @@ import ApprovalMatrix from "./pages/ApprovalMatrix.tsx";
 
 import PagCorp from "./pages/PagCorp.tsx";
 import PagCorpMapping from "./pages/PagCorpMapping.tsx";
+import PagCorpAnalytics from "./pages/PagCorpAnalytics.tsx";
 import PagCorpNondeductible from "./pages/PagCorpNondeductible.tsx";
 import PagCorpSettlements from "./pages/PagCorpSettlements.tsx";
 import IntegrationHistory from "./pages/IntegrationHistory.tsx";
