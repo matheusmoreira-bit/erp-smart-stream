@@ -802,9 +802,17 @@ Deno.serve(async (req) => {
       const date = documentDate || transactionDates[transactionDates.length - 1] || new Date().toISOString().slice(0, 10);
       const currency = String(transaction.currency || "BRL").toUpperCase();
       const customRemarks = typeof journalEntry.remarks === "string" ? journalEntry.remarks.trim() : "";
-      const journalMemo = customRemarks
-        ? formatPagCorpComments(customRemarks, 190)
-        : description;
+      // Memo padrão do LCM:
+      //   unitário: "PagCorp - {descrição da transação} - {descrição da prestação de contas}"
+      //   lote:     "PagCorp - LCM Consolidado"
+      const singleAccountability = pickAccountabilityText(transaction as Record<string, unknown>);
+      const singleDescription = String(transaction.description || "").trim();
+      const defaultJournalMemo = isConsolidated
+        ? "PagCorp - LCM Consolidado"
+        : ["PagCorp", singleDescription, singleAccountability]
+            .filter((part) => !!part)
+            .join(" - ");
+      const journalMemo = formatPagCorpComments(customRemarks || defaultJournalMemo, 190);
       const projectFallback = companyDb === "open_gaming_sa" ? "OPEN GAMING" : null;
       // Cotação (PTAX) para linhas em moeda estrangeira. O SAP recusa o
       // lançamento com "Update the exchange rate" quando a taxa do dia não
