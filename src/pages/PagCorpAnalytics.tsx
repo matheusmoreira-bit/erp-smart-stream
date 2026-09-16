@@ -266,7 +266,7 @@ export default function PagCorpAnalytics() {
                 <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ALL}>Todos</SelectItem>
-                  {cardOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  {cardOptions.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
