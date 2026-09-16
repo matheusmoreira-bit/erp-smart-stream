@@ -2108,7 +2108,17 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     ...sapFiltered.map((exp) => ({ exp, origin: "erp" as const })),
   ];
 
-  const totalValue = filtered.reduce((sum, item) => sum + item.exp.total_amount, 0);
+  // Totais por moeda: valores em moeda estrangeira NÃO podem ser somados ao
+  // total em reais (não há taxa de conversão armazenada no documento).
+  const totalsByCurrency = filtered.reduce<Record<string, number>>((acc, item) => {
+    const raw = String(item.exp.currency || "").toUpperCase().trim();
+    const code = /^[A-Z]{3}$/.test(raw) ? raw : "BRL";
+    acc[code] = (acc[code] || 0) + (Number(item.exp.total_amount) || 0);
+    return acc;
+  }, {});
+  const totalValue = totalsByCurrency.BRL || 0;
+  const foreignTotals = Object.entries(totalsByCurrency).filter(([code]) => code !== "BRL");
+
 
   // ─── Ordenação por coluna ─────────────────────────────────────
   type SortKey = "status" | "supplier" | "requester" | "created" | "doc" | "due" | "amount" | "origin";
