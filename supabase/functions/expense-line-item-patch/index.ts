@@ -306,7 +306,15 @@ Deno.serve(async (req) => {
     }).then(() => {}, () => {});
 
 
-    return json({ success: true, doc_entry: expense.sap_doc_entry, doc_num: expense.sap_doc_num, item_code: itemCode });
+    return json({
+      success: true,
+      doc_entry: expense.sap_doc_entry,
+      doc_num: expense.sap_doc_num,
+      item_code: itemCode,
+      lines_sent: payloadLines.length,
+      ...(priceWarning ? { warning: priceWarning } : {}),
+    });
+
 
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
