@@ -1417,6 +1417,7 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
     if (editableForFix) reasons.push("correção após erro de integração SAP");
     else if (editableApproved) reasons.push("alteração de pedido já aprovado");
     if (editableIntegrated) reasons.push(`atualização do PC ${current.sap_doc_num || current.sap_doc_entry}`);
+    if (editableRejected) reasons.push("correção de pedido rejeitado");
     if (attachmentsChanged) reasons.push("anexos alterados");
     if (reasons.length === 0) reasons.push("edição do documento");
 
