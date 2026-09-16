@@ -200,6 +200,8 @@ export interface PagCorpTransaction {
 
   isReversed?: boolean;
   isNondeductible?: boolean;
+  /** Saque em dinheiro (classificação PagCorp contém "saque"). Indedutível por padrão. */
+  isWithdrawal?: boolean;
   nondeductibleAtExpense?: boolean;
   nondeductibleSupplierCode?: string;
   nondeductibleSupplierName?: string;
