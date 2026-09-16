@@ -1,3 +1,4 @@
+import { pagcorpDisplayDescription } from "@/lib/pagcorp-accountability";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Loader2, CreditCard, Sparkles, Upload, Plus, AlertCircle, Paperclip, ExternalLink, Wand2, ShieldOff, FileText, BookOpen } from "lucide-react";
 import {
@@ -556,7 +557,7 @@ export function PagCorpIntegrateDialog({
                 <CreditCard className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">
-                    {isBatch ? `${activeTransactions.length} despesas PagCorp` : transaction.description}
+                    {isBatch ? `${activeTransactions.length} despesas PagCorp` : pagcorpDisplayDescription(transaction)}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {isBatch ? "Lançamento contábil em lote" : transaction.accountAlias || transaction.accountName || "—"}
@@ -871,7 +872,7 @@ export function PagCorpIntegrateDialog({
                       return (
                         <div key={key} className="rounded-md border border-border p-2 space-y-2">
                           <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="truncate">{tx.description || `#${tx.id}`}</span>
+                            <span className="truncate">{pagcorpDisplayDescription(tx) || `#${tx.id}`}</span>
                             <span className="tabular-nums font-medium shrink-0">
                               {formatCurrency(Number(tx.amount) || 0, tx.currency)}
                             </span>

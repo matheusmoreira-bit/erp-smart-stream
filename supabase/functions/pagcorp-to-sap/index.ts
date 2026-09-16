@@ -988,10 +988,14 @@ Deno.serve(async (req) => {
       // sobrescrita). A descrição vinda da nota do PagCorp vai para o campo
       // de texto livre da linha (FreeText), preservando a rastreabilidade
       // sem alterar o nome do item.
+      const lineAccountability = pickAccountabilityText(tx as Record<string, unknown>);
+      const lineBaseText = `${tx.description || "PagCorp"}${
+        lineAccountability && !String(tx.description || "").toLowerCase().includes(lineAccountability.toLowerCase())
+          ? ` - ${lineAccountability}`
+          : ""
+      }`;
       const lineFreeText = (
-        isConsolidated
-          ? `[#${tx.id}] ${tx.description || "PagCorp"}`
-          : (tx.description || "PagCorp")
+        isConsolidated ? `[#${tx.id}] ${lineBaseText}` : lineBaseText
       ).slice(0, 100);
       // Data da transação vira Data de Entrega da linha (ShipDate). Assim,
       // cada linha do PC consolidado carrega a data real da despesa.
