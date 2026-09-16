@@ -826,6 +826,17 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   }
 
 
+  // Fluxo Cactus Tecnologia: e-mail de nova despesa com o relatório em PDF.
+  if (companyDb === CACTUS_TECNOLOGIA_DB && docType !== "sales") {
+    runAfterResponse(
+      notifyCactusExpenseCreated(admin, { id: expenseId })
+        .then(() => undefined)
+        .catch((e) =>
+          console.warn("[expense-mutation] notifyCactusExpenseCreated failed:", e instanceof Error ? e.message : e)
+        ),
+    );
+  }
+
   return json(200, { ok: true, expense, auto_approved: autoApprovedByRule });
 }
 
