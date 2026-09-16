@@ -620,6 +620,9 @@ export function usePagCorp() {
         await applyIntegrationStatus(items, companyDb);
       }
 
+      // Saque é sempre indedutível (regra de negócio).
+      markPagCorpWithdrawals(items);
+
 
 
       setTransactions(items);
