@@ -1792,7 +1792,7 @@ async function actionAttachmentsAdd(admin: SupabaseClient, caller: Caller, body:
 
   // Documento integrado ao ERP continua aceitando NOVOS anexos (backfill) até
   // que a NF de entrada seja lançada. Depois disso, nada mais pode ser incluído.
-  const attachBlocked = new Set(["nf_entrada", "pagamento", "finalizado", "cancelado", "rejeitado"]);
+  const attachBlocked = new Set(["nf_entrada", "pagamento", "finalizado", "cancelado"]);
   if (attachBlocked.has(String(current.status))) {
     return json(409, {
       error: "Documento encerrado (NF de entrada lançada ou cancelado) — não é possível adicionar anexos.",
