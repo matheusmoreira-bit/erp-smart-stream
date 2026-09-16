@@ -208,6 +208,35 @@ export interface PagCorpTransaction {
   [key: string]: unknown;
 }
 
+/** Normaliza texto para comparação (sem acento, minúsculo, espaços simples). */
+function normText(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/** Saque: classificação da PagCorp contém "saque". */
+export function isPagCorpWithdrawal(t: { eventClassification?: unknown }): boolean {
+  return normText((t as { eventClassification?: unknown }).eventClassification).includes("saque");
+}
+
+/**
+ * Marca saques: por regra do negócio, saque é sempre indedutível.
+ * Aplicado tanto no fetch novo quanto na pintura vinda do cache.
+ */
+export function markPagCorpWithdrawals(items: PagCorpTransaction[]): void {
+  for (const t of items) {
+    if (isPagCorpWithdrawal(t)) {
+      t.isWithdrawal = true;
+      t.isNondeductible = true;
+    }
+  }
+}
+
+
 function enrichPagCorpAccountability(transaction: PagCorpTransaction): PagCorpTransaction {
   const details = extractPagCorpAccountability(transaction);
   const receipts = Array.isArray(transaction.receipts) ? transaction.receipts : [];
