@@ -1272,12 +1272,15 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
   }, [expenses]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-open the deep-linked document once expenses are loaded.
+  // Se o documento não estiver na página carregada (filtro/paginação/status),
+  // buscamos o registro direto no servidor — que continua aplicando as regras
+  // de visibilidade — para que o link de e-mail sempre abra o documento.
   const deepLinkHandledRef = useRef(false);
+  const deepLinkFetchRef = useRef(false);
   useEffect(() => {
     if (deepLinkHandledRef.current) return;
     const id = readDocParam();
     if (!id) { deepLinkHandledRef.current = true; return; }
-    if (!expenses || expenses.length === 0) return;
     // Aceita o id completo ou o código interno curto (ex.: `#A38F5BF9`).
     const key = normalizeDocQuery(id);
     const found = expenses.find((e) => e.id === id)
@@ -1285,9 +1288,38 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     if (found) {
       openExpense(found);
       deepLinkHandledRef.current = true;
+      return;
     }
+    if (isLoading || deepLinkFetchRef.current) return;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (!isUuid) return;
+    deepLinkFetchRef.current = true;
+    (async () => {
+      try {
+        const res = await expenseRead("expenses")
+          .select("*")
+          .eq("id", id)
+          .include("items", "attachments");
+        const row = ((res.data as any[]) || [])[0];
+        if (!row) {
+          toast.error("Documento não encontrado ou fora do seu acesso.");
+          deepLinkHandledRef.current = true;
+          return;
+        }
+        openExpense({
+          ...row,
+          items: ((res as any).items || []).filter((i: any) => i.expense_id === row.id),
+          attachments: ((res as any).attachments || []).filter((a: any) => a.expense_id === row.id),
+        } as Expense);
+        deepLinkHandledRef.current = true;
+      } catch {
+        toast.error("Não foi possível abrir o documento deste link.");
+        deepLinkHandledRef.current = true;
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expenses]);
+  }, [expenses, isLoading]);
+
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showUberExpense, setShowUberExpense] = useState(false);
