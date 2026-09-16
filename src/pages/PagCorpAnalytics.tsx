@@ -36,7 +36,7 @@ import { PageTitle } from "@/components/PageTitle";
 import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
 import { usePagCorp } from "@/hooks/usePagCorp";
-import { isTreasury, usePagCorpAccounts } from "@/hooks/usePagCorpAccounts";
+import { isTreasury, usePagCorpAccounts, type PagCorpAccountInfo } from "@/hooks/usePagCorpAccounts";
 
 const ALL = "__all__";
 
@@ -123,6 +123,47 @@ export default function PagCorpAnalytics() {
     accounts.forEach((a) => a.costCenter && set.add(a.costCenter));
     return [...set].sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [accounts]);
+
+  /** Contas em árvore (tesouraria pai → tesourarias/cartões filhos). */
+  const accountTree = useMemo(() => {
+    const byAccount = new Map(accounts.map((a) => [String(a.account), a]));
+    const children = new Map<string, PagCorpAccountInfo[]>();
+    const roots: PagCorpAccountInfo[] = [];
+    accounts.forEach((a) => {
+      const parent = a.parentAccount ? String(a.parentAccount) : "";
+      if (parent && byAccount.has(parent) && parent !== String(a.account)) {
+        const list = children.get(parent) ?? [];
+        list.push(a);
+        children.set(parent, list);
+      } else {
+        roots.push(a);
+      }
+    });
+    const sortFn = (a: PagCorpAccountInfo, b: PagCorpAccountInfo) => {
+      const ta = isTreasury(a) ? 0 : 1;
+      const tb = isTreasury(b) ? 0 : 1;
+      if (ta !== tb) return ta - tb;
+      return String(a.alias || a.account).localeCompare(String(b.alias || b.account), "pt-BR");
+    };
+    const rows: { account: PagCorpAccountInfo; depth: number; subtotal: number; hasChildren: boolean }[] = [];
+    const seen = new Set<string>();
+    const walk = (node: PagCorpAccountInfo, depth: number): number => {
+      const key = String(node.account);
+      if (seen.has(key)) return 0;
+      seen.add(key);
+      const row = { account: node, depth, subtotal: 0, hasChildren: false };
+      rows.push(row);
+      const kids = (children.get(key) ?? []).sort(sortFn);
+      row.hasChildren = kids.length > 0;
+      let total = Number(node.available ?? 0);
+      kids.forEach((k) => { total += walk(k, depth + 1); });
+      row.subtotal = total;
+      return total;
+    };
+    roots.sort(sortFn).forEach((r) => walk(r, 0));
+    return rows;
+  }, [accounts]);
+
 
   const filteredTx = useMemo(() => {
     return transactions.filter((t) => {
@@ -314,6 +355,67 @@ export default function PagCorpAnalytics() {
               loading={loadingTx}
             />
           </div>
+
+          {/* Hierarquia de contas */}
+          <div className="glass-card overflow-hidden">
+            <div className="p-4 border-b border-border">
+              <h2 className="text-sm font-semibold">Hierarquia de contas</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Tesourarias e cartões conforme a estrutura da operadora.
+              </p>
+            </div>
+            {loadingAccounts ? (
+              <div className="py-10 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
+            ) : accountTree.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-10 text-center">Sem contas disponíveis.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Conta</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Centro de custo</TableHead>
+                    <TableHead className="text-right">Saldo</TableHead>
+                    <TableHead className="text-right">Saldo consolidado</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {accountTree.map((row) => {
+                    const a = row.account;
+                    const treasury = isTreasury(a);
+                    return (
+                      <TableRow key={a.account}>
+                        <TableCell>
+                          <div
+                            className="flex items-center gap-2"
+                            style={{ paddingLeft: `${row.depth * 18}px` }}
+                          >
+                            {row.depth > 0 && <span className="text-muted-foreground text-xs">└</span>}
+                            <div>
+                              <div className={treasury ? "font-semibold" : "font-medium"}>
+                                {a.alias || a.account}
+                              </div>
+                              <div className="text-xs text-muted-foreground">{a.account}</div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {treasury ? "Tesouraria" : a.cards.length > 0 ? "Cartão" : (a.accountType || "—")}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{a.costCenter || "—"}</TableCell>
+                        <TableCell className="text-right">{a.available == null ? "—" : brl(Number(a.available))}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          {row.hasChildren ? brl(row.subtotal) : "—"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+
+
 
           {/* Gastos x aportes */}
           <div className="glass-card p-4">
