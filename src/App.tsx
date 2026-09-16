@@ -166,6 +166,7 @@ const App = () => (
               {/* Cartões Corporativos */}
               <Route path="/cartoes" element={<Navigate to="/cartoes/transacoes" replace />} />
               <Route path="/cartoes/transacoes" element={protect("pagcorp", <PagCorp />)} />
+              <Route path="/cartoes/analytics" element={protect("pagcorp", <PagCorpAnalytics />)} />
               <Route path="/cartoes/mapeamento" element={protect("pagcorp", <PagCorpMapping />)} />
               <Route path="/cartoes/indedutiveis" element={protect("pagcorp", <PagCorpNondeductible />)} />
               <Route path="/cartoes/baixas" element={protect("pagcorp", <PagCorpSettlements />)} />
