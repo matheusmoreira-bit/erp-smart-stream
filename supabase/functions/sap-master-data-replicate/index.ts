@@ -292,9 +292,21 @@ Deno.serve(async (req) => {
     let created = 0;
     let skipped = 0;
     let failed = 0;
+    let handled = 0;
+    let budgetReached = false;
     const errors: Array<{ code: string; error: string }> = [];
+    // Orçamento de tempo: devolve resultado parcial antes do limite da plataforma,
+    // evitando que o navegador perca a conexão ("Failed to fetch") quando o SAP
+    // está lento.
+    const startedAt = Date.now();
+    const TIME_BUDGET_MS = 55_000;
 
     for (const row of rows) {
+      if (Date.now() - startedAt > TIME_BUDGET_MS) {
+        budgetReached = true;
+        break;
+      }
+      handled++;
       const code = String(row[spec.keyField] ?? "");
       if (!code) continue;
       if (already.has(code)) {
@@ -322,7 +334,11 @@ Deno.serve(async (req) => {
       created++;
     }
 
-    const nextOffset = rows.length === limit ? offset + limit : null;
+    const nextOffset = budgetReached
+      ? offset + handled
+      : rows.length === limit
+      ? offset + limit
+      : null;
 
     return json({
       success: true,
@@ -331,7 +347,7 @@ Deno.serve(async (req) => {
       target_company_db: targetDb,
       dry_run: dryRun,
       total: Number.isFinite(total) ? total : null,
-      processed: rows.length,
+      processed: handled,
       created,
       skipped,
       failed,
