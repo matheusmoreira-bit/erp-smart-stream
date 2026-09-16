@@ -184,18 +184,97 @@ Deno.serve(async (req) => {
       });
     }
 
-    const line: Record<string, unknown> = { LineNum: lineNum, ItemCode: itemCode };
-    if (description) line.ItemDescription = description;
+    // Troca de item em UMA linha: o Service Layer substitui a coleção inteira
+    // de DocumentLines no PATCH. Enviar só {LineNum, ItemCode} zera preço,
+    // quantidade e dimensões das demais linhas (e da própria). Por isso lemos
+    // o documento atual no SAP e reenviamos TODAS as linhas completas.
+    const getRes = await fetch(
+      `${baseUrl}/${endpoint}(${expense.sap_doc_entry})?$select=DocumentLines`,
+      { headers: { Cookie: cookies } },
+    );
+    if (!getRes.ok) {
+      const t = await getRes.text().catch(() => "");
+      return json({ error: `Falha ao ler o documento no SAP [${getRes.status}]: ${t.slice(0, 300)}` }, 502);
+    }
+    const currentDoc = await getRes.json();
+    const currentLines: Record<string, unknown>[] = Array.isArray(currentDoc?.DocumentLines)
+      ? currentDoc.DocumentLines
+      : [];
+    if (!currentLines.length) return json({ error: "Documento sem linhas no SAP." }, 400);
+
+    // Fallback de quantidade/preço: se o SAP não devolver valores válidos,
+    // usamos os do próprio pedido no Flow para não gravar linha zerada.
+    const { data: flowLines } = await supabase
+      .from("expense_items")
+      .select("id, created_at, quantity, unit_price, cost_center, project, description")
+      .eq("expense_id", expenseId)
+      .order("created_at", { ascending: true });
+    const flowLine = (flowLines || [])[lineNum] as
+      | { quantity?: number; unit_price?: number; cost_center?: string | null; project?: string | null }
+      | undefined;
+
+    const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+
+    const payloadLines = currentLines.map((l, idx) => {
+      const isTarget = Number(l.LineNum ?? idx) === lineNum || idx === lineNum;
+      const qty = num(l.Quantity) > 0 ? num(l.Quantity) : num(flowLine?.quantity) || 1;
+      const price = num(l.UnitPrice) > 0 ? num(l.UnitPrice) : num(flowLine?.unit_price);
+      const out: Record<string, unknown> = {
+        LineNum: l.LineNum ?? idx,
+        ItemCode: isTarget ? itemCode : l.ItemCode,
+        Quantity: qty,
+        UnitPrice: price,
+      };
+      if (isTarget && description) out.ItemDescription = description;
+      else if (l.ItemDescription != null) out.ItemDescription = l.ItemDescription;
+      const cc = l.CostingCode ?? (isTarget ? flowLine?.cost_center : null);
+      if (cc != null) out.CostingCode = cc;
+      if (l.CostingCode2 != null) out.CostingCode2 = l.CostingCode2;
+      if (l.CostingCode3 != null) out.CostingCode3 = l.CostingCode3;
+      const proj = l.ProjectCode ?? (isTarget ? flowLine?.project : null);
+      if (proj != null) out.ProjectCode = proj;
+      if (l.WarehouseCode != null) out.WarehouseCode = l.WarehouseCode;
+      if (l.TaxCode != null) out.TaxCode = l.TaxCode;
+      if (l.AccountCode != null) out.AccountCode = l.AccountCode;
+      if (l.Usage != null) out.Usage = l.Usage;
+      if (l.FreeText != null) out.FreeText = l.FreeText;
+      if (l.DiscountPercent != null) out.DiscountPercent = l.DiscountPercent;
+      return out;
+    });
+
+    const zeroed = payloadLines.filter((l) => num(l.UnitPrice) <= 0);
+    if (zeroed.length) {
+      return json(
+        { error: "Não foi possível preservar o preço unitário das linhas no SAP. Nenhuma alteração foi aplicada." },
+        400,
+      );
+    }
 
     const patchRes = await fetch(`${baseUrl}/${endpoint}(${expense.sap_doc_entry})`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", Cookie: cookies },
-      body: JSON.stringify({ DocumentLines: [line] }),
+      body: JSON.stringify({ DocumentLines: payloadLines }),
     });
     if (!patchRes.ok) {
       const t = await patchRes.text().catch(() => "");
       return json({ error: `SAP recusou o PATCH [${patchRes.status}]: ${t.slice(0, 500)}` }, 502);
     }
+
+    // Conferência pós-PATCH: se o SAP zerou algum preço, avisamos em vez de
+    // deixar o documento silenciosamente sem valor.
+    let priceWarning: string | null = null;
+    const checkRes = await fetch(
+      `${baseUrl}/${endpoint}(${expense.sap_doc_entry})?$select=DocumentLines`,
+      { headers: { Cookie: cookies } },
+    );
+    if (checkRes.ok) {
+      const after = await checkRes.json().catch(() => ({}));
+      const lines: Record<string, unknown>[] = Array.isArray(after?.DocumentLines) ? after.DocumentLines : [];
+      if (lines.some((l) => num(l.UnitPrice) <= 0)) {
+        priceWarning = "O SAP retornou linha com preço unitário zerado após a troca. Revise o pedido no ERP.";
+      }
+    }
+
 
     const { data: localLines } = await supabase
       .from("expense_items")
@@ -227,7 +306,15 @@ Deno.serve(async (req) => {
     }).then(() => {}, () => {});
 
 
-    return json({ success: true, doc_entry: expense.sap_doc_entry, doc_num: expense.sap_doc_num, item_code: itemCode });
+    return json({
+      success: true,
+      doc_entry: expense.sap_doc_entry,
+      doc_num: expense.sap_doc_num,
+      item_code: itemCode,
+      lines_sent: payloadLines.length,
+      ...(priceWarning ? { warning: priceWarning } : {}),
+    });
+
 
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
