@@ -205,7 +205,80 @@ async function fetchExpenses(apiToken: string, baseUrl: string, accountId: strin
   return allItems;
 }
 
+interface PagCorpAccount {
+  account?: string | number;
+  parentAccount?: string | number;
+  alias?: string;
+  accountType?: string;
+  costCenter?: string;
+  status?: string;
+  active?: boolean;
+  cards?: unknown[];
+  cardHolders?: unknown[];
+}
+
+/** Hierarquia de contas (tesouraria + cartões) da conta raiz. */
+async function fetchAccounts(apiToken: string, baseUrl: string, accountId: string): Promise<PagCorpAccount[]> {
+  const out: PagCorpAccount[] = [];
+  const seen = new Set<string>();
+  for (const suffix of [`?useHierarchy=true&page=`, `?page=`]) {
+    let page = 1;
+    let ok = false;
+    while (page <= 50) {
+      const res = await fetch(`${baseUrl}Account/${accountId}${suffix}${page}`, {
+        headers: { Authorization: `Bearer ${apiToken}` },
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        console.warn(`[pagcorp accounts] ${res.status} ${body.slice(0, 200)}`);
+        break;
+      }
+      ok = true;
+      const data = await res.json().catch(() => null) as { items?: PagCorpAccount[]; currentPage?: number; totalPages?: number } | null;
+      const items = data?.items ?? [];
+      for (const it of items) {
+        const key = String(it.account ?? "");
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        out.push(it);
+      }
+      if (!items.length || !data?.totalPages || (data.currentPage ?? page) >= data.totalPages) break;
+      page++;
+    }
+    if (ok && out.length) break;
+  }
+  return out;
+}
+
+/** Saldo disponível por conta (tesouraria e cartões). */
+async function fetchAvailable(apiToken: string, baseUrl: string, accountId: string): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  for (const url of [
+    `${baseUrl}Account/${accountId}/Available?useHierarchy=true`,
+    `${baseUrl}Account/${accountId}/Available`,
+  ]) {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${apiToken}` } });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.warn(`[pagcorp available] ${res.status} ${body.slice(0, 200)}`);
+      continue;
+    }
+    const data = await res.json().catch(() => null) as any;
+    const rows: any[] = Array.isArray(data) ? data : (data?.items ?? (data ? [data] : []));
+    for (const r of rows) {
+      const acc = String(r?.account ?? r?.accountNumber ?? accountId);
+      const raw = r?.available ?? r?.availableValue ?? r?.balance ?? r?.value;
+      const num = typeof raw === "number" ? raw : Number(raw);
+      if (!acc || !Number.isFinite(num)) continue;
+      map.set(acc, num);
+    }
+    if (map.size) break;
+  }
+  return map;
+}
+
 Deno.serve(async (req) => {
+
   const foreignOrigin = rejectForeignOrigin(req);
   if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") {
