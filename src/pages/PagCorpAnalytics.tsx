@@ -36,7 +36,7 @@ import { PageTitle } from "@/components/PageTitle";
 import { useSap } from "@/contexts/SapContext";
 import { useCompanies } from "@/hooks/useCompanies";
 import { usePagCorp } from "@/hooks/usePagCorp";
-import { isTreasury, usePagCorpAccounts } from "@/hooks/usePagCorpAccounts";
+import { isTreasury, usePagCorpAccounts, type PagCorpAccountInfo } from "@/hooks/usePagCorpAccounts";
 
 const ALL = "__all__";
 
