@@ -61,7 +61,7 @@ export default function PagCorpAnalytics() {
   const [holder, setHolder] = useState<string>(ALL);
   const [costCenter, setCostCenter] = useState<string>(ALL);
 
-  const { transactions, loading: loadingTx, fetchTransactions } = usePagCorp();
+  const { transactions, isLoading: loadingTx, fetchTransactions } = usePagCorp();
   const {
     accounts,
     snapshots,
