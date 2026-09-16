@@ -916,11 +916,14 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   const editableApproved = editMode === "approved";
   const editableForFix = editableApproved && hasSapError;
   const editableIntegrated = editMode === "integrated";
+  // Rejeitado: editar corrige o documento e reinicia o fluxo do nível 1.
+  const editableRejected = editMode === "rejected";
   if (editMode === "blocked") {
     return json(409, {
-      error: "Somente pedidos em rascunho, pendentes de aprovação, com erro de integração ou já lançados sem NF de entrada podem ser alterados.",
+      error: "Somente pedidos em rascunho, pendentes de aprovação, rejeitados, com erro de integração ou já lançados sem NF de entrada podem ser alterados.",
     });
   }
+
 
 
   const input = body?.input ?? {};
@@ -1024,6 +1027,7 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
     status === "pendente_aprovacao" ||
     editableApproved ||
     editableIntegrated ||
+    editableRejected ||
     (attachmentsChanged && status === "pendente_aprovacao");
   let resubmittedApprover: string | null = null;
   let resubmittedLevel = 1;
@@ -1413,6 +1417,7 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
     if (editableForFix) reasons.push("correção após erro de integração SAP");
     else if (editableApproved) reasons.push("alteração de pedido já aprovado");
     if (editableIntegrated) reasons.push(`atualização do PC ${current.sap_doc_num || current.sap_doc_entry}`);
+    if (editableRejected) reasons.push("correção de pedido rejeitado");
     if (attachmentsChanged) reasons.push("anexos alterados");
     if (reasons.length === 0) reasons.push("edição do documento");
 
@@ -1787,7 +1792,7 @@ async function actionAttachmentsAdd(admin: SupabaseClient, caller: Caller, body:
 
   // Documento integrado ao ERP continua aceitando NOVOS anexos (backfill) até
   // que a NF de entrada seja lançada. Depois disso, nada mais pode ser incluído.
-  const attachBlocked = new Set(["nf_entrada", "pagamento", "finalizado", "cancelado", "rejeitado"]);
+  const attachBlocked = new Set(["nf_entrada", "pagamento", "finalizado", "cancelado"]);
   if (attachBlocked.has(String(current.status))) {
     return json(409, {
       error: "Documento encerrado (NF de entrada lançada ou cancelado) — não é possível adicionar anexos.",

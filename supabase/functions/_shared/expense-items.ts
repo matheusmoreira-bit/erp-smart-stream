@@ -11,18 +11,27 @@ export interface NormalizedExpenseItem {
   free_of_charge: boolean;
 }
 
-export type ExpenseEditMode = "draft" | "pending" | "approved" | "integrated" | "blocked";
+export type ExpenseEditMode =
+  | "draft"
+  | "pending"
+  | "rejected"
+  | "approved"
+  | "integrated"
+  | "blocked";
 
 export function classifyExpenseEdit(status: string, alreadyInSap: boolean): ExpenseEditMode {
-  if (["nf_entrada", "pagamento", "finalizado", "cancelado", "rejeitado"].includes(status)) {
+  if (["nf_entrada", "pagamento", "finalizado", "cancelado"].includes(status)) {
     return "blocked";
   }
   if (status === "rascunho") return "draft";
   if (status === "pendente_aprovacao") return "pending";
+  // Rejeitado pode ser corrigido: a edição reinicia o fluxo de aprovação.
+  if (status === "rejeitado") return "rejected";
   if (status === "aprovado") return alreadyInSap ? "integrated" : "approved";
   if (status === "pc_lancado" && alreadyInSap) return "integrated";
   return "blocked";
 }
+
 
 const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 

@@ -426,6 +426,7 @@ function ExpenseDetailModal({
   const showEdit = canEdit && !nfLancada && (
     expense.status === "rascunho" ||
     expense.status === "pendente_aprovacao" ||
+    expense.status === "rejeitado" ||
     expense.status === "pc_lancado" ||
     expense.status === "aprovado"
   );
@@ -3241,7 +3242,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
         canApprove={selectedExpense ? canApprove(selectedExpense) : false}
         canAddAttachments={
           !!selectedExpense &&
-          !["nf_entrada", "pagamento", "finalizado", "cancelado", "rejeitado"].includes(selectedExpense.status) &&
+          !["nf_entrada", "pagamento", "finalizado", "cancelado"].includes(selectedExpense.status) &&
           (isAdmin || canCancel(selectedExpense))
         }
         nfseEmission={selectedExpense ? nfseEmissionFor(selectedExpense) : null}
