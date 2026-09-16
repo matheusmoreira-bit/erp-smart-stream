@@ -916,11 +916,14 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   const editableApproved = editMode === "approved";
   const editableForFix = editableApproved && hasSapError;
   const editableIntegrated = editMode === "integrated";
+  // Rejeitado: editar corrige o documento e reinicia o fluxo do nível 1.
+  const editableRejected = editMode === "rejected";
   if (editMode === "blocked") {
     return json(409, {
-      error: "Somente pedidos em rascunho, pendentes de aprovação, com erro de integração ou já lançados sem NF de entrada podem ser alterados.",
+      error: "Somente pedidos em rascunho, pendentes de aprovação, rejeitados, com erro de integração ou já lançados sem NF de entrada podem ser alterados.",
     });
   }
+
 
 
   const input = body?.input ?? {};
