@@ -338,18 +338,6 @@ Deno.serve(async (req) => {
 
     let docs = (Array.isArray(bundle) ? bundle : []) as Array<Record<string, any>>;
 
-    // Recorte de visibilidade (mesma semântica de `expense-read`), em memória.
-    let substituteAliases = new Set<string>();
-    if (!caller.privileged) {
-      substituteAliases = await substituteOfficialAliases(admin, caller.aliases);
-      docs = docs.filter((d) => {
-        if (ownsExpense(d, caller.aliases, caller.directorateBranch, substituteAliases)) return true;
-        if (!caller.directorateBranch) return false;
-        return (d.items || []).some((it: Record<string, unknown>) =>
-          costCenterInBranch(it.cost_center, caller.directorateBranch),
-        );
-      });
-    }
 
     // As trilhas persistidas sao a fonte de verdade do rateio (e da pendencia).
     // Precisam ser carregadas ANTES do recorte de visibilidade: quem nao tem
