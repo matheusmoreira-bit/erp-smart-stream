@@ -1939,6 +1939,11 @@ export default function PagCorp() {
                         <TableCell className="text-sm text-foreground max-w-[250px]">
                           <div className="flex items-center gap-2">
                             <span className="truncate">{t.description}</span>
+                            {t.isWithdrawal && (
+                              <Badge variant="secondary" className="text-[10px] uppercase tracking-wide shrink-0">
+                                Saque
+                              </Badge>
+                            )}
                             {t.isNondeductible && (
                               <Badge variant="outline" className="text-[10px] uppercase tracking-wide gap-1 shrink-0">
                                 <ShieldOff className="w-3 h-3" />
