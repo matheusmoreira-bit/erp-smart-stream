@@ -33,7 +33,7 @@ interface ScopeResult {
   errors: Array<{ code: string; error: string }>;
 }
 
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 25;
 
 /**
  * Réplica de cadastros mestres (fornecedores, clientes e itens) de uma empresa
@@ -72,18 +72,35 @@ export function MasterDataReplicationCard() {
         let offset: number | null = 0;
         let total = 0;
         while (offset !== null) {
-          const response = await sapFunctionFetch("sap-master-data-replicate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              source_company_db: sourceDb,
-              target_company_db: targetDb,
-              scope,
-              offset,
-              limit: BATCH_SIZE,
-              dry_run: dryRun,
-            }),
-          });
+          // O ERP pode demorar; em falha de rede tentamos novamente antes de abortar.
+          let response: Response | null = null;
+          let lastNetworkError: unknown = null;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              response = await sapFunctionFetch("sap-master-data-replicate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  source_company_db: sourceDb,
+                  target_company_db: targetDb,
+                  scope,
+                  offset,
+                  limit: BATCH_SIZE,
+                  dry_run: dryRun,
+                }),
+              });
+              break;
+            } catch (err) {
+              lastNetworkError = err;
+              await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+            }
+          }
+          if (!response) {
+            throw new Error(
+              "Não foi possível falar com o ERP agora (conexão interrompida). Tente novamente em alguns minutos." +
+                (lastNetworkError ? "" : ""),
+            );
+          }
           const data = await response.json().catch(() => null);
           if (!response.ok || data?.error) throw new Error(data?.error || `HTTP ${response.status}`);
 

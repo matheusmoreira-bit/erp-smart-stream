@@ -347,7 +347,7 @@ Deno.serve(async (req) => {
       target_company_db: targetDb,
       dry_run: dryRun,
       total: Number.isFinite(total) ? total : null,
-      processed: rows.length,
+      processed: handled,
       created,
       skipped,
       failed,
