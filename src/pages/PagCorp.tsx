@@ -1938,7 +1938,7 @@ export default function PagCorp() {
                         </TableCell>
                         <TableCell className="text-sm text-foreground max-w-[250px]">
                           <div className="flex items-center gap-2">
-                            <span className="truncate">{t.description}</span>
+                            <span className="truncate" title={pagcorpDisplayDescription(t)}>{pagcorpDisplayDescription(t)}</span>
                             {t.isWithdrawal && (
                               <Badge variant="secondary" className="text-[10px] uppercase tracking-wide shrink-0">
                                 Saque
