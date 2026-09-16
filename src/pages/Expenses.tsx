@@ -426,6 +426,7 @@ function ExpenseDetailModal({
   const showEdit = canEdit && !nfLancada && (
     expense.status === "rascunho" ||
     expense.status === "pendente_aprovacao" ||
+    expense.status === "rejeitado" ||
     expense.status === "pc_lancado" ||
     expense.status === "aprovado"
   );
