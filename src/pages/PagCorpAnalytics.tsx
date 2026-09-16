@@ -145,24 +145,49 @@ export default function PagCorpAnalytics() {
       if (ta !== tb) return ta - tb;
       return String(a.alias || a.account).localeCompare(String(b.alias || b.account), "pt-BR");
     };
-    const rows: { account: PagCorpAccountInfo; depth: number; subtotal: number; hasChildren: boolean }[] = [];
+    const rows: {
+      account: PagCorpAccountInfo;
+      depth: number;
+      subtotal: number;
+      hasChildren: boolean;
+      ancestors: string[];
+    }[] = [];
     const seen = new Set<string>();
-    const walk = (node: PagCorpAccountInfo, depth: number): number => {
+    const walk = (node: PagCorpAccountInfo, depth: number, ancestors: string[]): number => {
       const key = String(node.account);
       if (seen.has(key)) return 0;
       seen.add(key);
-      const row = { account: node, depth, subtotal: 0, hasChildren: false };
+      const row = { account: node, depth, subtotal: 0, hasChildren: false, ancestors };
       rows.push(row);
       const kids = (children.get(key) ?? []).sort(sortFn);
       row.hasChildren = kids.length > 0;
       let total = Number(node.available ?? 0);
-      kids.forEach((k) => { total += walk(k, depth + 1); });
+      kids.forEach((k) => { total += walk(k, depth + 1, [...ancestors, key]); });
       row.subtotal = total;
       return total;
     };
-    roots.sort(sortFn).forEach((r) => walk(r, 0));
+    roots.sort(sortFn).forEach((r) => walk(r, 0, []));
     return rows;
   }, [accounts]);
+
+  /** Linhas realmente exibidas: colapsadas por padrão, expandindo o que casa com a busca. */
+  const visibleAccountRows = useMemo(() => {
+    const term = accountSearch.trim().toLowerCase();
+    if (term) {
+      const matches = new Set<string>();
+      accountTree.forEach((r) => {
+        const a = r.account;
+        const hay = `${a.alias ?? ""} ${a.account} ${a.costCenter ?? ""} ${a.cards.map((c) => c.alias ?? "").join(" ")}`.toLowerCase();
+        if (hay.includes(term)) {
+          matches.add(String(a.account));
+          r.ancestors.forEach((p) => matches.add(p));
+        }
+      });
+      return accountTree.filter((r) => matches.has(String(r.account.account)));
+    }
+    return accountTree.filter((r) => r.ancestors.every((p) => expandedAccounts.has(p)));
+  }, [accountTree, accountSearch, expandedAccounts]);
+
 
 
   const filteredTx = useMemo(() => {
