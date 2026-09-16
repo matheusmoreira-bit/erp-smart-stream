@@ -124,6 +124,47 @@ export default function PagCorpAnalytics() {
     return [...set].sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [accounts]);
 
+  /** Contas em árvore (tesouraria pai → tesourarias/cartões filhos). */
+  const accountTree = useMemo(() => {
+    const byAccount = new Map(accounts.map((a) => [String(a.account), a]));
+    const children = new Map<string, PagCorpAccountInfo[]>();
+    const roots: PagCorpAccountInfo[] = [];
+    accounts.forEach((a) => {
+      const parent = a.parentAccount ? String(a.parentAccount) : "";
+      if (parent && byAccount.has(parent) && parent !== String(a.account)) {
+        const list = children.get(parent) ?? [];
+        list.push(a);
+        children.set(parent, list);
+      } else {
+        roots.push(a);
+      }
+    });
+    const sortFn = (a: PagCorpAccountInfo, b: PagCorpAccountInfo) => {
+      const ta = isTreasury(a) ? 0 : 1;
+      const tb = isTreasury(b) ? 0 : 1;
+      if (ta !== tb) return ta - tb;
+      return String(a.alias || a.account).localeCompare(String(b.alias || b.account), "pt-BR");
+    };
+    const rows: { account: PagCorpAccountInfo; depth: number; subtotal: number; hasChildren: boolean }[] = [];
+    const seen = new Set<string>();
+    const walk = (node: PagCorpAccountInfo, depth: number): number => {
+      const key = String(node.account);
+      if (seen.has(key)) return 0;
+      seen.add(key);
+      const row = { account: node, depth, subtotal: 0, hasChildren: false };
+      rows.push(row);
+      const kids = (children.get(key) ?? []).sort(sortFn);
+      row.hasChildren = kids.length > 0;
+      let total = Number(node.available ?? 0);
+      kids.forEach((k) => { total += walk(k, depth + 1); });
+      row.subtotal = total;
+      return total;
+    };
+    roots.sort(sortFn).forEach((r) => walk(r, 0));
+    return rows;
+  }, [accounts]);
+
+
   const filteredTx = useMemo(() => {
     return transactions.filter((t) => {
       if (card !== ALL) {
