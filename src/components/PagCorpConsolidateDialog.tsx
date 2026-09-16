@@ -1,3 +1,4 @@
+import { pagcorpDisplayDescription } from "@/lib/pagcorp-accountability";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Loader2, Layers, CreditCard, BookOpen } from "lucide-react";
 import {
@@ -327,7 +328,7 @@ export function PagCorpConsolidateDialog({ open, onClose, transactions, onSwitch
                         <div className="flex items-start gap-1.5">
                           <CreditCard className="w-3.5 h-3.5 mt-0.5 text-muted-foreground shrink-0" />
                           <div className="min-w-0">
-                            <p className="truncate font-medium">{t.description}</p>
+                            <p className="truncate font-medium">{pagcorpDisplayDescription(t)}</p>
                             <p className="text-xs text-muted-foreground truncate">
                               {t.accountAlias || t.accountName || "—"}
                               {t.hasAccountability && <span className="ml-1 text-success">• com prestação</span>}

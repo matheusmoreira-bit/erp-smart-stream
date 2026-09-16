@@ -1,3 +1,4 @@
+import { pagcorpDisplayDescription } from "@/lib/pagcorp-accountability";
 import { Fragment, useState, useEffect, useMemo, useRef } from "react";
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import { motion } from "framer-motion";
