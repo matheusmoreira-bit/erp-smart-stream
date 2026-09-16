@@ -351,43 +351,86 @@ Deno.serve(async (req) => {
       });
     }
 
-    // As trilhas persistidas sao a fonte de verdade do rateio. Para callers
-    // comuns, cada documento e recortado antes de sair da funcao: valores,
-    // itens, CCs, projetos e cadeias de outras ramificacoes nao chegam ao
-    // navegador. Um administrador que nao participa de nenhuma trilha ainda
-    // preserva a visao operacional integral.
-    const expenseIds = docs.map((doc) => String(doc.id || "")).filter(Boolean);
-    if (expenseIds.length > 0) {
+    // As trilhas persistidas sao a fonte de verdade do rateio (e da pendencia).
+    // Precisam ser carregadas ANTES do recorte de visibilidade: quem nao tem
+    // nenhuma trilha pendente nao deve ver o documento na fila.
+    const segmentsByExpense = new Map<string, ApprovalSegmentVisibilityRow[]>();
+    const allIds = docs.map((doc) => String(doc.id || "")).filter(Boolean);
+    if (allIds.length > 0) {
       const { data: segmentData, error: segmentError } = await admin
         .from("expense_approval_segments")
         .select("*")
-        .in("expense_id", expenseIds);
+        .in("expense_id", allIds);
       if (segmentError) return json(500, { error: segmentError.message }, cors);
-
-      const segmentsByExpense = new Map<string, ApprovalSegmentVisibilityRow[]>();
       for (const row of (segmentData || []) as ApprovalSegmentVisibilityRow[]) {
         const expenseId = String(row.expense_id || "");
         if (!segmentsByExpense.has(expenseId)) segmentsByExpense.set(expenseId, []);
         segmentsByExpense.get(expenseId)!.push(row);
       }
+    }
 
-      const effectiveAliases = new Set([...caller.aliases, ...substituteAliases]);
+    const matchesAlias = (candidate: unknown, alias: string) =>
+      identityMatches(candidate, alias) ||
+      personMatches(candidate, alias) ||
+      personListMatches(candidate, alias);
+
+    /**
+     * Trilha ainda pendente PARA O CALLER: só o aprovador atual da trilha (ou
+     * um nível ainda não decidido). Quem já aprovou o próprio nível sai da fila.
+     */
+    const pendingSegmentForCaller = (
+      segment: ApprovalSegmentVisibilityRow,
+      aliases: Set<string>,
+    ): boolean => {
+      if (String(segment.status || "").toLowerCase() !== "pendente") return false;
+      const currentLevel = Number(segment.current_level ?? 1);
+      const chain = Array.isArray((segment as any).chain) ? (segment as any).chain as any[] : [];
+      const candidates: unknown[] = [segment.current_approver, segment.current_approver_email];
+      for (const entry of chain) {
+        const row = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
+        if (Number(row.level_order ?? 0) < currentLevel) continue;
+        candidates.push(row.approver_name, row.approver_email);
+      }
+      return candidates.some((c) => c && Array.from(aliases).some((alias) => matchesAlias(c, alias)));
+    };
+
+    // Recorte de visibilidade (mesma semântica de `expense-read`), em memória.
+    let substituteAliases = new Set<string>();
+    let effectiveAliases = new Set<string>(caller.aliases);
+    if (!caller.privileged) {
+      substituteAliases = await substituteOfficialAliases(admin, caller.aliases);
+      effectiveAliases = new Set([...caller.aliases, ...substituteAliases]);
+      docs = docs.filter((d) => {
+        if (ownsAsRequesterOrBranch(d, caller.aliases, caller.directorateBranch)) return true;
+        const segments = segmentsByExpense.get(String(d.id || "")) || [];
+        if (segments.length > 0) {
+          // Documento rateado: a pendência vem das trilhas, não do nível do
+          // cabeçalho (que pode apontar para a regra de outra ramificação).
+          return segments.some((s) => pendingSegmentForCaller(s, effectiveAliases));
+        }
+        if (hasPendingApproverClaim(d, caller.aliases, substituteAliases)) return true;
+        if (!caller.directorateBranch) return false;
+        return (d.items || []).some((it: Record<string, unknown>) =>
+          costCenterInBranch(it.cost_center, caller.directorateBranch),
+        );
+      });
+    } else {
+      effectiveAliases = new Set([...caller.aliases]);
+    }
+
+    // Recorte do payload por trilha: valores, itens, CCs, projetos e cadeias de
+    // outras ramificacoes nao chegam ao navegador.
+    if (docs.length > 0) {
       docs = docs.map((doc) => {
         const segments = segmentsByExpense.get(String(doc.id || "")) || [];
         return scopeApprovalDocumentToSegments(
           doc,
           segments,
-          (segment) => approvalSegmentBelongsToAliases(
-            segment,
-            effectiveAliases,
-            (candidate, alias) =>
-              identityMatches(candidate, alias) ||
-              personMatches(candidate, alias) ||
-              personListMatches(candidate, alias),
-          ),
+          (segment) => approvalSegmentBelongsToAliases(segment, effectiveAliases, matchesAlias),
         );
       });
     }
+
 
 
     return json(
