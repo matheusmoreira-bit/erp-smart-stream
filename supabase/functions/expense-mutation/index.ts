@@ -1027,6 +1027,7 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
     status === "pendente_aprovacao" ||
     editableApproved ||
     editableIntegrated ||
+    editableRejected ||
     (attachmentsChanged && status === "pendente_aprovacao");
   let resubmittedApprover: string | null = null;
   let resubmittedLevel = 1;
