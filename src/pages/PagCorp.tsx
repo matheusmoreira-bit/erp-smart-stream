@@ -385,6 +385,7 @@ export default function PagCorp() {
       return next;
     });
   const [cardFilter, setCardFilter] = useState<string>("all");
+  const [kindFilter, setKindFilter] = useState<"all" | "purchase" | "withdrawal">("all");
 
   const [reprocessingGroup, setReprocessingGroup] = useState<string | null>(null);
   const [batchReprocessing, setBatchReprocessing] = useState(false);
@@ -689,7 +690,7 @@ export default function PagCorp() {
   const filteredTransactions = useMemo(() => {
     let list = transactions;
 
-    // Exibe somente compras reais — estornos, cancelamentos e outras classificações
+    // Exibe compras reais e saques — estornos, cancelamentos e outras classificações
     // administrativas (recarga, tarifa, ajuste etc.) são ocultados.
     const ALLOWED_CLASSIFICATIONS = new Set([
       "compra nacional",
@@ -699,13 +700,25 @@ export default function PagCorp() {
     list = list.filter((t) => {
       const raw = (t as { eventClassification?: string }).eventClassification;
       if (!raw) return true; // sem classificação: mantém (dados legados)
-      const norm = String(raw).replace(/\s+/g, " ").trim().toLowerCase();
-      return ALLOWED_CLASSIFICATIONS.has(norm);
+      const norm = String(raw)
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
+      return ALLOWED_CLASSIFICATIONS.has(norm) || norm.includes("saque");
     });
 
-    // Nondeductible visibility: off = hide nondeductible cards
+    if (kindFilter === "withdrawal") {
+      list = list.filter((t) => !!t.isWithdrawal);
+    } else if (kindFilter === "purchase") {
+      list = list.filter((t) => !t.isWithdrawal);
+    }
+
+    // Nondeductible visibility: off = hide nondeductible cards.
+    // Saques são indedutíveis por natureza, então continuam visíveis.
     if (!showNondeductible) {
-      list = list.filter((t) => !t.isNondeductible);
+      list = list.filter((t) => !t.isNondeductible || t.isWithdrawal);
     }
 
     if (statusFilter === "pending") {
