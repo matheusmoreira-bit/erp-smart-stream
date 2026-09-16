@@ -86,14 +86,27 @@ export default function PagCorpAnalytics() {
   }, [accounts]);
 
   const cardOptions = useMemo(() => {
-    const set = new Set<string>();
+    const map = new Map<string, string>();
+    const put = (value?: string | number | null, name?: string | null) => {
+      const v = value == null ? "" : String(value).trim();
+      if (!v) return;
+      const n = (name || "").trim();
+      const label = n && n !== v ? `${n} · ${v}` : v;
+      const prev = map.get(v);
+      if (!prev || prev === v) map.set(v, label);
+    };
     transactions.forEach((t) => {
-      const label = t.cardName || t.cardLastDigits || (t.cardId != null ? String(t.cardId) : "");
-      if (label) set.add(String(label));
+      put(
+        t.cardName || t.cardLastDigits || t.cardId,
+        (t.accountAlias || t.accountName) as string | undefined,
+      );
     });
-    accounts.forEach((a) => a.cards.forEach((c) => c.alias && set.add(String(c.alias))));
-    return [...set].sort((a, b) => a.localeCompare(b, "pt-BR"));
+    accounts.forEach((a) => a.cards.forEach((c) => put(c.alias, a.alias)));
+    return [...map.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
   }, [transactions, accounts]);
+
 
   const holderOptions = useMemo(() => {
     const set = new Set<string>();
@@ -253,7 +266,7 @@ export default function PagCorpAnalytics() {
                 <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ALL}>Todos</SelectItem>
-                  {cardOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  {cardOptions.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
