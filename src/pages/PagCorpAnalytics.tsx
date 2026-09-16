@@ -356,6 +356,67 @@ export default function PagCorpAnalytics() {
             />
           </div>
 
+          {/* Hierarquia de contas */}
+          <div className="glass-card overflow-hidden">
+            <div className="p-4 border-b border-border">
+              <h2 className="text-sm font-semibold">Hierarquia de contas</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Tesourarias e cartões conforme a estrutura da operadora.
+              </p>
+            </div>
+            {loadingAccounts ? (
+              <div className="py-10 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
+            ) : accountTree.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-10 text-center">Sem contas disponíveis.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Conta</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Centro de custo</TableHead>
+                    <TableHead className="text-right">Saldo</TableHead>
+                    <TableHead className="text-right">Saldo consolidado</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {accountTree.map((row) => {
+                    const a = row.account;
+                    const treasury = isTreasury(a);
+                    return (
+                      <TableRow key={a.account}>
+                        <TableCell>
+                          <div
+                            className="flex items-center gap-2"
+                            style={{ paddingLeft: `${row.depth * 18}px` }}
+                          >
+                            {row.depth > 0 && <span className="text-muted-foreground text-xs">└</span>}
+                            <div>
+                              <div className={treasury ? "font-semibold" : "font-medium"}>
+                                {a.alias || a.account}
+                              </div>
+                              <div className="text-xs text-muted-foreground">{a.account}</div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {treasury ? "Tesouraria" : a.cards.length > 0 ? "Cartão" : (a.accountType || "—")}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{a.costCenter || "—"}</TableCell>
+                        <TableCell className="text-right">{a.available == null ? "—" : brl(Number(a.available))}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          {row.hasChildren ? brl(row.subtotal) : "—"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+
+
+
           {/* Gastos x aportes */}
           <div className="glass-card p-4">
             <h2 className="text-sm font-semibold mb-3">Aportes e gastos por dia</h2>
