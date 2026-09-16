@@ -264,39 +264,47 @@ function levelApproverCandidates(value: unknown): unknown[] {
   });
 }
 
-function ownsExpense(
+/** Solicitante / criador do documento, ou centro de custo da diretoria do caller. */
+function ownsAsRequesterOrBranch(
   row: Record<string, unknown>,
   aliases: Set<string>,
   directorateBranch: string | null,
-  substituteAliases?: Set<string> | null,
 ): boolean {
   if (costCenterInBranch(row.cost_center, directorateBranch)) return true;
-  const levelCandidates = levelApproverCandidates(row.level_approvers);
-  const candidates = [
-    row.requester_email,
-    row.requester_name,
-    row.created_by_email,
-    row.current_approver,
-    row.original_approver,
-    ...levelCandidates,
-  ];
-  for (const c of candidates) {
+  for (const c of [row.requester_email, row.requester_name, row.created_by_email]) {
     if (!c) continue;
     for (const alias of aliases) {
       if (identityMatches(c, alias) || personListMatches(c, alias)) return true;
     }
   }
-  // Substituto ativo: herda apenas a fila de aprovação do titular.
-  if (substituteAliases && substituteAliases.size > 0) {
-    for (const c of [row.current_approver, row.original_approver, ...levelCandidates]) {
-      if (!c) continue;
-      for (const alias of substituteAliases) {
-        if (identityMatches(c, alias) || personListMatches(c, alias)) return true;
-      }
+  return false;
+}
+
+/**
+ * Pendência de aprovação do caller no documento SEM trilhas de rateio.
+ * Só conta quem ainda precisa decidir (aprovador atual / nível atual), nunca
+ * quem já registrou a decisão em um nível anterior.
+ */
+function hasPendingApproverClaim(
+  row: Record<string, unknown>,
+  aliases: Set<string>,
+  substituteAliases?: Set<string> | null,
+): boolean {
+  const candidates = [
+    row.current_approver,
+    row.original_approver,
+    ...levelApproverCandidates(row.level_approvers),
+  ];
+  const all = new Set([...aliases, ...(substituteAliases || [])]);
+  for (const c of candidates) {
+    if (!c) continue;
+    for (const alias of all) {
+      if (identityMatches(c, alias) || personListMatches(c, alias)) return true;
     }
   }
   return false;
 }
+
 
 Deno.serve(async (req) => {
   const cors = corsFor(req, "POST, OPTIONS");
@@ -330,56 +338,87 @@ Deno.serve(async (req) => {
 
     let docs = (Array.isArray(bundle) ? bundle : []) as Array<Record<string, any>>;
 
-    // Recorte de visibilidade (mesma semântica de `expense-read`), em memória.
-    let substituteAliases = new Set<string>();
-    if (!caller.privileged) {
-      substituteAliases = await substituteOfficialAliases(admin, caller.aliases);
-      docs = docs.filter((d) => {
-        if (ownsExpense(d, caller.aliases, caller.directorateBranch, substituteAliases)) return true;
-        if (!caller.directorateBranch) return false;
-        return (d.items || []).some((it: Record<string, unknown>) =>
-          costCenterInBranch(it.cost_center, caller.directorateBranch),
-        );
-      });
-    }
 
-    // As trilhas persistidas sao a fonte de verdade do rateio. Para callers
-    // comuns, cada documento e recortado antes de sair da funcao: valores,
-    // itens, CCs, projetos e cadeias de outras ramificacoes nao chegam ao
-    // navegador. Um administrador que nao participa de nenhuma trilha ainda
-    // preserva a visao operacional integral.
-    const expenseIds = docs.map((doc) => String(doc.id || "")).filter(Boolean);
-    if (expenseIds.length > 0) {
+    // As trilhas persistidas sao a fonte de verdade do rateio (e da pendencia).
+    // Precisam ser carregadas ANTES do recorte de visibilidade: quem nao tem
+    // nenhuma trilha pendente nao deve ver o documento na fila.
+    const segmentsByExpense = new Map<string, ApprovalSegmentVisibilityRow[]>();
+    const allIds = docs.map((doc) => String(doc.id || "")).filter(Boolean);
+    if (allIds.length > 0) {
       const { data: segmentData, error: segmentError } = await admin
         .from("expense_approval_segments")
         .select("*")
-        .in("expense_id", expenseIds);
+        .in("expense_id", allIds);
       if (segmentError) return json(500, { error: segmentError.message }, cors);
-
-      const segmentsByExpense = new Map<string, ApprovalSegmentVisibilityRow[]>();
       for (const row of (segmentData || []) as ApprovalSegmentVisibilityRow[]) {
         const expenseId = String(row.expense_id || "");
         if (!segmentsByExpense.has(expenseId)) segmentsByExpense.set(expenseId, []);
         segmentsByExpense.get(expenseId)!.push(row);
       }
+    }
 
-      const effectiveAliases = new Set([...caller.aliases, ...substituteAliases]);
+    const matchesAlias = (candidate: unknown, alias: string) =>
+      identityMatches(candidate, alias) ||
+      personMatches(candidate, alias) ||
+      personListMatches(candidate, alias);
+
+    /**
+     * Trilha ainda pendente PARA O CALLER: só o aprovador atual da trilha (ou
+     * um nível ainda não decidido). Quem já aprovou o próprio nível sai da fila.
+     */
+    const pendingSegmentForCaller = (
+      segment: ApprovalSegmentVisibilityRow,
+      aliases: Set<string>,
+    ): boolean => {
+      if (String(segment.status || "").toLowerCase() !== "pendente") return false;
+      const currentLevel = Number(segment.current_level ?? 1);
+      const chain = Array.isArray((segment as any).chain) ? (segment as any).chain as any[] : [];
+      const candidates: unknown[] = [segment.current_approver, segment.current_approver_email];
+      for (const entry of chain) {
+        const row = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
+        if (Number(row.level_order ?? 0) < currentLevel) continue;
+        candidates.push(row.approver_name, row.approver_email);
+      }
+      return candidates.some((c) => c && Array.from(aliases).some((alias) => matchesAlias(c, alias)));
+    };
+
+    // Recorte de visibilidade (mesma semântica de `expense-read`), em memória.
+    let substituteAliases = new Set<string>();
+    let effectiveAliases = new Set<string>(caller.aliases);
+    if (!caller.privileged) {
+      substituteAliases = await substituteOfficialAliases(admin, caller.aliases);
+      effectiveAliases = new Set([...caller.aliases, ...substituteAliases]);
+      docs = docs.filter((d) => {
+        if (ownsAsRequesterOrBranch(d, caller.aliases, caller.directorateBranch)) return true;
+        const segments = segmentsByExpense.get(String(d.id || "")) || [];
+        if (segments.length > 0) {
+          // Documento rateado: a pendência vem das trilhas, não do nível do
+          // cabeçalho (que pode apontar para a regra de outra ramificação).
+          return segments.some((s) => pendingSegmentForCaller(s, effectiveAliases));
+        }
+        if (hasPendingApproverClaim(d, caller.aliases, substituteAliases)) return true;
+        if (!caller.directorateBranch) return false;
+        return (d.items || []).some((it: Record<string, unknown>) =>
+          costCenterInBranch(it.cost_center, caller.directorateBranch),
+        );
+      });
+    } else {
+      effectiveAliases = new Set([...caller.aliases]);
+    }
+
+    // Recorte do payload por trilha: valores, itens, CCs, projetos e cadeias de
+    // outras ramificacoes nao chegam ao navegador.
+    if (docs.length > 0) {
       docs = docs.map((doc) => {
         const segments = segmentsByExpense.get(String(doc.id || "")) || [];
         return scopeApprovalDocumentToSegments(
           doc,
           segments,
-          (segment) => approvalSegmentBelongsToAliases(
-            segment,
-            effectiveAliases,
-            (candidate, alias) =>
-              identityMatches(candidate, alias) ||
-              personMatches(candidate, alias) ||
-              personListMatches(candidate, alias),
-          ),
+          (segment) => approvalSegmentBelongsToAliases(segment, effectiveAliases, matchesAlias),
         );
       });
     }
+
 
 
     return json(
