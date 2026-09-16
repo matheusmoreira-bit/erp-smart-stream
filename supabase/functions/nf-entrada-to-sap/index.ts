@@ -155,7 +155,7 @@ Deno.serve(async (req) => {
     rows = (data || []) as NfRow[];
   }
 
-  const results: Array<{ id: string; ok: boolean; draft?: string; error?: string }> = [];
+  const results: Array<{ id: string; ok: boolean; draft?: string; error?: string; skipped?: boolean }> = [];
   for (const row of rows) {
     try {
       const draftId = await process(sb, row);
