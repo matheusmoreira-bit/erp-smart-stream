@@ -6672,6 +6672,45 @@ export type Database = {
         }
         Relationships: []
       }
+      pagcorp_balance_snapshots: {
+        Row: {
+          account: string
+          account_type: string | null
+          alias: string | null
+          available: number
+          captured_at: string
+          company_db: string
+          cost_center: string | null
+          id: string
+          parent_account: string | null
+          snapshot_date: string
+        }
+        Insert: {
+          account: string
+          account_type?: string | null
+          alias?: string | null
+          available?: number
+          captured_at?: string
+          company_db: string
+          cost_center?: string | null
+          id?: string
+          parent_account?: string | null
+          snapshot_date?: string
+        }
+        Update: {
+          account?: string
+          account_type?: string | null
+          alias?: string | null
+          available?: number
+          captured_at?: string
+          company_db?: string
+          cost_center?: string | null
+          id?: string
+          parent_account?: string | null
+          snapshot_date?: string
+        }
+        Relationships: []
+      }
       pagcorp_card_mapping: {
         Row: {
           card_identifier: string | null

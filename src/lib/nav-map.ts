@@ -61,6 +61,7 @@ export const NAV_MODULES: NavModule[] = [
     match: ["/cartoes"],
     items: [
       { label: "Transações", path: "/cartoes/transacoes", moduleKey: "pagcorp" },
+      { label: "Analytics", path: "/cartoes/analytics", moduleKey: "pagcorp" },
       { label: "Mapeamento de Cartões", path: "/cartoes/mapeamento", moduleKey: "pagcorp" },
       { label: "Baixas PagCorp", path: "/cartoes/baixas", moduleKey: "pagcorp" },
       { label: "Indedutíveis", path: "/cartoes/indedutiveis", moduleKey: "pagcorp" },

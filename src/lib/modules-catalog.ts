@@ -109,6 +109,7 @@ export const modules: Record<string, ModuleCard> = {
     moduleKey: "pagcorp",
     subItems: [
       { label: "Transações", path: "/cartoes/transacoes" },
+      { label: "Analytics", path: "/cartoes/analytics" },
       { label: "Mapeamento de Cartões", path: "/cartoes/mapeamento" },
       { label: "Indedutíveis", path: "/cartoes/indedutiveis" },
       { label: "Histórico de Integrações", path: "/cartoes/historico" },
