@@ -470,6 +470,7 @@ export function usePagCorp() {
           // publicar na tela para não disparar IA sobre status `pending`
           // armazenado em cache visual antigo.
           await applyIntegrationStatus(cached.data, companyDb);
+          markPagCorpWithdrawals(cached.data);
           setTransactions([...cached.data]);
         }
 
