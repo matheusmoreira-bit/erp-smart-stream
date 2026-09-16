@@ -264,39 +264,47 @@ function levelApproverCandidates(value: unknown): unknown[] {
   });
 }
 
-function ownsExpense(
+/** Solicitante / criador do documento, ou centro de custo da diretoria do caller. */
+function ownsAsRequesterOrBranch(
   row: Record<string, unknown>,
   aliases: Set<string>,
   directorateBranch: string | null,
-  substituteAliases?: Set<string> | null,
 ): boolean {
   if (costCenterInBranch(row.cost_center, directorateBranch)) return true;
-  const levelCandidates = levelApproverCandidates(row.level_approvers);
-  const candidates = [
-    row.requester_email,
-    row.requester_name,
-    row.created_by_email,
-    row.current_approver,
-    row.original_approver,
-    ...levelCandidates,
-  ];
-  for (const c of candidates) {
+  for (const c of [row.requester_email, row.requester_name, row.created_by_email]) {
     if (!c) continue;
     for (const alias of aliases) {
       if (identityMatches(c, alias) || personListMatches(c, alias)) return true;
     }
   }
-  // Substituto ativo: herda apenas a fila de aprovação do titular.
-  if (substituteAliases && substituteAliases.size > 0) {
-    for (const c of [row.current_approver, row.original_approver, ...levelCandidates]) {
-      if (!c) continue;
-      for (const alias of substituteAliases) {
-        if (identityMatches(c, alias) || personListMatches(c, alias)) return true;
-      }
+  return false;
+}
+
+/**
+ * Pendência de aprovação do caller no documento SEM trilhas de rateio.
+ * Só conta quem ainda precisa decidir (aprovador atual / nível atual), nunca
+ * quem já registrou a decisão em um nível anterior.
+ */
+function hasPendingApproverClaim(
+  row: Record<string, unknown>,
+  aliases: Set<string>,
+  substituteAliases?: Set<string> | null,
+): boolean {
+  const candidates = [
+    row.current_approver,
+    row.original_approver,
+    ...levelApproverCandidates(row.level_approvers),
+  ];
+  const all = new Set([...aliases, ...(substituteAliases || [])]);
+  for (const c of candidates) {
+    if (!c) continue;
+    for (const alias of all) {
+      if (identityMatches(c, alias) || personListMatches(c, alias)) return true;
     }
   }
   return false;
 }
+
 
 Deno.serve(async (req) => {
   const cors = corsFor(req, "POST, OPTIONS");
