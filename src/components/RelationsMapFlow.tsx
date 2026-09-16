@@ -67,6 +67,10 @@ function formatCurrency(value?: number | null, currency?: string | null) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: code }).format(value);
 }
 
+// NF de Entrada e Contas a Pagar vêm do ERP sempre na moeda local (BRL),
+// mesmo quando o pedido foi feito em moeda estrangeira.
+const LOCAL_CURRENCY = "BRL";
+
 function formatDateShort(iso?: string | null) {
   if (!iso) return null;
   const dateOnly = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -632,7 +636,7 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
         kind: `NF ${nf.numero_nf || "—"}${nf.serie ? `/${nf.serie}` : ""}`,
         identifier: nf.nome_fornecedor || "Fornecedor —",
         amount: nf.valor_total,
-        currency: expense.currency,
+        currency: LOCAL_CURRENCY,
         when: nf.created_at,
         dueDate: nf.due_date || null,
         paymentDate: nf.payment_date || null,
@@ -678,7 +682,7 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
       const paidPartially = paymentStatus.state === "partial";
       const isFluxoCp = matchesFluxoCp(ap.ap_doc_entry, ap.ap_doc_num);
       if (isFluxoCp) cpFluxoMatched = true;
-      const paidExtra = ap.ap_paid !== null && ap.ap_paid !== undefined ? `Pago: ${formatCurrency(ap.ap_paid, expense.currency)}` : null;
+      const paidExtra = ap.ap_paid !== null && ap.ap_paid !== undefined ? `Pago: ${formatCurrency(ap.ap_paid, LOCAL_CURRENCY)}` : null;
       buckets.contas_pagar.items.push({
         id: apId,
         data: {
@@ -687,7 +691,7 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
           kind: `${ap.source.toUpperCase()} · Doc ${ap.ap_doc_num || ap.ap_doc_entry}`,
           identifier: ap.ap_doc_num ? `#${ap.ap_doc_num}` : `#${ap.ap_doc_entry}`,
           amount: ap.ap_total,
-          currency: expense.currency,
+          currency: LOCAL_CURRENCY,
           when: ap.payment_date || ap.linked_at,
           dueDate: ap.due_date || null,
           paymentDate: ap.payment_date || null,
@@ -740,7 +744,7 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
         kind: `${ap.source.toUpperCase()} · Doc ${ap.numero_documento || ap.id}`,
         identifier: ap.numero_documento ? `#${ap.numero_documento}` : `#${ap.id}`,
         amount: ap.valor_documento,
-        currency: expense.currency,
+        currency: LOCAL_CURRENCY,
         when: ap.data_pagamento || ap.data_vencimento || ap.data_registro,
         dueDate: ap.data_vencimento || null,
         paymentDate: ap.data_pagamento || null,
@@ -784,7 +788,7 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
         icon: Receipt,
         kind: `NF #${fluxoNfId}`,
         identifier: fluxo?.fornecedor || expense.supplier_name || "Fornecedor —",
-        currency: expense.currency,
+        currency: LOCAL_CURRENCY,
         when: fluxo?.data_lancamento || null,
         status: "vínculo fluxo",
         statusTone: "muted",
@@ -825,7 +829,7 @@ function buildTimelineGraph(props: Props): { nodes: Node[]; edges: Edge[]; width
         kind: `CP #${fluxoCpId}`,
         identifier: fluxo?.fornecedor || expense.supplier_name || "—",
         amount: fluxo?.valor ?? null,
-        currency: expense.currency,
+        currency: LOCAL_CURRENCY,
         when: fluxo?.data_pagamento || fluxo?.data_vencimento || null,
         dueDate: fluxo?.data_vencimento || null,
         paymentDate: fluxo?.data_pagamento || null,

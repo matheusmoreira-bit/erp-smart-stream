@@ -2108,7 +2108,17 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     ...sapFiltered.map((exp) => ({ exp, origin: "erp" as const })),
   ];
 
-  const totalValue = filtered.reduce((sum, item) => sum + item.exp.total_amount, 0);
+  // Totais por moeda: valores em moeda estrangeira NÃO podem ser somados ao
+  // total em reais (não há taxa de conversão armazenada no documento).
+  const totalsByCurrency = filtered.reduce<Record<string, number>>((acc, item) => {
+    const raw = String(item.exp.currency || "").toUpperCase().trim();
+    const code = /^[A-Z]{3}$/.test(raw) ? raw : "BRL";
+    acc[code] = (acc[code] || 0) + (Number(item.exp.total_amount) || 0);
+    return acc;
+  }, {});
+  const totalValue = totalsByCurrency.BRL || 0;
+  const foreignTotals = Object.entries(totalsByCurrency).filter(([code]) => code !== "BRL");
+
 
   // ─── Ordenação por coluna ─────────────────────────────────────
   type SortKey = "status" | "supplier" | "requester" | "created" | "doc" | "due" | "amount" | "origin";
@@ -2675,7 +2685,13 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
             <div className="min-w-0">
               <p className="text-xs text-muted-foreground">{serverMode ? "Total (página)" : "Total"}</p>
               <p className="text-lg font-bold font-mono text-foreground truncate">{formatCurrency(totalValue)}</p>
+              {foreignTotals.length > 0 && (
+                <p className="text-[11px] font-mono text-muted-foreground truncate" title="Moeda estrangeira somada à parte (sem conversão)">
+                  {foreignTotals.map(([code, value]) => formatCurrency(value, code)).join(" · ")}
+                </p>
+              )}
             </div>
+
           </div>
           <div className="glass-card px-4 py-3 flex items-center gap-3 min-w-0">
             <Calendar className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
