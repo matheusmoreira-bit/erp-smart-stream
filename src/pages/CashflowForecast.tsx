@@ -296,7 +296,13 @@ export default function CashflowForecast() {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Button variant="outline" size="sm" className="gap-2" onClick={exportCsv} disabled={buckets.length === 0}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={exportCsv}
+              disabled={grouping === "none" ? details.length === 0 : buckets.length === 0}
+            >
               <FileDown className="w-4 h-4" /> CSV
             </Button>
             <Button variant="outline" size="sm" className="gap-2" onClick={load} disabled={loading || !companyDb}>
