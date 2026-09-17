@@ -137,6 +137,8 @@ export interface ApprovalRuleLevel {
   level_order: number;
   approver_name: string;
   approver_email?: string;
+  /** Todos os aprovadores deste nível precisam aprovar (aprovação unânime). */
+  require_all?: boolean;
 }
 
 export type RuleDocType = "purchase" | "sales" | "advance" | "both";
