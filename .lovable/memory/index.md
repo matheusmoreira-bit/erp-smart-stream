@@ -47,3 +47,4 @@
 - [Domínios de e-mail permitidos](mem://features/email-domains.md) — Migração para @growth.gg com domínios antigos coexistindo; allowlists de login e de envio SMTP.
 - [Cartões corporativos no Omie](mem://features/omie-cartoes-contas-a-pagar.md) — Empresas Omie lançam transações PagCorp sempre como Conta a Pagar (sem PC nem LCM), uma por transação.
 - [Módulos indisponíveis no Omie](mem://features/omie-modulos-indisponiveis.md) — Omie esconde NF de Entrada, Reconciliação de Adiantamentos e lançamento contábil manual (src/lib/erp-module-availability.ts).
+- [Compras Omie viram Conta a Pagar](mem://features/omie-compras-conta-a-pagar.md) — Compras em empresas Omie integram como Conta a Pagar (IncluirContaPagar) com campos de NF, chave NF-e, conta corrente e retenções.
