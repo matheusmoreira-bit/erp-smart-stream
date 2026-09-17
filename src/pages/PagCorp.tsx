@@ -413,6 +413,11 @@ export default function PagCorp() {
     tx: PagCorpTransaction | null;
   }>({ open: false, tx: null });
   const [integrating, setIntegrating] = useState<string | number | null>(null);
+  const [omieDialog, setOmieDialog] = useState<{ open: boolean; transactions: PagCorpTransaction[] }>({
+    open: false,
+    transactions: [],
+  });
+  const [omieSubmitting, setOmieSubmitting] = useState(false);
   const [settling, setSettling] = useState<string | number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
   const [batchQueue, setBatchQueue] = useState<PagCorpTransaction[]>([]);
