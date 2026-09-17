@@ -418,6 +418,15 @@ Analise os documentos enviados e extraia as seguintes informações em formato J
   "boleto_digitable_line": "Linha digitável do boleto, apenas números, normalmente 47 ou 48 dígitos. null se não aparecer.",
   "pix_key": "Chave PIX do fornecedor/beneficiário se aparecer no documento. null caso contrário.",
   "document_number": "Número do documento/NF/Invoice #",
+  "nfe_key": "Chave de acesso da NF-e/NFS-e com exatamente 44 dígitos, apenas números. null se não aparecer.",
+  "withheld_taxes": {
+    "pis": 0.00,
+    "cofins": 0.00,
+    "csll": 0.00,
+    "ir": 0.00,
+    "iss": 0.00,
+    "inss": 0.00
+  },
   "items": [
     {
       "description": "Descrição LITERAL do item/serviço, exatamente como está escrito no documento (sem resumir, sem reformular, sem traduzir)",
