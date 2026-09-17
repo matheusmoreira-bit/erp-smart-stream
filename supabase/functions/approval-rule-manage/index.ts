@@ -14,6 +14,7 @@ interface LevelInput {
   level_order?: number;
   approver_name?: string;
   approver_email?: string | null;
+  require_all?: boolean;
 }
 
 interface Body {
@@ -38,6 +39,7 @@ function cleanLevels(levels: LevelInput[] | undefined) {
       level_order: Number(l.level_order) || 1,
       approver_name: String(l.approver_name || "").trim(),
       approver_email: l.approver_email ? String(l.approver_email).trim() : null,
+      require_all: l.require_all === true,
     }))
     .filter((l) => l.approver_name.length > 0)
     .slice(0, 100);

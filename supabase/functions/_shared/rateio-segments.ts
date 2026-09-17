@@ -60,7 +60,7 @@ export interface SegmentRow {
 async function levelsOf(admin: SupabaseClient, ruleId: string): Promise<ApprovalLevel[]> {
   const { data } = await admin
     .from("approval_rule_levels")
-    .select("level_order, approver_name, approver_email")
+    .select("level_order, approver_name, approver_email, require_all")
     .eq("rule_id", ruleId)
     .order("level_order", { ascending: true });
   return ((data || []) as ApprovalLevel[]).filter((l) => l.approver_name || l.approver_email);

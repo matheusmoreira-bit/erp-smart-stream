@@ -867,6 +867,7 @@ function RuleFormModal({
           level_order: l.level_order,
           approver_name: l.approver_name,
           approver_email: l.approver_email || "",
+          require_all: l.require_all === true,
         }))
       );
     } else {
@@ -964,11 +965,16 @@ function RuleFormModal({
 
   // ── Níveis (agora agrupados por level_order, permitindo paralelismo) ──
   const levelsGrouped = useMemo(() => {
-    const map = new Map<number, Array<{ idx: number; approver_name: string; approver_email?: string }>>();
+    const map = new Map<number, Array<{ idx: number; approver_name: string; approver_email?: string; require_all?: boolean }>>();
     levels.forEach((l, idx) => {
       const key = l.level_order;
       if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push({ idx, approver_name: l.approver_name, approver_email: l.approver_email });
+      map.get(key)!.push({
+        idx,
+        approver_name: l.approver_name,
+        approver_email: l.approver_email,
+        require_all: l.require_all === true,
+      });
     });
     return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
   }, [levels]);
@@ -989,7 +995,12 @@ function RuleFormModal({
   const addParallelApprover = (levelOrder: number) => {
     setLevels((prev) => [
       ...prev,
-      { level_order: levelOrder, approver_name: "", approver_email: "" },
+      {
+        level_order: levelOrder,
+        approver_name: "",
+        approver_email: "",
+        require_all: prev.some((l) => l.level_order === levelOrder && l.require_all === true),
+      },
     ]);
   };
 
@@ -1019,6 +1030,13 @@ function RuleFormModal({
       (updated[index] as any)[field] = value;
       return updated;
     });
+  };
+
+  /** Liga/desliga a exigência de aprovação de TODOS do nível (unânime). */
+  const setLevelRequireAll = (levelOrder: number, value: boolean) => {
+    setLevels((prev) =>
+      prev.map((l) => (l.level_order === levelOrder ? { ...l, require_all: value } : l)),
+    );
   };
 
 
@@ -1246,19 +1264,33 @@ function RuleFormModal({
                           <p className="text-xs font-medium text-foreground">Nível {lo}</p>
                           {rows.length > 1 && (
                             <p className="text-[10px] text-muted-foreground">
-                              Aprovação em paralelo — {rows.length} aprovadores. O primeiro que decidir encerra o nível.
+                              {rows.some((r) => r.require_all)
+                                ? `Aprovação em paralelo — ${rows.length} aprovadores. Todos precisam aprovar para seguir.`
+                                : `Aprovação em paralelo — ${rows.length} aprovadores. O primeiro que decidir encerra o nível.`}
                             </p>
                           )}
                         </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => addParallelApprover(lo)}
-                        className="gap-1 text-[11px] h-7"
-                      >
-                        <Plus className="w-3 h-3" /> Aprovador paralelo
-                      </Button>
+                      <div className="flex items-center gap-3">
+                        {rows.length > 1 && (
+                          <label className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer">
+                            <Switch
+                              checked={rows.some((r) => r.require_all)}
+                              onCheckedChange={(v) => setLevelRequireAll(lo, v === true)}
+                              aria-label={`Exigir aprovação de todos no nível ${lo}`}
+                            />
+                            Todos devem aprovar
+                          </label>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => addParallelApprover(lo)}
+                          className="gap-1 text-[11px] h-7"
+                        >
+                          <Plus className="w-3 h-3" /> Aprovador paralelo
+                        </Button>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       {rows.map((row) => (
@@ -1505,7 +1537,9 @@ function RuleCard({
                       </span>
                       {rows.length > 1 && (
                         <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded-full font-medium">
-                          Paralelo — 1º decide
+                          {rows.some((l: any) => l.require_all)
+                            ? "Paralelo — todos aprovam"
+                            : "Paralelo — 1º decide"}
                         </span>
                       )}
                     </div>

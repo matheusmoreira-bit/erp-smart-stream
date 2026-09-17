@@ -38,6 +38,8 @@ import {
 import {
   approvalsSatisfyLevel,
   activeRevisionApprovalsFromLogs,
+  levelRequiresAll,
+  pendingLevelApprovers,
   resolveReprocessedApprovalState,
   type ApprovalLogRow,
   type PriorApproval,
@@ -625,11 +627,11 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
 
 
   const currentLevel = Number((exp as any).current_level_order || 1);
-  let levels: Array<{ level_order: number; approver_name: string; approver_email: string | null }> = [];
+  let levels: Array<{ level_order: number; approver_name: string; approver_email: string | null; require_all?: boolean | null }> = [];
   if ((exp as any).approval_rule_id) {
     const { data: lvls, error: lvlErr } = await admin
       .from("approval_rule_levels")
-      .select("level_order, approver_name, approver_email")
+      .select("level_order, approver_name, approver_email, require_all")
       .eq("rule_id", (exp as any).approval_rule_id)
       .order("level_order", { ascending: true });
     if (lvlErr) {
@@ -718,16 +720,22 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     requesterIdName,
     requesterIdEmail,
   );
+  // Nível UNÂNIME (`require_all`): todos os aprovadores do nível precisam
+  // aprovar, em qualquer ordem — por isso TODOS são alvos válidos, mesmo com
+  // um `current_approver` gravado no documento (que aponta para um deles).
+  const unanimousCurrentLevel = !segmentMode && levelRequiresAll(currentLevelRowsNoSelf as any);
   const designatedTargets: Array<{ name: string | null; email: string | null }> = segmentMode
     ? pendingSegments
         .map((s) => ({ name: s.current_approver, email: s.current_approver_email }))
         .filter((t) => !requesterMatchesApprover(requesterIdName, requesterIdEmail, t.name, t.email))
-    : (overrideApprover
-      ? [{
-          name: overrideIsEmail ? null : overrideApprover,
-          email: overrideIsEmail ? overrideApprover : null,
-        }].filter((t) => !requesterMatchesApprover(requesterIdName, requesterIdEmail, t.name, t.email))
-      : currentLevelRowsNoSelf.map((row) => ({ name: row.approver_name, email: row.approver_email })));
+    : (unanimousCurrentLevel
+      ? currentLevelRowsNoSelf.map((row) => ({ name: row.approver_name, email: row.approver_email }))
+      : (overrideApprover
+        ? [{
+            name: overrideIsEmail ? null : overrideApprover,
+            email: overrideIsEmail ? overrideApprover : null,
+          }].filter((t) => !requesterMatchesApprover(requesterIdName, requesterIdEmail, t.name, t.email))
+        : currentLevelRowsNoSelf.map((row) => ({ name: row.approver_name, email: row.approver_email }))));
 
   // Override/segmento salvo apenas por NOME CURTO (ex.: "Erika Caroline",
   // enquanto a pessoa é "Erika Caroline de Araujo" / erika.araujo@) impedia o
@@ -1291,6 +1299,41 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
 
 
   // action === "approve"
+  // Nível unânime: evita registrar a mesma aprovação duas vezes quando a
+  // pessoa clica de novo enquanto aguarda o outro aprovador do nível.
+  if (unanimousCurrentLevel) {
+    const { data: myLogs } = await admin
+      .from("expense_approval_log")
+      .select("decision, approver_name, approver_email, level_order")
+      .eq("expense_id", expenseId)
+      .eq("level_order", currentLevel)
+      .eq("decision", "approved");
+    const alreadyMine = (myLogs || []).some((l: any) =>
+      callerIsApprover(l.approver_name || null, l.approver_email || null)
+    );
+    if (alreadyMine) {
+      const pendingNow = pendingLevelApprovers(
+        (myLogs || []).map((l: any) => ({
+          approver_name: l.approver_name,
+          approver_email: l.approver_email,
+        })),
+        currentLevelRowsNoSelf as any,
+      );
+      return await respond(200, {
+        ok: true,
+        action: "approve",
+        finalized: false,
+        alreadyDecided: true,
+        currentLevel,
+        nextApproverName: pendingNow[0]?.approver_name || null,
+        nextApproverEmail: pendingNow[0]?.approver_email || null,
+        message: pendingNow.length > 0
+          ? `Sua aprovação já está registrada. Este nível exige a aprovação de todos: aguardando ${pendingNow.map((p) => p.approver_name || p.approver_email).filter(Boolean).join(", ")}.`
+          : "Sua aprovação já está registrada.",
+      });
+    }
+  }
+
   await admin.from("expense_approval_log").insert({
     expense_id: expenseId,
     decision: "approved",
@@ -1342,6 +1385,78 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     );
     return approvals;
   };
+
+  // ── NÍVEL UNÂNIME: só avança quando TODOS do nível aprovarem ───────────
+  if (unanimousCurrentLevel) {
+    const documentApprovals = await loadCurrentDocumentApprovals();
+    const stillMissing = pendingLevelApprovers(documentApprovals, currentLevelRowsNoSelf as any);
+    if (stillMissing.length > 0) {
+      const nextName = stillMissing[0].approver_name || stillMissing[0].approver_email || null;
+      const updates: Record<string, unknown> = {
+        current_level_order: currentLevel,
+        current_approver: nextName,
+      };
+      if (remarks) updates.remarks = remarks;
+      const { error: holdErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
+      if (holdErr) {
+        stageLog("update_advance_level", "error", {
+          requestId, expenseId, phase: "unanimous_hold", error: holdErr.message,
+        });
+      }
+      await writeAuditLog("approved", currentLevel, {
+        step: "approve_partial_unanimous",
+        metadata: {
+          unanimous_level: true,
+          pending_approvers: stillMissing.map((r) => r.approver_name || r.approver_email),
+        },
+      });
+      for (const missing of stillMissing) {
+        await notifyApprovalPending(admin, {
+          expenseId,
+          companyDb: (exp as any).company_db,
+          approverEmail: missing.approver_email || null,
+          approverName: missing.approver_name || null,
+          levelOrder: currentLevel,
+          requesterName: (exp as any).requester_name,
+          supplierName: (exp as any).supplier_name,
+          totalAmount: Number((exp as any).total_amount || 0),
+          currency: (exp as any).currency,
+          docType: String((exp as any).doc_type || "purchase"),
+          resolution: {
+            source: "next_level",
+            reason: `Nível ${currentLevel} exige aprovação de todos os aprovadores — falta a sua decisão`,
+            ruleId: (exp as any).approval_rule_id || null,
+            costCenter: (exp as any).cost_center || null,
+            project: (exp as any).project || null,
+            metadata: { unanimous_level: true },
+          },
+        });
+      }
+      stageLog("update_advance_level", "info", {
+        requestId, expenseId, unanimousLevel: currentLevel,
+        pending: stillMissing.map((r) => r.approver_name || r.approver_email),
+      });
+      return await respond(200, {
+        ok: true,
+        action: "approve",
+        finalized: false,
+        unanimousPending: true,
+        currentLevel,
+        nextApproverName: nextName,
+        nextApproverEmail: stillMissing[0].approver_email || null,
+        message: `Aprovação registrada. Este nível exige a aprovação de todos: aguardando ${stillMissing.map((r) => r.approver_name || r.approver_email).filter(Boolean).join(", ")}.`,
+        expense: {
+          id: expenseId,
+          requester_name: (exp as any).requester_name,
+          requester_email: (exp as any).requester_email,
+          supplier_name: (exp as any).supplier_name,
+          total_amount: (exp as any).total_amount,
+          currency: (exp as any).currency,
+          company_db: (exp as any).company_db,
+        },
+      });
+    }
+  }
 
   // ── RATEIO: aprovação por SEGMENTO (fluxos independentes) ──────────────
   if (segmentMode) {
