@@ -965,11 +965,16 @@ function RuleFormModal({
 
   // ── Níveis (agora agrupados por level_order, permitindo paralelismo) ──
   const levelsGrouped = useMemo(() => {
-    const map = new Map<number, Array<{ idx: number; approver_name: string; approver_email?: string }>>();
+    const map = new Map<number, Array<{ idx: number; approver_name: string; approver_email?: string; require_all?: boolean }>>();
     levels.forEach((l, idx) => {
       const key = l.level_order;
       if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push({ idx, approver_name: l.approver_name, approver_email: l.approver_email });
+      map.get(key)!.push({
+        idx,
+        approver_name: l.approver_name,
+        approver_email: l.approver_email,
+        require_all: l.require_all === true,
+      });
     });
     return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
   }, [levels]);
@@ -990,7 +995,12 @@ function RuleFormModal({
   const addParallelApprover = (levelOrder: number) => {
     setLevels((prev) => [
       ...prev,
-      { level_order: levelOrder, approver_name: "", approver_email: "" },
+      {
+        level_order: levelOrder,
+        approver_name: "",
+        approver_email: "",
+        require_all: prev.some((l) => l.level_order === levelOrder && l.require_all === true),
+      },
     ]);
   };
 
