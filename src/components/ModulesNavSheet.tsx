@@ -11,6 +11,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { useModuleAccess } from "@/hooks/usePermissions";
+import { useSap } from "@/contexts/SapContext";
 import {
   modules,
   moduleGroups,
