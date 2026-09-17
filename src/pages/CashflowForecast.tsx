@@ -217,16 +217,16 @@ export default function CashflowForecast() {
 
   const totals = useMemo(
     () =>
-      buckets.reduce(
-        (acc, b) => ({
-          apForecast: acc.apForecast + b.apForecast,
-          apActual: acc.apActual + b.apActual,
-          arForecast: acc.arForecast + b.arForecast,
-          arActual: acc.arActual + b.arActual,
+      filtered.reduce(
+        (acc, r) => ({
+          apForecast: acc.apForecast + (r.kind === "ap" ? r.amount : 0),
+          apActual: acc.apActual + (r.kind === "ap" ? r.paid_amount : 0),
+          arForecast: acc.arForecast + (r.kind === "ar" ? r.amount : 0),
+          arActual: acc.arActual + (r.kind === "ar" ? r.paid_amount : 0),
         }),
         { apForecast: 0, apActual: 0, arForecast: 0, arActual: 0 },
       ),
-    [buckets],
+    [filtered],
   );
 
   const todayIso = isoDay(new Date());
