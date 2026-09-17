@@ -465,6 +465,8 @@ Regras IMPORTANTES:
 - "payment_method": use "boleto" quando houver boleto ou linha digitável/código de barras; "pix" quando houver QR Code, copia-e-cola ou chave PIX; "ted" quando houver dados bancários para transferência sem boleto/PIX; "unknown" quando não houver dados suficientes.
 - Para boleto, extraia "boleto_barcode" somente quando o código de barras de 44 dígitos aparecer explicitamente. Se aparecer apenas a linha digitável, preencha "boleto_digitable_line" com os dígitos disponíveis e deixe "boleto_barcode" null.
 - Nunca invente linha digitável, código de barras ou chave PIX.
+- "nfe_key": copie apenas se houver chave de acesso com 44 dígitos no documento; caso contrário use null.
+- "withheld_taxes": informe apenas valores RETIDOS destacados no documento (PIS/COFINS/CSLL/IR/ISS/INSS). Use 0 quando o imposto não for retido e nunca calcule alíquotas por conta própria.
 - IMPORTANTE: Os campos supplier_email, supplier_phone1, supplier_phone2, supplier_address, supplier_country devem se referir SEMPRE ao EMISSOR (fornecedor), nunca ao destinatário/cliente.
 - Para supplier_address: extraia somente do bloco do EMITENTE.
 - supplier_address.zip: BR = apenas 8 dígitos; internacional = formato original (pode ser alfanumérico).
