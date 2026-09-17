@@ -1022,6 +1022,13 @@ function RuleFormModal({
     });
   };
 
+  /** Liga/desliga a exigência de aprovação de TODOS do nível (unânime). */
+  const setLevelRequireAll = (levelOrder: number, value: boolean) => {
+    setLevels((prev) =>
+      prev.map((l) => (l.level_order === levelOrder ? { ...l, require_all: value } : l)),
+    );
+  };
+
 
   const handleSubmit = async () => {
     if (!name.trim()) {
