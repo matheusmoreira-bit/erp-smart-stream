@@ -29,6 +29,25 @@ const DOC_LABELS: Record<string, string> = {
   incoming_payments: "Contas a receber (recebimentos)",
 };
 
+const MASTER_LABELS: Record<string, string> = {
+  chart_of_accounts: "Plano de contas",
+  payment_terms: "Condições de pagamento",
+  warehouses: "Depósitos",
+  price_lists: "Listas de preço",
+  item_groups: "Grupos de itens",
+  bp_groups: "Grupos de parceiros",
+  cost_centers: "Centros de custo",
+  projects: "Projetos",
+  items: "Itens",
+  business_partners: "Fornecedores e clientes",
+};
+
+interface MasterStat {
+  entity: string;
+  count: number;
+  last_sync: string | null;
+}
+
 interface TypeStat {
   doc_type: string;
   count: number;
@@ -67,10 +86,14 @@ export function DocumentArchiveCard() {
 
   const [companyDb, setCompanyDb] = useState("");
   const [stats, setStats] = useState<TypeStat[]>([]);
+  const [masterStats, setMasterStats] = useState<MasterStat[]>([]);
+  const [targetDb, setTargetDb] = useState("");
   const [attachments, setAttachments] = useState({ stored: 0, pending: 0, error: 0 });
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState<null | "pull" | "attachments" | "dry" | "restore">(null);
+  const [busy, setBusy] = useState<
+    null | "pull" | "attachments" | "master" | "dry" | "restore" | "restoreMaster"
+  >(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [confirmText, setConfirmText] = useState("");
   const [dryResult, setDryResult] = useState<any>(null);
@@ -79,11 +102,20 @@ export function DocumentArchiveCard() {
     if (!db) return;
     setLoading(true);
     try {
-      const [{ data: cursors }, { data: docs }, { data: att }, { data: runRows }] = await Promise.all([
+      const [
+        { data: cursors },
+        { data: docs },
+        { data: att },
+        { data: runRows },
+        { data: masterCursors },
+        { data: masterRows },
+      ] = await Promise.all([
         supabase.from("sap_archive_cursors").select("doc_type, completed, last_full_sync_at, last_incremental_at").eq("company_db", db),
         supabase.from("sap_archive_documents").select("doc_type").eq("company_db", db).limit(100000),
         supabase.from("sap_archive_attachments").select("status").eq("company_db", db).limit(100000),
         supabase.from("sap_archive_runs").select("id, kind, status, documents_count, attachments_count, errors, started_at").eq("company_db", db).order("started_at", { ascending: false }).limit(5),
+        supabase.from("sap_archive_master_cursors").select("entity_type, last_incremental_at, last_full_sync_at").eq("company_db", db),
+        supabase.from("sap_archive_master_data").select("entity_type").eq("company_db", db).limit(100000),
       ]);
       const counts = new Map<string, number>();
       for (const row of (docs || []) as Array<{ doc_type: string }>) {
@@ -95,6 +127,18 @@ export function DocumentArchiveCard() {
           doc_type: key,
           count: counts.get(key) || 0,
           completed: Boolean(c?.completed),
+          last_sync: c?.last_incremental_at || c?.last_full_sync_at || null,
+        };
+      }));
+      const mCounts = new Map<string, number>();
+      for (const row of (masterRows || []) as Array<{ entity_type: string }>) {
+        mCounts.set(row.entity_type, (mCounts.get(row.entity_type) || 0) + 1);
+      }
+      setMasterStats(Object.keys(MASTER_LABELS).map((key) => {
+        const c = (masterCursors || []).find((x: any) => x.entity_type === key) as any;
+        return {
+          entity: key,
+          count: mCounts.get(key) || 0,
           last_sync: c?.last_incremental_at || c?.last_full_sync_at || null,
         };
       }));
@@ -113,7 +157,9 @@ export function DocumentArchiveCard() {
     }
   }, []);
 
-  useEffect(() => { if (companyDb) void loadStats(companyDb); }, [companyDb, loadStats]);
+  useEffect(() => {
+    if (companyDb) { setTargetDb(companyDb); void loadStats(companyDb); }
+  }, [companyDb, loadStats]);
 
   const callFn = useCallback(async (fn: string, payload: Record<string, unknown>) => {
     const res = await sapFunctionFetch(fn, {
@@ -176,16 +222,43 @@ export function DocumentArchiveCard() {
     }
   }, [companyDb, callFn, loadStats]);
 
-  const runRestore = useCallback(async (dryRun: boolean) => {
+  const runMasterPull = useCallback(async () => {
     if (!companyDb) return;
-    if (!dryRun && confirmText !== companyDb) {
-      toast.error(`Digite ${companyDb} para confirmar a devolução dos dados ao ERP.`);
+    setBusy("master");
+    try {
+      let done = false;
+      let total = 0;
+      let rounds = 0;
+      while (!done && rounds < 200) {
+        rounds++;
+        const data = await callFn("sap-archive-master-pull", { company_db: companyDb });
+        total += Number(data.records || 0);
+        done = Boolean(data.done);
+        setProgress(`${total} cadastros copiados…`);
+      }
+      toast.success(`Cadastros atualizados: ${total}.`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+      setProgress(null);
+      void loadStats(companyDb);
+    }
+  }, [companyDb, callFn, loadStats]);
+
+  const runRestore = useCallback(async (dryRun: boolean, masterOnly = false) => {
+    if (!companyDb) return;
+    const destination = targetDb || companyDb;
+    if (!dryRun && confirmText !== destination) {
+      toast.error(`Digite ${destination} para confirmar a devolução dos dados ao ERP.`);
       return;
     }
-    setBusy(dryRun ? "dry" : "restore");
+    setBusy(dryRun ? "dry" : masterOnly ? "restoreMaster" : "restore");
     try {
       if (dryRun) {
-        const data = await callFn("sap-archive-restore", { company_db: companyDb, dry_run: true });
+        const data = await callFn("sap-archive-restore", {
+          company_db: companyDb, target_company_db: destination, dry_run: true,
+        });
         setDryResult(data);
         toast.success("Simulação concluída.");
       } else {
@@ -195,14 +268,30 @@ export function DocumentArchiveCard() {
         while (!done && rounds < 500) {
           rounds++;
           const data = await callFn("sap-archive-restore", {
-            company_db: companyDb, dry_run: false, confirm: companyDb,
+            company_db: companyDb,
+            target_company_db: destination,
+            dry_run: false,
+            confirm: destination,
+            master_only: masterOnly,
           });
-          total += Number(data.restored || 0);
+          total += Number(data.restored || 0) + Number(data.master_restored || 0);
           done = Boolean(data.done);
-          setProgress(`${total} documentos devolvidos ao ERP…`);
-          if (Number(data.restored || 0) === 0 && (data.errors || []).length > 0) break;
+          setProgress(
+            masterOnly
+              ? `${total} cadastros criados no ERP…`
+              : `${total} registros devolvidos ao ERP…`,
+          );
+          if (
+            Number(data.restored || 0) === 0 &&
+            Number(data.master_restored || 0) === 0 &&
+            (data.errors || []).length > 0
+          ) break;
         }
-        toast.success(`Devolução concluída: ${total} documentos recriados no ERP.`);
+        toast.success(
+          masterOnly
+            ? `Cadastros devolvidos: ${total}.`
+            : `Devolução concluída: ${total} registros recriados no ERP.`,
+        );
         setConfirmText("");
       }
     } catch (e) {
@@ -212,7 +301,7 @@ export function DocumentArchiveCard() {
       setProgress(null);
       void loadStats(companyDb);
     }
-  }, [companyDb, confirmText, callFn, loadStats]);
+  }, [companyDb, targetDb, confirmText, callFn, loadStats]);
 
   if (!isAdmin) {
     return (
@@ -299,6 +388,28 @@ export function DocumentArchiveCard() {
               {attachments.pending} pendentes{attachments.error ? `, ${attachments.error} com erro` : ""}.
             </p>
 
+            <div className="rounded-md border">
+              <table className="w-full text-sm">
+                <caption className="sr-only">Cadastros guardados no backup</caption>
+                <thead className="bg-muted/50 text-muted-foreground">
+                  <tr>
+                    <th scope="col" className="px-3 py-2 text-left font-medium">Cadastro</th>
+                    <th scope="col" className="px-3 py-2 text-right font-medium">Copiados</th>
+                    <th scope="col" className="px-3 py-2 text-left font-medium">Última cópia</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {masterStats.map((m) => (
+                    <tr key={m.entity} className="border-t">
+                      <td className="px-3 py-2">{MASTER_LABELS[m.entity]}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{m.count.toLocaleString("pt-BR")}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{fmtDate(m.last_sync)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
             {progress && (
               <div className="space-y-1">
                 <Progress value={busy ? undefined : 0} aria-label="Progresso da cópia" />
@@ -307,12 +418,13 @@ export function DocumentArchiveCard() {
             )}
 
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => void runPull(false)} disabled={busy !== null}>
+              <Button onClick={() => void runPull(true)} disabled={busy !== null}>
                 {busy === "pull" && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-                Copiar agora
+                Copiar novidades dos documentos
               </Button>
-              <Button variant="outline" onClick={() => void runPull(true)} disabled={busy !== null}>
-                Copiar só as novidades
+              <Button variant="outline" onClick={() => void runMasterPull()} disabled={busy !== null}>
+                {busy === "master" && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+                Copiar cadastros
               </Button>
               <Button variant="outline" onClick={() => void runAttachments()} disabled={busy !== null}>
                 {busy === "attachments" && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
@@ -328,6 +440,24 @@ export function DocumentArchiveCard() {
                 Recria no ERP os documentos guardados, na ordem correta. Simule primeiro para ver o
                 que falta de cadastro no destino.
               </p>
+              <div className="space-y-1">
+                <Label htmlFor="arquivo-destino">Base de destino</Label>
+                <Select value={targetDb || companyDb} onValueChange={(v) => { setTargetDb(v); setConfirmText(""); }}>
+                  <SelectTrigger id="arquivo-destino" className="sm:w-96">
+                    <SelectValue placeholder="Selecione a base de destino" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sapCompanies.map((c) => (
+                      <SelectItem key={c.company_db} value={c.company_db}>
+                        {c.display_name} · {c.company_db}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Pode ser a base nova: os cadastros vão primeiro e depois os documentos.
+                </p>
+              </div>
               <div className="flex flex-wrap items-end gap-2">
                 <Button variant="outline" onClick={() => void runRestore(true)} disabled={busy !== null}>
                   {busy === "dry" && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
@@ -335,7 +465,7 @@ export function DocumentArchiveCard() {
                 </Button>
                 <div className="space-y-1">
                   <Label htmlFor="arquivo-confirmacao" className="text-xs">
-                    Digite {companyDb} para liberar
+                    Digite {targetDb || companyDb} para liberar
                   </Label>
                   <Input
                     id="arquivo-confirmacao"
@@ -346,12 +476,20 @@ export function DocumentArchiveCard() {
                   />
                 </div>
                 <Button
+                  variant="outline"
+                  onClick={() => void runRestore(false, true)}
+                  disabled={busy !== null || confirmText !== (targetDb || companyDb)}
+                >
+                  {busy === "restoreMaster" && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+                  Devolver só os cadastros
+                </Button>
+                <Button
                   variant="destructive"
                   onClick={() => void runRestore(false)}
-                  disabled={busy !== null || confirmText !== companyDb}
+                  disabled={busy !== null || confirmText !== (targetDb || companyDb)}
                 >
                   {busy === "restore" && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-                  Devolver ao ERP
+                  Devolver cadastros e documentos
                 </Button>
               </div>
 

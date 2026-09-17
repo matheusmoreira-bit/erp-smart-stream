@@ -200,3 +200,74 @@ export async function sapFetchFile(
   }
   return new Uint8Array(await res.arrayBuffer());
 }
+
+// ---------------------------------------------------------------------------
+// Cadastros (itens, fornecedores/clientes, grupos, centros de custo, projetos…)
+// ---------------------------------------------------------------------------
+
+export interface ArchiveMasterSpec {
+  key: string;
+  label: string;
+  endpoint: string;
+  /** campo-chave no Service Layer */
+  keyField: string;
+  /** a chave é numérica (afeta a forma de consultar Entidade(chave)) */
+  numericKey?: boolean;
+  /** campo usado como nome/descrição na listagem */
+  nameField?: string;
+  /** ordem de criação no destino (menor primeiro) */
+  restoreOrder: number;
+  /** campos removidos antes de recriar no destino */
+  stripOnRestore?: string[];
+  /** entidade não pode ser criada via Service Layer (só conferida) */
+  readOnly?: boolean;
+}
+
+export const ARCHIVE_MASTER_SPECS: ArchiveMasterSpec[] = [
+  { key: "chart_of_accounts", label: "Plano de contas", endpoint: "ChartOfAccounts", keyField: "Code", nameField: "Name", restoreOrder: 5 },
+  { key: "payment_terms", label: "Condições de pagamento", endpoint: "PaymentTermsTypes", keyField: "GroupNumber", numericKey: true, nameField: "PaymentTermsGroupName", restoreOrder: 6 },
+  { key: "warehouses", label: "Depósitos", endpoint: "Warehouses", keyField: "WarehouseCode", nameField: "WarehouseName", restoreOrder: 7 },
+  { key: "price_lists", label: "Listas de preço", endpoint: "PriceLists", keyField: "PriceListNo", numericKey: true, nameField: "PriceListName", restoreOrder: 8 },
+  { key: "item_groups", label: "Grupos de itens", endpoint: "ItemGroups", keyField: "Number", numericKey: true, nameField: "GroupName", restoreOrder: 9 },
+  { key: "bp_groups", label: "Grupos de parceiros", endpoint: "BusinessPartnerGroups", keyField: "Code", numericKey: true, nameField: "Name", restoreOrder: 10 },
+  { key: "cost_centers", label: "Centros de custo", endpoint: "ProfitCenters", keyField: "CenterCode", nameField: "CenterName", restoreOrder: 11 },
+  { key: "projects", label: "Projetos", endpoint: "Projects", keyField: "Code", nameField: "Name", restoreOrder: 12 },
+  { key: "items", label: "Itens", endpoint: "Items", keyField: "ItemCode", nameField: "ItemName", restoreOrder: 20 },
+  { key: "business_partners", label: "Fornecedores e clientes", endpoint: "BusinessPartners", keyField: "CardCode", nameField: "CardName", restoreOrder: 21 },
+];
+
+export function masterSpecByKey(key: string): ArchiveMasterSpec | undefined {
+  return ARCHIVE_MASTER_SPECS.find((s) => s.key === key);
+}
+
+/** Campos calculados/controlados pelo SAP que não podem voltar num POST de cadastro. */
+const MASTER_READONLY_FIELDS = new Set([
+  "CreateDate", "CreateTime", "UpdateDate", "UpdateTime", "AbsEntry",
+  "QuantityOnStock", "QuantityOrderedFromVendors", "QuantityOrderedByCustomers",
+  "CurrentAccountBalance", "OpenOrdersBalance", "OpenDeliveryNotesBalance",
+  "OpenChecksBalance", "OpenOpportunities", "AccountBalanceSys", "AccountBalanceFC",
+  "DeliveryNotesBalSys", "DeliveryNotesBalFC", "OrdersBalSys", "OrdersBalFC",
+  "LastTradedPrice", "LastPurchasePrice", "AvgStdPrice", "LastEvaluatedPrice",
+  "ItemWarehouseInfoCollection", "ItemPrices", "InventoryUOM",
+]);
+
+/** Prepara o payload de um cadastro para ser recriado na base destino. */
+export function sanitizeMasterForRestore(
+  payload: Record<string, any>,
+  extraStrip: string[] = [],
+): Record<string, any> {
+  const strip = new Set([...MASTER_READONLY_FIELDS, ...extraStrip]);
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(payload)) {
+    if (k.startsWith("@odata") || k.startsWith("odata.")) continue;
+    if (strip.has(k)) continue;
+    if (v === null) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+/** Formata a chave para uma consulta Entidade(chave) do Service Layer. */
+export function masterKeyRef(spec: ArchiveMasterSpec, code: string): string {
+  return spec.numericKey ? `(${Number(code)})` : `('${encodeURIComponent(code)}')`;
+}

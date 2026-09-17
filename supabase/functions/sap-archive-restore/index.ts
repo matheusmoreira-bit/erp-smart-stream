@@ -16,7 +16,11 @@ import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 import {
   ARCHIVE_BUCKET,
   ARCHIVE_DOC_SPECS,
+  ARCHIVE_MASTER_SPECS,
+  masterKeyRef,
+  masterSpecByKey,
   sanitizeForRestore,
+  sanitizeMasterForRestore,
   sapGet,
   sapLogin,
   sapLogout,
@@ -73,7 +77,17 @@ Deno.serve(async (req) => {
       return json(400, { error: `Confirmação obrigatória: envie confirm = "${targetDb}".` });
     }
 
-    const specs = (Array.isArray(body?.doc_types) && body.doc_types.length
+    // Fase de cadastros: itens, fornecedores/clientes, grupos, centros de custo…
+    // Por padrão os cadastros vão antes dos documentos (o documento depende deles).
+    const masterOnly = body?.master_only === true;
+    const includeMaster = masterOnly || body?.include_master !== false;
+    const masterSpecs = (Array.isArray(body?.entities) && body.entities.length
+      ? (body.entities.map(String).map(masterSpecByKey).filter(Boolean) as typeof ARCHIVE_MASTER_SPECS)
+      : ARCHIVE_MASTER_SPECS
+    ).slice().sort((a, b) => a.restoreOrder - b.restoreOrder);
+    const masterLimit = Math.min(Math.max(Number(body?.master_limit) || 200, 1), 500);
+
+    const specs = masterOnly ? [] : (Array.isArray(body?.doc_types) && body.doc_types.length
       ? (body.doc_types.map(String).map(specByKey).filter(Boolean) as typeof ARCHIVE_DOC_SPECS)
       : ARCHIVE_DOC_SPECS
     ).slice().sort((a, b) => a.restoreOrder - b.restoreOrder);
@@ -94,7 +108,9 @@ Deno.serve(async (req) => {
     const checkedItems = new Map<string, boolean>();
     const errors: string[] = [];
     const perType: Array<Record<string, unknown>> = [];
+    const perEntity: Array<Record<string, unknown>> = [];
     let restored = 0;
+    let masterRestored = 0;
     let allDone = true;
 
     async function cardExists(code: string): Promise<boolean> {
@@ -117,6 +133,94 @@ Deno.serve(async (req) => {
       checkedItems.set(code, ok);
       return ok;
     }
+
+    // ---- Cadastros ---------------------------------------------------------
+    if (includeMaster) {
+      for (const ms of masterSpecs) {
+        if (Date.now() - started > TIME_BUDGET_MS) { allDone = false; break; }
+
+        const { data: alreadyRows } = await sb
+          .from("sap_archive_master_restore_map")
+          .select("code")
+          .eq("source_company_db", companyDb)
+          .eq("target_company_db", targetDb)
+          .eq("entity_type", ms.key)
+          .eq("status", "restored");
+        const doneCodes = new Set((alreadyRows || []).map((r: any) => String(r.code)));
+
+        const { data: rows } = await sb
+          .from("sap_archive_master_data")
+          .select("code, name, payload")
+          .eq("company_db", companyDb)
+          .eq("entity_type", ms.key)
+          .order("code", { ascending: true })
+          .limit(masterLimit + doneCodes.size);
+
+        const pending = ((rows || []) as any[])
+          .filter((r) => !doneCodes.has(String(r.code)))
+          .slice(0, masterLimit);
+
+        let created = 0;
+        let existing = 0;
+
+        for (const row of pending) {
+          if (Date.now() - started > TIME_BUDGET_MS) { allDone = false; break; }
+          const code = String(row.code);
+
+          // Já existe na base destino? Então só registra e segue.
+          let exists = false;
+          try {
+            await sapGet(session, `${ms.endpoint}${masterKeyRef(ms, code)}?$select=${ms.keyField}`);
+            exists = true;
+          } catch { exists = false; }
+
+          if (exists) {
+            existing++;
+            if (!dryRun) {
+              await sb.from("sap_archive_master_restore_map").upsert({
+                source_company_db: companyDb, target_company_db: targetDb,
+                entity_type: ms.key, code, status: "restored", error_message: null,
+                restored_at: new Date().toISOString(),
+              }, { onConflict: "source_company_db,target_company_db,entity_type,code" });
+            }
+            continue;
+          }
+
+          if (dryRun || ms.readOnly) continue;
+
+          try {
+            await sapPost(session, ms.endpoint, sanitizeMasterForRestore(row.payload, ms.stripOnRestore));
+            created++; masterRestored++;
+            await sb.from("sap_archive_master_restore_map").upsert({
+              source_company_db: companyDb, target_company_db: targetDb,
+              entity_type: ms.key, code, status: "restored", error_message: null,
+              restored_at: new Date().toISOString(),
+            }, { onConflict: "source_company_db,target_company_db,entity_type,code" });
+          } catch (e) {
+            const msg = (e as Error).message;
+            errors.push(`${ms.key}/${code}: ${msg}`);
+            await sb.from("sap_archive_master_restore_map").upsert({
+              source_company_db: companyDb, target_company_db: targetDb,
+              entity_type: ms.key, code, status: "error", error_message: msg.slice(0, 500),
+            }, { onConflict: "source_company_db,target_company_db,entity_type,code" });
+          }
+        }
+
+        const { count: total } = await sb
+          .from("sap_archive_master_data")
+          .select("id", { count: "exact", head: true })
+          .eq("company_db", companyDb)
+          .eq("entity_type", ms.key);
+
+        const remaining = (total || 0) - doneCodes.size - created - existing;
+        if (remaining > 0 && !dryRun) allDone = false;
+        perEntity.push({
+          entity: ms.key, label: ms.label, total: total || 0,
+          created, existing, remaining: Math.max(remaining, 0),
+        });
+      }
+    }
+
 
     for (const spec of specs) {
       if (Date.now() - started > TIME_BUDGET_MS) { allDone = false; break; }
@@ -203,7 +307,7 @@ Deno.serve(async (req) => {
     if (runId) {
       await sb.from("sap_archive_runs").update({
         status: errors.length ? "partial" : "ok",
-        documents_count: restored,
+        documents_count: restored + masterRestored,
         errors: errors.slice(0, 50),
         finished_at: new Date().toISOString(),
         duration_ms: Date.now() - started,
@@ -214,6 +318,8 @@ Deno.serve(async (req) => {
       dry_run: dryRun,
       done: allDone,
       restored,
+      master_restored: masterRestored,
+      per_entity: perEntity,
       per_type: perType,
       missing_business_partners: [...missingCards].slice(0, 100),
       missing_items: [...missingItems].slice(0, 100),

@@ -58,7 +58,9 @@ Deno.serve(async (req) => {
       return json(400, { error: "company_db obrigatório" });
     }
     const pageSize = Math.min(Math.max(Number(body?.page_size) || 20, 5), 50);
-    const incremental = Boolean(body?.incremental);
+    // Incremental é o padrão: a base atual está sendo desativada e não queremos
+    // varreduras completas. Só faz cópia total quando pedirem incremental=false.
+    const incremental = body?.incremental === false ? false : true;
     const requested: string[] = Array.isArray(body?.doc_types) && body.doc_types.length
       ? body.doc_types.map(String)
       : ARCHIVE_DOC_SPECS.map((s) => s.key);
