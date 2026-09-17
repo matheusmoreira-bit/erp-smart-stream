@@ -15,6 +15,7 @@
 - [Auto-aprovação](mem://features/auto-aprovacao.md) — Regra de escalonamento quando o solicitante também é aprovador.
 - [Debug discipline](skill://lovable-debug-discipline) — Checklist root-cause / reuse / trace-before-fix para evitar loops de fix em sintoma.
 - [Users screen actions](mem://preferences/users-screen-actions.md) — Keep the Users screen action buttons minimal and icon-based instead of large filled buttons.
+- [Grupo Contabilidade & Fiscal](mem://features/grupo-contabilidade-fiscal.md) — Todos os módulos liberados, visibilidade total e robson.luiz vinculado ao grupo.
 - [Aprovação unânime no nível](mem://features/aprovacao-unanime-nivel.md) — require_all no nível; Cactus Tecnologia: Robson Luiz como 2º aprovador do nível 1 em todas as regras ativas.
 - [Escopos por diretoria](mem://features/directorate-scopes.md) — Duas permissões combináveis: por CC do documento e por autor (time da mesma diretoria).
 - [Alçadas CASSINO/VERA 1.80-1.90](mem://features/alcada-ana-lotus-1801-901.md) — ANA Gaming: faixas e aprovadores (Fernando/Gustavo/Anderson) dos projetos CASSINO e VERA nos CCs 1.80.% e 1.90.%.
