@@ -1,3 +1,4 @@
+// build: 1789678375
 // Edge function: cashflow-forecast
 // Consolida Contas a Pagar (cache VW_FIN_ANALISE_FLUXO) e Contas a Receber
 // (Invoices do SAP Service Layer) por data de vencimento, com quebra por
@@ -114,7 +115,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const baseUrl = buildSapBaseUrl(creds.service_layer_url);
       let session: { sessionId: string; routeId: string } | null = null;
       try {
-        session = await sapSessionLogin(baseUrl, companyDb, creds.username, creds.password);
+        session = await sapSessionLogin(baseUrl, creds.company_db || companyDb, creds.username, creds.password);
         const cookie = `B1SESSION=${session.sessionId}${session.routeId ? `; B1ROUTEID=${session.routeId}` : ""}`;
         const select =
           "DocEntry,DocNum,CardCode,CardName,DocDate,DocDueDate,DocTotal,PaidToDate,DocumentStatus,Comments,Project";

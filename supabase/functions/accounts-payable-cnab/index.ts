@@ -1,3 +1,4 @@
+// build: 1789678375
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { requireAdminOrSapModule, authErrorResponse, parseSapHeaders } from "../_shared/auth.ts";
@@ -610,7 +611,7 @@ async function withSap<T>(admin: AdminClient, companyDb: string, req: Request, f
   const creds = await loadSapCreds(admin as never, companyDb, { requireApiuser: true });
   if (creds) {
     const baseUrl = buildSapBaseUrl(creds.service_layer_url);
-    const session = await sapSessionLogin(baseUrl, companyDb, creds.username, creds.password);
+    const session = await sapSessionLogin(baseUrl, creds.company_db || companyDb, creds.username, creds.password);
     try {
       return await fn(baseUrl, sapCookie(session));
     } finally {
