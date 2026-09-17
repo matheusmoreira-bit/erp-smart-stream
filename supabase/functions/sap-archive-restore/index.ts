@@ -307,7 +307,7 @@ Deno.serve(async (req) => {
     if (runId) {
       await sb.from("sap_archive_runs").update({
         status: errors.length ? "partial" : "ok",
-        documents_count: restored,
+        documents_count: restored + masterRestored,
         errors: errors.slice(0, 50),
         finished_at: new Date().toISOString(),
         duration_ms: Date.now() - started,
@@ -318,6 +318,8 @@ Deno.serve(async (req) => {
       dry_run: dryRun,
       done: allDone,
       restored,
+      master_restored: masterRestored,
+      per_entity: perEntity,
       per_type: perType,
       missing_business_partners: [...missingCards].slice(0, 100),
       missing_items: [...missingItems].slice(0, 100),
