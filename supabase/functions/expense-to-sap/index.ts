@@ -1077,20 +1077,20 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         .eq("id", expenseId);
       if (omiePersistError) {
         throw new Error(
-          `Pedido de ${isSales ? "Venda" : "Compra"} ${omieDocumentId} criado na Omie, mas não foi possível salvar o vínculo local: ${omiePersistError.message}`,
+          `${isSales ? "Pedido de Venda" : "Conta a Pagar"} ${omieDocumentId} criado na Omie, mas não foi possível salvar o vínculo local: ${omiePersistError.message}`,
         );
       }
 
       await supabase.rpc("insert_audit_log", {
         p_action: isSales
           ? (recoveredExistingOrder ? "omie_sales_order_recovered" : "omie_sales_order_created")
-          : "omie_purchase_order_created",
+          : (recoveredExistingOrder ? "omie_accounts_payable_recovered" : "omie_accounts_payable_created"),
         p_entity_type: "expense",
         p_entity_id: expenseId,
         p_company_db: expense.company_db || null,
         p_details: {
           erp_type: "omie",
-          document_type: isSales ? "sales_order" : "purchase_order",
+          document_type: isSales ? "sales_order" : "accounts_payable",
           recovered_existing_order: recoveredExistingOrder,
           omie_document_id: omieDocumentId,
           omie_document_number: omieDocumentNumber,
