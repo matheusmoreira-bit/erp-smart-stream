@@ -1326,6 +1326,21 @@ export function CreateExpenseModal({
         : "",
     });
     if (doc.document_date) setDocDate(doc.document_date);
+    // Omie (Conta a Pagar): número da NF, chave da NF-e e impostos retidos.
+    if (omieApEnabled) {
+      if (doc.document_number) setOmieInvoiceNumber(String(doc.document_number).trim().slice(0, 20));
+      const key = String(doc.nfe_key || "").replace(/\D/g, "");
+      if (key.length === 44) setOmieNfeKey(key);
+      const taxes = doc.withheld_taxes || {};
+      setOmieTaxes((prev) => {
+        const next = { ...prev };
+        (["pis", "cofins", "csll", "ir", "iss", "inss"] as const).forEach((k) => {
+          const value = Number(taxes[k]);
+          if (Number.isFinite(value) && value > 0) next[k] = String(value);
+        });
+        return next;
+      });
+    }
     if (doc.due_date) setDueDate(doc.due_date);
     if (doc.remarks) setRemarks(doc.remarks);
     const detectedPaymentInstrument = docs.map((item) => paymentInstrumentOf(item)).find(Boolean);
@@ -2538,6 +2553,26 @@ export function CreateExpenseModal({
         payment_boleto_barcode: !isSales ? paymentInstrument?.boletoBarcode || undefined : undefined,
         payment_boleto_digitable_line: !isSales ? paymentInstrument?.boletoDigitableLine || undefined : undefined,
         payment_metadata: !isSales && paymentInstrument ? { pix_key: paymentInstrument.pixKey || null, source: "expense_document_ai" } : undefined,
+        omie_ap_data: omieApEnabled
+          ? {
+              current_account_code: omieCurrentAccount?.code || null,
+              current_account_name: omieCurrentAccount?.name || null,
+              category_code: headerCostCenter?.code || items[0]?.cost_center || null,
+              invoice_number: omieInvoiceNumber.trim() || null,
+              nfe_key: omieNfeKey.replace(/\D/g, "") || null,
+              document_type: omieDocumentType.trim() || null,
+              barcode: paymentInstrument?.boletoDigitableLine || paymentInstrument?.boletoBarcode || null,
+              payment_forecast_date: dueDate || null,
+              taxes: {
+                pis: Number(omieTaxes.pis) || 0,
+                cofins: Number(omieTaxes.cofins) || 0,
+                csll: Number(omieTaxes.csll) || 0,
+                ir: Number(omieTaxes.ir) || 0,
+                iss: Number(omieTaxes.iss) || 0,
+                inss: Number(omieTaxes.inss) || 0,
+              },
+            }
+          : undefined,
         rateio_type: !isSales ? rateioType : undefined,
         nfse_split_mode: isSales ? nfseSplitMode : undefined,
         sales_usage: isSales ? salesUsage?.code || undefined : undefined,
