@@ -68,6 +68,10 @@ import { useCredentials } from "@/hooks/useCredentials";
 import { toast } from "sonner";
 import { useCompanies } from "@/hooks/useCompanies";
 import { PagCorpIntegrateDialog } from "@/components/PagCorpIntegrateDialog";
+import {
+  PagCorpOmieIntegrateDialog,
+  type OmieApSubmitValues,
+} from "@/components/PagCorpOmieIntegrateDialog";
 import { PagCorpConsolidateDialog } from "@/components/PagCorpConsolidateDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PagCorpPresentationDialog } from "@/components/PagCorpPresentationDialog";
@@ -333,6 +337,11 @@ function buildRelationsExpense(
 export default function PagCorp() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
+  /**
+   * Empresas Omie não usam Pedido de Compra nem Lançamento Contábil para
+   * cartão corporativo: toda transação vira uma conta a pagar no Omie.
+   */
+  const isOmie = session?.erpType?.toLowerCase() === "omie";
   const { transactions, isLoading, error, fetchTransactions, integrateDirect, integrateJournalBatch, integrateConsolidated, classifyDocuments } = usePagCorp();
   const { createExpense } = useExpenses();
   const { fetchCredentials } = useCredentials();
@@ -404,6 +413,11 @@ export default function PagCorp() {
     tx: PagCorpTransaction | null;
   }>({ open: false, tx: null });
   const [integrating, setIntegrating] = useState<string | number | null>(null);
+  const [omieDialog, setOmieDialog] = useState<{ open: boolean; transactions: PagCorpTransaction[] }>({
+    open: false,
+    transactions: [],
+  });
+  const [omieSubmitting, setOmieSubmitting] = useState(false);
   const [settling, setSettling] = useState<string | number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
   const [batchQueue, setBatchQueue] = useState<PagCorpTransaction[]>([]);
@@ -939,6 +953,10 @@ export default function PagCorp() {
     opts: { fallback?: boolean; forcePostingType?: "purchase_order" | "journal_entry" } = {},
   ) => {
     if (!(await checkSapCredentials())) return;
+    if (isOmie) {
+      setOmieDialog({ open: true, transactions: [t] });
+      return;
+    }
     // O usuário sempre pode escolher o caminho, mesmo sem retorno da IA.
     const postingType = opts.forcePostingType
       || t.postingType
@@ -996,6 +1014,10 @@ export default function PagCorp() {
       toast.info("Selecione ao menos uma transação");
       return;
     }
+    if (isOmie) {
+      setOmieDialog({ open: true, transactions: queue });
+      return;
+    }
     setBatchQueue(queue);
     setBatchIndex(0);
     setBatchActive(true);
@@ -1046,6 +1068,10 @@ export default function PagCorp() {
     const selected = selectableTransactions.filter((t) => selectedIds.has(t.id));
     if (selected.length === 0) {
       toast.info("Selecione ao menos uma transação");
+      return;
+    }
+    if (isOmie) {
+      setOmieDialog({ open: true, transactions: selected });
       return;
     }
     const allPurchaseOrders = selected.every((item) =>
@@ -1206,6 +1232,46 @@ export default function PagCorp() {
       return;
     }
     setConsolidateDialog({ open: true, transactions: list });
+  };
+
+  /** Omie: cria uma conta a pagar por transação selecionada. */
+  const handleConfirmOmieAp = async (values: OmieApSubmitValues) => {
+    const txs = omieDialog.transactions;
+    if (txs.length === 0 || !session?.companyDB) return;
+    setOmieSubmitting(true);
+    try {
+      const { publicFunctionFetch } = await import("@/lib/auth-fetch");
+      const response = await publicFunctionFetch("pagcorp-to-omie", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyDb: session.companyDB,
+          transactions: txs,
+          supplierCode: values.supplierCode,
+          supplierName: values.supplierName,
+          categoryCode: values.categoryCode,
+          currentAccountCode: values.currentAccountCode,
+          dueDate: values.dueDate,
+          integratedBy: session.userName || undefined,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.success === false) {
+        throw new Error(result.error || `Erro ${response.status}`);
+      }
+      toast.success(
+        txs.length === 1 ? "Conta a pagar criada no Omie" : `${result.created ?? txs.length} contas a pagar criadas no Omie`,
+      );
+      setOmieDialog({ open: false, transactions: [] });
+      setSelectedIds(new Set());
+      await fetchTransactions(startDate, endDate, session.companyDB);
+    } catch (error) {
+      toast.error("Falha ao lançar em contas a pagar", {
+        description: error instanceof Error ? error.message : "Erro desconhecido",
+      });
+    } finally {
+      setOmieSubmitting(false);
+    }
   };
 
   const handleConfirmConsolidate = async (
@@ -2434,6 +2500,17 @@ export default function PagCorp() {
           </Button>
         </div>
       )}
+
+      <PagCorpOmieIntegrateDialog
+        open={omieDialog.open}
+        onOpenChange={(open) => {
+          if (!open) setOmieDialog({ open: false, transactions: [] });
+        }}
+        companyDb={session?.companyDB || ""}
+        transactions={omieDialog.transactions}
+        submitting={omieSubmitting}
+        onConfirm={handleConfirmOmieAp}
+      />
 
       <PagCorpIntegrateDialog
         open={integrateDialog.open}
