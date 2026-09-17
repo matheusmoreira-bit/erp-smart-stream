@@ -188,6 +188,7 @@ export default function CashflowForecast() {
   );
 
   const buckets = useMemo<Bucket[]>(() => {
+    if (grouping === "none") return [];
     const map = new Map<string, Bucket>();
     for (const r of filtered) {
       const key = bucketOf(r, grouping);
