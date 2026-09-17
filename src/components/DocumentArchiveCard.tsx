@@ -244,16 +244,19 @@ export function DocumentArchiveCard() {
     }
   }, [companyDb, callFn, loadStats]);
 
-  const runRestore = useCallback(async (dryRun: boolean) => {
+  const runRestore = useCallback(async (dryRun: boolean, masterOnly = false) => {
     if (!companyDb) return;
-    if (!dryRun && confirmText !== companyDb) {
-      toast.error(`Digite ${companyDb} para confirmar a devolução dos dados ao ERP.`);
+    const destination = targetDb || companyDb;
+    if (!dryRun && confirmText !== destination) {
+      toast.error(`Digite ${destination} para confirmar a devolução dos dados ao ERP.`);
       return;
     }
-    setBusy(dryRun ? "dry" : "restore");
+    setBusy(dryRun ? "dry" : masterOnly ? "restoreMaster" : "restore");
     try {
       if (dryRun) {
-        const data = await callFn("sap-archive-restore", { company_db: companyDb, dry_run: true });
+        const data = await callFn("sap-archive-restore", {
+          company_db: companyDb, target_company_db: destination, dry_run: true,
+        });
         setDryResult(data);
         toast.success("Simulação concluída.");
       } else {
@@ -263,14 +266,30 @@ export function DocumentArchiveCard() {
         while (!done && rounds < 500) {
           rounds++;
           const data = await callFn("sap-archive-restore", {
-            company_db: companyDb, dry_run: false, confirm: companyDb,
+            company_db: companyDb,
+            target_company_db: destination,
+            dry_run: false,
+            confirm: destination,
+            master_only: masterOnly,
           });
-          total += Number(data.restored || 0);
+          total += Number(data.restored || 0) + Number(data.master_restored || 0);
           done = Boolean(data.done);
-          setProgress(`${total} documentos devolvidos ao ERP…`);
-          if (Number(data.restored || 0) === 0 && (data.errors || []).length > 0) break;
+          setProgress(
+            masterOnly
+              ? `${total} cadastros criados no ERP…`
+              : `${total} registros devolvidos ao ERP…`,
+          );
+          if (
+            Number(data.restored || 0) === 0 &&
+            Number(data.master_restored || 0) === 0 &&
+            (data.errors || []).length > 0
+          ) break;
         }
-        toast.success(`Devolução concluída: ${total} documentos recriados no ERP.`);
+        toast.success(
+          masterOnly
+            ? `Cadastros devolvidos: ${total}.`
+            : `Devolução concluída: ${total} registros recriados no ERP.`,
+        );
         setConfirmText("");
       }
     } catch (e) {
@@ -280,7 +299,7 @@ export function DocumentArchiveCard() {
       setProgress(null);
       void loadStats(companyDb);
     }
-  }, [companyDb, confirmText, callFn, loadStats]);
+  }, [companyDb, targetDb, confirmText, callFn, loadStats]);
 
   if (!isAdmin) {
     return (
