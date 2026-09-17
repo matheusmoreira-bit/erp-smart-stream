@@ -610,7 +610,7 @@ async function withSap<T>(admin: AdminClient, companyDb: string, req: Request, f
   const creds = await loadSapCreds(admin as never, companyDb, { requireApiuser: true });
   if (creds) {
     const baseUrl = buildSapBaseUrl(creds.service_layer_url);
-    const session = await sapSessionLogin(baseUrl, companyDb, creds.username, creds.password);
+    const session = await sapSessionLogin(baseUrl, creds.company_db || companyDb, creds.username, creds.password);
     try {
       return await fn(baseUrl, sapCookie(session));
     } finally {
