@@ -46,3 +46,4 @@
 - [Avisos de aprovação por WhatsApp](mem://features/whatsapp-flow-approval-watcher.md) — Watcher a cada 30min lê pendências do próprio ERP Flow (sem HANA) e envia digest por aprovador.
 - [Domínios de e-mail permitidos](mem://features/email-domains.md) — Migração para @growth.gg com domínios antigos coexistindo; allowlists de login e de envio SMTP.
 - [Cartões corporativos no Omie](mem://features/omie-cartoes-contas-a-pagar.md) — Empresas Omie lançam transações PagCorp sempre como Conta a Pagar (sem PC nem LCM), uma por transação.
+- [Módulos indisponíveis no Omie](mem://features/omie-modulos-indisponiveis.md) — Omie esconde NF de Entrada, Reconciliação de Adiantamentos e lançamento contábil manual (src/lib/erp-module-availability.ts).
