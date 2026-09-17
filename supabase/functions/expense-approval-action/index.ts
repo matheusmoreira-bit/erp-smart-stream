@@ -1299,6 +1299,41 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
 
 
   // action === "approve"
+  // Nível unânime: evita registrar a mesma aprovação duas vezes quando a
+  // pessoa clica de novo enquanto aguarda o outro aprovador do nível.
+  if (unanimousCurrentLevel) {
+    const { data: myLogs } = await admin
+      .from("expense_approval_log")
+      .select("decision, approver_name, approver_email, level_order")
+      .eq("expense_id", expenseId)
+      .eq("level_order", currentLevel)
+      .eq("decision", "approved");
+    const alreadyMine = (myLogs || []).some((l: any) =>
+      callerIsApprover(l.approver_name || null, l.approver_email || null)
+    );
+    if (alreadyMine) {
+      const pendingNow = pendingLevelApprovers(
+        (myLogs || []).map((l: any) => ({
+          approver_name: l.approver_name,
+          approver_email: l.approver_email,
+        })),
+        currentLevelRowsNoSelf as any,
+      );
+      return await respond(200, {
+        ok: true,
+        action: "approve",
+        finalized: false,
+        alreadyDecided: true,
+        currentLevel,
+        nextApproverName: pendingNow[0]?.approver_name || null,
+        nextApproverEmail: pendingNow[0]?.approver_email || null,
+        message: pendingNow.length > 0
+          ? `Sua aprovação já está registrada. Este nível exige a aprovação de todos: aguardando ${pendingNow.map((p) => p.approver_name || p.approver_email).filter(Boolean).join(", ")}.`
+          : "Sua aprovação já está registrada.",
+      });
+    }
+  }
+
   await admin.from("expense_approval_log").insert({
     expense_id: expenseId,
     decision: "approved",
