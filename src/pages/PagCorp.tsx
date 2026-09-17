@@ -337,6 +337,11 @@ function buildRelationsExpense(
 export default function PagCorp() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
+  /**
+   * Empresas Omie não usam Pedido de Compra nem Lançamento Contábil para
+   * cartão corporativo: toda transação vira uma conta a pagar no Omie.
+   */
+  const isOmie = session?.erpType?.toLowerCase() === "omie";
   const { transactions, isLoading, error, fetchTransactions, integrateDirect, integrateJournalBatch, integrateConsolidated, classifyDocuments } = usePagCorp();
   const { createExpense } = useExpenses();
   const { fetchCredentials } = useCredentials();
