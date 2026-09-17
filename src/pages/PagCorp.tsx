@@ -1014,6 +1014,10 @@ export default function PagCorp() {
       toast.info("Selecione ao menos uma transação");
       return;
     }
+    if (isOmie) {
+      setOmieDialog({ open: true, transactions: queue });
+      return;
+    }
     setBatchQueue(queue);
     setBatchIndex(0);
     setBatchActive(true);
