@@ -44,6 +44,7 @@ import { CcProjectAlertDialog, type CcProjectAlertInfo } from "@/components/CcPr
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { useSap } from "@/contexts/SapContext";
 import { erpSupportsJournalEntry } from "@/lib/erp-module-availability";
+import { omieListarContasCorrentes } from "@/lib/omie-client";
 import {
   Dialog,
   DialogContent,
@@ -243,6 +244,16 @@ export function CreateExpenseModal({
   const [overdueBlockDays, setOverdueBlockDays] = useState(0);
   const [paymentTerms, setPaymentTerms] = useState<SapSearchOption | null>(null);
   const [remarks, setRemarks] = useState("");
+  // Omie — campos da Conta a Pagar (compras no Omie não geram Pedido de Compra).
+  const [omieAccounts, setOmieAccounts] = useState<SapSearchOption[]>([]);
+  const [omieAccountsLoading, setOmieAccountsLoading] = useState(false);
+  const [omieCurrentAccount, setOmieCurrentAccount] = useState<SapSearchOption | null>(null);
+  const [omieInvoiceNumber, setOmieInvoiceNumber] = useState("");
+  const [omieNfeKey, setOmieNfeKey] = useState("");
+  const [omieDocumentType, setOmieDocumentType] = useState("");
+  const [omieTaxes, setOmieTaxes] = useState<Record<"pis" | "cofins" | "csll" | "ir" | "iss" | "inss", string>>({
+    pis: "", cofins: "", csll: "", ir: "", iss: "", inss: "",
+  });
   const [items, setItems] = useState<(Omit<ExpenseItem, "id"> & { sapItem?: SapSearchOption | null; sapCostCenter?: SapSearchOption | null; sapProject?: SapSearchOption | null; searchHint?: string; projectSplit?: ProjectSplit | null })[]>([
     { description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" },
   ]);
@@ -317,6 +328,30 @@ export function CreateExpenseModal({
     params: { $filter: "Active eq 'tYES'", $select: "CenterCode,CenterName" },
     mapRow: costCenterMapRow,
   });
+
+  // Omie: contas correntes usadas na Conta a Pagar.
+  const omieApEnabled = isOmie && !isSales;
+  useEffect(() => {
+    if (!omieApEnabled || !open) return;
+    const companyDB = sapSession?.companyDB || session?.companyDB;
+    if (!companyDB) return;
+    let cancelled = false;
+    setOmieAccountsLoading(true);
+    omieListarContasCorrentes(companyDB)
+      .then((rows) => {
+        if (cancelled) return;
+        setOmieAccounts(
+          rows.map((row) => ({
+            code: String(row.nCodCC),
+            name: String(row.descricao || row.tipo_conta_corrente || row.nCodCC),
+          })),
+        );
+      })
+      .catch(() => { if (!cancelled) setOmieAccounts([]); })
+      .finally(() => { if (!cancelled) setOmieAccountsLoading(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [omieApEnabled, open, sapSession?.companyDB, session?.companyDB]);
   // CCs LOTUS só aparecem para Contábil e RH/DP/Folha (ou admins).
   const { groups: myGroups, loading: myGroupsLoading } = useMyPermissionGroups();
   const canSeeLotusCcs = useMemo(
@@ -1291,6 +1326,21 @@ export function CreateExpenseModal({
         : "",
     });
     if (doc.document_date) setDocDate(doc.document_date);
+    // Omie (Conta a Pagar): número da NF, chave da NF-e e impostos retidos.
+    if (omieApEnabled) {
+      if (doc.document_number) setOmieInvoiceNumber(String(doc.document_number).trim().slice(0, 20));
+      const key = String(doc.nfe_key || "").replace(/\D/g, "");
+      if (key.length === 44) setOmieNfeKey(key);
+      const taxes = doc.withheld_taxes || {};
+      setOmieTaxes((prev) => {
+        const next = { ...prev };
+        (["pis", "cofins", "csll", "ir", "iss", "inss"] as const).forEach((k) => {
+          const value = Number(taxes[k]);
+          if (Number.isFinite(value) && value > 0) next[k] = String(value);
+        });
+        return next;
+      });
+    }
     if (doc.due_date) setDueDate(doc.due_date);
     if (doc.remarks) setRemarks(doc.remarks);
     const detectedPaymentInstrument = docs.map((item) => paymentInstrumentOf(item)).find(Boolean);
@@ -2326,6 +2376,10 @@ export function CreateExpenseModal({
       toast.error("Informe a forma de pagamento");
       return;
     }
+    if (omieApEnabled && !omieCurrentAccount) {
+      toast.error("Informe a conta corrente da Conta a Pagar");
+      return;
+    }
     if (isSales && filteredUsageOptions.length > 0 && !salesUsage) {
       toast.error("Informe a Utilização (obrigatória no SAP para pedidos de venda)");
       return;
@@ -2503,6 +2557,26 @@ export function CreateExpenseModal({
         payment_boleto_barcode: !isSales ? paymentInstrument?.boletoBarcode || undefined : undefined,
         payment_boleto_digitable_line: !isSales ? paymentInstrument?.boletoDigitableLine || undefined : undefined,
         payment_metadata: !isSales && paymentInstrument ? { pix_key: paymentInstrument.pixKey || null, source: "expense_document_ai" } : undefined,
+        omie_ap_data: omieApEnabled
+          ? {
+              current_account_code: omieCurrentAccount?.code || null,
+              current_account_name: omieCurrentAccount?.name || null,
+              category_code: headerCostCenter?.code || items[0]?.cost_center || null,
+              invoice_number: omieInvoiceNumber.trim() || null,
+              nfe_key: omieNfeKey.replace(/\D/g, "") || null,
+              document_type: omieDocumentType.trim() || null,
+              barcode: paymentInstrument?.boletoDigitableLine || paymentInstrument?.boletoBarcode || null,
+              payment_forecast_date: dueDate || null,
+              taxes: {
+                pis: Number(omieTaxes.pis) || 0,
+                cofins: Number(omieTaxes.cofins) || 0,
+                csll: Number(omieTaxes.csll) || 0,
+                ir: Number(omieTaxes.ir) || 0,
+                iss: Number(omieTaxes.iss) || 0,
+                inss: Number(omieTaxes.inss) || 0,
+              },
+            }
+          : undefined,
         rateio_type: !isSales ? rateioType : undefined,
         nfse_split_mode: isSales ? nfseSplitMode : undefined,
         sales_usage: isSales ? salesUsage?.code || undefined : undefined,
@@ -3491,6 +3565,81 @@ export function CreateExpenseModal({
                 portalContainer={dialogContainer}
                 required={paymentTermsOptions.length > 0 && !paymentTerms}
               />
+            </div>
+          )}
+
+          {/* Omie — Conta a Pagar: campos da tela "Nova Conta a Pagar" */}
+          {omieApEnabled && (
+            <div className="space-y-3 rounded-md border border-dashed border-border bg-muted/20 p-3">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Conta a pagar (Omie)
+              </p>
+              <CachedSearchCombobox
+                label="Conta corrente *"
+                options={omieAccounts}
+                isLoading={omieAccountsLoading}
+                value={omieCurrentAccount}
+                onChange={setOmieCurrentAccount}
+                placeholder="Selecione a conta corrente…"
+                portalContainer={dialogContainer}
+                required={!omieCurrentAccount}
+              />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Nota fiscal</label>
+                  <Input
+                    value={omieInvoiceNumber}
+                    onChange={(e) => setOmieInvoiceNumber(e.target.value.slice(0, 20))}
+                    placeholder="Número da NF"
+                    className="h-9 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Tipo de documento</label>
+                  <Input
+                    value={omieDocumentType}
+                    onChange={(e) => setOmieDocumentType(e.target.value.toUpperCase().slice(0, 10))}
+                    placeholder="NF, BOL, OUT…"
+                    className="h-9 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Chave da NF-e</label>
+                  <Input
+                    value={omieNfeKey}
+                    onChange={(e) => setOmieNfeKey(e.target.value.replace(/\D/g, "").slice(0, 44))}
+                    placeholder="44 dígitos"
+                    className="h-9 text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
+                  Impostos retidos (opcional)
+                </p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
+                  {([
+                    ["pis", "PIS"],
+                    ["cofins", "COFINS"],
+                    ["csll", "CSLL"],
+                    ["ir", "IR"],
+                    ["iss", "ISS"],
+                    ["inss", "INSS"],
+                  ] as const).map(([key, label]) => (
+                    <div key={key}>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">{label}</label>
+                      <DecimalInput
+                        value={Number(omieTaxes[key]) || 0}
+                        onChange={(v) => setOmieTaxes((prev) => ({ ...prev, [key]: v ? String(v) : "" }))}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Informe apenas valores efetivamente retidos na nota — eles seguem marcados como retidos no Omie.
+                </p>
+              </div>
             </div>
           )}
 

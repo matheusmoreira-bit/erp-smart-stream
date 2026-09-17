@@ -14,7 +14,7 @@ import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { normalizeExpenseItems } from "../_shared/expense-items.ts";
 import { callOmieApi, loadOmieCredentials } from "../_shared/omie-api.ts";
-import { buildOmiePurchaseOrderPayload } from "../_shared/omie-purchase-order.ts";
+import { buildOmieAccountsPayablePayload } from "../_shared/omie-accounts-payable.ts";
 import { buildOmieSalesOrderPayload } from "../_shared/omie-sales-order.ts";
 import { isExpenseIntegrationCancelled } from "../_shared/expense-integration-cancel.ts";
 
@@ -926,7 +926,11 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     if (expenseErpType === "omie") {
       if (expense.sap_doc_entry) {
         if (body.patch_document === true) {
-          throw new Error(`Atualização de Pedido de ${isSales ? "Venda" : "Compra"} Omie já integrado ainda não está habilitada.`);
+          throw new Error(
+            isSales
+              ? "Atualização de Pedido de Venda Omie já integrado ainda não está habilitada."
+              : "Atualização de Conta a Pagar Omie já integrada ainda não está habilitada.",
+          );
         }
         return new Response(
           JSON.stringify({
@@ -955,7 +959,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       attachmentLinkStatus = "not_applicable";
 
       let omiePayload:
-        | ReturnType<typeof buildOmiePurchaseOrderPayload>
+        | ReturnType<typeof buildOmieAccountsPayablePayload>
         | ReturnType<typeof buildOmieSalesOrderPayload>;
       let credentials: Awaited<ReturnType<typeof loadOmieCredentials>>;
       try {
@@ -969,14 +973,15 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
             credentials.sales_stage_code || "10",
           );
         } else {
-          omiePayload = buildOmiePurchaseOrderPayload(expense, items as any[]);
+          // Compras no Omie viram diretamente um título em Contas a Pagar.
+          omiePayload = buildOmieAccountsPayablePayload(expense as any, items as any[]);
         }
       } catch (error) {
         purchaseOrderStatus = "failed";
         throw error;
       }
-      const omieCallName = isSales ? "IncluirPedido" : "IncluirPedCompra";
-      const omieEndpoint = isSales ? "produtos/pedido/" : "produtos/pedidocompra/";
+      const omieCallName = isSales ? "IncluirPedido" : "IncluirContaPagar";
+      const omieEndpoint = isSales ? "produtos/pedido/" : "financas/contapagar/";
       const requestPayload = {
         call: omieCallName,
         param: [omiePayload],
@@ -993,9 +998,23 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         );
       } catch (error) {
         if (!isSales) {
-          purchaseOrderStatus = "failed";
-          throw error;
-        }
+          // O código de integração é estável: se a Omie já criou o título e a
+          // resposta se perdeu, recuperamos em vez de duplicar.
+          try {
+            const integrationCode = (omiePayload as ReturnType<typeof buildOmieAccountsPayablePayload>)
+              .codigo_lancamento_integracao;
+            omieResponse = await callOmieApi<Record<string, unknown>>(
+              credentials,
+              "financas/contapagar/",
+              "ConsultarContaPagar",
+              { codigo_lancamento_integracao: integrationCode },
+            );
+            recoveredExistingOrder = true;
+          } catch {
+            purchaseOrderStatus = "failed";
+            throw error;
+          }
+        } else {
 
         // O código de integração do pedido é estável. Se a Omie criou o pedido
         // mas a resposta se perdeu antes de persistirmos o vínculo, recuperamos
@@ -1014,15 +1033,20 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
           purchaseOrderStatus = "failed";
           throw error;
         }
+        }
       }
       lastSapResponse = omieResponse;
       const salesFacts = isSales ? omieSalesOrderFacts(omieResponse) : null;
-      const omieDocumentId = isSales ? Number(salesFacts?.id) : Number(omieResponse.nCodPed);
-      const purchaseDocumentNumber = Number(omieResponse.cNumero);
+      const omieDocumentId = isSales
+        ? Number(salesFacts?.id)
+        : Number(omieResponse.codigo_lancamento_omie);
+      const payableDocumentNumber = Number(
+        String(omieResponse.numero_documento ?? omieResponse.codigo_lancamento_omie ?? "").replace(/\D/g, ""),
+      );
       const omieDocumentNumber = isSales
         ? salesFacts?.number ?? null
-        : Number.isFinite(purchaseDocumentNumber) && purchaseDocumentNumber > 0
-          ? purchaseDocumentNumber
+        : Number.isFinite(payableDocumentNumber) && payableDocumentNumber > 0
+          ? payableDocumentNumber
           : null;
       if (!Number.isFinite(omieDocumentId) || omieDocumentId <= 0) {
         purchaseOrderStatus = "failed";
@@ -1030,7 +1054,10 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
           omieResponse.cDescStatus || omieResponse.descricao_status || omieResponse.codigo_status || "",
         ).trim();
         throw new Error(
-          statusDescription || `A Omie não retornou o código interno do Pedido de ${isSales ? "Venda" : "Compra"} criado.`,
+          statusDescription ||
+            (isSales
+              ? "A Omie não retornou o código interno do Pedido de Venda criado."
+              : "A Omie não retornou o código interno da Conta a Pagar criada."),
         );
       }
       purchaseOrderStatus = "success";
@@ -1050,20 +1077,20 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         .eq("id", expenseId);
       if (omiePersistError) {
         throw new Error(
-          `Pedido de ${isSales ? "Venda" : "Compra"} ${omieDocumentId} criado na Omie, mas não foi possível salvar o vínculo local: ${omiePersistError.message}`,
+          `${isSales ? "Pedido de Venda" : "Conta a Pagar"} ${omieDocumentId} criado na Omie, mas não foi possível salvar o vínculo local: ${omiePersistError.message}`,
         );
       }
 
       await supabase.rpc("insert_audit_log", {
         p_action: isSales
           ? (recoveredExistingOrder ? "omie_sales_order_recovered" : "omie_sales_order_created")
-          : "omie_purchase_order_created",
+          : (recoveredExistingOrder ? "omie_accounts_payable_recovered" : "omie_accounts_payable_created"),
         p_entity_type: "expense",
         p_entity_id: expenseId,
         p_company_db: expense.company_db || null,
         p_details: {
           erp_type: "omie",
-          document_type: isSales ? "sales_order" : "purchase_order",
+          document_type: isSales ? "sales_order" : "accounts_payable",
           recovered_existing_order: recoveredExistingOrder,
           omie_document_id: omieDocumentId,
           omie_document_number: omieDocumentNumber,

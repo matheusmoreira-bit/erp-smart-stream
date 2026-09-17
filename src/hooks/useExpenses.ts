@@ -240,6 +240,8 @@ export interface CreateExpenseInput {
   payment_boleto_barcode?: string | null;
   payment_boleto_digitable_line?: string | null;
   payment_metadata?: Record<string, unknown> | null;
+  /** Omie: campos da Conta a Pagar (conta corrente, NF, chave NF-e, retenções). */
+  omie_ap_data?: Record<string, unknown> | null;
   rateio_type?: RateioType | null;
   /** Vendas: emitir NFS-e unificada ou uma nota por marca/projeto. */
   nfse_split_mode?: "unified" | "per_brand";
@@ -918,6 +920,7 @@ export function useExpenses(
           payment_boleto_barcode: input.payment_boleto_barcode || null,
           payment_boleto_digitable_line: input.payment_boleto_digitable_line || null,
           payment_metadata: input.payment_metadata || null,
+          omie_ap_data: input.omie_ap_data || null,
           rateio_type: input.rateio_type || null,
           nfse_split_mode: input.nfse_split_mode || "unified",
           sales_usage: input.sales_usage || null,

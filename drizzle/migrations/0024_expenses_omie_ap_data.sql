@@ -1,0 +1,2 @@
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS omie_ap_data jsonb;
+COMMENT ON COLUMN public.expenses.omie_ap_data IS 'Campos da Conta a Pagar Omie (conta corrente, nota fiscal, chave NF-e, impostos retidos).';
