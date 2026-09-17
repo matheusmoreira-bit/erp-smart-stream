@@ -46,7 +46,7 @@ function approverKey(name: string | null, email: string | null): string {
 async function levelsOf(admin: SupabaseClient, ruleId: string): Promise<ApprovalLevel[]> {
   const { data } = await admin
     .from("approval_rule_levels")
-    .select("level_order, approver_name, approver_email")
+    .select("level_order, approver_name, approver_email, require_all")
     .eq("rule_id", ruleId)
     .order("level_order", { ascending: true });
   return ((data || []) as ApprovalLevel[]);

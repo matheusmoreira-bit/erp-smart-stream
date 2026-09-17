@@ -11,6 +11,12 @@ export type ApprovalLevel = {
   level_order: number;
   approver_name: string | null;
   approver_email: string | null;
+  /**
+   * Aprovação UNÂNIME: quando true, todos os aprovadores deste nível precisam
+   * aprovar para o documento avançar. Quando false/ausente, o primeiro que
+   * decidir encerra o nível (comportamento padrão de aprovadores paralelos).
+   */
+  require_all?: boolean | null;
 };
 
 export type ResolvedApprover = {
