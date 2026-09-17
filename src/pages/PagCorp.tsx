@@ -953,6 +953,10 @@ export default function PagCorp() {
     opts: { fallback?: boolean; forcePostingType?: "purchase_order" | "journal_entry" } = {},
   ) => {
     if (!(await checkSapCredentials())) return;
+    if (isOmie) {
+      setOmieDialog({ open: true, transactions: [t] });
+      return;
+    }
     // O usuário sempre pode escolher o caminho, mesmo sem retorno da IA.
     const postingType = opts.forcePostingType
       || t.postingType
