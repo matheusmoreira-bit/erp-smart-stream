@@ -1386,6 +1386,78 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     return approvals;
   };
 
+  // ── NÍVEL UNÂNIME: só avança quando TODOS do nível aprovarem ───────────
+  if (unanimousCurrentLevel) {
+    const documentApprovals = await loadCurrentDocumentApprovals();
+    const stillMissing = pendingLevelApprovers(documentApprovals, currentLevelRowsNoSelf as any);
+    if (stillMissing.length > 0) {
+      const nextName = stillMissing[0].approver_name || stillMissing[0].approver_email || null;
+      const updates: Record<string, unknown> = {
+        current_level_order: currentLevel,
+        current_approver: nextName,
+      };
+      if (remarks) updates.remarks = remarks;
+      const { error: holdErr } = await admin.from("expenses").update(updates).eq("id", expenseId);
+      if (holdErr) {
+        stageLog("update_advance_level", "error", {
+          requestId, expenseId, phase: "unanimous_hold", error: holdErr.message,
+        });
+      }
+      await writeAuditLog("approved", currentLevel, {
+        step: "approve_partial_unanimous",
+        metadata: {
+          unanimous_level: true,
+          pending_approvers: stillMissing.map((r) => r.approver_name || r.approver_email),
+        },
+      });
+      for (const missing of stillMissing) {
+        await notifyApprovalPending(admin, {
+          expenseId,
+          companyDb: (exp as any).company_db,
+          approverEmail: missing.approver_email || null,
+          approverName: missing.approver_name || null,
+          levelOrder: currentLevel,
+          requesterName: (exp as any).requester_name,
+          supplierName: (exp as any).supplier_name,
+          totalAmount: Number((exp as any).total_amount || 0),
+          currency: (exp as any).currency,
+          docType: String((exp as any).doc_type || "purchase"),
+          resolution: {
+            source: "next_level",
+            reason: `Nível ${currentLevel} exige aprovação de todos os aprovadores — falta a sua decisão`,
+            ruleId: (exp as any).approval_rule_id || null,
+            costCenter: (exp as any).cost_center || null,
+            project: (exp as any).project || null,
+            metadata: { unanimous_level: true },
+          },
+        });
+      }
+      stageLog("update_advance_level", "info", {
+        requestId, expenseId, unanimousLevel: currentLevel,
+        pending: stillMissing.map((r) => r.approver_name || r.approver_email),
+      });
+      return await respond(200, {
+        ok: true,
+        action: "approve",
+        finalized: false,
+        unanimousPending: true,
+        currentLevel,
+        nextApproverName: nextName,
+        nextApproverEmail: stillMissing[0].approver_email || null,
+        message: `Aprovação registrada. Este nível exige a aprovação de todos: aguardando ${stillMissing.map((r) => r.approver_name || r.approver_email).filter(Boolean).join(", ")}.`,
+        expense: {
+          id: expenseId,
+          requester_name: (exp as any).requester_name,
+          requester_email: (exp as any).requester_email,
+          supplier_name: (exp as any).supplier_name,
+          total_amount: (exp as any).total_amount,
+          currency: (exp as any).currency,
+          company_db: (exp as any).company_db,
+        },
+      });
+    }
+  }
+
   // ── RATEIO: aprovação por SEGMENTO (fluxos independentes) ──────────────
   if (segmentMode) {
     const reqName = (exp as any).requester_name || null;
