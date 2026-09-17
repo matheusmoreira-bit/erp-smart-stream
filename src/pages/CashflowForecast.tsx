@@ -239,18 +239,34 @@ export default function CashflowForecast() {
   );
 
   const exportCsv = () => {
-    const header = ["Período/Grupo", "A pagar previsto", "A pagar realizado", "A receber previsto", "A receber realizado", "Saldo previsto", "Saldo realizado"];
-    const lines = buckets.map((b) =>
-      [
-        b.label,
-        b.apForecast.toFixed(2),
-        b.apActual.toFixed(2),
-        b.arForecast.toFixed(2),
-        b.arActual.toFixed(2),
-        (b.arForecast - b.apForecast).toFixed(2),
-        (b.arActual - b.apActual).toFixed(2),
-      ].join(";"),
-    );
+    const header =
+      grouping === "none"
+        ? ["Fornecedor/Cliente", "Valor total", "Saldo do valor", "Centro de custo", "Projeto", "Vencimento", "Status"]
+        : ["Período/Grupo", "A pagar previsto", "A pagar realizado", "A receber previsto", "A receber realizado", "Saldo previsto", "Saldo realizado"];
+    const lines =
+      grouping === "none"
+        ? details.map((d) =>
+            [
+              (d.row.party || "—").replace(/;/g, ","),
+              d.total.toFixed(2),
+              d.balance.toFixed(2),
+              (d.row.cost_center || "").replace(/;/g, ","),
+              (d.row.project || "").replace(/;/g, ","),
+              d.row.due_date || "",
+              d.status.label,
+            ].join(";"),
+          )
+        : buckets.map((b) =>
+            [
+              b.label,
+              b.apForecast.toFixed(2),
+              b.apActual.toFixed(2),
+              b.arForecast.toFixed(2),
+              b.arActual.toFixed(2),
+              (b.arForecast - b.apForecast).toFixed(2),
+              (b.arActual - b.apActual).toFixed(2),
+            ].join(";"),
+          );
     const blob = new Blob([[header.join(";"), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
