@@ -426,7 +426,8 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
     (companiesData || []).forEach((c: { company_db: string; display_name: string }) => nameMap.set(c.company_db, c.display_name));
 
     // Timeout individual por empresa (ms). Ajustável via secret.
-    const PER_COMPANY_TIMEOUT_MS = Number(Deno.env.get("SAP_CHANGE_PASSWORD_TIMEOUT_MS") || "25000");
+    const PER_COMPANY_TIMEOUT_MS = Number(Deno.env.get("SAP_CHANGE_PASSWORD_TIMEOUT_MS") || "45000");
+    const VERIFY_TIMEOUT_MS = Number(Deno.env.get("SAP_CHANGE_PASSWORD_VERIFY_TIMEOUT_MS") || "20000");
 
     // Login gerenciado: a senha só é gravada no banco DEPOIS que o login com a
     // nova senha foi confirmado no Service Layer daquela empresa, usando
