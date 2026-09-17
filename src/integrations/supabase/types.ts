@@ -7947,6 +7947,105 @@ export type Database = {
         }
         Relationships: []
       }
+      sap_archive_master_cursors: {
+        Row: {
+          company_db: string
+          completed: boolean
+          entity_type: string
+          last_full_sync_at: string | null
+          last_incremental_at: string | null
+          last_offset: number
+          updated_at: string
+        }
+        Insert: {
+          company_db: string
+          completed?: boolean
+          entity_type: string
+          last_full_sync_at?: string | null
+          last_incremental_at?: string | null
+          last_offset?: number
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string
+          completed?: boolean
+          entity_type?: string
+          last_full_sync_at?: string | null
+          last_incremental_at?: string | null
+          last_offset?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sap_archive_master_data: {
+        Row: {
+          code: string
+          company_db: string
+          created_at: string
+          entity_type: string
+          fetched_at: string
+          id: string
+          name: string | null
+          payload: Json
+          update_date: string | null
+        }
+        Insert: {
+          code: string
+          company_db: string
+          created_at?: string
+          entity_type: string
+          fetched_at?: string
+          id?: string
+          name?: string | null
+          payload: Json
+          update_date?: string | null
+        }
+        Update: {
+          code?: string
+          company_db?: string
+          created_at?: string
+          entity_type?: string
+          fetched_at?: string
+          id?: string
+          name?: string | null
+          payload?: Json
+          update_date?: string | null
+        }
+        Relationships: []
+      }
+      sap_archive_master_restore_map: {
+        Row: {
+          code: string
+          entity_type: string
+          error_message: string | null
+          id: string
+          restored_at: string
+          source_company_db: string
+          status: string
+          target_company_db: string
+        }
+        Insert: {
+          code: string
+          entity_type: string
+          error_message?: string | null
+          id?: string
+          restored_at?: string
+          source_company_db: string
+          status?: string
+          target_company_db: string
+        }
+        Update: {
+          code?: string
+          entity_type?: string
+          error_message?: string | null
+          id?: string
+          restored_at?: string
+          source_company_db?: string
+          status?: string
+          target_company_db?: string
+        }
+        Relationships: []
+      }
       sap_archive_restore_map: {
         Row: {
           created_at: string
