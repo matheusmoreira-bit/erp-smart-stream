@@ -38,7 +38,19 @@ export interface CashflowRow {
   doc_ref: string | null;
 }
 
-type Grouping = "month" | "week" | "cost_center" | "project";
+type Grouping = "none" | "month" | "week" | "cost_center" | "project";
+type StatusFilter = "all" | "paid" | "partial" | "open";
+
+/** Status de baixa do lançamento (pago/recebido, parcial ou em aberto). */
+function statusOf(row: CashflowRow): { key: Exclude<StatusFilter, "all">; label: string } {
+  const total = Math.max(0, Number(row.amount) || 0);
+  const paid = Math.max(0, Number(row.paid_amount) || 0);
+  if (total > 0 && paid >= total - 0.01) {
+    return { key: "paid", label: row.kind === "ap" ? "Pago" : "Recebido" };
+  }
+  if (paid > 0.01) return { key: "partial", label: "Parcial" };
+  return { key: "open", label: "Em aberto" };
+}
 
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 });
@@ -103,6 +115,7 @@ export default function CashflowForecast() {
   const [grouping, setGrouping] = useState<Grouping>("month");
   const [ccFilter, setCcFilter] = useState<string>("all");
   const [projectFilter, setProjectFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   const [rows, setRows] = useState<CashflowRow[]>([]);
   const [arNote, setArNote] = useState<string | null>(null);
@@ -150,15 +163,32 @@ export default function CashflowForecast() {
 
   const filtered = useMemo(
     () =>
-      rows.filter(
-        (r) =>
-          (ccFilter === "all" || (r.cost_center?.trim() || "") === ccFilter) &&
-          (projectFilter === "all" || (r.project?.trim() || "") === projectFilter),
-      ),
-    [rows, ccFilter, projectFilter],
+      rows.filter((r) => {
+        const due = (r.due_date || "").slice(0, 10);
+        if (from && (!due || due < from)) return false;
+        if (to && (!due || due > to)) return false;
+        if (ccFilter !== "all" && (r.cost_center?.trim() || "") !== ccFilter) return false;
+        if (projectFilter !== "all" && (r.project?.trim() || "") !== projectFilter) return false;
+        if (statusFilter !== "all" && statusOf(r).key !== statusFilter) return false;
+        return true;
+      }),
+    [rows, ccFilter, projectFilter, statusFilter, from, to],
+  );
+
+  /** Lançamentos detalhados: pagamentos negativos, recebimentos positivos. */
+  const details = useMemo(
+    () =>
+      [...filtered].sort((a, b) => (a.due_date || "").localeCompare(b.due_date || "")).map((r) => {
+        const sign = r.kind === "ap" ? -1 : 1;
+        const total = Number(r.amount) || 0;
+        const balance = Math.max(0, total - (Number(r.paid_amount) || 0));
+        return { row: r, total: sign * total, balance: sign * balance, status: statusOf(r) };
+      }),
+    [filtered],
   );
 
   const buckets = useMemo<Bucket[]>(() => {
+    if (grouping === "none") return [];
     const map = new Map<string, Bucket>();
     for (const r of filtered) {
       const key = bucketOf(r, grouping);
@@ -187,16 +217,16 @@ export default function CashflowForecast() {
 
   const totals = useMemo(
     () =>
-      buckets.reduce(
-        (acc, b) => ({
-          apForecast: acc.apForecast + b.apForecast,
-          apActual: acc.apActual + b.apActual,
-          arForecast: acc.arForecast + b.arForecast,
-          arActual: acc.arActual + b.arActual,
+      filtered.reduce(
+        (acc, r) => ({
+          apForecast: acc.apForecast + (r.kind === "ap" ? r.amount : 0),
+          apActual: acc.apActual + (r.kind === "ap" ? r.paid_amount : 0),
+          arForecast: acc.arForecast + (r.kind === "ar" ? r.amount : 0),
+          arActual: acc.arActual + (r.kind === "ar" ? r.paid_amount : 0),
         }),
         { apForecast: 0, apActual: 0, arForecast: 0, arActual: 0 },
       ),
-    [buckets],
+    [filtered],
   );
 
   const todayIso = isoDay(new Date());
@@ -209,18 +239,34 @@ export default function CashflowForecast() {
   );
 
   const exportCsv = () => {
-    const header = ["Período/Grupo", "A pagar previsto", "A pagar realizado", "A receber previsto", "A receber realizado", "Saldo previsto", "Saldo realizado"];
-    const lines = buckets.map((b) =>
-      [
-        b.label,
-        b.apForecast.toFixed(2),
-        b.apActual.toFixed(2),
-        b.arForecast.toFixed(2),
-        b.arActual.toFixed(2),
-        (b.arForecast - b.apForecast).toFixed(2),
-        (b.arActual - b.apActual).toFixed(2),
-      ].join(";"),
-    );
+    const header =
+      grouping === "none"
+        ? ["Fornecedor/Cliente", "Valor total", "Saldo do valor", "Centro de custo", "Projeto", "Vencimento", "Status"]
+        : ["Período/Grupo", "A pagar previsto", "A pagar realizado", "A receber previsto", "A receber realizado", "Saldo previsto", "Saldo realizado"];
+    const lines =
+      grouping === "none"
+        ? details.map((d) =>
+            [
+              (d.row.party || "—").replace(/;/g, ","),
+              d.total.toFixed(2),
+              d.balance.toFixed(2),
+              (d.row.cost_center || "").replace(/;/g, ","),
+              (d.row.project || "").replace(/;/g, ","),
+              d.row.due_date || "",
+              d.status.label,
+            ].join(";"),
+          )
+        : buckets.map((b) =>
+            [
+              b.label,
+              b.apForecast.toFixed(2),
+              b.apActual.toFixed(2),
+              b.arForecast.toFixed(2),
+              b.arActual.toFixed(2),
+              (b.arForecast - b.apForecast).toFixed(2),
+              (b.arActual - b.apActual).toFixed(2),
+            ].join(";"),
+          );
     const blob = new Blob([[header.join(";"), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -250,7 +296,13 @@ export default function CashflowForecast() {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Button variant="outline" size="sm" className="gap-2" onClick={exportCsv} disabled={buckets.length === 0}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={exportCsv}
+              disabled={grouping === "none" ? details.length === 0 : buckets.length === 0}
+            >
               <FileDown className="w-4 h-4" /> CSV
             </Button>
             <Button variant="outline" size="sm" className="gap-2" onClick={load} disabled={loading || !companyDb}>
@@ -284,6 +336,7 @@ export default function CashflowForecast() {
                 <Select value={grouping} onValueChange={(v) => setGrouping(v as Grouping)}>
                   <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">Não agrupar</SelectItem>
                     <SelectItem value="month">Mês de vencimento</SelectItem>
                     <SelectItem value="week">Semana de vencimento</SelectItem>
                     <SelectItem value="cost_center">Centro de custo</SelectItem>
@@ -308,6 +361,18 @@ export default function CashflowForecast() {
                   <SelectContent>
                     <SelectItem value="all">Todos</SelectItem>
                     {projects.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Status</label>
+                <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+                  <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="paid">Pago / Recebido</SelectItem>
+                    <SelectItem value="partial">Parcial</SelectItem>
+                    <SelectItem value="open">Em aberto</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -344,18 +409,69 @@ export default function CashflowForecast() {
             <div className="glass-card p-4">
               <div className="flex items-center gap-2 mb-3">
                 <TrendingUp className="w-4 h-4 text-primary" aria-hidden />
-                <h2 className="text-sm font-semibold text-foreground">Previsto × realizado</h2>
+                <h2 className="text-sm font-semibold text-foreground">
+                  {grouping === "none" ? "Lançamentos" : "Previsto × realizado"}
+                </h2>
                 <Badge variant="secondary" className="text-xs ml-auto">{filtered.length} lançamentos</Badge>
               </div>
 
               {loading && rows.length === 0 && (
                 <p className="text-sm text-muted-foreground">Carregando dados financeiros...</p>
               )}
-              {!loading && loaded && buckets.length === 0 && (
+              {!loading && loaded && (grouping === "none" ? details.length === 0 : buckets.length === 0) && (
                 <p className="text-sm text-muted-foreground">
                   Nenhum vencimento no período e filtros selecionados.
                 </p>
               )}
+
+              {grouping === "none" && details.length > 0 && (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Fornecedor / Cliente</TableHead>
+                        <TableHead className="text-right">Valor total</TableHead>
+                        <TableHead className="text-right">Saldo do valor</TableHead>
+                        <TableHead>Centro de custo</TableHead>
+                        <TableHead>Projeto</TableHead>
+                        <TableHead>Vencimento</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {details.map((d) => (
+                        <TableRow key={d.row.key}>
+                          <TableCell className="font-medium max-w-[280px] truncate" title={d.row.party || undefined}>
+                            {d.row.party || "—"}
+                          </TableCell>
+                          <TableCell className={`text-right ${d.total < 0 ? "text-destructive" : "text-emerald-500"}`}>
+                            {brl(d.total)}
+                          </TableCell>
+                          <TableCell className={`text-right ${d.balance < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                            {brl(d.balance)}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">{d.row.cost_center || "—"}</TableCell>
+                          <TableCell className="text-muted-foreground">{d.row.project || "—"}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {d.row.due_date
+                              ? new Date(`${d.row.due_date}T00:00:00Z`).toLocaleDateString("pt-BR", { timeZone: "UTC" })
+                              : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={d.status.key === "paid" ? "secondary" : d.status.key === "partial" ? "outline" : "destructive"}
+                              className="text-[11px]"
+                            >
+                              {d.status.label}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
 
               {buckets.length > 0 && (
                 <div className="overflow-x-auto">
