@@ -16,7 +16,11 @@ import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 import {
   ARCHIVE_BUCKET,
   ARCHIVE_DOC_SPECS,
+  ARCHIVE_MASTER_SPECS,
+  masterKeyRef,
+  masterSpecByKey,
   sanitizeForRestore,
+  sanitizeMasterForRestore,
   sapGet,
   sapLogin,
   sapLogout,
