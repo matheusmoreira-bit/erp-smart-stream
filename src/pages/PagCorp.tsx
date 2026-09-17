@@ -1234,6 +1234,46 @@ export default function PagCorp() {
     setConsolidateDialog({ open: true, transactions: list });
   };
 
+  /** Omie: cria uma conta a pagar por transação selecionada. */
+  const handleConfirmOmieAp = async (values: OmieApSubmitValues) => {
+    const txs = omieDialog.transactions;
+    if (txs.length === 0 || !session?.companyDB) return;
+    setOmieSubmitting(true);
+    try {
+      const { publicFunctionFetch } = await import("@/lib/auth-fetch");
+      const response = await publicFunctionFetch("pagcorp-to-omie", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyDb: session.companyDB,
+          transactions: txs,
+          supplierCode: values.supplierCode,
+          supplierName: values.supplierName,
+          categoryCode: values.categoryCode,
+          currentAccountCode: values.currentAccountCode,
+          dueDate: values.dueDate,
+          integratedBy: session.userName || undefined,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.success === false) {
+        throw new Error(result.error || `Erro ${response.status}`);
+      }
+      toast.success(
+        txs.length === 1 ? "Conta a pagar criada no Omie" : `${result.created ?? txs.length} contas a pagar criadas no Omie`,
+      );
+      setOmieDialog({ open: false, transactions: [] });
+      setSelectedIds(new Set());
+      await fetchTransactions(startDate, endDate, session.companyDB);
+    } catch (error) {
+      toast.error("Falha ao lançar em contas a pagar", {
+        description: error instanceof Error ? error.message : "Erro desconhecido",
+      });
+    } finally {
+      setOmieSubmitting(false);
+    }
+  };
+
   const handleConfirmConsolidate = async (
     supplier: SapSearchOption,
     lineOverrides: Record<string, { costCenter?: string | null; project?: string | null; item?: string | null }> = {},
