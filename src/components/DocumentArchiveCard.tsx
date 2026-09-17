@@ -29,6 +29,25 @@ const DOC_LABELS: Record<string, string> = {
   incoming_payments: "Contas a receber (recebimentos)",
 };
 
+const MASTER_LABELS: Record<string, string> = {
+  chart_of_accounts: "Plano de contas",
+  payment_terms: "Condições de pagamento",
+  warehouses: "Depósitos",
+  price_lists: "Listas de preço",
+  item_groups: "Grupos de itens",
+  bp_groups: "Grupos de parceiros",
+  cost_centers: "Centros de custo",
+  projects: "Projetos",
+  items: "Itens",
+  business_partners: "Fornecedores e clientes",
+};
+
+interface MasterStat {
+  entity: string;
+  count: number;
+  last_sync: string | null;
+}
+
 interface TypeStat {
   doc_type: string;
   count: number;
@@ -67,10 +86,14 @@ export function DocumentArchiveCard() {
 
   const [companyDb, setCompanyDb] = useState("");
   const [stats, setStats] = useState<TypeStat[]>([]);
+  const [masterStats, setMasterStats] = useState<MasterStat[]>([]);
+  const [targetDb, setTargetDb] = useState("");
   const [attachments, setAttachments] = useState({ stored: 0, pending: 0, error: 0 });
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState<null | "pull" | "attachments" | "dry" | "restore">(null);
+  const [busy, setBusy] = useState<
+    null | "pull" | "attachments" | "master" | "dry" | "restore" | "restoreMaster"
+  >(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [confirmText, setConfirmText] = useState("");
   const [dryResult, setDryResult] = useState<any>(null);
@@ -79,11 +102,20 @@ export function DocumentArchiveCard() {
     if (!db) return;
     setLoading(true);
     try {
-      const [{ data: cursors }, { data: docs }, { data: att }, { data: runRows }] = await Promise.all([
+      const [
+        { data: cursors },
+        { data: docs },
+        { data: att },
+        { data: runRows },
+        { data: masterCursors },
+        { data: masterRows },
+      ] = await Promise.all([
         supabase.from("sap_archive_cursors").select("doc_type, completed, last_full_sync_at, last_incremental_at").eq("company_db", db),
         supabase.from("sap_archive_documents").select("doc_type").eq("company_db", db).limit(100000),
         supabase.from("sap_archive_attachments").select("status").eq("company_db", db).limit(100000),
         supabase.from("sap_archive_runs").select("id, kind, status, documents_count, attachments_count, errors, started_at").eq("company_db", db).order("started_at", { ascending: false }).limit(5),
+        supabase.from("sap_archive_master_cursors").select("entity_type, last_incremental_at, last_full_sync_at").eq("company_db", db),
+        supabase.from("sap_archive_master_data").select("entity_type").eq("company_db", db).limit(100000),
       ]);
       const counts = new Map<string, number>();
       for (const row of (docs || []) as Array<{ doc_type: string }>) {
@@ -95,6 +127,18 @@ export function DocumentArchiveCard() {
           doc_type: key,
           count: counts.get(key) || 0,
           completed: Boolean(c?.completed),
+          last_sync: c?.last_incremental_at || c?.last_full_sync_at || null,
+        };
+      }));
+      const mCounts = new Map<string, number>();
+      for (const row of (masterRows || []) as Array<{ entity_type: string }>) {
+        mCounts.set(row.entity_type, (mCounts.get(row.entity_type) || 0) + 1);
+      }
+      setMasterStats(Object.keys(MASTER_LABELS).map((key) => {
+        const c = (masterCursors || []).find((x: any) => x.entity_type === key) as any;
+        return {
+          entity: key,
+          count: mCounts.get(key) || 0,
           last_sync: c?.last_incremental_at || c?.last_full_sync_at || null,
         };
       }));
@@ -167,6 +211,30 @@ export function DocumentArchiveCard() {
         setProgress(`${total} anexos copiados · ${data.pending ?? 0} restantes`);
       }
       toast.success(`Anexos copiados: ${total}.`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+      setProgress(null);
+      void loadStats(companyDb);
+    }
+  }, [companyDb, callFn, loadStats]);
+
+  const runMasterPull = useCallback(async () => {
+    if (!companyDb) return;
+    setBusy("master");
+    try {
+      let done = false;
+      let total = 0;
+      let rounds = 0;
+      while (!done && rounds < 200) {
+        rounds++;
+        const data = await callFn("sap-archive-master-pull", { company_db: companyDb });
+        total += Number(data.records || 0);
+        done = Boolean(data.done);
+        setProgress(`${total} cadastros copiados…`);
+      }
+      toast.success(`Cadastros atualizados: ${total}.`);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
