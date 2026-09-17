@@ -5,6 +5,7 @@ import { SubmenuBar } from "@/components/SubmenuBar";
 import { findNavModule } from "@/lib/nav-map";
 import { useModuleAccess } from "@/hooks/usePermissions";
 import { useSap } from "@/contexts/SapContext";
+import { filterPathsForErp } from "@/lib/erp-module-availability";
 
 /**
  * Barra de submenu global: aparece no topo de todas as telas de módulo
@@ -72,7 +73,7 @@ export function ModuleSubmenu() {
   const mod = findNavModule(pathname);
   if (!mod) return null;
 
-  const items = mod.items.filter(
+  const items = filterPathsForErp(mod.items, session?.erpType).filter(
     (i) => !i.moduleKey || userModules.length === 0 || userModules.includes(i.moduleKey),
   );
   if (items.length === 0) return null;
