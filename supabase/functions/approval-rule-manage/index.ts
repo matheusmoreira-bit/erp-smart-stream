@@ -14,6 +14,7 @@ interface LevelInput {
   level_order?: number;
   approver_name?: string;
   approver_email?: string | null;
+  require_all?: boolean;
 }
 
 interface Body {
