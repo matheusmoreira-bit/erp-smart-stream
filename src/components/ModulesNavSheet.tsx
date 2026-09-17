@@ -29,6 +29,7 @@ export function ModulesNavSheet() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { userModules, loading: permLoading } = useModuleAccess();
+  const { session } = useSap();
 
   const go = (mod: ModuleCard) => {
     setOpen(false);
