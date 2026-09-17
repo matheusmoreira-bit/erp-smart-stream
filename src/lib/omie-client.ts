@@ -449,3 +449,51 @@ export async function omieListarContasPagar(
 
   return all;
 }
+
+export interface OmieContaCorrente {
+  nCodCC: number;
+  descricao?: string;
+  codigo_banco?: string;
+  tipo_conta_corrente?: string;
+  inativo?: "S" | "N" | string;
+  [key: string]: unknown;
+}
+
+interface OmieContasCorrentesResponse {
+  ListarContasCorrentes?: OmieContaCorrente[];
+  conta_corrente_cadastro?: OmieContaCorrente[];
+  pagina?: number;
+  total_de_paginas?: number;
+}
+
+/** Contas correntes financeiras da empresa (usadas nas contas a pagar). */
+export async function omieListarContasCorrentes(
+  companyDB: string,
+  options: { maxPages?: number; forceRefresh?: boolean } = {},
+): Promise<OmieContaCorrente[]> {
+  const all: OmieContaCorrente[] = [];
+  const maxPages = options.maxPages ?? 10;
+  let page = 1;
+  while (page <= maxPages) {
+    let response: OmieContasCorrentesResponse;
+    try {
+      response = await omieCall<OmieContasCorrentesResponse>(
+        companyDB,
+        "geral/contacorrente/",
+        {
+          call: "ListarContasCorrentes",
+          param: [{ pagina: page, registros_por_pagina: 200, apenas_importado_api: "N" }],
+        },
+        { cacheTtlMs: 5 * 60_000, forceRefresh: options.forceRefresh },
+      );
+    } catch (error) {
+      if (isOmieEmptyListError(error)) break;
+      throw error;
+    }
+    const rows = response.ListarContasCorrentes || response.conta_corrente_cadastro || [];
+    all.push(...rows);
+    if (page >= (response.total_de_paginas || 1)) break;
+    page++;
+  }
+  return all.filter((account) => String(account.inativo || "N").toUpperCase() !== "S");
+}
