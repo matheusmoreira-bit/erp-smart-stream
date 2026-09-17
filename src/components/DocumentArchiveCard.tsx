@@ -157,7 +157,9 @@ export function DocumentArchiveCard() {
     }
   }, []);
 
-  useEffect(() => { if (companyDb) void loadStats(companyDb); }, [companyDb, loadStats]);
+  useEffect(() => {
+    if (companyDb) { setTargetDb(companyDb); void loadStats(companyDb); }
+  }, [companyDb, loadStats]);
 
   const callFn = useCallback(async (fn: string, payload: Record<string, unknown>) => {
     const res = await sapFunctionFetch(fn, {
@@ -386,6 +388,28 @@ export function DocumentArchiveCard() {
               {attachments.pending} pendentes{attachments.error ? `, ${attachments.error} com erro` : ""}.
             </p>
 
+            <div className="rounded-md border">
+              <table className="w-full text-sm">
+                <caption className="sr-only">Cadastros guardados no backup</caption>
+                <thead className="bg-muted/50 text-muted-foreground">
+                  <tr>
+                    <th scope="col" className="px-3 py-2 text-left font-medium">Cadastro</th>
+                    <th scope="col" className="px-3 py-2 text-right font-medium">Copiados</th>
+                    <th scope="col" className="px-3 py-2 text-left font-medium">Última cópia</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {masterStats.map((m) => (
+                    <tr key={m.entity} className="border-t">
+                      <td className="px-3 py-2">{MASTER_LABELS[m.entity]}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{m.count.toLocaleString("pt-BR")}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{fmtDate(m.last_sync)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
             {progress && (
               <div className="space-y-1">
                 <Progress value={busy ? undefined : 0} aria-label="Progresso da cópia" />
@@ -394,12 +418,13 @@ export function DocumentArchiveCard() {
             )}
 
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => void runPull(false)} disabled={busy !== null}>
+              <Button onClick={() => void runPull(true)} disabled={busy !== null}>
                 {busy === "pull" && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-                Copiar agora
+                Copiar novidades dos documentos
               </Button>
-              <Button variant="outline" onClick={() => void runPull(true)} disabled={busy !== null}>
-                Copiar só as novidades
+              <Button variant="outline" onClick={() => void runMasterPull()} disabled={busy !== null}>
+                {busy === "master" && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+                Copiar cadastros
               </Button>
               <Button variant="outline" onClick={() => void runAttachments()} disabled={busy !== null}>
                 {busy === "attachments" && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
@@ -415,6 +440,24 @@ export function DocumentArchiveCard() {
                 Recria no ERP os documentos guardados, na ordem correta. Simule primeiro para ver o
                 que falta de cadastro no destino.
               </p>
+              <div className="space-y-1">
+                <Label htmlFor="arquivo-destino">Base de destino</Label>
+                <Select value={targetDb || companyDb} onValueChange={(v) => { setTargetDb(v); setConfirmText(""); }}>
+                  <SelectTrigger id="arquivo-destino" className="sm:w-96">
+                    <SelectValue placeholder="Selecione a base de destino" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sapCompanies.map((c) => (
+                      <SelectItem key={c.company_db} value={c.company_db}>
+                        {c.display_name} · {c.company_db}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Pode ser a base nova: os cadastros vão primeiro e depois os documentos.
+                </p>
+              </div>
               <div className="flex flex-wrap items-end gap-2">
                 <Button variant="outline" onClick={() => void runRestore(true)} disabled={busy !== null}>
                   {busy === "dry" && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
@@ -422,7 +465,7 @@ export function DocumentArchiveCard() {
                 </Button>
                 <div className="space-y-1">
                   <Label htmlFor="arquivo-confirmacao" className="text-xs">
-                    Digite {companyDb} para liberar
+                    Digite {targetDb || companyDb} para liberar
                   </Label>
                   <Input
                     id="arquivo-confirmacao"
@@ -433,12 +476,20 @@ export function DocumentArchiveCard() {
                   />
                 </div>
                 <Button
+                  variant="outline"
+                  onClick={() => void runRestore(false, true)}
+                  disabled={busy !== null || confirmText !== (targetDb || companyDb)}
+                >
+                  {busy === "restoreMaster" && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+                  Devolver só os cadastros
+                </Button>
+                <Button
                   variant="destructive"
                   onClick={() => void runRestore(false)}
-                  disabled={busy !== null || confirmText !== companyDb}
+                  disabled={busy !== null || confirmText !== (targetDb || companyDb)}
                 >
                   {busy === "restore" && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-                  Devolver ao ERP
+                  Devolver cadastros e documentos
                 </Button>
               </div>
 
