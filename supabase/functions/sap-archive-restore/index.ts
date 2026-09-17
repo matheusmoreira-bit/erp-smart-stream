@@ -134,6 +134,94 @@ Deno.serve(async (req) => {
       return ok;
     }
 
+    // ---- Cadastros ---------------------------------------------------------
+    if (includeMaster) {
+      for (const ms of masterSpecs) {
+        if (Date.now() - started > TIME_BUDGET_MS) { allDone = false; break; }
+
+        const { data: alreadyRows } = await sb
+          .from("sap_archive_master_restore_map")
+          .select("code")
+          .eq("source_company_db", companyDb)
+          .eq("target_company_db", targetDb)
+          .eq("entity_type", ms.key)
+          .eq("status", "restored");
+        const doneCodes = new Set((alreadyRows || []).map((r: any) => String(r.code)));
+
+        const { data: rows } = await sb
+          .from("sap_archive_master_data")
+          .select("code, name, payload")
+          .eq("company_db", companyDb)
+          .eq("entity_type", ms.key)
+          .order("code", { ascending: true })
+          .limit(masterLimit + doneCodes.size);
+
+        const pending = ((rows || []) as any[])
+          .filter((r) => !doneCodes.has(String(r.code)))
+          .slice(0, masterLimit);
+
+        let created = 0;
+        let existing = 0;
+
+        for (const row of pending) {
+          if (Date.now() - started > TIME_BUDGET_MS) { allDone = false; break; }
+          const code = String(row.code);
+
+          // Já existe na base destino? Então só registra e segue.
+          let exists = false;
+          try {
+            await sapGet(session, `${ms.endpoint}${masterKeyRef(ms, code)}?$select=${ms.keyField}`);
+            exists = true;
+          } catch { exists = false; }
+
+          if (exists) {
+            existing++;
+            if (!dryRun) {
+              await sb.from("sap_archive_master_restore_map").upsert({
+                source_company_db: companyDb, target_company_db: targetDb,
+                entity_type: ms.key, code, status: "restored", error_message: null,
+                restored_at: new Date().toISOString(),
+              }, { onConflict: "source_company_db,target_company_db,entity_type,code" });
+            }
+            continue;
+          }
+
+          if (dryRun || ms.readOnly) continue;
+
+          try {
+            await sapPost(session, ms.endpoint, sanitizeMasterForRestore(row.payload, ms.stripOnRestore));
+            created++; masterRestored++;
+            await sb.from("sap_archive_master_restore_map").upsert({
+              source_company_db: companyDb, target_company_db: targetDb,
+              entity_type: ms.key, code, status: "restored", error_message: null,
+              restored_at: new Date().toISOString(),
+            }, { onConflict: "source_company_db,target_company_db,entity_type,code" });
+          } catch (e) {
+            const msg = (e as Error).message;
+            errors.push(`${ms.key}/${code}: ${msg}`);
+            await sb.from("sap_archive_master_restore_map").upsert({
+              source_company_db: companyDb, target_company_db: targetDb,
+              entity_type: ms.key, code, status: "error", error_message: msg.slice(0, 500),
+            }, { onConflict: "source_company_db,target_company_db,entity_type,code" });
+          }
+        }
+
+        const { count: total } = await sb
+          .from("sap_archive_master_data")
+          .select("id", { count: "exact", head: true })
+          .eq("company_db", companyDb)
+          .eq("entity_type", ms.key);
+
+        const remaining = (total || 0) - doneCodes.size - created - existing;
+        if (remaining > 0 && !dryRun) allDone = false;
+        perEntity.push({
+          entity: ms.key, label: ms.label, total: total || 0,
+          created, existing, remaining: Math.max(remaining, 0),
+        });
+      }
+    }
+
+
     for (const spec of specs) {
       if (Date.now() - started > TIME_BUDGET_MS) { allDone = false; break; }
 
