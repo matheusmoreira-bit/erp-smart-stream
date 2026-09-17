@@ -2501,6 +2501,17 @@ export default function PagCorp() {
         </div>
       )}
 
+      <PagCorpOmieIntegrateDialog
+        open={omieDialog.open}
+        onOpenChange={(open) => {
+          if (!open) setOmieDialog({ open: false, transactions: [] });
+        }}
+        companyDb={session?.companyDB || ""}
+        transactions={omieDialog.transactions}
+        submitting={omieSubmitting}
+        onConfirm={handleConfirmOmieAp}
+      />
+
       <PagCorpIntegrateDialog
         open={integrateDialog.open}
         onClose={() => {
