@@ -44,6 +44,7 @@ import { CcProjectAlertDialog, type CcProjectAlertInfo } from "@/components/CcPr
 import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { useSap } from "@/contexts/SapContext";
 import { erpSupportsJournalEntry } from "@/lib/erp-module-availability";
+import { omieListarContasCorrentes } from "@/lib/omie-client";
 import {
   Dialog,
   DialogContent,
@@ -243,6 +244,16 @@ export function CreateExpenseModal({
   const [overdueBlockDays, setOverdueBlockDays] = useState(0);
   const [paymentTerms, setPaymentTerms] = useState<SapSearchOption | null>(null);
   const [remarks, setRemarks] = useState("");
+  // Omie — campos da Conta a Pagar (compras no Omie não geram Pedido de Compra).
+  const [omieAccounts, setOmieAccounts] = useState<SapSearchOption[]>([]);
+  const [omieAccountsLoading, setOmieAccountsLoading] = useState(false);
+  const [omieCurrentAccount, setOmieCurrentAccount] = useState<SapSearchOption | null>(null);
+  const [omieInvoiceNumber, setOmieInvoiceNumber] = useState("");
+  const [omieNfeKey, setOmieNfeKey] = useState("");
+  const [omieDocumentType, setOmieDocumentType] = useState("");
+  const [omieTaxes, setOmieTaxes] = useState<Record<"pis" | "cofins" | "csll" | "ir" | "iss" | "inss", string>>({
+    pis: "", cofins: "", csll: "", ir: "", iss: "", inss: "",
+  });
   const [items, setItems] = useState<(Omit<ExpenseItem, "id"> & { sapItem?: SapSearchOption | null; sapCostCenter?: SapSearchOption | null; sapProject?: SapSearchOption | null; searchHint?: string; projectSplit?: ProjectSplit | null })[]>([
     { description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" },
   ]);
