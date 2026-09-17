@@ -38,7 +38,19 @@ export interface CashflowRow {
   doc_ref: string | null;
 }
 
-type Grouping = "month" | "week" | "cost_center" | "project";
+type Grouping = "none" | "month" | "week" | "cost_center" | "project";
+type StatusFilter = "all" | "paid" | "partial" | "open";
+
+/** Status de baixa do lançamento (pago/recebido, parcial ou em aberto). */
+function statusOf(row: CashflowRow): { key: Exclude<StatusFilter, "all">; label: string } {
+  const total = Math.max(0, Number(row.amount) || 0);
+  const paid = Math.max(0, Number(row.paid_amount) || 0);
+  if (total > 0 && paid >= total - 0.01) {
+    return { key: "paid", label: row.kind === "ap" ? "Pago" : "Recebido" };
+  }
+  if (paid > 0.01) return { key: "partial", label: "Parcial" };
+  return { key: "open", label: "Em aberto" };
+}
 
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 });
