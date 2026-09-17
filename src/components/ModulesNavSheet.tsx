@@ -11,11 +11,13 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { useModuleAccess } from "@/hooks/usePermissions";
+import { useSap } from "@/contexts/SapContext";
 import {
   modules,
   moduleGroups,
   moduleHasAccess,
   firstAccessiblePath,
+  moduleAvailableForErp,
   type ModuleCard,
 } from "@/lib/modules-catalog";
 
@@ -28,10 +30,11 @@ export function ModulesNavSheet() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { userModules, loading: permLoading } = useModuleAccess();
+  const { session } = useSap();
 
   const go = (mod: ModuleCard) => {
     setOpen(false);
-    navigate(firstAccessiblePath(mod, userModules, permLoading));
+    navigate(firstAccessiblePath(mod, userModules, permLoading, session?.erpType));
   };
 
   const isActive = (mod: ModuleCard) => {
@@ -79,9 +82,9 @@ export function ModulesNavSheet() {
             const groupModules = group.keys
               .map((k) => modules[k])
               .filter((m): m is ModuleCard => Boolean(m));
-            const visible = groupModules.filter(
-              (m) => permLoading || moduleHasAccess(m, userModules),
-            );
+            const visible = groupModules
+              .filter((m) => moduleAvailableForErp(m, session?.erpType))
+              .filter((m) => permLoading || moduleHasAccess(m, userModules));
             if (visible.length === 0) return null;
             return (
               <div key={group.title} className="mb-3">

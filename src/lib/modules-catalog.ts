@@ -22,6 +22,7 @@ import {
   Landmark,
   LayoutGrid,
 } from "lucide-react";
+import { isPathDeniedForErp } from "@/lib/erp-module-availability";
 
 export interface ModuleCard {
   title: string;
@@ -344,13 +345,26 @@ export function firstAccessiblePath(
   mod: ModuleCard,
   userModules: string[],
   permLoading: boolean,
+  erpType?: string | null,
 ): string {
-  const items = (mod.subItems ?? []).filter(
-    (s) =>
-      permLoading ||
-      !s.moduleKey ||
-      userModules.length === 0 ||
-      userModules.includes(s.moduleKey),
-  );
+  const items = (mod.subItems ?? [])
+    .filter((s) => !isPathDeniedForErp(s.path, erpType))
+    .filter(
+      (s) =>
+        permLoading ||
+        !s.moduleKey ||
+        userModules.length === 0 ||
+        userModules.includes(s.moduleKey),
+    );
   return items[0]?.path ?? mod.path;
+}
+
+/**
+ * O módulo existe no ERP da empresa atual? Telas sem equivalente no ERP
+ * (ex.: contabilidade e NF de Entrada no Omie) somem do painel e do menu.
+ */
+export function moduleAvailableForErp(mod: ModuleCard, erpType?: string | null): boolean {
+  const subs = mod.subItems ?? [];
+  if (subs.length > 0 && subs.some((s) => !isPathDeniedForErp(s.path, erpType))) return true;
+  return !isPathDeniedForErp(mod.path, erpType);
 }

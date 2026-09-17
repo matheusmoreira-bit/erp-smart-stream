@@ -42,6 +42,8 @@ import {
 import { CcProjectAlertDialog, type CcProjectAlertInfo } from "@/components/CcProjectAlertDialog";
 
 import { useSapCachedList } from "@/hooks/useSapCachedList";
+import { useSap } from "@/contexts/SapContext";
+import { erpSupportsJournalEntry } from "@/lib/erp-module-availability";
 import {
   Dialog,
   DialogContent,
@@ -288,6 +290,7 @@ export function CreateExpenseModal({
     : "";
 
   const itemMapRow = useCallback((row: any) => ({ code: row.ItemCode, name: row.ItemName }), []);
+  const { session } = useSap();
   const { options: itemOptions, isLoading: itemsLoading } = useSapCachedList({
     cacheKey: isOmie
       ? (isSales ? "omie_sales_products_v1" : "omie_purchase_products_v1")
@@ -2774,7 +2777,7 @@ export function CreateExpenseModal({
           <DialogTitle className="text-base sm:text-lg">{title || (isSales ? "Novo Pedido de Venda" : "Nova Despesa")}</DialogTitle>
         </DialogHeader>
 
-        {origin === "pagcorp" && onPagcorpPostingTypeChange && (
+        {origin === "pagcorp" && onPagcorpPostingTypeChange && erpSupportsJournalEntry(session?.erpType) && (
           <div className="mt-3 space-y-2">
             <label className="text-xs font-medium text-muted-foreground">Tipo de lançamento</label>
             <ToggleGroup
