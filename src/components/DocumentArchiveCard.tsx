@@ -98,6 +98,33 @@ export function DocumentArchiveCard() {
   const [confirmText, setConfirmText] = useState("");
   const [dryResult, setDryResult] = useState<any>(null);
 
+  type PlanStep = { kind: "master" | "doc"; key: string; enabled: boolean };
+  const [plan, setPlan] = useState<PlanStep[]>(() => [
+    ...Object.keys(MASTER_LABELS).map((key) => ({ kind: "master" as const, key, enabled: true })),
+    ...Object.keys(DOC_LABELS).map((key) => ({ kind: "doc" as const, key, enabled: true })),
+  ]);
+
+  const stepLabel = (s: PlanStep) =>
+    s.kind === "master" ? MASTER_LABELS[s.key] : DOC_LABELS[s.key];
+
+  const movePlan = useCallback((index: number, dir: -1 | 1) => {
+    setPlan((prev) => {
+      const target = index + dir;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = prev.slice();
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }, []);
+
+  const togglePlan = useCallback((index: number) => {
+    setPlan((prev) => prev.map((s, i) => (i === index ? { ...s, enabled: !s.enabled } : s)));
+  }, []);
+
+  const setAllPlan = useCallback((enabled: boolean) => {
+    setPlan((prev) => prev.map((s) => ({ ...s, enabled })));
+  }, []);
+
   const loadStats = useCallback(async (db: string) => {
     if (!db) return;
     setLoading(true);
