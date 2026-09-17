@@ -163,12 +163,28 @@ export default function CashflowForecast() {
 
   const filtered = useMemo(
     () =>
-      rows.filter(
-        (r) =>
-          (ccFilter === "all" || (r.cost_center?.trim() || "") === ccFilter) &&
-          (projectFilter === "all" || (r.project?.trim() || "") === projectFilter),
-      ),
-    [rows, ccFilter, projectFilter],
+      rows.filter((r) => {
+        const due = (r.due_date || "").slice(0, 10);
+        if (from && (!due || due < from)) return false;
+        if (to && (!due || due > to)) return false;
+        if (ccFilter !== "all" && (r.cost_center?.trim() || "") !== ccFilter) return false;
+        if (projectFilter !== "all" && (r.project?.trim() || "") !== projectFilter) return false;
+        if (statusFilter !== "all" && statusOf(r).key !== statusFilter) return false;
+        return true;
+      }),
+    [rows, ccFilter, projectFilter, statusFilter, from, to],
+  );
+
+  /** Lançamentos detalhados: pagamentos negativos, recebimentos positivos. */
+  const details = useMemo(
+    () =>
+      [...filtered].sort((a, b) => (a.due_date || "").localeCompare(b.due_date || "")).map((r) => {
+        const sign = r.kind === "ap" ? -1 : 1;
+        const total = Number(r.amount) || 0;
+        const balance = Math.max(0, total - (Number(r.paid_amount) || 0));
+        return { row: r, total: sign * total, balance: sign * balance, status: statusOf(r) };
+      }),
+    [filtered],
   );
 
   const buckets = useMemo<Bucket[]>(() => {
