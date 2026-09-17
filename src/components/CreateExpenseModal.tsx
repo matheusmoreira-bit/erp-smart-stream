@@ -2376,6 +2376,10 @@ export function CreateExpenseModal({
       toast.error("Informe a forma de pagamento");
       return;
     }
+    if (omieApEnabled && !omieCurrentAccount) {
+      toast.error("Informe a conta corrente da Conta a Pagar");
+      return;
+    }
     if (isSales && filteredUsageOptions.length > 0 && !salesUsage) {
       toast.error("Informe a Utilização (obrigatória no SAP para pedidos de venda)");
       return;
@@ -3561,6 +3565,81 @@ export function CreateExpenseModal({
                 portalContainer={dialogContainer}
                 required={paymentTermsOptions.length > 0 && !paymentTerms}
               />
+            </div>
+          )}
+
+          {/* Omie — Conta a Pagar: campos da tela "Nova Conta a Pagar" */}
+          {omieApEnabled && (
+            <div className="space-y-3 rounded-md border border-dashed border-border bg-muted/20 p-3">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Conta a pagar (Omie)
+              </p>
+              <CachedSearchCombobox
+                label="Conta corrente *"
+                options={omieAccounts}
+                isLoading={omieAccountsLoading}
+                value={omieCurrentAccount}
+                onChange={setOmieCurrentAccount}
+                placeholder="Selecione a conta corrente…"
+                portalContainer={dialogContainer}
+                required={!omieCurrentAccount}
+              />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Nota fiscal</label>
+                  <Input
+                    value={omieInvoiceNumber}
+                    onChange={(e) => setOmieInvoiceNumber(e.target.value.slice(0, 20))}
+                    placeholder="Número da NF"
+                    className="h-9 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Tipo de documento</label>
+                  <Input
+                    value={omieDocumentType}
+                    onChange={(e) => setOmieDocumentType(e.target.value.toUpperCase().slice(0, 10))}
+                    placeholder="NF, BOL, OUT…"
+                    className="h-9 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Chave da NF-e</label>
+                  <Input
+                    value={omieNfeKey}
+                    onChange={(e) => setOmieNfeKey(e.target.value.replace(/\D/g, "").slice(0, 44))}
+                    placeholder="44 dígitos"
+                    className="h-9 text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
+                  Impostos retidos (opcional)
+                </p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
+                  {([
+                    ["pis", "PIS"],
+                    ["cofins", "COFINS"],
+                    ["csll", "CSLL"],
+                    ["ir", "IR"],
+                    ["iss", "ISS"],
+                    ["inss", "INSS"],
+                  ] as const).map(([key, label]) => (
+                    <div key={key}>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">{label}</label>
+                      <DecimalInput
+                        value={Number(omieTaxes[key]) || 0}
+                        onChange={(v) => setOmieTaxes((prev) => ({ ...prev, [key]: v ? String(v) : "" }))}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Informe apenas valores efetivamente retidos na nota — eles seguem marcados como retidos no Omie.
+                </p>
+              </div>
             </div>
           )}
 
