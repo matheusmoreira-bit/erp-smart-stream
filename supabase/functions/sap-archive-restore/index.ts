@@ -81,16 +81,18 @@ Deno.serve(async (req) => {
     // Por padrão os cadastros vão antes dos documentos (o documento depende deles).
     const masterOnly = body?.master_only === true;
     const includeMaster = masterOnly || body?.include_master !== false;
-    const masterSpecs = (Array.isArray(body?.entities) && body.entities.length
+    // Quando a lista vem do painel, a ORDEM ESCOLHIDA pelo usuário é respeitada.
+    const masterSpecs = Array.isArray(body?.entities) && body.entities.length
       ? (body.entities.map(String).map(masterSpecByKey).filter(Boolean) as typeof ARCHIVE_MASTER_SPECS)
-      : ARCHIVE_MASTER_SPECS
-    ).slice().sort((a, b) => a.restoreOrder - b.restoreOrder);
+      : ARCHIVE_MASTER_SPECS.slice().sort((a, b) => a.restoreOrder - b.restoreOrder);
     const masterLimit = Math.min(Math.max(Number(body?.master_limit) || 200, 1), 500);
 
-    const specs = masterOnly ? [] : (Array.isArray(body?.doc_types) && body.doc_types.length
-      ? (body.doc_types.map(String).map(specByKey).filter(Boolean) as typeof ARCHIVE_DOC_SPECS)
-      : ARCHIVE_DOC_SPECS
-    ).slice().sort((a, b) => a.restoreOrder - b.restoreOrder);
+    const specs = masterOnly
+      ? []
+      : Array.isArray(body?.doc_types) && body.doc_types.length
+        ? (body.doc_types.map(String).map(specByKey).filter(Boolean) as typeof ARCHIVE_DOC_SPECS)
+        : ARCHIVE_DOC_SPECS.slice().sort((a, b) => a.restoreOrder - b.restoreOrder);
+
 
     const { data: runRow } = await sb.from("sap_archive_runs").insert({
       company_db: companyDb,
@@ -340,4 +342,4 @@ Deno.serve(async (req) => {
   }
 });
 
-// build: 1789670762
+// build: 1789673539

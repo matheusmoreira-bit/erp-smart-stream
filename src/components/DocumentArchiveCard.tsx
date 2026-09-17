@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Archive, Loader2, RefreshCw, ShieldAlert, Undo2 } from "lucide-react";
+import { Archive, ArrowDown, ArrowUp, Loader2, RefreshCw, ShieldAlert, Undo2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -97,6 +99,33 @@ export function DocumentArchiveCard() {
   const [progress, setProgress] = useState<string | null>(null);
   const [confirmText, setConfirmText] = useState("");
   const [dryResult, setDryResult] = useState<any>(null);
+
+  type PlanStep = { kind: "master" | "doc"; key: string; enabled: boolean };
+  const [plan, setPlan] = useState<PlanStep[]>(() => [
+    ...Object.keys(MASTER_LABELS).map((key) => ({ kind: "master" as const, key, enabled: true })),
+    ...Object.keys(DOC_LABELS).map((key) => ({ kind: "doc" as const, key, enabled: true })),
+  ]);
+
+  const stepLabel = (s: PlanStep) =>
+    s.kind === "master" ? MASTER_LABELS[s.key] : DOC_LABELS[s.key];
+
+  const movePlan = useCallback((index: number, dir: -1 | 1) => {
+    setPlan((prev) => {
+      const target = index + dir;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = prev.slice();
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }, []);
+
+  const togglePlan = useCallback((index: number) => {
+    setPlan((prev) => prev.map((s, i) => (i === index ? { ...s, enabled: !s.enabled } : s)));
+  }, []);
+
+  const setAllPlan = useCallback((enabled: boolean) => {
+    setPlan((prev) => prev.map((s) => ({ ...s, enabled })));
+  }, []);
 
   const loadStats = useCallback(async (db: string) => {
     if (!db) return;
@@ -249,6 +278,11 @@ export function DocumentArchiveCard() {
   const runRestore = useCallback(async (dryRun: boolean, masterOnly = false) => {
     if (!companyDb) return;
     const destination = targetDb || companyDb;
+    const steps = plan.filter((s) => s.enabled && (!masterOnly || s.kind === "master"));
+    if (steps.length === 0) {
+      toast.error("Marque ao menos um item na lista de replicação.");
+      return;
+    }
     if (!dryRun && confirmText !== destination) {
       toast.error(`Digite ${destination} para confirmar a devolução dos dados ao ERP.`);
       return;
@@ -257,41 +291,40 @@ export function DocumentArchiveCard() {
     try {
       if (dryRun) {
         const data = await callFn("sap-archive-restore", {
-          company_db: companyDb, target_company_db: destination, dry_run: true,
+          company_db: companyDb,
+          target_company_db: destination,
+          dry_run: true,
+          include_master: steps.some((s) => s.kind === "master"),
+          entities: steps.filter((s) => s.kind === "master").map((s) => s.key),
+          doc_types: steps.filter((s) => s.kind === "doc").map((s) => s.key),
         });
         setDryResult(data);
         toast.success("Simulação concluída.");
       } else {
-        let done = false;
         let total = 0;
-        let rounds = 0;
-        while (!done && rounds < 500) {
-          rounds++;
-          const data = await callFn("sap-archive-restore", {
-            company_db: companyDb,
-            target_company_db: destination,
-            dry_run: false,
-            confirm: destination,
-            master_only: masterOnly,
-          });
-          total += Number(data.restored || 0) + Number(data.master_restored || 0);
-          done = Boolean(data.done);
-          setProgress(
-            masterOnly
-              ? `${total} cadastros criados no ERP…`
-              : `${total} registros devolvidos ao ERP…`,
-          );
-          if (
-            Number(data.restored || 0) === 0 &&
-            Number(data.master_restored || 0) === 0 &&
-            (data.errors || []).length > 0
-          ) break;
+        for (const step of steps) {
+          let done = false;
+          let rounds = 0;
+          while (!done && rounds < 200) {
+            rounds++;
+            const scope = step.kind === "master"
+              ? { master_only: true, entities: [step.key] }
+              : { include_master: false, doc_types: [step.key] };
+            const data = await callFn("sap-archive-restore", {
+              company_db: companyDb,
+              target_company_db: destination,
+              dry_run: false,
+              confirm: destination,
+              ...scope,
+            });
+            const n = Number(data.restored || 0) + Number(data.master_restored || 0);
+            total += n;
+            done = Boolean(data.done);
+            setProgress(`${stepLabel(step)}: ${total} registros devolvidos ao ERP…`);
+            if (n === 0 && (data.errors || []).length > 0) break;
+          }
         }
-        toast.success(
-          masterOnly
-            ? `Cadastros devolvidos: ${total}.`
-            : `Devolução concluída: ${total} registros recriados no ERP.`,
-        );
+        toast.success(`Devolução concluída: ${total} registros recriados no ERP.`);
         setConfirmText("");
       }
     } catch (e) {
@@ -301,7 +334,8 @@ export function DocumentArchiveCard() {
       setProgress(null);
       void loadStats(companyDb);
     }
-  }, [companyDb, targetDb, confirmText, callFn, loadStats]);
+  }, [companyDb, targetDb, confirmText, callFn, loadStats, plan]);
+
 
   if (!isAdmin) {
     return (
@@ -455,9 +489,68 @@ export function DocumentArchiveCard() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Pode ser a base nova: os cadastros vão primeiro e depois os documentos.
+                  Pode ser a base nova. A replicação segue exatamente a ordem da lista abaixo.
                 </p>
               </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>O que replicar e em que ordem</Label>
+                  <div className="flex gap-1">
+                    <Button type="button" variant="ghost" size="sm" className="h-7 text-xs"
+                      onClick={() => setAllPlan(true)}>Marcar tudo</Button>
+                    <Button type="button" variant="ghost" size="sm" className="h-7 text-xs"
+                      onClick={() => setAllPlan(false)}>Desmarcar tudo</Button>
+                  </div>
+                </div>
+                <ul className="divide-y rounded-md border">
+                  {plan.map((step, index) => {
+                    const count = step.kind === "master"
+                      ? masterStats.find((m) => m.entity === step.key)?.count ?? 0
+                      : stats.find((s) => s.doc_type === step.key)?.count ?? 0;
+                    const position = plan.slice(0, index + 1).filter((s) => s.enabled).length;
+                    return (
+                      <li key={`${step.kind}-${step.key}`} className="flex items-center gap-2 px-2 py-1.5">
+                        <span className="w-6 text-right text-xs tabular-nums text-muted-foreground">
+                          {step.enabled ? position : "—"}
+                        </span>
+                        <Checkbox
+                          id={`plan-${step.kind}-${step.key}`}
+                          checked={step.enabled}
+                          onCheckedChange={() => togglePlan(index)}
+                        />
+                        <label
+                          htmlFor={`plan-${step.kind}-${step.key}`}
+                          className={`flex-1 text-sm ${step.enabled ? "" : "text-muted-foreground line-through"}`}
+                        >
+                          {stepLabel(step)}
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {step.kind === "master" ? "cadastro" : "documento"} ·{" "}
+                            {count.toLocaleString("pt-BR")} guardados
+                          </span>
+                        </label>
+                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7"
+                          aria-label={`Subir ${stepLabel(step)}`}
+                          disabled={index === 0 || busy !== null}
+                          onClick={() => movePlan(index, -1)}>
+                          <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7"
+                          aria-label={`Descer ${stepLabel(step)}`}
+                          disabled={index === plan.length - 1 || busy !== null}
+                          onClick={() => movePlan(index, 1)}>
+                          <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="text-xs text-muted-foreground">
+                  {plan.filter((s) => s.enabled).length} etapa(s) selecionada(s). Cada etapa só começa
+                  quando a anterior termina.
+                </p>
+              </div>
+
               <div className="flex flex-wrap items-end gap-2">
                 <Button variant="outline" onClick={() => void runRestore(true)} disabled={busy !== null}>
                   {busy === "dry" && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
