@@ -154,8 +154,8 @@ Deno.serve(async (req) => {
     if (allowErr) return json({ error: "Falha ao validar acesso à empresa" }, 500);
     if (allowed !== true) return json({ error: "Sem acesso a esta empresa" }, 403);
 
-    const pause = await getIntegrationPause(supabase, companyDb);
-    if (pause?.paused) return pauseResponse(pause, corsHeaders);
+    const pause = await getIntegrationPause("omie");
+    if (pause) return pauseResponse(pause, corsHeaders);
 
     const credentials = await loadOmieCredentials(supabase, companyDb);
 
