@@ -115,6 +115,7 @@ export default function CashflowForecast() {
   const [grouping, setGrouping] = useState<Grouping>("month");
   const [ccFilter, setCcFilter] = useState<string>("all");
   const [projectFilter, setProjectFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   const [rows, setRows] = useState<CashflowRow[]>([]);
   const [arNote, setArNote] = useState<string | null>(null);
