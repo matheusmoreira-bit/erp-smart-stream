@@ -68,6 +68,10 @@ import { useCredentials } from "@/hooks/useCredentials";
 import { toast } from "sonner";
 import { useCompanies } from "@/hooks/useCompanies";
 import { PagCorpIntegrateDialog } from "@/components/PagCorpIntegrateDialog";
+import {
+  PagCorpOmieIntegrateDialog,
+  type OmieApSubmitValues,
+} from "@/components/PagCorpOmieIntegrateDialog";
 import { PagCorpConsolidateDialog } from "@/components/PagCorpConsolidateDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PagCorpPresentationDialog } from "@/components/PagCorpPresentationDialog";
