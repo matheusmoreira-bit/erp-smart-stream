@@ -1,3 +1,4 @@
+// build: 1789678375
 // Edge function: cashflow-forecast
 // Consolida Contas a Pagar (cache VW_FIN_ANALISE_FLUXO) e Contas a Receber
 // (Invoices do SAP Service Layer) por data de vencimento, com quebra por
