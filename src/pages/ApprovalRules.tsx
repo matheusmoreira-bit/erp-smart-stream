@@ -1264,19 +1264,33 @@ function RuleFormModal({
                           <p className="text-xs font-medium text-foreground">Nível {lo}</p>
                           {rows.length > 1 && (
                             <p className="text-[10px] text-muted-foreground">
-                              Aprovação em paralelo — {rows.length} aprovadores. O primeiro que decidir encerra o nível.
+                              {rows.some((r) => r.require_all)
+                                ? `Aprovação em paralelo — ${rows.length} aprovadores. Todos precisam aprovar para seguir.`
+                                : `Aprovação em paralelo — ${rows.length} aprovadores. O primeiro que decidir encerra o nível.`}
                             </p>
                           )}
                         </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => addParallelApprover(lo)}
-                        className="gap-1 text-[11px] h-7"
-                      >
-                        <Plus className="w-3 h-3" /> Aprovador paralelo
-                      </Button>
+                      <div className="flex items-center gap-3">
+                        {rows.length > 1 && (
+                          <label className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer">
+                            <Switch
+                              checked={rows.some((r) => r.require_all)}
+                              onCheckedChange={(v) => setLevelRequireAll(lo, v === true)}
+                              aria-label={`Exigir aprovação de todos no nível ${lo}`}
+                            />
+                            Todos devem aprovar
+                          </label>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => addParallelApprover(lo)}
+                          className="gap-1 text-[11px] h-7"
+                        >
+                          <Plus className="w-3 h-3" /> Aprovador paralelo
+                        </Button>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       {rows.map((row) => (
