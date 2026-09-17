@@ -336,6 +336,7 @@ export default function CashflowForecast() {
                 <Select value={grouping} onValueChange={(v) => setGrouping(v as Grouping)}>
                   <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">Não agrupar</SelectItem>
                     <SelectItem value="month">Mês de vencimento</SelectItem>
                     <SelectItem value="week">Semana de vencimento</SelectItem>
                     <SelectItem value="cost_center">Centro de custo</SelectItem>
