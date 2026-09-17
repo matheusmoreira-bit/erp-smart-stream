@@ -1070,6 +1070,10 @@ export default function PagCorp() {
       toast.info("Selecione ao menos uma transação");
       return;
     }
+    if (isOmie) {
+      setOmieDialog({ open: true, transactions: selected });
+      return;
+    }
     const allPurchaseOrders = selected.every((item) =>
       (item.postingType || (item.hasFiscalDocument ? "purchase_order" : "journal_entry")) === "purchase_order"
     );
