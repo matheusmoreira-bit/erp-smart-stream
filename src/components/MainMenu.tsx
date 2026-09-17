@@ -34,7 +34,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { OfflineQueueIndicator } from "@/components/OfflineQueueIndicator";
 
 
-import { modules, moduleGroups, moduleHasAccess, firstAccessiblePath, type ModuleCard } from "@/lib/modules-catalog";
+import { modules, moduleGroups, moduleHasAccess, moduleAvailableForErp, firstAccessiblePath, type ModuleCard } from "@/lib/modules-catalog";
 
 
 function ModuleCardItem({
@@ -138,9 +138,9 @@ export function MainMenu() {
               const groupModules = group.keys
                 .map((k) => modules[k])
                 .filter((m): m is ModuleCard => Boolean(m));
-              const visible = groupModules.filter(
-                (m) => permLoading || moduleHasAccess(m, userModules),
-              );
+              const visible = groupModules
+                .filter((m) => moduleAvailableForErp(m, session?.erpType))
+                .filter((m) => permLoading || moduleHasAccess(m, userModules));
               if (visible.length === 0) return null;
               return (
                 <section key={group.title}>
@@ -154,7 +154,7 @@ export function MainMenu() {
                         mod={mod}
                         index={i}
                         hasAccess={true}
-                        targetPath={firstAccessiblePath(mod, userModules, permLoading)}
+                        targetPath={firstAccessiblePath(mod, userModules, permLoading, session?.erpType)}
                         color={group.color}
                         bgGlow={group.bgGlow}
 

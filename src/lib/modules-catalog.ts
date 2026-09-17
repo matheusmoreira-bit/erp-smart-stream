@@ -22,6 +22,7 @@ import {
   Landmark,
   LayoutGrid,
 } from "lucide-react";
+import { isPathDeniedForErp } from "@/lib/erp-module-availability";
 
 export interface ModuleCard {
   title: string;
