@@ -627,11 +627,11 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
 
 
   const currentLevel = Number((exp as any).current_level_order || 1);
-  let levels: Array<{ level_order: number; approver_name: string; approver_email: string | null }> = [];
+  let levels: Array<{ level_order: number; approver_name: string; approver_email: string | null; require_all?: boolean | null }> = [];
   if ((exp as any).approval_rule_id) {
     const { data: lvls, error: lvlErr } = await admin
       .from("approval_rule_levels")
-      .select("level_order, approver_name, approver_email")
+      .select("level_order, approver_name, approver_email, require_all")
       .eq("rule_id", (exp as any).approval_rule_id)
       .order("level_order", { ascending: true });
     if (lvlErr) {
@@ -720,16 +720,22 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     requesterIdName,
     requesterIdEmail,
   );
+  // Nível UNÂNIME (`require_all`): todos os aprovadores do nível precisam
+  // aprovar, em qualquer ordem — por isso TODOS são alvos válidos, mesmo com
+  // um `current_approver` gravado no documento (que aponta para um deles).
+  const unanimousCurrentLevel = !segmentMode && levelRequiresAll(currentLevelRowsNoSelf as any);
   const designatedTargets: Array<{ name: string | null; email: string | null }> = segmentMode
     ? pendingSegments
         .map((s) => ({ name: s.current_approver, email: s.current_approver_email }))
         .filter((t) => !requesterMatchesApprover(requesterIdName, requesterIdEmail, t.name, t.email))
-    : (overrideApprover
-      ? [{
-          name: overrideIsEmail ? null : overrideApprover,
-          email: overrideIsEmail ? overrideApprover : null,
-        }].filter((t) => !requesterMatchesApprover(requesterIdName, requesterIdEmail, t.name, t.email))
-      : currentLevelRowsNoSelf.map((row) => ({ name: row.approver_name, email: row.approver_email })));
+    : (unanimousCurrentLevel
+      ? currentLevelRowsNoSelf.map((row) => ({ name: row.approver_name, email: row.approver_email }))
+      : (overrideApprover
+        ? [{
+            name: overrideIsEmail ? null : overrideApprover,
+            email: overrideIsEmail ? overrideApprover : null,
+          }].filter((t) => !requesterMatchesApprover(requesterIdName, requesterIdEmail, t.name, t.email))
+        : currentLevelRowsNoSelf.map((row) => ({ name: row.approver_name, email: row.approver_email }))));
 
   // Override/segmento salvo apenas por NOME CURTO (ex.: "Erika Caroline",
   // enquanto a pessoa é "Erika Caroline de Araujo" / erika.araujo@) impedia o
