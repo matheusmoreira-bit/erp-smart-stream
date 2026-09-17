@@ -38,6 +38,8 @@ import {
 import {
   approvalsSatisfyLevel,
   activeRevisionApprovalsFromLogs,
+  levelRequiresAll,
+  pendingLevelApprovers,
   resolveReprocessedApprovalState,
   type ApprovalLogRow,
   type PriorApproval,
