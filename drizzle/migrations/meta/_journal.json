@@ -169,6 +169,13 @@
       "when": 1789576714752,
       "tag": "0023_pagcorp_balance_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789656220730,
+      "tag": "0024_expenses_omie_ap_data",
+      "breakpoints": true
     }
   ]
 }

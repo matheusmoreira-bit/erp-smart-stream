@@ -4073,6 +4073,7 @@ export type Database = {
           due_date: string | null
           id: string
           nfse_split_mode: string
+          omie_ap_data: Json | null
           origin: string
           original_approver: string | null
           payment_boleto_barcode: string | null
@@ -4123,6 +4124,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           nfse_split_mode?: string
+          omie_ap_data?: Json | null
           origin?: string
           original_approver?: string | null
           payment_boleto_barcode?: string | null
@@ -4173,6 +4175,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           nfse_split_mode?: string
+          omie_ap_data?: Json | null
           origin?: string
           original_approver?: string | null
           payment_boleto_barcode?: string | null
