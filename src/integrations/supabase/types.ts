@@ -7794,6 +7794,249 @@ export type Database = {
           },
         ]
       }
+      sap_archive_attachments: {
+        Row: {
+          attachment_entry: number
+          byte_size: number | null
+          company_db: string
+          created_at: string
+          doc_entry: number
+          doc_type: string
+          downloaded_at: string | null
+          file_extension: string | null
+          file_name: string
+          id: string
+          last_error: string | null
+          line_num: number
+          sha256: string | null
+          source_path: string | null
+          status: string
+          storage_path: string | null
+        }
+        Insert: {
+          attachment_entry: number
+          byte_size?: number | null
+          company_db: string
+          created_at?: string
+          doc_entry: number
+          doc_type: string
+          downloaded_at?: string | null
+          file_extension?: string | null
+          file_name: string
+          id?: string
+          last_error?: string | null
+          line_num?: number
+          sha256?: string | null
+          source_path?: string | null
+          status?: string
+          storage_path?: string | null
+        }
+        Update: {
+          attachment_entry?: number
+          byte_size?: number | null
+          company_db?: string
+          created_at?: string
+          doc_entry?: number
+          doc_type?: string
+          downloaded_at?: string | null
+          file_extension?: string | null
+          file_name?: string
+          id?: string
+          last_error?: string | null
+          line_num?: number
+          sha256?: string | null
+          source_path?: string | null
+          status?: string
+          storage_path?: string | null
+        }
+        Relationships: []
+      }
+      sap_archive_cursors: {
+        Row: {
+          company_db: string
+          completed: boolean
+          doc_type: string
+          last_doc_entry: number
+          last_full_sync_at: string | null
+          last_incremental_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_db: string
+          completed?: boolean
+          doc_type: string
+          last_doc_entry?: number
+          last_full_sync_at?: string | null
+          last_incremental_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string
+          completed?: boolean
+          doc_type?: string
+          last_doc_entry?: number
+          last_full_sync_at?: string | null
+          last_incremental_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sap_archive_documents: {
+        Row: {
+          attachment_entry: number | null
+          attachments_copied: number
+          attachments_total: number
+          card_code: string | null
+          card_name: string | null
+          company_db: string
+          created_at: string
+          doc_currency: string | null
+          doc_date: string | null
+          doc_entry: number
+          doc_num: number | null
+          doc_status: string | null
+          doc_total: number | null
+          doc_type: string
+          fetched_at: string
+          id: string
+          last_error: string | null
+          payload: Json
+          update_date: string | null
+        }
+        Insert: {
+          attachment_entry?: number | null
+          attachments_copied?: number
+          attachments_total?: number
+          card_code?: string | null
+          card_name?: string | null
+          company_db: string
+          created_at?: string
+          doc_currency?: string | null
+          doc_date?: string | null
+          doc_entry: number
+          doc_num?: number | null
+          doc_status?: string | null
+          doc_total?: number | null
+          doc_type: string
+          fetched_at?: string
+          id?: string
+          last_error?: string | null
+          payload: Json
+          update_date?: string | null
+        }
+        Update: {
+          attachment_entry?: number | null
+          attachments_copied?: number
+          attachments_total?: number
+          card_code?: string | null
+          card_name?: string | null
+          company_db?: string
+          created_at?: string
+          doc_currency?: string | null
+          doc_date?: string | null
+          doc_entry?: number
+          doc_num?: number | null
+          doc_status?: string | null
+          doc_total?: number | null
+          doc_type?: string
+          fetched_at?: string
+          id?: string
+          last_error?: string | null
+          payload?: Json
+          update_date?: string | null
+        }
+        Relationships: []
+      }
+      sap_archive_restore_map: {
+        Row: {
+          created_at: string
+          doc_type: string
+          error_message: string | null
+          id: string
+          restored_at: string | null
+          source_company_db: string
+          source_doc_entry: number
+          source_doc_num: number | null
+          status: string
+          target_company_db: string
+          target_doc_entry: number | null
+          target_doc_num: number | null
+        }
+        Insert: {
+          created_at?: string
+          doc_type: string
+          error_message?: string | null
+          id?: string
+          restored_at?: string | null
+          source_company_db: string
+          source_doc_entry: number
+          source_doc_num?: number | null
+          status?: string
+          target_company_db: string
+          target_doc_entry?: number | null
+          target_doc_num?: number | null
+        }
+        Update: {
+          created_at?: string
+          doc_type?: string
+          error_message?: string | null
+          id?: string
+          restored_at?: string | null
+          source_company_db?: string
+          source_doc_entry?: number
+          source_doc_num?: number | null
+          status?: string
+          target_company_db?: string
+          target_doc_entry?: number | null
+          target_doc_num?: number | null
+        }
+        Relationships: []
+      }
+      sap_archive_runs: {
+        Row: {
+          attachments_count: number
+          company_db: string
+          doc_type: string | null
+          documents_count: number
+          duration_ms: number | null
+          errors: Json
+          finished_at: string | null
+          id: string
+          kind: string
+          started_at: string
+          status: string
+          triggered_by: string | null
+        }
+        Insert: {
+          attachments_count?: number
+          company_db: string
+          doc_type?: string | null
+          documents_count?: number
+          duration_ms?: number | null
+          errors?: Json
+          finished_at?: string | null
+          id?: string
+          kind: string
+          started_at?: string
+          status?: string
+          triggered_by?: string | null
+        }
+        Update: {
+          attachments_count?: number
+          company_db?: string
+          doc_type?: string | null
+          documents_count?: number
+          duration_ms?: number | null
+          errors?: Json
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          started_at?: string
+          status?: string
+          triggered_by?: string | null
+        }
+        Relationships: []
+      }
       sap_cache: {
         Row: {
           cache_key: string

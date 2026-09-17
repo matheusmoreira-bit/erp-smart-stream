@@ -176,6 +176,20 @@
       "when": 1789656220730,
       "tag": "0024_expenses_omie_ap_data",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1789670325540,
+      "tag": "0025_sap_document_archive",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1789670355976,
+      "tag": "0026_sap_archive_bucket_policies",
+      "breakpoints": true
     }
   ]
 }

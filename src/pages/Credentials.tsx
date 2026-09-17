@@ -29,6 +29,7 @@ import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { PageTitle } from "@/components/PageTitle";
 import { StandaloneModeCard } from "@/components/StandaloneModeCard";
 import { MasterDataReplicationCard } from "@/components/MasterDataReplicationCard";
+import { DocumentArchiveCard } from "@/components/DocumentArchiveCard";
 
 const TEST_ENDPOINTS: Record<string, string> = {
   mastertax: "mastertax-test",
@@ -473,6 +474,7 @@ export default function Credentials() {
         <div className="max-w-4xl mx-auto space-y-6">
           <StandaloneModeCard />
           <MasterDataReplicationCard />
+          <DocumentArchiveCard />
           <div className="glass-card p-4 flex items-start gap-3 border-warning/30">
             <Shield className="w-5 h-5 text-warning mt-0.5" />
             <div>
