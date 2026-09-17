@@ -426,7 +426,8 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
     (companiesData || []).forEach((c: { company_db: string; display_name: string }) => nameMap.set(c.company_db, c.display_name));
 
     // Timeout individual por empresa (ms). Ajustável via secret.
-    const PER_COMPANY_TIMEOUT_MS = Number(Deno.env.get("SAP_CHANGE_PASSWORD_TIMEOUT_MS") || "25000");
+    const PER_COMPANY_TIMEOUT_MS = Number(Deno.env.get("SAP_CHANGE_PASSWORD_TIMEOUT_MS") || "45000");
+    const VERIFY_TIMEOUT_MS = Number(Deno.env.get("SAP_CHANGE_PASSWORD_VERIFY_TIMEOUT_MS") || "20000");
 
     // Login gerenciado: a senha só é gravada no banco DEPOIS que o login com a
     // nova senha foi confirmado no Service Layer daquela empresa, usando
@@ -546,11 +547,50 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
         );
 
         // 3) Verificação: tenta logar como o próprio usuário com a nova senha.
-        // Se o SAP aceitou o PATCH mas não aplicou (ex.: admin sem privilégio
-        // de superuser), o login falha e reportamos como erro real.
+        // Usa um AbortController próprio (o da empresa já pode estar perto do
+        // limite após o PATCH) e tenta duas vezes, porque o Service Layer fica
+        // lento e derrubava a validação de uma senha que já foi aplicada.
         let verifySession: Session | null = null;
+        let verifyRaw = "";
+        let verifyTimedOut = false;
+        for (let attempt = 0; attempt < 2 && !verifySession; attempt++) {
+          const vctrl = new AbortController();
+          const vtimer = setTimeout(() => vctrl.abort(), VERIFY_TIMEOUT_MS);
+          try {
+            verifySession = await sapLogin(baseUrl, creds.sapCompanyDb, userCode, newPassword, vctrl.signal);
+          } catch (e) {
+            verifyRaw = e instanceof Error ? e.message : "Falha ao validar nova senha";
+            verifyTimedOut = vctrl.signal.aborted || /aborted|timeout|network|fetch failed/i.test(verifyRaw);
+            if (!verifyTimedOut) break;
+            if (attempt === 0) await new Promise((r) => setTimeout(r, 1500));
+          } finally {
+            clearTimeout(vtimer);
+          }
+        }
+
         try {
-          verifySession = await sapLogin(baseUrl, creds.sapCompanyDb, userCode, newPassword, ctrl.signal);
+          if (!verifySession) {
+            console.error(`[sap-change-password] verify login failed`, { companyDb, userCode, sapCompanyDb: creds.sapCompanyDb, raw: verifyRaw, verifyTimedOut });
+            if (verifyTimedOut) {
+              // O SAP aceitou a troca; só não conseguimos confirmar por
+              // lentidão/instabilidade. Não é erro de senha.
+              return {
+                companyDB: companyDb,
+                displayName,
+                status: "success",
+                verified: false,
+                managedSaved: false,
+                message: "Senha alterada no SAP, mas não foi possível confirmar o login agora (SAP lento). Tente entrar com a nova senha.",
+              };
+            }
+            return {
+              companyDB: companyDb,
+              displayName,
+              status: "error",
+              message: `A senha foi aceita pelo SAP (PATCH ok), mas o login de validação falhou. ${explainLoginFailure(verifyRaw)}`,
+            };
+          }
+
           const managedSaved = await persistManagedCredential(companyDb);
           if (saveManaged && !managedSaved) {
             return {
@@ -571,15 +611,6 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
             message: saveManaged
               ? (alreadyCurrent ? "Senha já era atual no SAP — senha provisionada" : "Senha provisionada e validada")
               : "Senha redefinida e validada",
-          };
-        } catch (e) {
-          const raw = e instanceof Error ? e.message : "Falha ao validar nova senha";
-          console.error(`[sap-change-password] verify login failed`, { companyDb, userCode, sapCompanyDb: creds.sapCompanyDb, raw });
-          return {
-            companyDB: companyDb,
-            displayName,
-            status: "error",
-            message: `A senha foi aceita pelo SAP (PATCH ok), mas o login de validação falhou. ${explainLoginFailure(raw)}`,
           };
         } finally {
           if (verifySession) sapLogout(verifySession);
