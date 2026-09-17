@@ -276,6 +276,11 @@ export function DocumentArchiveCard() {
   const runRestore = useCallback(async (dryRun: boolean, masterOnly = false) => {
     if (!companyDb) return;
     const destination = targetDb || companyDb;
+    const steps = plan.filter((s) => s.enabled && (!masterOnly || s.kind === "master"));
+    if (steps.length === 0) {
+      toast.error("Marque ao menos um item na lista de replicação.");
+      return;
+    }
     if (!dryRun && confirmText !== destination) {
       toast.error(`Digite ${destination} para confirmar a devolução dos dados ao ERP.`);
       return;
@@ -284,41 +289,40 @@ export function DocumentArchiveCard() {
     try {
       if (dryRun) {
         const data = await callFn("sap-archive-restore", {
-          company_db: companyDb, target_company_db: destination, dry_run: true,
+          company_db: companyDb,
+          target_company_db: destination,
+          dry_run: true,
+          include_master: steps.some((s) => s.kind === "master"),
+          entities: steps.filter((s) => s.kind === "master").map((s) => s.key),
+          doc_types: steps.filter((s) => s.kind === "doc").map((s) => s.key),
         });
         setDryResult(data);
         toast.success("Simulação concluída.");
       } else {
-        let done = false;
         let total = 0;
-        let rounds = 0;
-        while (!done && rounds < 500) {
-          rounds++;
-          const data = await callFn("sap-archive-restore", {
-            company_db: companyDb,
-            target_company_db: destination,
-            dry_run: false,
-            confirm: destination,
-            master_only: masterOnly,
-          });
-          total += Number(data.restored || 0) + Number(data.master_restored || 0);
-          done = Boolean(data.done);
-          setProgress(
-            masterOnly
-              ? `${total} cadastros criados no ERP…`
-              : `${total} registros devolvidos ao ERP…`,
-          );
-          if (
-            Number(data.restored || 0) === 0 &&
-            Number(data.master_restored || 0) === 0 &&
-            (data.errors || []).length > 0
-          ) break;
+        for (const step of steps) {
+          let done = false;
+          let rounds = 0;
+          while (!done && rounds < 200) {
+            rounds++;
+            const scope = step.kind === "master"
+              ? { master_only: true, entities: [step.key] }
+              : { include_master: false, doc_types: [step.key] };
+            const data = await callFn("sap-archive-restore", {
+              company_db: companyDb,
+              target_company_db: destination,
+              dry_run: false,
+              confirm: destination,
+              ...scope,
+            });
+            const n = Number(data.restored || 0) + Number(data.master_restored || 0);
+            total += n;
+            done = Boolean(data.done);
+            setProgress(`${stepLabel(step)}: ${total} registros devolvidos ao ERP…`);
+            if (n === 0 && (data.errors || []).length > 0) break;
+          }
         }
-        toast.success(
-          masterOnly
-            ? `Cadastros devolvidos: ${total}.`
-            : `Devolução concluída: ${total} registros recriados no ERP.`,
-        );
+        toast.success(`Devolução concluída: ${total} registros recriados no ERP.`);
         setConfirmText("");
       }
     } catch (e) {
@@ -328,7 +332,8 @@ export function DocumentArchiveCard() {
       setProgress(null);
       void loadStats(companyDb);
     }
-  }, [companyDb, targetDb, confirmText, callFn, loadStats]);
+  }, [companyDb, targetDb, confirmText, callFn, loadStats, plan]);
+
 
   if (!isAdmin) {
     return (
