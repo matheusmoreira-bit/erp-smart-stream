@@ -77,7 +77,17 @@ Deno.serve(async (req) => {
       return json(400, { error: `Confirmação obrigatória: envie confirm = "${targetDb}".` });
     }
 
-    const specs = (Array.isArray(body?.doc_types) && body.doc_types.length
+    // Fase de cadastros: itens, fornecedores/clientes, grupos, centros de custo…
+    // Por padrão os cadastros vão antes dos documentos (o documento depende deles).
+    const masterOnly = body?.master_only === true;
+    const includeMaster = masterOnly || body?.include_master !== false;
+    const masterSpecs = (Array.isArray(body?.entities) && body.entities.length
+      ? (body.entities.map(String).map(masterSpecByKey).filter(Boolean) as typeof ARCHIVE_MASTER_SPECS)
+      : ARCHIVE_MASTER_SPECS
+    ).slice().sort((a, b) => a.restoreOrder - b.restoreOrder);
+    const masterLimit = Math.min(Math.max(Number(body?.master_limit) || 200, 1), 500);
+
+    const specs = masterOnly ? [] : (Array.isArray(body?.doc_types) && body.doc_types.length
       ? (body.doc_types.map(String).map(specByKey).filter(Boolean) as typeof ARCHIVE_DOC_SPECS)
       : ARCHIVE_DOC_SPECS
     ).slice().sort((a, b) => a.restoreOrder - b.restoreOrder);
@@ -98,7 +108,9 @@ Deno.serve(async (req) => {
     const checkedItems = new Map<string, boolean>();
     const errors: string[] = [];
     const perType: Array<Record<string, unknown>> = [];
+    const perEntity: Array<Record<string, unknown>> = [];
     let restored = 0;
+    let masterRestored = 0;
     let allDone = true;
 
     async function cardExists(code: string): Promise<boolean> {
