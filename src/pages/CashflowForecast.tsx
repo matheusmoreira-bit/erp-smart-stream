@@ -409,18 +409,69 @@ export default function CashflowForecast() {
             <div className="glass-card p-4">
               <div className="flex items-center gap-2 mb-3">
                 <TrendingUp className="w-4 h-4 text-primary" aria-hidden />
-                <h2 className="text-sm font-semibold text-foreground">Previsto × realizado</h2>
+                <h2 className="text-sm font-semibold text-foreground">
+                  {grouping === "none" ? "Lançamentos" : "Previsto × realizado"}
+                </h2>
                 <Badge variant="secondary" className="text-xs ml-auto">{filtered.length} lançamentos</Badge>
               </div>
 
               {loading && rows.length === 0 && (
                 <p className="text-sm text-muted-foreground">Carregando dados financeiros...</p>
               )}
-              {!loading && loaded && buckets.length === 0 && (
+              {!loading && loaded && (grouping === "none" ? details.length === 0 : buckets.length === 0) && (
                 <p className="text-sm text-muted-foreground">
                   Nenhum vencimento no período e filtros selecionados.
                 </p>
               )}
+
+              {grouping === "none" && details.length > 0 && (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Fornecedor / Cliente</TableHead>
+                        <TableHead className="text-right">Valor total</TableHead>
+                        <TableHead className="text-right">Saldo do valor</TableHead>
+                        <TableHead>Centro de custo</TableHead>
+                        <TableHead>Projeto</TableHead>
+                        <TableHead>Vencimento</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {details.map((d) => (
+                        <TableRow key={d.row.key}>
+                          <TableCell className="font-medium max-w-[280px] truncate" title={d.row.party || undefined}>
+                            {d.row.party || "—"}
+                          </TableCell>
+                          <TableCell className={`text-right ${d.total < 0 ? "text-destructive" : "text-emerald-500"}`}>
+                            {brl(d.total)}
+                          </TableCell>
+                          <TableCell className={`text-right ${d.balance < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                            {brl(d.balance)}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">{d.row.cost_center || "—"}</TableCell>
+                          <TableCell className="text-muted-foreground">{d.row.project || "—"}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {d.row.due_date
+                              ? new Date(`${d.row.due_date}T00:00:00Z`).toLocaleDateString("pt-BR", { timeZone: "UTC" })
+                              : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={d.status.key === "paid" ? "secondary" : d.status.key === "partial" ? "outline" : "destructive"}
+                              className="text-[11px]"
+                            >
+                              {d.status.label}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
 
               {buckets.length > 0 && (
                 <div className="overflow-x-auto">
