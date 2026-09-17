@@ -72,10 +72,33 @@ export function approvalMatchesLevel(approval: PriorApproval, level: ApprovalLev
   );
 }
 
+/** O nível exige aprovação de TODOS os aprovadores (unânime)? */
+export function levelRequiresAll(levels: ApprovalLevel[]): boolean {
+  return levels.some((level) => level.require_all === true);
+}
+
+/** Linhas do nível que ainda NÃO têm aprovação registrada. */
+export function pendingLevelApprovers(
+  approvals: PriorApproval[],
+  levels: ApprovalLevel[],
+): ApprovalLevel[] {
+  return levels.filter((level) =>
+    !approvals.some((approval) => approvalMatchesLevel(approval, level))
+  );
+}
+
+/**
+ * Nível satisfeito? Em nível paralelo comum basta UMA decisão. Em nível
+ * unânime (`require_all`) todas as linhas precisam ter aprovado.
+ */
 export function approvalsSatisfyLevel(
   approvals: PriorApproval[],
   levels: ApprovalLevel[],
 ): boolean {
+  if (levels.length === 0) return false;
+  if (levelRequiresAll(levels)) {
+    return pendingLevelApprovers(approvals, levels).length === 0;
+  }
   return approvals.some((approval) =>
     levels.some((level) => approvalMatchesLevel(approval, level))
   );
@@ -117,7 +140,9 @@ export function resolveReprocessedApprovalState(
       continue;
     }
 
-    const next = eligible[0];
+    // Nível unânime: segue com quem ainda não aprovou.
+    const stillPending = pendingLevelApprovers(priorApprovals, eligible);
+    const next = (levelRequiresAll(eligible) ? stillPending[0] : null) || eligible[0];
     return {
       status: "pendente",
       current_level: levelOrder,
