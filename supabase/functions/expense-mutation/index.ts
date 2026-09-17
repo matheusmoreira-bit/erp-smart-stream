@@ -677,6 +677,12 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
       const metadata = (input as { payment_metadata?: unknown }).payment_metadata;
       return metadata && typeof metadata === "object" && !Array.isArray(metadata) ? metadata : {};
     })(),
+    // Campos específicos da Conta a Pagar do Omie (conta corrente, nota
+    // fiscal, chave NF-e, código de barras e impostos retidos).
+    omie_ap_data: (() => {
+      const data = (input as { omie_ap_data?: unknown }).omie_ap_data;
+      return data && typeof data === "object" && !Array.isArray(data) ? data : null;
+    })(),
     rateio_type: input.rateio_type || null,
     nfse_split_mode:
       (input as { nfse_split_mode?: string }).nfse_split_mode === "per_brand" ? "per_brand" : "unified",
