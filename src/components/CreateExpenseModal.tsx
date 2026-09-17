@@ -332,7 +332,7 @@ export function CreateExpenseModal({
   // Omie: contas correntes usadas na Conta a Pagar.
   const omieApEnabled = isOmie && !isSales;
   useEffect(() => {
-    if (!omieApEnabled || !isOpen) return;
+    if (!omieApEnabled || !open) return;
     const companyDB = sapSession?.companyDB || session?.companyDB;
     if (!companyDB) return;
     let cancelled = false;
@@ -351,7 +351,7 @@ export function CreateExpenseModal({
       .finally(() => { if (!cancelled) setOmieAccountsLoading(false); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [omieApEnabled, isOpen, sapSession?.companyDB, session?.companyDB]);
+  }, [omieApEnabled, open, sapSession?.companyDB, session?.companyDB]);
   // CCs LOTUS só aparecem para Contábil e RH/DP/Folha (ou admins).
   const { groups: myGroups, loading: myGroupsLoading } = useMyPermissionGroups();
   const canSeeLotusCcs = useMemo(
