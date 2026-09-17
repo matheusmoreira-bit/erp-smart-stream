@@ -328,6 +328,30 @@ export function CreateExpenseModal({
     params: { $filter: "Active eq 'tYES'", $select: "CenterCode,CenterName" },
     mapRow: costCenterMapRow,
   });
+
+  // Omie: contas correntes usadas na Conta a Pagar.
+  const omieApEnabled = isOmie && !isSales;
+  useEffect(() => {
+    if (!omieApEnabled || !isOpen) return;
+    const companyDB = sapSession?.companyDB || session?.companyDB;
+    if (!companyDB) return;
+    let cancelled = false;
+    setOmieAccountsLoading(true);
+    omieListarContasCorrentes(companyDB)
+      .then((rows) => {
+        if (cancelled) return;
+        setOmieAccounts(
+          rows.map((row) => ({
+            code: String(row.nCodCC),
+            name: String(row.descricao || row.tipo_conta_corrente || row.nCodCC),
+          })),
+        );
+      })
+      .catch(() => { if (!cancelled) setOmieAccounts([]); })
+      .finally(() => { if (!cancelled) setOmieAccountsLoading(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [omieApEnabled, isOpen, sapSession?.companyDB, session?.companyDB]);
   // CCs LOTUS só aparecem para Contábil e RH/DP/Folha (ou admins).
   const { groups: myGroups, loading: myGroupsLoading } = useMyPermissionGroups();
   const canSeeLotusCcs = useMemo(
