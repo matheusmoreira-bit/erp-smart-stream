@@ -1537,7 +1537,9 @@ function RuleCard({
                       </span>
                       {rows.length > 1 && (
                         <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded-full font-medium">
-                          Paralelo — 1º decide
+                          {rows.some((l: any) => l.require_all)
+                            ? "Paralelo — todos aprovam"
+                            : "Paralelo — 1º decide"}
                         </span>
                       )}
                     </div>
