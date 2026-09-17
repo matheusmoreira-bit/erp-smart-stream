@@ -487,9 +487,68 @@ export function DocumentArchiveCard() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Pode ser a base nova: os cadastros vão primeiro e depois os documentos.
+                  Pode ser a base nova. A replicação segue exatamente a ordem da lista abaixo.
                 </p>
               </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>O que replicar e em que ordem</Label>
+                  <div className="flex gap-1">
+                    <Button type="button" variant="ghost" size="sm" className="h-7 text-xs"
+                      onClick={() => setAllPlan(true)}>Marcar tudo</Button>
+                    <Button type="button" variant="ghost" size="sm" className="h-7 text-xs"
+                      onClick={() => setAllPlan(false)}>Desmarcar tudo</Button>
+                  </div>
+                </div>
+                <ul className="divide-y rounded-md border">
+                  {plan.map((step, index) => {
+                    const count = step.kind === "master"
+                      ? masterStats.find((m) => m.entity === step.key)?.count ?? 0
+                      : stats.find((s) => s.doc_type === step.key)?.count ?? 0;
+                    const position = plan.slice(0, index + 1).filter((s) => s.enabled).length;
+                    return (
+                      <li key={`${step.kind}-${step.key}`} className="flex items-center gap-2 px-2 py-1.5">
+                        <span className="w-6 text-right text-xs tabular-nums text-muted-foreground">
+                          {step.enabled ? position : "—"}
+                        </span>
+                        <Checkbox
+                          id={`plan-${step.kind}-${step.key}`}
+                          checked={step.enabled}
+                          onCheckedChange={() => togglePlan(index)}
+                        />
+                        <label
+                          htmlFor={`plan-${step.kind}-${step.key}`}
+                          className={`flex-1 text-sm ${step.enabled ? "" : "text-muted-foreground line-through"}`}
+                        >
+                          {stepLabel(step)}
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {step.kind === "master" ? "cadastro" : "documento"} ·{" "}
+                            {count.toLocaleString("pt-BR")} guardados
+                          </span>
+                        </label>
+                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7"
+                          aria-label={`Subir ${stepLabel(step)}`}
+                          disabled={index === 0 || busy !== null}
+                          onClick={() => movePlan(index, -1)}>
+                          <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7"
+                          aria-label={`Descer ${stepLabel(step)}`}
+                          disabled={index === plan.length - 1 || busy !== null}
+                          onClick={() => movePlan(index, 1)}>
+                          <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="text-xs text-muted-foreground">
+                  {plan.filter((s) => s.enabled).length} etapa(s) selecionada(s). Cada etapa só começa
+                  quando a anterior termina.
+                </p>
+              </div>
+
               <div className="flex flex-wrap items-end gap-2">
                 <Button variant="outline" onClick={() => void runRestore(true)} disabled={busy !== null}>
                   {busy === "dry" && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
