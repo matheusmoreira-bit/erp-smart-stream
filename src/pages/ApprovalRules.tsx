@@ -867,6 +867,7 @@ function RuleFormModal({
           level_order: l.level_order,
           approver_name: l.approver_name,
           approver_email: l.approver_email || "",
+          require_all: l.require_all === true,
         }))
       );
     } else {
