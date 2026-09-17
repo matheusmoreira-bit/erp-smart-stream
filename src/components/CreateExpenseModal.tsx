@@ -2774,7 +2774,7 @@ export function CreateExpenseModal({
           <DialogTitle className="text-base sm:text-lg">{title || (isSales ? "Novo Pedido de Venda" : "Nova Despesa")}</DialogTitle>
         </DialogHeader>
 
-        {origin === "pagcorp" && onPagcorpPostingTypeChange && (
+        {origin === "pagcorp" && onPagcorpPostingTypeChange && erpSupportsJournalEntry(session?.erpType) && (
           <div className="mt-3 space-y-2">
             <label className="text-xs font-medium text-muted-foreground">Tipo de lançamento</label>
             <ToggleGroup
