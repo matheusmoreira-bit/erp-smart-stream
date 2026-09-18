@@ -191,16 +191,30 @@ export function DocumentArchiveCard() {
   }, [companyDb, loadStats]);
 
   const callFn = useCallback(async (fn: string, payload: Record<string, unknown>) => {
-    const res = await sapFunctionFetch(fn, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok || data?.error) {
-      throw new Error(data?.error || `Não foi possível falar com o ERP agora (HTTP ${res.status}).`);
+    // Quedas de conexão ("Failed to fetch") são comuns quando o SAP está lento;
+    // tentamos novamente algumas vezes antes de avisar o usuário.
+    let lastErr: unknown = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const res = await sapFunctionFetch(fn, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || data?.error) {
+          throw new Error(data?.error || `Não foi possível falar com o ERP agora (HTTP ${res.status}).`);
+        }
+        return data;
+      } catch (e) {
+        lastErr = e;
+        const msg = e instanceof Error ? e.message : String(e);
+        const networkIssue = /failed to fetch|network|load failed|aborted|timeout/i.test(msg);
+        if (!networkIssue || attempt === 3) break;
+        await new Promise((r) => setTimeout(r, 2000 * attempt));
+      }
     }
-    return data;
+    throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
   }, []);
 
   const runPull = useCallback(async (incremental: boolean) => {
