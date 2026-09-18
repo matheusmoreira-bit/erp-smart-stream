@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
     const companyDb = String(body?.company_db || "").trim();
     const targetDb = String(body?.target_company_db || companyDb).trim();
     const dryRun = body?.dry_run === false ? false : true;
-    const limit = Math.min(Math.max(Number(body?.limit) || 25, 1), 100);
+    const limit = Math.min(Math.max(Number(body?.limit) || 10, 1), 100);
 
     if (!companyDb || !/^[A-Za-z0-9_\-]+$/.test(companyDb)) return json(400, { error: "company_db obrigatório" });
     if (!/^[A-Za-z0-9_\-]+$/.test(targetDb)) return json(400, { error: "target_company_db inválido" });
