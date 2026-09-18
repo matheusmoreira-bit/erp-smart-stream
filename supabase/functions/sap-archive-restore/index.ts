@@ -1,3 +1,4 @@
+// build: 1789740883
 // Edge function: sap-archive-restore
 // Devolve ao SAP os documentos guardados na base de backup do ERP Flow.
 //
@@ -36,7 +37,9 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const TIME_BUDGET_MS = 50_000;
+// Orçamento curto: a resposta precisa sair antes do limite do navegador/gateway,
+// senão o cliente vê "Failed to fetch". O painel continua de onde parou.
+const TIME_BUDGET_MS = 25_000;
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -69,7 +72,7 @@ Deno.serve(async (req) => {
     const companyDb = String(body?.company_db || "").trim();
     const targetDb = String(body?.target_company_db || companyDb).trim();
     const dryRun = body?.dry_run === false ? false : true;
-    const limit = Math.min(Math.max(Number(body?.limit) || 25, 1), 100);
+    const limit = Math.min(Math.max(Number(body?.limit) || 10, 1), 100);
 
     if (!companyDb || !/^[A-Za-z0-9_\-]+$/.test(companyDb)) return json(400, { error: "company_db obrigatório" });
     if (!/^[A-Za-z0-9_\-]+$/.test(targetDb)) return json(400, { error: "target_company_db inválido" });
@@ -85,7 +88,7 @@ Deno.serve(async (req) => {
     const masterSpecs = Array.isArray(body?.entities) && body.entities.length
       ? (body.entities.map(String).map(masterSpecByKey).filter(Boolean) as typeof ARCHIVE_MASTER_SPECS)
       : ARCHIVE_MASTER_SPECS.slice().sort((a, b) => a.restoreOrder - b.restoreOrder);
-    const masterLimit = Math.min(Math.max(Number(body?.master_limit) || 200, 1), 500);
+    const masterLimit = Math.min(Math.max(Number(body?.master_limit) || 40, 1), 500);
 
     const specs = masterOnly
       ? []
