@@ -1,3 +1,4 @@
+// build: 1789739971
 // Edge function: sap-master-data-replicate
 // Replica cadastros mestres (fornecedores, clientes e itens) de uma empresa SAP
 // de origem para outra empresa SAP de destino (tipicamente produção → teste).
