@@ -775,7 +775,8 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     } as any);
     runAfterResponse(dispatchApprovedExpense(expenseId, docType, origin));
   }
-  if (status === "pendente_aprovacao") {
+  if (status === "pendente_aprovacao" && !deferSubmitForAttachment) {
+
     await admin.from("expense_approval_log").insert({
       expense_id: expenseId,
       decision: "submitted",
