@@ -961,6 +961,20 @@ export function useExpenses(
         );
       }
 
+      // Trava de anexo: quando o documento vai para aprovação, ele nasce em
+      // rascunho e só é submetido AQUI, depois que os anexos foram realmente
+      // gravados no servidor. Se o upload falhar, ele permanece em rascunho.
+      if (createResp.pending_submit) {
+        try {
+          await invokeExpenseMutation({ action: "submit", expense_id: createdId });
+        } catch (submitErr) {
+          throw new Error(
+            `Anexos salvos, mas o envio para aprovação falhou: ${submitErr instanceof Error ? submitErr.message : String(submitErr)}. O documento ficou em rascunho — reabra e envie para aprovação.`,
+          );
+        }
+      }
+
+
       // A despesa e os anexos obrigatórios já foram persistidos. As etapas
       // restantes (notificar aprovador e atualizar lista) rodam em segundo plano.
       const finalize = async () => {
