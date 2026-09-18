@@ -557,11 +557,12 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
 
   // Trava de anexo na criação: o arquivo só é enviado DEPOIS de criar o
   // documento, então nascer direto em aprovação permite passar sem anexo.
-  // Nestes casos o documento nasce em rascunho e só é submetido pelo cliente
-  // (action "submit", que confere os anexos gravados) após o upload terminar.
+  // Nestes casos o documento é GRAVADO em rascunho (a alçada continua sendo
+  // resolvida normalmente) e só é submetido pelo cliente via action "submit",
+  // que confere os anexos realmente gravados, depois do upload terminar.
   const deferSubmitForAttachment =
     status === "pendente_aprovacao" && !isUberExpense && docType !== "sales";
-  if (deferSubmitForAttachment) status = "rascunho";
+
 
 
 
