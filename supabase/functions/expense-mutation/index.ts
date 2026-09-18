@@ -813,7 +813,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
 
 
 
-  if (status === "pendente_aprovacao") {
+  if (status === "pendente_aprovacao" && !deferSubmitForAttachment) {
     runAfterResponse(
       notifyApprovalPending(admin, {
         expenseId,
