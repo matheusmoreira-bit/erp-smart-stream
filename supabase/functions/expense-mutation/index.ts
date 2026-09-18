@@ -555,6 +555,15 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     status === "pendente_aprovacao" && await isAutomaticApprovalRule(admin, ruleId);
   if (autoApprovedByRule) status = "aprovado";
 
+  // Trava de anexo na criação: o arquivo só é enviado DEPOIS de criar o
+  // documento, então nascer direto em aprovação permite passar sem anexo.
+  // Nestes casos o documento nasce em rascunho e só é submetido pelo cliente
+  // (action "submit", que confere os anexos gravados) após o upload terminar.
+  const deferSubmitForAttachment =
+    status === "pendente_aprovacao" && !isUberExpense && docType !== "sales";
+  if (deferSubmitForAttachment) status = "rascunho";
+
+
 
 
   // Self-approval guard: when the requester matches the level's approver,
