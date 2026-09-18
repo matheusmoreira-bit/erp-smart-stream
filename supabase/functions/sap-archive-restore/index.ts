@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
     const masterSpecs = Array.isArray(body?.entities) && body.entities.length
       ? (body.entities.map(String).map(masterSpecByKey).filter(Boolean) as typeof ARCHIVE_MASTER_SPECS)
       : ARCHIVE_MASTER_SPECS.slice().sort((a, b) => a.restoreOrder - b.restoreOrder);
-    const masterLimit = Math.min(Math.max(Number(body?.master_limit) || 200, 1), 500);
+    const masterLimit = Math.min(Math.max(Number(body?.master_limit) || 40, 1), 500);
 
     const specs = masterOnly
       ? []
