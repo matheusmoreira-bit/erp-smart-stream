@@ -322,8 +322,8 @@ export function DocumentArchiveCard() {
           while (!done && rounds < 200) {
             rounds++;
             const scope = step.kind === "master"
-              ? { master_only: true, entities: [step.key] }
-              : { include_master: false, doc_types: [step.key] };
+              ? { master_only: true, entities: [step.key], master_limit: 40 }
+              : { include_master: false, doc_types: [step.key], limit: 10 };
             const data = await callFn("sap-archive-restore", {
               company_db: companyDb,
               target_company_db: destination,
