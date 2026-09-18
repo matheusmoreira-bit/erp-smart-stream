@@ -143,26 +143,33 @@ const READONLY_FIELDS = new Set([
 export function sanitizeForRestore(payload: Record<string, any>, extraStrip: string[] = []): Record<string, any> {
   const out: Record<string, any> = {};
   const strip = new Set([...READONLY_FIELDS, ...extraStrip]);
+  // Campos definidos pelo usuário (U_*) vazios são rejeitados pelo Service Layer
+  // quando têm lista de valores válidos — omitimos em vez de enviar "".
+  const dropEmptyUdf = (k: string, v: any) => k.startsWith("U_") && typeof v === "string" && v.trim() === "";
   for (const [k, v] of Object.entries(payload)) {
     if (k.startsWith("odata.")) continue;
     if (k.startsWith("@odata")) continue;
     if (strip.has(k)) continue;
     if (v === null) continue;
+    if (dropEmptyUdf(k, v)) continue;
     out[k] = v;
   }
-  if (Array.isArray(out.DocumentLines)) {
-    out.DocumentLines = out.DocumentLines.map((line: Record<string, any>) => {
+  const cleanLines = (lines: any[]) =>
+    lines.map((line: Record<string, any>) => {
       const l: Record<string, any> = {};
       for (const [k, v] of Object.entries(line)) {
         if (k.startsWith("@odata") || v === null) continue;
         if (["DocEntry", "LineStatus", "RemainingOpenQuantity", "RemainingOpenInventoryQuantity"].includes(k)) continue;
+        if (dropEmptyUdf(k, v)) continue;
         l[k] = v;
       }
       return l;
     });
-  }
+  if (Array.isArray(out.DocumentLines)) out.DocumentLines = cleanLines(out.DocumentLines);
+  if (Array.isArray(out.DownPaymentsToDraw)) out.DownPaymentsToDraw = cleanLines(out.DownPaymentsToDraw);
   return out;
 }
+
 
 /** POST no Service Layer (usado na restauração). */
 export async function sapPost(s: SapSession, path: string, body: unknown): Promise<any> {
