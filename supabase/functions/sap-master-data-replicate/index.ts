@@ -245,8 +245,14 @@ Deno.serve(async (req) => {
   let source: Session | null = null;
   let target: Session | null = null;
 
+  // Orçamento de tempo global: a resposta precisa sair bem antes do limite da
+  // plataforma/navegador, senão o cliente vê "conexão interrompida".
+  const startedAt = Date.now();
+  const TIME_BUDGET_MS = 40_000;
+
   try {
     const body = await req.json().catch(() => ({}));
+
     const sourceDb = String(body?.source_company_db || "").trim();
     const targetDb = String(body?.target_company_db || "").trim();
     const scope = String(body?.scope || "").trim() as Scope;
