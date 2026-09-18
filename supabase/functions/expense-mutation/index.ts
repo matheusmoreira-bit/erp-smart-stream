@@ -645,7 +645,8 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     cost_center: input.cost_center || null,
     project: input.project || null,
     remarks: input.remarks || null,
-    status,
+    status: deferSubmitForAttachment ? "rascunho" : status,
+
     requester_name: requesterName,
     requester_email: requesterEmail,
     created_by_email: requesterEmail,
