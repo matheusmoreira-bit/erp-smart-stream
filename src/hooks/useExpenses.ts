@@ -896,7 +896,7 @@ export function useExpenses(
       // Server-side create (RLS on expenses is closed; anon can no longer
       // INSERT). The edge function overrides requester identity with the
       // authenticated SAP user, so client cannot forge who owns the doc.
-      const createResp = await invokeExpenseMutation<{ ok: true; expense: any }>({
+      const createResp = await invokeExpenseMutation<{ ok: true; expense: any; pending_submit?: boolean }>({
         action: "create",
         input: {
           supplier_code: input.supplier_code || null,
