@@ -1,3 +1,4 @@
+// build: 1789800000
 import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 // Edge function: authorize + execute internal expense approval / rejection.
 //
@@ -1053,6 +1054,35 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     }
   };
 
+
+  // ── Guarda de anexo ────────────────────────────────────────────────────
+  // Nenhum documento pode ser aprovado sem ao menos 1 anexo efetivamente
+  // gravado (o arquivo é enviado depois da criação e pode falhar no meio).
+  if (action === "approve") {
+    const docTypeGuard = String((exp as any).doc_type || "purchase").toLowerCase();
+    const originGuard = String((exp as any).origin || "").toLowerCase();
+    if (docTypeGuard !== "sales" && originGuard !== "uber") {
+      const { count: attCount, error: attErr } = await admin
+        .from("expense_attachments")
+        .select("id", { count: "exact", head: true })
+        .eq("expense_id", expenseId);
+      if (attErr) {
+        stageLog("attachment_guard", "error", { requestId, expenseId, error: attErr.message });
+        return await respond(500, {
+          error: `Falha ao validar anexos do documento: ${attErr.message}`,
+          stage: "attachment_guard",
+        });
+      }
+      if (!attCount || attCount < 1) {
+        stageLog("attachment_guard", "warn", { requestId, expenseId, reason: "no_attachment" });
+        return await respond(400, {
+          error:
+            "Este documento não possui anexo salvo e não pode ser aprovado. Devolva ao solicitante para anexar o documento fiscal.",
+          stage: "attachment_guard",
+        });
+      }
+    }
+  }
 
   // ── Execute ────────────────────────────────────────────────────────────
   // Devolver ao solicitante: o documento volta para rascunho, com o motivo
