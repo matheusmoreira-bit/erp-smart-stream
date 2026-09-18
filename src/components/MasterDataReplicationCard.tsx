@@ -33,7 +33,7 @@ interface ScopeResult {
   errors: Array<{ code: string; error: string }>;
 }
 
-const BATCH_SIZE = 25;
+const BATCH_SIZE = 10;
 
 /**
  * Réplica de cadastros mestres (fornecedores, clientes e itens) de uma empresa

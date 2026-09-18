@@ -1,3 +1,4 @@
+// build: 1789739971
 // Edge function: sap-master-data-replicate
 // Replica cadastros mestres (fornecedores, clientes e itens) de uma empresa SAP
 // de origem para outra empresa SAP de destino (tipicamente produção → teste).
@@ -245,8 +246,14 @@ Deno.serve(async (req) => {
   let source: Session | null = null;
   let target: Session | null = null;
 
+  // Orçamento de tempo global: a resposta precisa sair bem antes do limite da
+  // plataforma/navegador, senão o cliente vê "conexão interrompida".
+  const startedAt = Date.now();
+  const TIME_BUDGET_MS = 40_000;
+
   try {
     const body = await req.json().catch(() => ({}));
+
     const sourceDb = String(body?.source_company_db || "").trim();
     const targetDb = String(body?.target_company_db || "").trim();
     const scope = String(body?.scope || "").trim() as Scope;
@@ -295,17 +302,15 @@ Deno.serve(async (req) => {
     let handled = 0;
     let budgetReached = false;
     const errors: Array<{ code: string; error: string }> = [];
-    // Orçamento de tempo: devolve resultado parcial antes do limite da plataforma,
-    // evitando que o navegador perca a conexão ("Failed to fetch") quando o SAP
-    // está lento.
-    const startedAt = Date.now();
-    const TIME_BUDGET_MS = 55_000;
 
     for (const row of rows) {
-      if (Date.now() - startedAt > TIME_BUDGET_MS) {
+      // Sempre processa pelo menos um registro, para o cliente nunca ficar
+      // repetindo o mesmo offset.
+      if (handled > 0 && Date.now() - startedAt > TIME_BUDGET_MS) {
         budgetReached = true;
         break;
       }
+
       handled++;
       const code = String(row[spec.keyField] ?? "");
       if (!code) continue;
