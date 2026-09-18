@@ -36,7 +36,9 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const TIME_BUDGET_MS = 50_000;
+// Orçamento curto: a resposta precisa sair antes do limite do navegador/gateway,
+// senão o cliente vê "Failed to fetch". O painel continua de onde parou.
+const TIME_BUDGET_MS = 25_000;
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
