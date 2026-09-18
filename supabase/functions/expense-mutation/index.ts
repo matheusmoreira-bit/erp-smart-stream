@@ -855,7 +855,13 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     );
   }
 
-  return json(200, { ok: true, expense, auto_approved: autoApprovedByRule });
+  return json(200, {
+    ok: true,
+    expense,
+    auto_approved: autoApprovedByRule,
+    pending_submit: deferSubmitForAttachment,
+  });
+
 }
 
 async function loadExpenseForOwner(admin: SupabaseClient, expenseId: string) {
