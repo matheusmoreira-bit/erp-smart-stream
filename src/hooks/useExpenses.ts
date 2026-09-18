@@ -896,7 +896,7 @@ export function useExpenses(
       // Server-side create (RLS on expenses is closed; anon can no longer
       // INSERT). The edge function overrides requester identity with the
       // authenticated SAP user, so client cannot forge who owns the doc.
-      const createResp = await invokeExpenseMutation<{ ok: true; expense: any }>({
+      const createResp = await invokeExpenseMutation<{ ok: true; expense: any; pending_submit?: boolean }>({
         action: "create",
         input: {
           supplier_code: input.supplier_code || null,
@@ -960,6 +960,20 @@ export function useExpenses(
           `Despesa criada, mas falhou ao registrar anexo(s) no servidor: ${attErr instanceof Error ? attErr.message : String(attErr)}. Reabra a despesa e reanexe antes de aprovar/integrar.`,
         );
       }
+
+      // Trava de anexo: quando o documento vai para aprovação, ele nasce em
+      // rascunho e só é submetido AQUI, depois que os anexos foram realmente
+      // gravados no servidor. Se o upload falhar, ele permanece em rascunho.
+      if (createResp.pending_submit) {
+        try {
+          await invokeExpenseMutation({ action: "submit", expense_id: createdId });
+        } catch (submitErr) {
+          throw new Error(
+            `Anexos salvos, mas o envio para aprovação falhou: ${submitErr instanceof Error ? submitErr.message : String(submitErr)}. O documento ficou em rascunho — reabra e envie para aprovação.`,
+          );
+        }
+      }
+
 
       // A despesa e os anexos obrigatórios já foram persistidos. As etapas
       // restantes (notificar aprovador e atualizar lista) rodam em segundo plano.

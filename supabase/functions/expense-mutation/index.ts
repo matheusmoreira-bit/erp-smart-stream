@@ -555,6 +555,16 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     status === "pendente_aprovacao" && await isAutomaticApprovalRule(admin, ruleId);
   if (autoApprovedByRule) status = "aprovado";
 
+  // Trava de anexo na criação: o arquivo só é enviado DEPOIS de criar o
+  // documento, então nascer direto em aprovação permite passar sem anexo.
+  // Nestes casos o documento é GRAVADO em rascunho (a alçada continua sendo
+  // resolvida normalmente) e só é submetido pelo cliente via action "submit",
+  // que confere os anexos realmente gravados, depois do upload terminar.
+  const deferSubmitForAttachment =
+    status === "pendente_aprovacao" && !isUberExpense && docType !== "sales";
+
+
+
 
 
   // Self-approval guard: when the requester matches the level's approver,
@@ -635,7 +645,8 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     cost_center: input.cost_center || null,
     project: input.project || null,
     remarks: input.remarks || null,
-    status,
+    status: deferSubmitForAttachment ? "rascunho" : status,
+
     requester_name: requesterName,
     requester_email: requesterEmail,
     created_by_email: requesterEmail,
@@ -764,7 +775,8 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     } as any);
     runAfterResponse(dispatchApprovedExpense(expenseId, docType, origin));
   }
-  if (status === "pendente_aprovacao") {
+  if (status === "pendente_aprovacao" && !deferSubmitForAttachment) {
+
     await admin.from("expense_approval_log").insert({
       expense_id: expenseId,
       decision: "submitted",
@@ -801,7 +813,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
 
 
 
-  if (status === "pendente_aprovacao") {
+  if (status === "pendente_aprovacao" && !deferSubmitForAttachment) {
     runAfterResponse(
       notifyApprovalPending(admin, {
         expenseId,
@@ -843,7 +855,13 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     );
   }
 
-  return json(200, { ok: true, expense, auto_approved: autoApprovedByRule });
+  return json(200, {
+    ok: true,
+    expense,
+    auto_approved: autoApprovedByRule,
+    pending_submit: deferSubmitForAttachment,
+  });
+
 }
 
 async function loadExpenseForOwner(admin: SupabaseClient, expenseId: string) {
