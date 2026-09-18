@@ -301,17 +301,15 @@ Deno.serve(async (req) => {
     let handled = 0;
     let budgetReached = false;
     const errors: Array<{ code: string; error: string }> = [];
-    // Orçamento de tempo: devolve resultado parcial antes do limite da plataforma,
-    // evitando que o navegador perca a conexão ("Failed to fetch") quando o SAP
-    // está lento.
-    const startedAt = Date.now();
-    const TIME_BUDGET_MS = 55_000;
 
     for (const row of rows) {
-      if (Date.now() - startedAt > TIME_BUDGET_MS) {
+      // Sempre processa pelo menos um registro, para o cliente nunca ficar
+      // repetindo o mesmo offset.
+      if (handled > 0 && Date.now() - startedAt > TIME_BUDGET_MS) {
         budgetReached = true;
         break;
       }
+
       handled++;
       const code = String(row[spec.keyField] ?? "");
       if (!code) continue;
