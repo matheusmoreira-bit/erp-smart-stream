@@ -560,8 +560,14 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
   // Nestes casos o documento é GRAVADO em rascunho (a alçada continua sendo
   // resolvida normalmente) e só é submetido pelo cliente via action "submit",
   // que confere os anexos realmente gravados, depois do upload terminar.
+  // IMPORTANTE: só adiamos quando o cliente avisa que sabe submeter depois
+  // (defer_submit_supported). Clientes antigos (bundle publicado) não chamam
+  // "submit" e os documentos ficariam presos em rascunho.
   const deferSubmitForAttachment =
-    status === "pendente_aprovacao" && !isUberExpense && docType !== "sales";
+    status === "pendente_aprovacao" &&
+    !isUberExpense &&
+    docType !== "sales" &&
+    (input as any).defer_submit_supported === true;
 
 
 
