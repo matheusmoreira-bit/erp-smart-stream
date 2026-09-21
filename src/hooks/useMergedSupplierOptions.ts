@@ -348,7 +348,8 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     if (!companyDb) return;
     const refreshAll = () => {
       hanaMemory.delete(`${hanaCacheKey}:${companyDb}`);
-      void fetchLocal();
+      void fetchLocal(true);
+
       setHanaReloadTick((t) => t + 1);
       void reloadSap?.();
     };
