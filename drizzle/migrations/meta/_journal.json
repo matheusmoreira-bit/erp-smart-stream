@@ -204,6 +204,34 @@
       "when": 1789675103431,
       "tag": "0028_approval_levels_require_all",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790017294871,
+      "tag": "0029_audit_trail_minimizacao",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1790017496670,
+      "tag": "0030_audit_trail_payload_purge_fn",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1790017536786,
+      "tag": "0031_audit_trail_payload_purge_fn_v2",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790017684319,
+      "tag": "0032_audit_trail_payload_purge_tick",
+      "breakpoints": true
     }
   ]
 }

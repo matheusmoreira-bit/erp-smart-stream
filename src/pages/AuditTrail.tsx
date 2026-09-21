@@ -529,16 +529,23 @@ export default function AuditTrailPage() {
                   </div>
                 </div>
               )}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">Antes</div>
-                  <pre className="bg-muted p-3 rounded text-xs overflow-auto max-h-[400px]">{JSON.stringify(detail.old_data, null, 2) || "—"}</pre>
+              {detail.old_data || detail.new_data ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Antes</div>
+                    <pre className="bg-muted p-3 rounded text-xs overflow-auto max-h-[400px]">{JSON.stringify(detail.old_data, null, 2) || "—"}</pre>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Depois</div>
+                    <pre className="bg-muted p-3 rounded text-xs overflow-auto max-h-[400px]">{JSON.stringify(detail.new_data, null, 2) || "—"}</pre>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">Depois</div>
-                  <pre className="bg-muted p-3 rounded text-xs overflow-auto max-h-[400px]">{JSON.stringify(detail.new_data, null, 2) || "—"}</pre>
-                </div>
-              </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Por minimização de dados, o conteúdo completo antes/depois não é armazenado. Ficam registrados autor, data, tabela, operação, chave do registro e os campos alterados.
+                </p>
+              )}
+
             </div>
           )}
         </DialogContent>
