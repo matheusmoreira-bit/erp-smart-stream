@@ -54,6 +54,11 @@ interface Options {
 const hanaMemory = new Map<string, { rows: any[]; at: number }>();
 /** Chamadas em voo, para deduplicar requisições simultâneas. */
 const hanaInflight = new Map<string, Promise<any>>();
+/** Cache compartilhado das linhas locais de suppliers/customers por empresa. */
+const localCache = new Map<string, { rows: any[]; at: number }>();
+const localInflight = new Map<string, Promise<any[]>>();
+const LOCAL_TTL_MS = 5 * 60_000;
+
 
 export function useMergedSupplierOptions({ companyDb, isSales = false }: Options) {
 
