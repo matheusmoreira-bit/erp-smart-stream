@@ -3,6 +3,7 @@ import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
 import { Loader2, ShieldAlert } from "lucide-react";
 import AdminUsersManager from "@/components/AdminUsersManager";
 import { IdpBindingFlagCard } from "@/components/IdpBindingFlagCard";
+import { DuplicateIdentitiesCard } from "@/components/DuplicateIdentitiesCard";
 import { PageTitle } from "@/components/PageTitle";
 
 /**
