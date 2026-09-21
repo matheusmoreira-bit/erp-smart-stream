@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -84,6 +84,12 @@ const queryClient = new QueryClient();
 const protect = (moduleKey: string, element: JSX.Element) => (
   <ModuleRoute moduleKey={moduleKey}>{element}</ModuleRoute>
 );
+
+/** Rota legada da trilha por documento → aba unificada, preservando os parâmetros. */
+const AuditTimelineRedirect = () => {
+  const { search } = useLocation();
+  return <Navigate to={`/auditoria/documento${search}`} replace />;
+};
 
 const App = () => (
   <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="erp-theme">
