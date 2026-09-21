@@ -120,8 +120,8 @@ const App = () => (
               <Route path="/backoffice" element={<AdminRoute><Backoffice /></AdminRoute>} />
               <Route path="/backoffice/sap-users" element={<Navigate to="/usuarios/sap" replace />} />
               <Route path="/backoffice/sap-users/replicate" element={<AdminRoute><SapUsersReplicate /></AdminRoute>} />
-              <Route path="/backoffice/audit-trail" element={<AdminRoute><AuditTrail /></AdminRoute>} />
-              <Route path="/backoffice/trilha-documento" element={<AdminRoute><AuditTimeline /></AdminRoute>} />
+              <Route path="/backoffice/audit-trail" element={<Navigate to="/auditoria/trilha" replace />} />
+              <Route path="/backoffice/trilha-documento" element={<AuditTimelineRedirect />} />
               <Route path="/backoffice/transfer-history" element={<AdminRoute><TransferApprovalsHistory /></AdminRoute>} />
               <Route path="/backoffice/sap-sync" element={<AdminRoute><SapStatusSync /></AdminRoute>} />
               <Route path="/backoffice/sap-sync/execucoes" element={<AdminRoute><SapSyncRuns /></AdminRoute>} />
@@ -138,7 +138,7 @@ const App = () => (
               <Route path="/backoffice/sla-dashboard" element={<AdminRoute><SlaDashboard /></AdminRoute>} />
               <Route path="/backoffice/roadmap" element={<AdminRoute><BackofficeRoadmap /></AdminRoute>} />
 
-              <Route path="/backoffice/baixas-pagcorp" element={<AdminRoute><PagCorpSettlementAudit /></AdminRoute>} />
+              <Route path="/backoffice/baixas-pagcorp" element={<Navigate to="/auditoria/baixas-pagcorp" replace />} />
 
 
 

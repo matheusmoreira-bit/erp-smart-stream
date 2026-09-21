@@ -25,9 +25,9 @@ const TABS: readonly HubTabDef<TabKey>[] = [
   { key: "totais", label: "Reconciliação de Totais", module: "fiscal_audit", path: "/auditoria/totais", render: () => <SapTotalsReconciliation /> },
   { key: "kyp", label: "KYP — Fornecedores", module: "kyp", path: "/auditoria/kyp", render: () => <AuditKYP /> },
   { key: "logs", label: "Logs do Sistema", module: "audit_log", path: "/auditoria/logs", render: () => <AuditLog /> },
-  { key: "trilha", label: "Trilha de auditoria", module: "audit_log", path: "/auditoria/trilha", render: () => <AuditTrail /> },
-  { key: "documento", label: "Trilha por documento", module: "audit_log", path: "/auditoria/documento", render: () => <AuditTimeline /> },
-  { key: "baixas", label: "Baixas PagCorp", module: "pagcorp", path: "/auditoria/baixas-pagcorp", render: () => <PagCorpSettlementAudit /> },
+  { key: "trilha", label: "Trilha de auditoria", module: "audit_log", path: "/auditoria/trilha", render: () => <AuditTrail embedded /> },
+  { key: "documento", label: "Trilha por documento", module: "audit_log", path: "/auditoria/documento", render: () => <AuditTimeline embedded /> },
+  { key: "baixas", label: "Baixas PagCorp", module: "pagcorp", path: "/auditoria/baixas-pagcorp", render: () => <PagCorpSettlementAudit embedded /> },
 ];
 
 
