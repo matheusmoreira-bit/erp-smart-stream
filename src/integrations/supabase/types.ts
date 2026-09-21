@@ -10584,6 +10584,15 @@ export type Database = {
           valor_juros_multa: number
         }[]
       }
+      list_login_companies: {
+        Args: never
+        Returns: {
+          company_db: string
+          display_name: string
+          erp_type: string
+          is_test: boolean
+        }[]
+      }
       log_permission_shadow: {
         Args: {
           _action: string

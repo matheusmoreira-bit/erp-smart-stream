@@ -246,6 +246,13 @@
       "when": 1790018312248,
       "tag": "0034_purge_auditoria_sem_lock_exclusivo",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1790020241090,
+      "tag": "0035_fechar_leitura_publica_companies",
+      "breakpoints": true
     }
   ]
 }
