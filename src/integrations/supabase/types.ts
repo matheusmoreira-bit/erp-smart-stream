@@ -10627,6 +10627,13 @@ export type Database = {
       prune_db_query_metrics: { Args: never; Returns: undefined }
       prune_edge_function_metrics: { Args: never; Returns: undefined }
       prune_old_integration_data: { Args: never; Returns: undefined }
+      purge_audit_trail_payloads: {
+        Args: { _batch_limit?: number }
+        Returns: {
+          cleared: number
+          remaining: number
+        }[]
+      }
       purge_expense_action_idempotency: {
         Args: {
           _completed_retention_hours?: number
