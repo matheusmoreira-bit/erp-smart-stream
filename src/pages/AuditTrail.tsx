@@ -88,7 +88,7 @@ function DateField({
   );
 }
 
-export default function AuditTrailPage() {
+export default function AuditTrailPage({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
   const [rows, setRows] = useState<AuditTrailRow[]>([]);
   const [total, setTotal] = useState<number>(0);
