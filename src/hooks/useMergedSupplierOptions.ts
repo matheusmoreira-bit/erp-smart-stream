@@ -501,7 +501,8 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     reload: () => {
       if (isOmie) {
         setOmieReloadTick((tick) => tick + 1);
-        void fetchLocal();
+        void fetchLocal(true);
+
         return;
       }
       if (companyDb) void invalidateSapCache([hanaCacheKey], companyDb);
