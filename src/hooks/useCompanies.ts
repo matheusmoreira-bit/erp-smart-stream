@@ -54,7 +54,15 @@ let realtimeSubscribed = false;
 const listeners = new Set<() => void>();
 
 async function loadFromSupabase(): Promise<void> {
-  const { data } = await supabase.from("companies").select("*").order("display_name");
+  // Campos sensíveis (service_layer_url, tax_id, legal_name, foreign_name) não
+  // são legíveis por usuários comuns — telas administrativas usam
+  // admin_list_companies().
+  const { data } = await supabase
+    .from("companies")
+    .select(
+      "id, company_db, display_name, is_active, created_at, updated_at, targets, erp_type, default_currency, timezone, logo_url, trade_name, is_foreign, is_test",
+    )
+    .order("display_name");
   const all = (data || []).map((c: any) => ({
     ...c,
     targets: { ...DEFAULT_TARGETS, ...(c.targets as Record<string, number>) },
