@@ -260,6 +260,13 @@
       "when": 1790020328558,
       "tag": "0036_restringir_funcoes_internas_servidor",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1790020358956,
+      "tag": "0037_tabelas_uso_exclusivo_servico",
+      "breakpoints": true
     }
   ]
 }
