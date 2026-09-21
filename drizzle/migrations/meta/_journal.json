@@ -253,6 +253,13 @@
       "when": 1790020241090,
       "tag": "0035_fechar_leitura_publica_companies",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790020328558,
+      "tag": "0036_restringir_funcoes_internas_servidor",
+      "breakpoints": true
     }
   ]
 }
