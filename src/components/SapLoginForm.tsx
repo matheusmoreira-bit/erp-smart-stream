@@ -134,12 +134,11 @@ export function SapLoginForm() {
     setCompaniesLoading(true);
     setCompaniesError(null);
     try {
-      const { data, error } = await supabase
-        .from("companies")
-        .select("company_db, display_name, erp_type")
-        .eq("is_active", true)
-        .order("display_name");
+      // Lista mínima de empresas (nome/código/ERP), sem dados sensíveis como
+      // a URL do Service Layer ou CNPJ. Funciona antes e depois do login.
+      const { data, error } = await supabase.rpc("list_login_companies");
       if (error) throw error;
+
       const { data: { session: authSession } } = await supabase.auth.getSession();
       const email = authSession?.user?.email || null;
       const canSeeTest = await resolveTestCompanyVisibility({
