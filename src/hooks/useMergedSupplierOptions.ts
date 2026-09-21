@@ -508,7 +508,8 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
       if (companyDb) void invalidateSapCache([hanaCacheKey], companyDb);
       setHanaReloadTick((t) => t + 1);
       reloadSap();
-      void fetchLocal();
+      void fetchLocal(true);
+
     },
     crossCompanyLookup,
     retrySync,
