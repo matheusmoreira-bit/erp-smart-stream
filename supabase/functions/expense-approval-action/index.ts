@@ -1,3 +1,4 @@
+// build: 1790022110
 // build: 1789800000
 import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 // Edge function: authorize + execute internal expense approval / rejection.
@@ -1332,15 +1333,28 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
   // Nível unânime: evita registrar a mesma aprovação duas vezes quando a
   // pessoa clica de novo enquanto aguarda o outro aprovador do nível.
   if (unanimousCurrentLevel) {
-    const { data: myLogs } = await admin
+    // Só contam as aprovações do ciclo atual: uma reenvio/edição/devolução
+    // reinicia o nível, então aprovações anteriores a esse marco não valem.
+    const { data: cycleRows } = await admin
       .from("expense_approval_log")
-      .select("decision, approver_name, approver_email, level_order")
+      .select("decision, decided_at")
+      .eq("expense_id", expenseId)
+      .in("decision", ["submitted", "returned", "edited", "reactivated", "created"])
+      .order("decided_at", { ascending: false })
+      .limit(1);
+    const cycleStart = (cycleRows || [])[0]?.decided_at as string | undefined;
+    let myLogsQuery = admin
+      .from("expense_approval_log")
+      .select("decision, approver_name, approver_email, level_order, decided_at")
       .eq("expense_id", expenseId)
       .eq("level_order", currentLevel)
       .eq("decision", "approved");
+    if (cycleStart) myLogsQuery = myLogsQuery.gte("decided_at", cycleStart);
+    const { data: myLogs } = await myLogsQuery;
     const alreadyMine = (myLogs || []).some((l: any) =>
       callerIsApprover(l.approver_name || null, l.approver_email || null)
     );
+
     if (alreadyMine) {
       const pendingNow = pendingLevelApprovers(
         (myLogs || []).map((l: any) => ({
