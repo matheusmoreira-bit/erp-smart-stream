@@ -453,10 +453,9 @@ export default function Admin() {
   const { entries: auditEntries, isLoading: auditLoading, refresh: auditRefresh } = useAuditLog(auditCompanyDb);
 
   const fetchCompanies = async () => {
-    const { data, error } = await supabase
-      .from("companies")
-      .select("*")
-      .order("display_name");
+    // Tela administrativa: acesso completo (inclui endereço do SAP e CNPJ)
+    // somente via função com validação de papel no servidor.
+    const { data, error } = await supabase.rpc("admin_list_companies");
     if (error) {
       toast.error("Erro ao carregar empresas");
       return;

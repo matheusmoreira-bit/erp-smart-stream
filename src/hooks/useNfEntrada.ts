@@ -92,12 +92,10 @@ export function useNfEntrada() {
       return;
     }
 
-    const { data: company } = await supabase
-      .from("companies")
-      .select("tax_id")
-      .eq("company_db", companyDb)
-      .maybeSingle();
-    const taxId = onlyDigits(company?.tax_id);
+    const { data: companyTax } = await supabase.rpc("company_tax_id", {
+      _company_db: companyDb,
+    });
+    const taxId = onlyDigits(companyTax as string | null);
     setCompanyTaxId(taxId || null);
 
     const { data, error: err } = await supabase
