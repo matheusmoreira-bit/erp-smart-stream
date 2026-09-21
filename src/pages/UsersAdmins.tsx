@@ -3,6 +3,7 @@ import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
 import { Loader2, ShieldAlert } from "lucide-react";
 import AdminUsersManager from "@/components/AdminUsersManager";
 import { IdpBindingFlagCard } from "@/components/IdpBindingFlagCard";
+import { DuplicateIdentitiesCard } from "@/components/DuplicateIdentitiesCard";
 import { PageTitle } from "@/components/PageTitle";
 
 /**
@@ -37,6 +38,7 @@ export default function UsersAdmins() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-8">
       <PageTitle title="Administradores" />
       <IdpBindingFlagCard />
+      <DuplicateIdentitiesCard />
       <AdminUsersManager />
     </div>
   );

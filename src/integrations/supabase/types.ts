@@ -10584,6 +10584,19 @@ export type Database = {
           valor_juros_multa: number
         }[]
       }
+      list_duplicate_identities: {
+        Args: never
+        Returns: {
+          created_at: string
+          email: string
+          group_count: number
+          has_sap_credentials: boolean
+          is_admin: boolean
+          last_sign_in_at: string
+          local_part: string
+          user_id: string
+        }[]
+      }
       list_login_companies: {
         Args: never
         Returns: {
