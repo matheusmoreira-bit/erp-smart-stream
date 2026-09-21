@@ -57,27 +57,39 @@ async function persistCacheRows(
   opts?: { replace?: boolean },
 ): Promise<any[]> {
   let merged = rows;
+  let previousJson: string | null = null;
+  let previousExpiresAt: string | null = null;
   if (!opts?.replace) {
     try {
       const { data: current } = await supabase
         .from("sap_cache")
-        .select("data")
+        .select("data, expires_at")
         .eq("cache_key", cacheKey)
         .eq("company_db", companyDB)
         .maybeSingle();
       const previous = (current?.data as any[]) || [];
+      previousJson = current ? JSON.stringify(previous) : null;
+      previousExpiresAt = (current?.expires_at as string) || null;
       merged = mergeCacheRows(previous, rows) as any[];
     } catch (e) {
       console.warn(`[sap_cache/${cacheKey}] merge falhou, gravando resposta do ERP`, e);
     }
   }
-  const expiresAt = new Date(Date.now() + getCacheTtlMs(cacheKey)).toISOString();
+  const ttlMs = getCacheTtlMs(cacheKey);
+  // Evita regravar a mesma lista a cada leitura: só escreve quando o conteúdo
+  // mudou ou quando falta menos de metade do TTL para expirar.
+  if (previousJson !== null && previousExpiresAt) {
+    const remaining = new Date(previousExpiresAt).getTime() - Date.now();
+    if (remaining > ttlMs / 2 && previousJson === JSON.stringify(merged)) return merged;
+  }
+  const expiresAt = new Date(Date.now() + ttlMs).toISOString();
   markSelfCacheWrite(cacheKey, companyDB);
   await supabase.from("sap_cache").upsert(
     { cache_key: cacheKey, company_db: companyDB, data: merged as any, expires_at: expiresAt },
     { onConflict: "cache_key,company_db" },
   );
   return merged;
+
 }
 
 // -----------------------------------------------------------------------------

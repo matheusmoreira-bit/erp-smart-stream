@@ -54,6 +54,11 @@ interface Options {
 const hanaMemory = new Map<string, { rows: any[]; at: number }>();
 /** Chamadas em voo, para deduplicar requisições simultâneas. */
 const hanaInflight = new Map<string, Promise<any>>();
+/** Cache compartilhado das linhas locais de suppliers/customers por empresa. */
+const localCache = new Map<string, { rows: any[]; at: number }>();
+const localInflight = new Map<string, Promise<any[]>>();
+const LOCAL_TTL_MS = 5 * 60_000;
+
 
 export function useMergedSupplierOptions({ companyDb, isSales = false }: Options) {
 
@@ -295,25 +300,45 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
 
   // 2) Linhas locais em public.suppliers da empresa atual — inclui fornecedores
   //    que falharam ou ainda não subiram ao SAP.
-  const [localRows, setLocalRows] = useState<any[]>([]);
+  //    Cache compartilhado em memória por empresa: a tabela muda pouco e cada
+  //    mount refazia a consulta (centenas de milhares de leituras/mês). O
+  //    realtime abaixo invalida o cache quando algo muda de verdade.
+  const [localRows, setLocalRows] = useState<any[]>(() => localCache.get(companyDb || "")?.rows || []);
 
-  const fetchLocal = useCallback(async () => {
+  const fetchLocal = useCallback(async (force = false) => {
     if (!companyDb) {
       setLocalRows([]);
       return;
     }
-    const { data, error } = await (supabase as any)
-      .from("suppliers")
-      .select(
-        "id, card_code, card_name, federal_tax_id, u_fgr_taxid0, currency, sap_sync_status, sap_sync_error, is_active",
-      )
-      .eq("company_db", companyDb);
-    if (!error) setLocalRows(data || []);
+    const cached = localCache.get(companyDb);
+    if (!force && cached && Date.now() - cached.at < LOCAL_TTL_MS) {
+      setLocalRows(cached.rows);
+      return;
+    }
+    const inflightKey = companyDb;
+    let p = localInflight.get(inflightKey);
+    if (!p) {
+      p = (async () => {
+        const { data, error } = await (supabase as any)
+          .from("suppliers")
+          .select(
+            "id, card_code, card_name, federal_tax_id, u_fgr_taxid0, currency, sap_sync_status, sap_sync_error, is_active",
+          )
+          .eq("company_db", companyDb);
+        if (error) return localCache.get(inflightKey)?.rows || [];
+        const rows = data || [];
+        localCache.set(inflightKey, { rows, at: Date.now() });
+        return rows;
+      })().finally(() => localInflight.delete(inflightKey));
+      localInflight.set(inflightKey, p);
+    }
+    setLocalRows(await p);
   }, [companyDb]);
 
   useEffect(() => {
     void fetchLocal();
   }, [fetchLocal]);
+
 
   // 3) Realtime: qualquer mudança em suppliers da empresa (ou no cache de
   //    listas do SAP, inclusive quando outra aba/edge function o invalida)
@@ -323,7 +348,8 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     if (!companyDb) return;
     const refreshAll = () => {
       hanaMemory.delete(`${hanaCacheKey}:${companyDb}`);
-      void fetchLocal();
+      void fetchLocal(true);
+
       setHanaReloadTick((t) => t + 1);
       void reloadSap?.();
     };
@@ -455,7 +481,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     // Não bloqueia o hook — chamador usa `resendSupplierToSap` de useSuppliers
     // se quiser encadear ação. Aqui, só invalida caches para recarregar.
     if (companyDb) await invalidateSapCache([cacheKey, hanaCacheKey], companyDb);
-    await fetchLocal();
+    await fetchLocal(true);
   }, [cacheKey, hanaCacheKey, companyDb, fetchLocal]);
 
   const activeCount = useMemo(
@@ -475,13 +501,15 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     reload: () => {
       if (isOmie) {
         setOmieReloadTick((tick) => tick + 1);
-        void fetchLocal();
+        void fetchLocal(true);
+
         return;
       }
       if (companyDb) void invalidateSapCache([hanaCacheKey], companyDb);
       setHanaReloadTick((t) => t + 1);
       reloadSap();
-      void fetchLocal();
+      void fetchLocal(true);
+
     },
     crossCompanyLookup,
     retrySync,
