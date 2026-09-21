@@ -232,6 +232,20 @@
       "when": 1790017684319,
       "tag": "0032_audit_trail_payload_purge_tick",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790018244745,
+      "tag": "0033_pausar_purge_auditoria_e_reduzir_lote",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790018312248,
+      "tag": "0034_purge_auditoria_sem_lock_exclusivo",
+      "breakpoints": true
     }
   ]
 }
