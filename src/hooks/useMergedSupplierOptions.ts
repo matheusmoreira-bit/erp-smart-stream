@@ -295,25 +295,45 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
 
   // 2) Linhas locais em public.suppliers da empresa atual — inclui fornecedores
   //    que falharam ou ainda não subiram ao SAP.
-  const [localRows, setLocalRows] = useState<any[]>([]);
+  //    Cache compartilhado em memória por empresa: a tabela muda pouco e cada
+  //    mount refazia a consulta (centenas de milhares de leituras/mês). O
+  //    realtime abaixo invalida o cache quando algo muda de verdade.
+  const [localRows, setLocalRows] = useState<any[]>(() => localCache.get(companyDb || "")?.rows || []);
 
-  const fetchLocal = useCallback(async () => {
+  const fetchLocal = useCallback(async (force = false) => {
     if (!companyDb) {
       setLocalRows([]);
       return;
     }
-    const { data, error } = await (supabase as any)
-      .from("suppliers")
-      .select(
-        "id, card_code, card_name, federal_tax_id, u_fgr_taxid0, currency, sap_sync_status, sap_sync_error, is_active",
-      )
-      .eq("company_db", companyDb);
-    if (!error) setLocalRows(data || []);
+    const cached = localCache.get(companyDb);
+    if (!force && cached && Date.now() - cached.at < LOCAL_TTL_MS) {
+      setLocalRows(cached.rows);
+      return;
+    }
+    const inflightKey = companyDb;
+    let p = localInflight.get(inflightKey);
+    if (!p) {
+      p = (async () => {
+        const { data, error } = await (supabase as any)
+          .from("suppliers")
+          .select(
+            "id, card_code, card_name, federal_tax_id, u_fgr_taxid0, currency, sap_sync_status, sap_sync_error, is_active",
+          )
+          .eq("company_db", companyDb);
+        if (error) return localCache.get(inflightKey)?.rows || [];
+        const rows = data || [];
+        localCache.set(inflightKey, { rows, at: Date.now() });
+        return rows;
+      })().finally(() => localInflight.delete(inflightKey));
+      localInflight.set(inflightKey, p);
+    }
+    setLocalRows(await p);
   }, [companyDb]);
 
   useEffect(() => {
     void fetchLocal();
   }, [fetchLocal]);
+
 
   // 3) Realtime: qualquer mudança em suppliers da empresa (ou no cache de
   //    listas do SAP, inclusive quando outra aba/edge function o invalida)
