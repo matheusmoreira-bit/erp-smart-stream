@@ -303,33 +303,40 @@ export default function AuditTrailPage({ embedded = false }: { embedded?: boolea
     ? "0 registros"
     : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} de ${total.toLocaleString("pt-BR")}`;
 
+  const headerActions = (
+    <>
+      <Button variant="outline" size="sm" onClick={load} disabled={isLoading}>
+        <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+        Atualizar
+      </Button>
+      <Button variant="outline" size="sm" onClick={() => void exportCsv()} disabled={exporting}>
+        <Download className={`w-4 h-4 mr-2 ${exporting ? "animate-pulse" : ""}`} />
+        {exporting ? "Exportando..." : "Exportar CSV"}
+      </Button>
+      <Button size="sm" onClick={runVerify} disabled={verifying}>
+        {verifyResult?.ok === false ? (
+          <ShieldAlert className="w-4 h-4 mr-2" />
+        ) : (
+          <ShieldCheck className="w-4 h-4 mr-2" />
+        )}
+        {verifying ? "Verificando..." : "Verificar integridade"}
+      </Button>
+    </>
+  );
+
   return (
-    <div className="min-h-screen bg-background">
-      <BackofficePageHeader
-        title="Audit Trail"
-        description="Registro imutável (append-only + hash chain) de todas as operações do banco"
-        icon={<ScrollText className="w-5 h-5 text-primary" />}
-        actions={
-          <>
-            <Button variant="outline" size="sm" onClick={load} disabled={isLoading}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-              Atualizar
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => void exportCsv()} disabled={exporting}>
-              <Download className={`w-4 h-4 mr-2 ${exporting ? "animate-pulse" : ""}`} />
-              {exporting ? "Exportando..." : "Exportar CSV"}
-            </Button>
-            <Button size="sm" onClick={runVerify} disabled={verifying}>
-              {verifyResult?.ok === false ? (
-                <ShieldAlert className="w-4 h-4 mr-2" />
-              ) : (
-                <ShieldCheck className="w-4 h-4 mr-2" />
-              )}
-              {verifying ? "Verificando..." : "Verificar integridade"}
-            </Button>
-          </>
-        }
-      />
+    <div className={embedded ? "" : "min-h-screen bg-background"}>
+      {embedded ? (
+        <div className="max-w-7xl mx-auto px-6 pt-6 flex flex-wrap justify-end gap-2">{headerActions}</div>
+      ) : (
+        <BackofficePageHeader
+          title="Audit Trail"
+          description="Registro imutável (append-only + hash chain) de todas as operações do banco"
+          icon={<ScrollText className="w-5 h-5 text-primary" />}
+          actions={headerActions}
+        />
+      )}
+
 
 
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-4">
