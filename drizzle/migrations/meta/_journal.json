@@ -274,6 +274,13 @@
       "when": 1790020473096,
       "tag": "0038_retencao_telemetria",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790020598044,
+      "tag": "0039_indice_audit_log_actor_email",
+      "breakpoints": true
     }
   ]
 }
