@@ -267,6 +267,13 @@
       "when": 1790020358956,
       "tag": "0037_tabelas_uso_exclusivo_servico",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790020473096,
+      "tag": "0038_retencao_telemetria",
+      "breakpoints": true
     }
   ]
 }
