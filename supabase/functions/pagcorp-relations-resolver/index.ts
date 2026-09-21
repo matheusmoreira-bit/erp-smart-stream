@@ -19,6 +19,9 @@ const corsHeaders = {
 };
 
 const STALE_MINUTES = 5;
+// Relações já completas (PC + NF + pagamento) só são revisitadas 1x por dia.
+const COMPLETE_STALE_MINUTES = 1440;
+
 const BATCH_SIZE = 200;
 
 interface LogRow {
