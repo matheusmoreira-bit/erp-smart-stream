@@ -281,6 +281,8 @@ export const modules: Record<string, ModuleCard> = {
       { label: "Cruzamento Fiscal × Pagamentos", path: "/auditoria/cruzamento", moduleKey: "fiscal_audit" },
       { label: "KYP — Fornecedores", path: "/auditoria/kyp", moduleKey: "kyp" },
       { label: "Logs do Sistema", path: "/auditoria/logs", moduleKey: "audit_log" },
+      { label: "Trilha de auditoria", path: "/auditoria/trilha", moduleKey: "audit_log" },
+      { label: "Trilha por documento", path: "/auditoria/documento", moduleKey: "audit_log" },
     ],
   },
 };
