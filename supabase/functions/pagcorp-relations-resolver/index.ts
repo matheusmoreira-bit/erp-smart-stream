@@ -449,15 +449,23 @@ Deno.serve(async (req) => {
       logs = (data || []) as LogRow[];
     } else {
       // Modo cron: logs com sap_doc_entry setado e relação stale.
+      // Relação já completa (PC + NF + pagamento, sem erro) só é revisitada
+      // uma vez por dia; relações incompletas seguem o intervalo curto.
       const cutoff = new Date(Date.now() - STALE_MINUTES * 60_000).toISOString();
-      // Left join simulado: pega logs cujo pagcorp_document_relations.last_resolved_at
-      // não existe ou é anterior ao cutoff. Simplificamos com 2 queries.
+      const completeCutoff = new Date(Date.now() - COMPLETE_STALE_MINUTES * 60_000).toISOString();
       const { data: recent, error: recErr } = await sb
         .from("pagcorp_document_relations")
-        .select("pagcorp_log_id")
-        .gt("last_resolved_at", cutoff);
+        .select("pagcorp_log_id, last_resolved_at, po_found, nf_found, payment_found, resolve_error")
+        .gt("last_resolved_at", completeCutoff);
       if (recErr) throw new Error(recErr.message);
-      const fresh = new Set((recent || []).map((r: { pagcorp_log_id: string }) => r.pagcorp_log_id));
+      type RelRow = { pagcorp_log_id: string; last_resolved_at: string; po_found: boolean | null; nf_found: boolean | null; payment_found: boolean | null; resolve_error: string | null };
+      const fresh = new Set(
+        (recent || [] as RelRow[]).filter((r: RelRow) => {
+          const complete = !!r.po_found && !!r.nf_found && !!r.payment_found && !r.resolve_error;
+          return complete ? true : r.last_resolved_at > cutoff;
+        }).map((r: RelRow) => r.pagcorp_log_id),
+      );
+
       const { data, error } = await sb
         .from("pagcorp_integration_log")
         .select("id, pagcorp_expense_id, company_db, sap_doc_entry, pagcorp_data")
