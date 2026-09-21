@@ -10634,6 +10634,7 @@ export type Database = {
           remaining: number
         }[]
       }
+      purge_audit_trail_payloads_tick: { Args: never; Returns: string }
       purge_expense_action_idempotency: {
         Args: {
           _completed_retention_hours?: number
