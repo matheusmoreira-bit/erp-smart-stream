@@ -288,6 +288,13 @@
       "when": 1790021003404,
       "tag": "0040_relatorio_identidades_duplicadas",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1790024553670,
+      "tag": "0041_restrict_company_sensitive_columns",
+      "breakpoints": true
     }
   ]
 }

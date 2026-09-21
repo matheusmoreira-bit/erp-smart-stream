@@ -10024,6 +10024,35 @@ export type Database = {
           official_name: string
         }[]
       }
+      admin_list_companies: {
+        Args: never
+        Returns: {
+          company_db: string
+          created_at: string
+          default_currency: string
+          display_name: string
+          erp_type: string
+          foreign_name: string | null
+          id: string
+          is_active: boolean
+          is_foreign: boolean
+          is_test: boolean
+          legal_name: string | null
+          logo_url: string | null
+          service_layer_url: string | null
+          targets: Json
+          tax_id: string | null
+          timezone: string
+          trade_name: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "companies"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       api_key_register_use: { Args: { _id: string }; Returns: undefined }
       approvals_feed_bundle: { Args: { _company_db: string }; Returns: Json }
       archive_audit_trail: {
@@ -10154,6 +10183,7 @@ export type Database = {
         Args: { _campaign_id: string }
         Returns: undefined
       }
+      company_tax_id: { Args: { _company_db: string }; Returns: string }
       consume_csrf_token: {
         Args: { _purpose: string; _subject: string; _token_hash: string }
         Returns: boolean
