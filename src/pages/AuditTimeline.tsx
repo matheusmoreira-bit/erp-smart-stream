@@ -38,7 +38,7 @@ const fmtDate = (v: string | null) => (v ? new Date(v).toLocaleString("pt-BR") :
 const fmtMoney = (v: number | null, c: string | null) =>
   v == null ? "—" : `${c ?? "BRL"} ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
-export default function AuditTimeline() {
+export default function AuditTimeline({ embedded = false }: { embedded?: boolean } = {}) {
   const [params, setParams] = useSearchParams();
   const [term, setTerm] = useState(params.get("q") ?? "");
   const [rows, setRows] = useState<DocRow[]>([]);
