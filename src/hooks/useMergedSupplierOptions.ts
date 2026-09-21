@@ -481,7 +481,7 @@ export function useMergedSupplierOptions({ companyDb, isSales = false }: Options
     // Não bloqueia o hook — chamador usa `resendSupplierToSap` de useSuppliers
     // se quiser encadear ação. Aqui, só invalida caches para recarregar.
     if (companyDb) await invalidateSapCache([cacheKey, hanaCacheKey], companyDb);
-    await fetchLocal();
+    await fetchLocal(true);
   }, [cacheKey, hanaCacheKey, companyDb, fetchLocal]);
 
   const activeCount = useMemo(
