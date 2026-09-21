@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -45,7 +45,6 @@ import Profile from "./pages/Profile.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Backoffice from "./pages/Admin.tsx";
 import SapUsersReplicate from "./pages/SapUsersReplicate.tsx";
-import AuditTrail from "./pages/AuditTrail.tsx";
 import TransferApprovalsHistory from "./pages/TransferApprovalsHistory.tsx";
 import SapStatusSync from "./pages/SapStatusSync.tsx";
 import SapSyncRuns from "./pages/SapSyncRuns.tsx";
@@ -54,7 +53,6 @@ import InfraHealth from "./pages/InfraHealth.tsx";
 import DbPerformance from "./pages/DbPerformance.tsx";
 import FlowPerformance from "./pages/FlowPerformance.tsx";
 import IntegrationHealth from "./pages/IntegrationHealth.tsx";
-import AuditTimeline from "./pages/AuditTimeline.tsx";
 import AccessReview from "./pages/AccessReview.tsx";
 import ApiKeys from "./pages/ApiKeys.tsx";
 
@@ -63,7 +61,6 @@ import SlaDashboard from "./pages/SlaDashboard.tsx";
 import BackofficeRetryQueue from "./pages/BackofficeRetryQueue.tsx";
 import BackofficeRoadmap from "./pages/BackofficeRoadmap.tsx";
 
-import PagCorpSettlementAudit from "./pages/PagCorpSettlementAudit.tsx";
 import { AdminRoute } from "./components/AdminRoute.tsx";
 import { GlobalAiChat } from "./components/GlobalAiChat.tsx";
 import { WhatsNewWizard } from "./components/WhatsNewWizard.tsx";
@@ -87,6 +84,12 @@ const queryClient = new QueryClient();
 const protect = (moduleKey: string, element: JSX.Element) => (
   <ModuleRoute moduleKey={moduleKey}>{element}</ModuleRoute>
 );
+
+/** Rota legada da trilha por documento → aba unificada, preservando os parâmetros. */
+const AuditTimelineRedirect = () => {
+  const { search } = useLocation();
+  return <Navigate to={`/auditoria/documento${search}`} replace />;
+};
 
 const App = () => (
   <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="erp-theme">
@@ -120,8 +123,8 @@ const App = () => (
               <Route path="/backoffice" element={<AdminRoute><Backoffice /></AdminRoute>} />
               <Route path="/backoffice/sap-users" element={<Navigate to="/usuarios/sap" replace />} />
               <Route path="/backoffice/sap-users/replicate" element={<AdminRoute><SapUsersReplicate /></AdminRoute>} />
-              <Route path="/backoffice/audit-trail" element={<AdminRoute><AuditTrail /></AdminRoute>} />
-              <Route path="/backoffice/trilha-documento" element={<AdminRoute><AuditTimeline /></AdminRoute>} />
+              <Route path="/backoffice/audit-trail" element={<Navigate to="/auditoria/trilha" replace />} />
+              <Route path="/backoffice/trilha-documento" element={<AuditTimelineRedirect />} />
               <Route path="/backoffice/transfer-history" element={<AdminRoute><TransferApprovalsHistory /></AdminRoute>} />
               <Route path="/backoffice/sap-sync" element={<AdminRoute><SapStatusSync /></AdminRoute>} />
               <Route path="/backoffice/sap-sync/execucoes" element={<AdminRoute><SapSyncRuns /></AdminRoute>} />
@@ -138,7 +141,7 @@ const App = () => (
               <Route path="/backoffice/sla-dashboard" element={<AdminRoute><SlaDashboard /></AdminRoute>} />
               <Route path="/backoffice/roadmap" element={<AdminRoute><BackofficeRoadmap /></AdminRoute>} />
 
-              <Route path="/backoffice/baixas-pagcorp" element={<AdminRoute><PagCorpSettlementAudit /></AdminRoute>} />
+              <Route path="/backoffice/baixas-pagcorp" element={<Navigate to="/auditoria/baixas-pagcorp" replace />} />
 
 
 
@@ -186,6 +189,9 @@ const App = () => (
               <Route path="/auditoria/kyp" element={protect("audit_console", <AuditHub tab="kyp" />)} />
 
               <Route path="/auditoria/logs" element={protect("audit_console", <AuditHub tab="logs" />)} />
+              <Route path="/auditoria/trilha" element={<AdminRoute><AuditHub tab="trilha" /></AdminRoute>} />
+              <Route path="/auditoria/documento" element={<AdminRoute><AuditHub tab="documento" /></AdminRoute>} />
+              <Route path="/auditoria/baixas-pagcorp" element={<AdminRoute><AuditHub tab="baixas" /></AdminRoute>} />
 
               {/* Integrações */}
               <Route path="/integracoes" element={<Navigate to="/integracoes/automacoes" replace />} />

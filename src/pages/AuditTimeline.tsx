@@ -38,7 +38,7 @@ const fmtDate = (v: string | null) => (v ? new Date(v).toLocaleString("pt-BR") :
 const fmtMoney = (v: number | null, c: string | null) =>
   v == null ? "—" : `${c ?? "BRL"} ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
-export default function AuditTimeline() {
+export default function AuditTimeline({ embedded = false }: { embedded?: boolean } = {}) {
   const [params, setParams] = useSearchParams();
   const [term, setTerm] = useState(params.get("q") ?? "");
   const [rows, setRows] = useState<DocRow[]>([]);
@@ -103,11 +103,13 @@ export default function AuditTimeline() {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      <BackofficePageHeader
-        title="Trilha de Auditoria Unificada"
-        description="Uma única linha do tempo por documento, reunindo eventos de ERP, SAP, aprovações, integrações, notificações e alterações de dados."
-        icon={<History className="h-5 w-5 text-muted-foreground" />}
-      />
+      {!embedded && (
+        <BackofficePageHeader
+          title="Trilha de Auditoria Unificada"
+          description="Uma única linha do tempo por documento, reunindo eventos de ERP, SAP, aprovações, integrações, notificações e alterações de dados."
+          icon={<History className="h-5 w-5 text-muted-foreground" />}
+        />
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,380px)_1fr]">
         <Card className="h-fit">

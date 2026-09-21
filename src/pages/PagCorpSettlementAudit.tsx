@@ -92,7 +92,7 @@ function dateBr(iso: string | null) {
   return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR");
 }
 
-export default function PagCorpSettlementAudit() {
+export default function PagCorpSettlementAudit({ embedded = false }: { embedded?: boolean } = {}) {
   const [findings, setFindings] = useState<AuditFinding[]>([]);
   const [errors, setErrors] = useState<Array<{ companyDb: string; message: string }>>([]);
   const [loading, setLoading] = useState(false);
@@ -251,11 +251,13 @@ export default function PagCorpSettlementAudit() {
   }, [visible]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <BackofficePageHeader
-        title="Auditoria de baixas PagCorp"
-        description="Compara as baixas (pagamentos de fornecedor) criadas pelo ERP Flow com o valor das transações PagCorp e o total da NF no ERP. Somente leitura — nada é alterado."
-      />
+    <div className={embedded ? "" : "min-h-screen bg-background"}>
+      {!embedded && (
+        <BackofficePageHeader
+          title="Auditoria de baixas PagCorp"
+          description="Compara as baixas (pagamentos de fornecedor) criadas pelo ERP Flow com o valor das transações PagCorp e o total da NF no ERP. Somente leitura — nada é alterado."
+        />
+      )}
 
       <main className="container mx-auto px-4 py-6 space-y-4">
         <Alert>

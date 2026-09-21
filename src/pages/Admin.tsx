@@ -143,8 +143,8 @@ const BACKOFFICE_MORE_GROUPS: { label: string; items: BackofficeNavItem[] }[] = 
   {
     label: "Observabilidade",
     items: [
-      { key: "audit_trail", label: "Trilha de auditoria", icon: FileCheck2, to: "/backoffice/audit-trail" },
-      { key: "document_timeline", label: "Trilha por documento", icon: HistoryIcon, to: "/backoffice/trilha-documento" },
+      { key: "audit_trail", label: "Trilha de auditoria", icon: FileCheck2, to: "/auditoria/trilha" },
+      { key: "document_timeline", label: "Trilha por documento", icon: HistoryIcon, to: "/auditoria/documento" },
       { key: "integration_health", label: "Saúde das integrações", icon: Activity, to: "/backoffice/saude-integracoes" },
       { key: "infra_health", label: "Infraestrutura e backups", icon: Server, to: "/backoffice/infra-health" },
       { key: "db_performance", label: "Desempenho do banco", icon: Database, to: "/backoffice/desempenho-banco" },
@@ -155,7 +155,7 @@ const BACKOFFICE_MORE_GROUPS: { label: string; items: BackofficeNavItem[] }[] = 
     label: "Operação Assistida",
     items: [
       { key: "retry_queue", label: "Fila de retentativas", icon: RefreshCw, to: "/backoffice/retry-queue" },
-      { key: "pagcorp_audit", label: "Auditoria de baixas PagCorp", icon: FileCheck2, to: "/backoffice/baixas-pagcorp" },
+      { key: "pagcorp_audit", label: "Auditoria de baixas PagCorp", icon: FileCheck2, to: "/auditoria/baixas-pagcorp" },
       { key: "sla_escalation", label: "Escalonamento por SLA", icon: AlarmClock, to: "/backoffice/sla-escalonamento" },
       { key: "sla_dashboard", label: "Dashboard de SLA", icon: TrendingUp, to: "/backoffice/sla-dashboard" },
       { key: "roadmap", label: "Roadmap", icon: Rocket, to: "/backoffice/roadmap" },

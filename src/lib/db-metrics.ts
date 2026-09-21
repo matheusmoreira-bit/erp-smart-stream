@@ -41,7 +41,7 @@ const EXTRA_SCREEN_LABELS: Record<string, string> = {
   "/backoffice/desempenho-banco": "Backoffice · Desempenho do banco",
   "/backoffice/saude-integracoes": "Backoffice · Saúde das integrações",
   "/backoffice/retry-queue": "Backoffice · Fila de retentativas",
-  "/backoffice/audit-trail": "Backoffice · Trilha de auditoria",
+  "/auditoria/trilha": "Auditoria · Trilha de auditoria",
   "/backoffice/copiloto": "Backoffice · Copiloto",
   "/perfil": "Perfil",
   "/usuarios": "Usuários",

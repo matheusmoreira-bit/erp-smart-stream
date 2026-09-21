@@ -65,7 +65,7 @@ function categoryLabel(cat: string | null): string {
 
 /** Link da trilha unificada do documento (abre a linha do tempo já filtrada). */
 function docTrailLink(row: Pick<Row, "ref_id">): string {
-  return `/backoffice/trilha-documento?q=${encodeURIComponent(row.ref_id)}&doc=${encodeURIComponent(row.ref_id)}`;
+  return `/auditoria/documento?q=${encodeURIComponent(row.ref_id)}&doc=${encodeURIComponent(row.ref_id)}`;
 }
 
 /** Link da tela onde o documento é operado (pedido de compra). */
