@@ -45,7 +45,6 @@ import Profile from "./pages/Profile.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Backoffice from "./pages/Admin.tsx";
 import SapUsersReplicate from "./pages/SapUsersReplicate.tsx";
-import AuditTrail from "./pages/AuditTrail.tsx";
 import TransferApprovalsHistory from "./pages/TransferApprovalsHistory.tsx";
 import SapStatusSync from "./pages/SapStatusSync.tsx";
 import SapSyncRuns from "./pages/SapSyncRuns.tsx";
@@ -54,7 +53,6 @@ import InfraHealth from "./pages/InfraHealth.tsx";
 import DbPerformance from "./pages/DbPerformance.tsx";
 import FlowPerformance from "./pages/FlowPerformance.tsx";
 import IntegrationHealth from "./pages/IntegrationHealth.tsx";
-import AuditTimeline from "./pages/AuditTimeline.tsx";
 import AccessReview from "./pages/AccessReview.tsx";
 import ApiKeys from "./pages/ApiKeys.tsx";
 
@@ -63,7 +61,6 @@ import SlaDashboard from "./pages/SlaDashboard.tsx";
 import BackofficeRetryQueue from "./pages/BackofficeRetryQueue.tsx";
 import BackofficeRoadmap from "./pages/BackofficeRoadmap.tsx";
 
-import PagCorpSettlementAudit from "./pages/PagCorpSettlementAudit.tsx";
 import { AdminRoute } from "./components/AdminRoute.tsx";
 import { GlobalAiChat } from "./components/GlobalAiChat.tsx";
 import { WhatsNewWizard } from "./components/WhatsNewWizard.tsx";
@@ -186,6 +183,9 @@ const App = () => (
               <Route path="/auditoria/kyp" element={protect("audit_console", <AuditHub tab="kyp" />)} />
 
               <Route path="/auditoria/logs" element={protect("audit_console", <AuditHub tab="logs" />)} />
+              <Route path="/auditoria/trilha" element={<AdminRoute><AuditHub tab="trilha" /></AdminRoute>} />
+              <Route path="/auditoria/documento" element={<AdminRoute><AuditHub tab="documento" /></AdminRoute>} />
+              <Route path="/auditoria/baixas-pagcorp" element={<AdminRoute><AuditHub tab="baixas" /></AdminRoute>} />
 
               {/* Integrações */}
               <Route path="/integracoes" element={<Navigate to="/integracoes/automacoes" replace />} />
