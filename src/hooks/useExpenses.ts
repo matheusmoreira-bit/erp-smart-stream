@@ -925,6 +925,7 @@ export function useExpenses(
           nfse_split_mode: input.nfse_split_mode || "unified",
           sales_usage: input.sales_usage || null,
           attachment_count: input.files?.length || 0,
+          defer_submit_supported: true,
           items: enrichedItems,
         },
       });
