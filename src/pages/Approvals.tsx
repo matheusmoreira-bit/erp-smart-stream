@@ -2069,7 +2069,7 @@ async function decideSapApprovalRequest(
   // pode aceitar um PATCH ambíguo sem alterar a decisão deste aprovador.
   const userKey = await getCurrentSapUserKey(session);
   const request = await getSapApprovalRequest(session, code);
-  const decisions = request.ApprovalRequestDecisions || [];
+  const decisions = decisionRowsOf(request);
   if (findCompletedDecisionForAction(decisions, userKey, action)) {
     return { recoveredFromSapError: true };
   }
@@ -2096,7 +2096,7 @@ async function decideSapApprovalRequest(
     for (const delayMs of [300, 700, 1400, 2500]) {
       await new Promise((resolve) => setTimeout(resolve, delayMs));
       const fresh = await getSapApprovalRequest(session, code);
-      if (findCompletedDecisionForAction(fresh.ApprovalRequestDecisions || [], userKey, action)) {
+      if (findCompletedDecisionForAction(decisionRowsOf(fresh), userKey, action)) {
         return { recoveredFromSapError: false };
       }
     }
@@ -2107,7 +2107,7 @@ async function decideSapApprovalRequest(
     const message = e instanceof Error ? e.message : String(e);
     try {
       const fresh = await getSapApprovalRequest(session, code);
-      const freshDecisions = fresh.ApprovalRequestDecisions || [];
+      const freshDecisions = decisionRowsOf(fresh);
       if (findCompletedDecisionForAction(freshDecisions, userKey, action)) {
         return { recoveredFromSapError: true };
       }
