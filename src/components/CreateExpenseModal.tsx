@@ -1273,6 +1273,29 @@ export function CreateExpenseModal({
 
 
 
+  // ---- Planilha/texto de rateio como referência das linhas do pedido ----
+  const fileKey = (f: File) => `${f.name}:${f.size}`;
+  const rateioCheckedRef = useRef<Set<string>>(new Set());
+  const rateioFilesRef = useRef<Set<string>>(new Set());
+
+  /** Procura, entre os anexos novos, um arquivo com estrutura de rateio. */
+  const detectRateio = async (candidates: File[]): Promise<boolean> => {
+    let found = false;
+    for (const f of candidates) {
+      const key = fileKey(f);
+      if (rateioCheckedRef.current.has(key)) continue;
+      rateioCheckedRef.current.add(key);
+      const parsed = await parseRateioFile(f);
+      if (parsed && parsed.rows.length > 0) {
+        rateioFilesRef.current.add(key);
+        setRateioPreview({ fileName: f.name, result: parsed });
+        found = true;
+        break;
+      }
+    }
+    return found;
+  };
+
   const handleFiles = (newFiles: FileList | File[]) => {
     const { valid, errors } = validateAttachments(newFiles);
     for (const msg of errors) toast.error(msg);
@@ -1281,14 +1304,63 @@ export function CreateExpenseModal({
     // vários arquivos em sequência rápida, antes do re-render).
     setFiles((prev) => {
       const next = [...prev, ...valid];
-      if (aiEnabled) queueMicrotask(() => processWithAI(next));
+      const candidates = valid.filter(isRateioCandidate);
+      void (async () => {
+        if (candidates.length > 0) await detectRateio(candidates);
+        if (!aiEnabled) return;
+        // Planilhas de rateio não vão para a IA fiscal: elas já descrevem
+        // as linhas do pedido e só confundiriam a extração do documento.
+        const forAi = next.filter((f) => !rateioFilesRef.current.has(fileKey(f)));
+        if (forAi.length > 0) processWithAI(forAi);
+      })();
       return next;
     });
   };
 
   const removeFile = (index: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
+    setFiles((prev) => {
+      const target = prev[index];
+      if (target) rateioFilesRef.current.delete(fileKey(target));
+      return prev.filter((_, i) => i !== index);
+    });
   };
+
+  /** Substitui as linhas do pedido pelas linhas da planilha de rateio. */
+  const applyRateioRows = (rows: RateioRow[]) => {
+    const resolve = (list: SapSearchOption[], code: string) =>
+      code ? list.find((o) => o.code === code) || { code, name: code, extra: "" } : null;
+    const resolveByCodeOrName = (list: SapSearchOption[], value: string) => {
+      if (!value) return null;
+      const v = value.trim().toLowerCase();
+      return (
+        list.find((o) => o.code.toLowerCase() === v) ||
+        list.find((o) => (o.name || "").toLowerCase() === v) ||
+        { code: value.trim(), name: value.trim(), extra: "" }
+      );
+    };
+    const next = rows.map((r) => {
+      const ccOpt = resolve(costCenterOptions, r.cost_center);
+      const prOpt = resolveByCodeOrName(projectOptionsForCc(ccOpt?.code ?? null), r.project);
+      const itOpt = resolve(itemOptions, r.item_code);
+      const quantity = r.quantity > 0 ? r.quantity : 1;
+      const unitPrice = r.unit_price;
+      return {
+        item_code: itOpt?.code || "",
+        description: r.description || itOpt?.name || "",
+        quantity,
+        unit_price: unitPrice,
+        line_total: Math.round(quantity * unitPrice * 100) / 100,
+        cost_center: ccOpt?.code || "",
+        project: prOpt?.code || "",
+        sapItem: itOpt,
+        sapCostCenter: ccOpt,
+        sapProject: prOpt,
+      };
+    });
+    setItems(next);
+    toast.success(`${next.length} linha(s) de rateio aplicadas ao pedido.`);
+  };
+
 
   // Aplica UM grupo de documentos fiscais (todos do MESMO fornecedor).
   // Usa o primeiro doc como fonte do cabeçalho e concatena os itens de todos.
