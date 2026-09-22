@@ -6,6 +6,7 @@
 // Auth: scheduler/service-role or Cloud admin only.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { logSend } from "../_shared/send-log.ts";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
 import { listStandaloneCompanies } from "../_shared/standalone-mode.ts";
 import { isTestCompanyDb } from "../_shared/watcher-lock.ts";
@@ -55,6 +56,14 @@ async function sendWhatsApp(to: string, message: string) {
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: body.toString(),
+    });
+    await logSend({
+      channel: "whatsapp",
+      recipient: to,
+      status: resp.ok ? "sent" : "failed",
+      subject: message.slice(0, 120),
+      errorMessage: resp.ok ? null : `HTTP ${resp.status}`,
+      source: "expense-integration-retry",
     });
     return { ok: resp.ok, status: resp.status };
   } catch (e) {

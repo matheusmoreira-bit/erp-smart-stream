@@ -7,6 +7,7 @@
 // Histórico dos disparos:      public.integration_health_alerts
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { logSend } from "../_shared/send-log.ts";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { filterHealthAlertRecipients } from "../_shared/health-alert-optout.ts";
@@ -111,6 +112,14 @@ async function sendSlack(channel: string, text: string): Promise<{ ok: boolean; 
       body: JSON.stringify({ channel, text, unfurl_links: false }),
     });
     const body = await res.text().catch(() => "");
+    await logSend({
+      channel: "slack",
+      recipient: channel,
+      status: res.ok ? "sent" : "failed",
+      subject: text.slice(0, 120),
+      errorMessage: res.ok ? null : `slack ${res.status}`,
+      source: "integration-health-alerts",
+    });
     if (!res.ok) return { ok: false, detail: `slack ${res.status}: ${body.slice(0, 200)}` };
     let parsed: any = null;
     try { parsed = JSON.parse(body); } catch { /* ignore */ }

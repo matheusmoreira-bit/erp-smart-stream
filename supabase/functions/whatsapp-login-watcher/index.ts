@@ -3,6 +3,7 @@
 // (sem login bem sucedido entre elas) nas últimas 6 horas.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { logSend } from "../_shared/send-log.ts";
 import { tryWatcherLock, releaseWatcherLock } from "../_shared/watcher-lock.ts";
 import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
@@ -103,7 +104,16 @@ async function sendWhatsApp(message: string) {
     },
     body: body.toString(),
   });
-  return { ok: resp.ok, status: resp.status, body: await resp.text().catch(() => "") };
+  const respBody = await resp.text().catch(() => "");
+  await logSend({
+    channel: "whatsapp",
+    recipient: WHATSAPP_TO,
+    status: resp.ok ? "sent" : "failed",
+    subject: message.slice(0, 120),
+    errorMessage: resp.ok ? null : `${resp.status} ${respBody.slice(0, 200)}`,
+    source: "whatsapp-login-watcher",
+  });
+  return { ok: resp.ok, status: resp.status, body: respBody };
 }
 
 interface CompanyResult {

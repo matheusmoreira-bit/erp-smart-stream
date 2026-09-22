@@ -1,3 +1,4 @@
+import { logSend } from "./send-log.ts";
 // MEDIDA EMERGENCIAL — 09/09/2026
 // O SAP está recusando qualquer upload de anexo ("Attachments folder not
 // defined..."). Durante este dia, documentos de compra que falharem SOMENTE por
@@ -49,6 +50,14 @@ export async function sendEmergencyWhatsApp(to: string, message: string) {
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({ to, message }).toString(),
+    });
+    await logSend({
+      channel: "whatsapp",
+      recipient: to,
+      status: resp.ok ? "sent" : "failed",
+      subject: message.slice(0, 120),
+      errorMessage: resp.ok ? null : `HTTP ${resp.status}`,
+      source: "attachment-emergency",
     });
     return { ok: resp.ok, status: resp.status };
   } catch (e) {

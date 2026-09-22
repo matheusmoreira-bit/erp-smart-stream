@@ -3,6 +3,7 @@
 // Inclui empresa, link do erp-flow e a descrição de cada pendência.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { logSend } from "../_shared/send-log.ts";
 import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
 import { listSapUsersHybrid } from "../_shared/sap-users-hybrid.ts";
 import { tryWatcherLock, releaseWatcherLock } from "../_shared/watcher-lock.ts";
@@ -109,7 +110,16 @@ async function sendWhatsApp(to: string, message: string) {
     headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, "Content-Type": "application/x-www-form-urlencoded" },
     body: body.toString(),
   });
-  return { ok: resp.ok, status: resp.status, body: await resp.text().catch(() => "") };
+  const respBody = await resp.text().catch(() => "");
+  await logSend({
+    channel: "whatsapp",
+    recipient: typeof to === "string" ? to : WHATSAPP_TO,
+    status: resp.ok ? "sent" : "failed",
+    subject: message.slice(0, 120),
+    errorMessage: resp.ok ? null : `${resp.status} ${respBody.slice(0, 200)}`,
+    source: "whatsapp-approval-digest",
+  });
+  return { ok: resp.ok, status: resp.status, body: respBody };
 }
 
 interface CompanyDigestResult {

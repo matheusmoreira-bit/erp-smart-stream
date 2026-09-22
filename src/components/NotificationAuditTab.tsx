@@ -8,8 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, RefreshCw, MessageCircle, Mail, AlertTriangle, ShieldCheck, Search } from "lucide-react";
 import { format } from "date-fns";
 
-type Channel = "whatsapp" | "email" | "in_app";
-type Kind = "approval" | "login_failure" | "license_idle" | "in_app";
+type Channel = "whatsapp" | "email" | "in_app" | "push" | "slack" | "sms";
+type Kind = "approval" | "login_failure" | "license_idle" | "in_app" | "envio";
 
 interface AuditEntry {
   id: string;
@@ -28,6 +28,7 @@ const KIND_LABEL: Record<Kind, string> = {
   login_failure: "Falha de login",
   license_idle: "Licença ociosa",
   in_app: "In-App",
+  envio: "Envio",
 };
 
 const KIND_COLOR: Record<Kind, string> = {
@@ -35,6 +36,7 @@ const KIND_COLOR: Record<Kind, string> = {
   login_failure: "bg-red-500/15 text-red-600 border-red-500/30",
   license_idle: "bg-amber-500/15 text-amber-600 border-amber-500/30",
   in_app: "bg-violet-500/15 text-violet-600 border-violet-500/30",
+  envio: "bg-emerald-500/15 text-emerald-600 border-emerald-500/30",
 };
 
 function ChannelIcon({ channel }: { channel: Channel }) {
@@ -59,7 +61,7 @@ export function NotificationAuditTab() {
       const fromIso = new Date(`${from}T00:00:00`).toISOString();
       const toIso = new Date(`${to}T23:59:59.999`).toISOString();
 
-      const [approvals, logins, idle, inApp] = await Promise.all([
+      const [approvals, logins, idle, inApp, sends] = await Promise.all([
         supabase
           .from("whatsapp_approval_alerts")
           .select("id, sent_at, whatsapp_to, company_db, approval_request_id, payload")
@@ -85,6 +87,13 @@ export function NotificationAuditTab() {
           .lte("created_at", toIso)
           .order("created_at", { ascending: false })
           .limit(500),
+        supabase
+          .from("message_send_log")
+          .select("id, created_at, channel, recipient, subject, status, error_message, source, company_db, metadata")
+          .gte("created_at", fromIso)
+          .lte("created_at", toIso)
+          .order("created_at", { ascending: false })
+          .limit(1000),
       ]);
 
       const merged: AuditEntry[] = [];
@@ -148,6 +157,23 @@ export function NotificationAuditTab() {
           payload: (r.metadata || {}) as Record<string, unknown>,
         });
       }
+
+      for (const r of sends.data || []) {
+        merged.push({
+          id: `ms-${r.id}`,
+          sent_at: r.created_at,
+          channel: (r.channel || "email") as Channel,
+          kind: "envio",
+          recipient: r.recipient,
+          company_db: r.company_db,
+          title: r.subject || `Envio ${r.channel}`,
+          details: [r.source, r.status === "sent" ? "enviado" : `falhou: ${r.error_message ?? ""}`]
+            .filter(Boolean)
+            .join(" • "),
+          payload: (r.metadata || {}) as Record<string, unknown>,
+        });
+      }
+
 
       merged.sort((a, b) => (a.sent_at < b.sent_at ? 1 : -1));
       setEntries(merged);
