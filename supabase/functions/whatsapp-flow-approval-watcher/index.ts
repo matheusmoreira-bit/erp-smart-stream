@@ -5,6 +5,7 @@
 // o aprovador atual. Dedup de 24h por (empresa, documento, aprovador).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { logSend } from "../_shared/send-log.ts";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
 
@@ -76,7 +77,16 @@ async function sendWhatsApp(to: string, message: string) {
     },
     body: body.toString(),
   });
-  return { ok: resp.ok, status: resp.status, body: await resp.text().catch(() => "") };
+  const respBody = await resp.text().catch(() => "");
+  await logSend({
+    channel: "whatsapp",
+    recipient: typeof to === "string" ? to : WHATSAPP_TO,
+    status: resp.ok ? "sent" : "failed",
+    subject: message.slice(0, 120),
+    errorMessage: resp.ok ? null : `${resp.status} ${respBody.slice(0, 200)}`,
+    source: "whatsapp-flow-approval-watcher",
+  });
+  return { ok: resp.ok, status: resp.status, body: respBody };
 }
 
 function money(v: unknown, currency?: string | null) {

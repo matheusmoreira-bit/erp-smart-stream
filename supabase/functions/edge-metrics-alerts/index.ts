@@ -1,6 +1,7 @@
 // Envia alertas WhatsApp quando funções edge ficam lentas (p95 > 10s) ou
 // com alta taxa de erro (> 5%) na janela recente. Executado por cron.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { logSend } from "../_shared/send-log.ts";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
@@ -32,7 +33,16 @@ async function sendWhatsApp(to: string, message: string) {
     },
     body: body.toString(),
   });
-  return { ok: resp.ok, status: resp.status, body: await resp.text().catch(() => "") };
+  const respBody = await resp.text().catch(() => "");
+  await logSend({
+    channel: "whatsapp",
+    recipient: typeof to === "string" ? to : WHATSAPP_TO,
+    status: resp.ok ? "sent" : "failed",
+    subject: message.slice(0, 120),
+    errorMessage: resp.ok ? null : `${resp.status} ${respBody.slice(0, 200)}`,
+    source: "edge-metrics-alerts",
+  });
+  return { ok: resp.ok, status: resp.status, body: respBody };
 }
 
 import { weekendBlockResponse } from "../_shared/weekend-guard.ts";
