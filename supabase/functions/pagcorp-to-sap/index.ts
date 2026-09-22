@@ -900,8 +900,8 @@ Deno.serve(async (req) => {
         journalTransactions.push({
           amount: Number(tx.amount) || 0,
           currency: txCurrency,
-          lineMemo: truncateSapText(
-            `PagCorp - ${transactions.length > 1 ? `[#${tx.id}] ` : ""}${tx.description || journalMemo}`,
+          lineMemo: formatPagCorpComments(
+            `${transactions.length > 1 ? `[#${tx.id}] ` : ""}${tx.description || journalMemo}`,
             50,
           ),
           costCenter: String(costCenter),
