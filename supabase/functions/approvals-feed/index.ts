@@ -330,6 +330,11 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const companyDb = typeof body?.company_db === "string" ? body.company_db.trim() : "";
     if (!companyDb) return json(400, { error: "company_db obrigatório" }, cors);
+    // Modo multiempresa: traz também as pendências do aprovador nas demais
+    // empresas ativas, para que ele não precise trocar de empresa para decidir.
+    // O recorte é mais restrito que o da empresa logada: fora dela, só entram
+    // documentos em que o próprio caller é o aprovador pendente.
+    const includeAllCompanies = body?.include_all_companies === true;
 
     // Dados e identidade são independentes: buscamos os dois EM PARALELO e o
     // recorte de visibilidade é aplicado depois, em memória. O tempo total
@@ -337,6 +342,9 @@ Deno.serve(async (req) => {
     const tAuth = Date.now();
     // `.then()` força o início imediato: os builders do supabase-js são lazy.
     const bundlePromise = admin.rpc("approvals_feed_bundle", { _company_db: companyDb }).then((r) => r);
+    const companiesPromise = includeAllCompanies
+      ? admin.from("companies").select("company_db, display_name").eq("is_active", true).then((r) => r)
+      : Promise.resolve({ data: [], error: null } as { data: Array<Record<string, unknown>>; error: null });
     const caller = await identifyCallerCached(req, admin);
     const authMs = Date.now() - tAuth;
     if (!caller.identity) {
@@ -348,6 +356,30 @@ Deno.serve(async (req) => {
     if (bundleErr) return json(500, { error: bundleErr.message }, cors);
 
     let docs = (Array.isArray(bundle) ? bundle : []) as Array<Record<string, any>>;
+
+    // Empresas conhecidas (rótulo amigável no cabeçalho do documento).
+    const companyNames = new Map<string, string>();
+    const otherCompanies: string[] = [];
+    if (includeAllCompanies) {
+      const { data: companyRows, error: companiesErr } = await companiesPromise;
+      if (companiesErr) return json(500, { error: (companiesErr as { message: string }).message }, cors);
+      for (const row of (companyRows || []) as Array<Record<string, unknown>>) {
+        const db = String(row.company_db || "").trim();
+        if (!db) continue;
+        companyNames.set(db, String(row.display_name || db));
+        if (db !== companyDb) otherCompanies.push(db);
+      }
+      const results = await Promise.all(
+        otherCompanies.map((db) =>
+          admin
+            .rpc("approvals_feed_bundle", { _company_db: db })
+            .then(({ data }) => (Array.isArray(data) ? data : []) as Array<Record<string, any>>)
+            .catch(() => [] as Array<Record<string, any>>),
+        ),
+      );
+      for (const rows of results) docs = docs.concat(rows);
+    }
+
 
 
     // As trilhas persistidas sao a fonte de verdade do rateio (e da pendencia).
@@ -426,27 +458,40 @@ Deno.serve(async (req) => {
     // Recorte de visibilidade (mesma semântica de `expense-read`), em memória.
     let substituteAliases = new Set<string>();
     let effectiveAliases = new Set<string>(caller.aliases);
-    if (!caller.privileged) {
-      substituteAliases = await substituteOfficialAliases(admin, caller.aliases);
-      effectiveAliases = new Set([...caller.aliases, ...substituteAliases]);
-      docs = docs.filter((d) => {
-        if (ownsAsRequesterOrBranch(d, caller.aliases, caller.directorateBranch)) return true;
-        const segments = segmentsByExpense.get(String(d.id || "")) || [];
-        if (segments.length > 0) {
-          // Documento rateado: a pendência vem das trilhas, não do nível do
-          // cabeçalho (que pode apontar para a regra de outra ramificação).
-          return segments.some((s) => pendingSegmentForCaller(s, effectiveAliases));
-        }
-        const approvalsAtLevel = currentCycleApprovalsByExpense.get(String(d.id || "")) || [];
-        if (hasPendingApproverClaim(d, caller.aliases, substituteAliases, approvalsAtLevel)) return true;
-        if (!caller.directorateBranch) return false;
-        return (d.items || []).some((it: Record<string, unknown>) =>
-          costCenterInBranch(it.cost_center, caller.directorateBranch),
-        );
-      });
-    } else {
-      effectiveAliases = new Set([...caller.aliases]);
-    }
+    substituteAliases = await substituteOfficialAliases(admin, caller.aliases);
+    effectiveAliases = new Set([...caller.aliases, ...substituteAliases]);
+
+    /** Pendência de decisão do próprio caller (cabeçalho ou trilha de rateio). */
+    const callerIsPendingApprover = (d: Record<string, any>): boolean => {
+      const segments = segmentsByExpense.get(String(d.id || "")) || [];
+      if (segments.length > 0) {
+        return segments.some((s) => pendingSegmentForCaller(s, effectiveAliases));
+      }
+      const approvalsAtLevel = currentCycleApprovalsByExpense.get(String(d.id || "")) || [];
+      return hasPendingApproverClaim(d, caller.aliases, substituteAliases, approvalsAtLevel);
+    };
+
+    docs = docs.filter((d) => {
+      const docCompany = String(d.company_db || "");
+      // Fora da empresa logada, nenhuma permissão amplia a visão: só entram os
+      // documentos em que o caller é o aprovador pendente.
+      if (docCompany && docCompany !== companyDb) return callerIsPendingApprover(d);
+      if (caller.privileged) return true;
+      if (ownsAsRequesterOrBranch(d, caller.aliases, caller.directorateBranch)) return true;
+      const segments = segmentsByExpense.get(String(d.id || "")) || [];
+      if (segments.length > 0) {
+        // Documento rateado: a pendência vem das trilhas, não do nível do
+        // cabeçalho (que pode apontar para a regra de outra ramificação).
+        return segments.some((s) => pendingSegmentForCaller(s, effectiveAliases));
+      }
+      const approvalsAtLevel = currentCycleApprovalsByExpense.get(String(d.id || "")) || [];
+      if (hasPendingApproverClaim(d, caller.aliases, substituteAliases, approvalsAtLevel)) return true;
+      if (!caller.directorateBranch) return false;
+      return (d.items || []).some((it: Record<string, unknown>) =>
+        costCenterInBranch(it.cost_center, caller.directorateBranch),
+      );
+    });
+
 
     // Recorte do payload por trilha: valores, itens, CCs, projetos e cadeias de
     // outras ramificacoes nao chegam ao navegador.
@@ -474,12 +519,19 @@ Deno.serve(async (req) => {
           );
         }
         const segments = segmentsByExpense.get(String(doc.id || "")) || [];
-        return scopeApprovalDocumentToSegments(
+        const scoped = scopeApprovalDocumentToSegments(
           doc,
           segments,
           (segment) => approvalSegmentBelongsToAliases(segment, effectiveAliases, matchesAlias),
-        );
+        ) as Record<string, any>;
+        const docCompany = String(scoped.company_db || companyDb);
+        scoped.company_db = docCompany;
+        scoped.company_name = companyNames.get(docCompany) || docCompany;
+        scoped.foreign_company = docCompany !== companyDb;
+
+        return scoped;
       });
+
     }
 
 
@@ -490,6 +542,12 @@ Deno.serve(async (req) => {
         docs,
         privileged: caller.privileged,
         directorate_branch: caller.directorateBranch,
+        all_companies: includeAllCompanies,
+        companies: Array.from(companyNames.entries()).map(([company_db, display_name]) => ({
+          company_db,
+          display_name,
+        })),
+
         // O cliente usa isto para NÃO substituir uma lista boa por uma
         // resposta calculada com permissões incompletas.
         degraded: !!caller.degraded,

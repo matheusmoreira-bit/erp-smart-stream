@@ -25,15 +25,26 @@ export interface ApprovalFeedDoc extends Expense {
   restricted_item_count?: number;
   /** O usuário atual já decidiu neste nível durante o ciclo vigente. */
   viewer_already_approved?: boolean;
+  /** Nome amigável da empresa dona do documento (modo multiempresa). */
+  company_name?: string;
+  /** Documento de outra empresa que não a logada. */
+  foreign_company?: boolean;
+}
+
+export interface ApprovalFeedCompany {
+  company_db: string;
+  display_name: string;
 }
 
 interface FeedState {
   docs: ApprovalFeedDoc[];
   privileged: boolean;
   generatedAt: string | null;
+  companies: ApprovalFeedCompany[];
 }
 
-const EMPTY: FeedState = { docs: [], privileged: false, generatedAt: null };
+const EMPTY: FeedState = { docs: [], privileged: false, generatedAt: null, companies: [] };
+
 
 function cacheKey(companyDb: string, user: string) {
   // Mantido apenas para limpar snapshots antigos gravados por versões anteriores.
@@ -48,7 +59,8 @@ function clearLegacyCache(key: string) {
   }
 }
 
-export function useApprovalsFeed() {
+export function useApprovalsFeed(options?: { includeAllCompanies?: boolean }) {
+  const includeAllCompanies = options?.includeAllCompanies === true;
   const { session } = useSap();
   const companyDb = session?.companyDB || "";
   const userKey = (session?.userName || "").toLowerCase();
@@ -76,7 +88,7 @@ export function useApprovalsFeed() {
       const res = await sapFunctionFetch("approvals-feed", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company_db: companyDb }),
+        body: JSON.stringify({ company_db: companyDb, include_all_companies: includeAllCompanies }),
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) throw new Error(body?.error || `approvals-feed ${res.status}`);
@@ -85,6 +97,7 @@ export function useApprovalsFeed() {
         privileged: Boolean(body?.privileged),
         degraded: Boolean(body?.degraded),
         generatedAt: body?.generated_at || new Date().toISOString(),
+        companies: (body?.companies || []) as ApprovalFeedCompany[],
       };
     };
 
@@ -111,6 +124,7 @@ export function useApprovalsFeed() {
           docs: result.docs,
           privileged: result.privileged,
           generatedAt: result.generatedAt,
+          companies: result.companies,
         };
         setState(next);
 
@@ -124,10 +138,10 @@ export function useApprovalsFeed() {
     })();
     inFlight.current = run;
     return run;
-  }, [companyDb, key]);
+  }, [companyDb, key, includeAllCompanies]);
 
 
-  // Abertura da tela / troca de empresa: sempre recarrega da fonte.
+  // Abertura da tela / troca de empresa / troca de escopo: recarrega da fonte.
   useEffect(() => {
     clearLegacyCache(key);
     setState(EMPTY);
@@ -144,10 +158,12 @@ export function useApprovalsFeed() {
     docs: state.docs,
     privileged: state.privileged,
     generatedAt: state.generatedAt,
+    companies: state.companies,
     isLoading,
     isRefreshing,
     error,
     refresh: load,
     removeLocal,
   };
+
 }

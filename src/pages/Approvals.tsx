@@ -32,6 +32,8 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -275,6 +277,7 @@ function ApprovalCard({
   substituteName,
   selectedForTransfer,
   onToggleTransfer,
+  showCompany,
 }: {
   doc: ApprovalDoc;
   onOpen: () => void;
@@ -285,7 +288,10 @@ function ApprovalCard({
   substituteName?: string | null;
   selectedForTransfer?: boolean;
   onToggleTransfer?: (checked: boolean) => void;
+  /** Exibe a empresa do documento no cabeçalho (modo multiempresa). */
+  showCompany?: boolean;
 }) {
+
   const dueStatus = getDueStatus(doc.dueDate);
   const overdue = dueStatus === "overdue";
   const dueWarning = dueStatus === "warning";
@@ -351,10 +357,21 @@ function ApprovalCard({
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               <DocKindBadge doc={doc} />
+              {showCompany && (doc as { __companyName?: string }).__companyName && (
+                <Badge
+                  variant="outline"
+                  className="gap-1 text-[10px] font-medium border-primary/40 text-primary"
+                  title={`Empresa: ${(doc as { __companyName?: string }).__companyName}`}
+                >
+                  <Building2 className="w-3 h-3" aria-hidden="true" />
+                  {(doc as { __companyName?: string }).__companyName}
+                </Badge>
+              )}
             </div>
 
             <h3 className="text-foreground font-semibold mt-2 font-mono">{docNumberLabel(doc)}</h3>
           </div>
+
         </div>
         <div className="text-right flex items-start gap-1">
           {onRelationsMap && (
@@ -1931,6 +1948,10 @@ function mapInternalExpense(e: ApprovalFeedDoc, ruleName?: string | null): Appro
     __internalId: e.id,
     __revision: Number(e.revision_number || 1),
     __viewerAlreadyApproved: e.viewer_already_approved === true,
+    __companyDb: (e as { company_db?: string }).company_db || "",
+    __companyName: (e as { company_name?: string }).company_name || "",
+    __foreignCompany: (e as { foreign_company?: boolean }).foreign_company === true,
+
 
     __explain: {
       ruleId: e.approval_rule_id || null,
@@ -2369,13 +2390,33 @@ export default function ApprovalsPage() {
   // Documentos internos pendentes vêm de UM único feed servidor-side
   // (`approvals-feed`): escopo de visibilidade, itens, anexos e aprovadores do
   // nível atual já resolvidos, com pintura imediata a partir do cache local.
+  // Escopo multiempresa (desligado por padrão): traz as pendências do próprio
+  // aprovador nas demais empresas, sem precisar trocar de empresa.
+  const [allCompanies, setAllCompanies] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("approvals:all-companies") === "1";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("approvals:all-companies", allCompanies ? "1" : "0");
+    } catch { /* storage indisponível */ }
+  }, [allCompanies]);
+  const [companyFilter, setCompanyFilter] = useState<string>("all");
+  useEffect(() => {
+    if (!allCompanies) setCompanyFilter("all");
+  }, [allCompanies]);
   const {
     docs: feedDocs,
     privileged: feedPrivileged,
+    companies: feedCompanies,
     isLoading: isLoadingFeed,
     refresh: refreshFeed,
     removeLocal: removeFeedLocal,
-  } = useApprovalsFeed();
+  } = useApprovalsFeed({ includeAllCompanies: allCompanies });
+
   const purchaseExpenses = useMemo(
     () => feedDocs.filter((d) => (d as { doc_type?: string }).doc_type !== "sales"),
     [feedDocs],
@@ -3012,8 +3053,15 @@ export default function ApprovalsPage() {
   const dueToD = dueTo ? new Date(dueTo).getTime() + 86399999 : null;
 
   const preFiltered = userApprovals.filter((a) => {
+    // Empresa (modo multiempresa)
+    if (allCompanies && companyFilter !== "all") {
+      const db = (a as unknown as { __companyDb?: string }).__companyDb || session?.companyDB || "";
+      if (db !== companyFilter) return false;
+    }
+
     // Natureza do documento (compra / venda / outro)
     if (typeFilter !== "all" && docKind(a as never) !== typeFilter) return false;
+
 
     // Value range
     if (minV !== null && !Number.isNaN(minV) && a.docTotal < minV) return false;
@@ -3187,7 +3235,7 @@ export default function ApprovalsPage() {
     useLazyList(filtered, {
       initial: 30,
       step: 10,
-      resetDeps: [search, typeFilter, originFilter, minValue, maxValue, createdFrom, createdTo, dueFrom, dueTo, showAll, viewMode, onlyOverdue, sortKey, sortDir, ccFilter.join(","), projectFilter.join(","), approverFilter.join(","), requesterFilter.join(",")],
+      resetDeps: [search, typeFilter, originFilter, minValue, maxValue, createdFrom, createdTo, dueFrom, dueTo, showAll, allCompanies, companyFilter, viewMode, onlyOverdue, sortKey, sortDir, ccFilter.join(","), projectFilter.join(","), approverFilter.join(","), requesterFilter.join(",")],
     });
 
   const handleApprovalAction = async (
@@ -3943,6 +3991,29 @@ export default function ApprovalsPage() {
               <Switch id="show-all" checked={showAll} onCheckedChange={setShowAll} />
             </div>
           )}
+          <div className="flex items-center gap-2 glass-card px-3 py-2">
+            <Building2 className="w-4 h-4 text-primary/70" />
+            <Label htmlFor="all-companies" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+              Todas as empresas
+            </Label>
+            <Switch id="all-companies" checked={allCompanies} onCheckedChange={setAllCompanies} />
+          </div>
+          {allCompanies && feedCompanies.length > 0 && (
+            <Select value={companyFilter} onValueChange={setCompanyFilter}>
+              <SelectTrigger className="w-[220px] bg-muted/30 border-border" aria-label="Filtrar por empresa">
+                <SelectValue placeholder="Todas as empresas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as empresas</SelectItem>
+                {feedCompanies.map((c) => (
+                  <SelectItem key={c.company_db} value={c.company_db}>
+                    {c.display_name || c.company_db}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
           {isAdmin && transferEligibleDocs.length > 0 && (
             <div className="flex items-center gap-2">
               <Button
@@ -4282,6 +4353,8 @@ export default function ApprovalsPage() {
                 <motion.div key={doc.approvalRequestId} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
                 <ApprovalCard
                   doc={doc}
+                  showCompany={allCompanies}
+
                   onOpen={() => setSelectedDoc(doc)}
                   approverCCs={getCostCentersForEmail(doc.approverEmail)}
                   formatCostCenter={formatCostCenter}
@@ -4400,7 +4473,15 @@ export default function ApprovalsPage() {
                       <td className="py-3 px-3">
                         <div className="flex items-center gap-1.5 flex-wrap"><DocKindBadge doc={doc} /></div>
                       </td>
-                      <td className="py-3 px-3 font-mono text-xs text-foreground font-semibold">{docNumberLabel(doc)}</td>
+                      <td className="py-3 px-3 font-mono text-xs text-foreground font-semibold">
+                        {docNumberLabel(doc)}
+                        {allCompanies && (doc as { __companyName?: string }).__companyName && (
+                          <span className="block mt-1 font-sans text-[10px] font-medium text-primary">
+                            {(doc as { __companyName?: string }).__companyName}
+                          </span>
+                        )}
+                      </td>
+
                       <td className="py-3 px-3 text-right font-mono text-foreground font-medium">{formatCurrency(doc.docTotal, doc.currency)}</td>
                       <td className="py-3 px-3 text-foreground">{doc.cardName}</td>
                       <td className="py-3 px-3 text-foreground font-medium">
