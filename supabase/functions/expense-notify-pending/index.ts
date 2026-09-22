@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
     { auth: { persistSession: false } },
   );
 
-  const auth = await requireSchedulerOrAdmin(req, admin, corsHeaders);
+  const auth = await requireSchedulerOrAdmin(req, corsHeaders);
   if (!auth.ok) return auth.response;
 
   let body: unknown;
