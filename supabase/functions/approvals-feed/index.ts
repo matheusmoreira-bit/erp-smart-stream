@@ -519,12 +519,17 @@ Deno.serve(async (req) => {
           );
         }
         const segments = segmentsByExpense.get(String(doc.id || "")) || [];
-        return scopeApprovalDocumentToSegments(
+        const scoped = scopeApprovalDocumentToSegments(
           doc,
           segments,
           (segment) => approvalSegmentBelongsToAliases(segment, effectiveAliases, matchesAlias),
-        );
+        ) as Record<string, any>;
+        const docCompany = String(scoped.company_db || companyDb);
+        scoped.company_name = companyNames.get(docCompany) || docCompany;
+        scoped.foreign_company = docCompany !== companyDb;
+        return scoped;
       });
+
     }
 
 
