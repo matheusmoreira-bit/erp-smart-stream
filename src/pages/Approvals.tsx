@@ -1931,6 +1931,10 @@ function mapInternalExpense(e: ApprovalFeedDoc, ruleName?: string | null): Appro
     __internalId: e.id,
     __revision: Number(e.revision_number || 1),
     __viewerAlreadyApproved: e.viewer_already_approved === true,
+    __companyDb: (e as { company_db?: string }).company_db || "",
+    __companyName: (e as { company_name?: string }).company_name || "",
+    __foreignCompany: (e as { foreign_company?: boolean }).foreign_company === true,
+
 
     __explain: {
       ruleId: e.approval_rule_id || null,
