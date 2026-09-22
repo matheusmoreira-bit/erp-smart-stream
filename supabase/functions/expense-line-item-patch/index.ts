@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
       const changed = sapLines.filter((l) => String(l.ItemCode || "").trim() === fromItemCode).length;
       if (!changed) return json({ error: `Nenhuma linha com o item ${fromItemCode} no SAP.` }, 400);
 
-      const payloadLines = sapLines.map((l) => {
+      const desiredLines = sapLines.map((l) => {
         const isTarget = String(l.ItemCode || "").trim() === fromItemCode;
         const out: Record<string, unknown> = {
           LineNum: l.LineNum,
