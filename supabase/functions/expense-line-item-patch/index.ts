@@ -3,6 +3,7 @@
 // Somente administradores (ou chamadas com service role) podem executar.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { enforceSapLinePrices } from "../_shared/sap-line-prices.ts";
+import { mergeSapDocumentLines } from "../_shared/sap-line-merge.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -123,7 +124,7 @@ Deno.serve(async (req) => {
       const changed = sapLines.filter((l) => String(l.ItemCode || "").trim() === fromItemCode).length;
       if (!changed) return json({ error: `Nenhuma linha com o item ${fromItemCode} no SAP.` }, 400);
 
-      const payloadLines = sapLines.map((l) => {
+      const desiredLines = sapLines.map((l) => {
         const isTarget = String(l.ItemCode || "").trim() === fromItemCode;
         const out: Record<string, unknown> = {
           LineNum: l.LineNum,
@@ -143,6 +144,9 @@ Deno.serve(async (req) => {
         if (l.FreeText != null) out.FreeText = l.FreeText;
         return out;
       });
+      // Envia a linha íntegra (campos atuais do SAP + personalizados U_*).
+      const payloadLines = mergeSapDocumentLines(sapLines, desiredLines);
+
 
       const patchRes = await fetch(`${baseUrl}/${endpoint}(${expense.sap_doc_entry})`, {
         method: "PATCH",
@@ -235,7 +239,7 @@ Deno.serve(async (req) => {
 
     const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
-    const payloadLines = currentLines.map((l, idx) => {
+    const desiredLines = currentLines.map((l, idx) => {
       const isTarget = Number(l.LineNum ?? idx) === lineNum || idx === lineNum;
       const qty = num(l.Quantity) > 0 ? num(l.Quantity) : num(flowLine?.quantity) || 1;
       const price = num(l.UnitPrice) > 0 ? num(l.UnitPrice) : num(flowLine?.unit_price);
@@ -261,6 +265,9 @@ Deno.serve(async (req) => {
       if (l.DiscountPercent != null) out.DiscountPercent = l.DiscountPercent;
       return out;
     });
+    // Linha íntegra: campos atuais do SAP (inclusive U_*) + valores do Flow.
+    const payloadLines = mergeSapDocumentLines(currentLines, desiredLines);
+
 
     const zeroed = payloadLines.filter((l) => num(l.UnitPrice) <= 0);
     if (zeroed.length) {
