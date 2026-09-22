@@ -144,6 +144,9 @@ Deno.serve(async (req) => {
         if (l.FreeText != null) out.FreeText = l.FreeText;
         return out;
       });
+      // Envia a linha íntegra (campos atuais do SAP + personalizados U_*).
+      const payloadLines = mergeSapDocumentLines(sapLines, desiredLines);
+
 
       const patchRes = await fetch(`${baseUrl}/${endpoint}(${expense.sap_doc_entry})`, {
         method: "PATCH",
