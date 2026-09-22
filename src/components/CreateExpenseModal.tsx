@@ -1002,6 +1002,10 @@ export function CreateExpenseModal({
       setShowSupplierForm(false);
       setItems([{ description: "", quantity: 1, unit_price: 0, line_total: 0, cost_center: "", project: "" }]);
       setAiConfidence(null);
+      setRateioPreview(null);
+      rateioCheckedRef.current.clear();
+      rateioFilesRef.current.clear();
+
       setPendingPrefill(null);
       setHeaderCostCenter(null);
       setHeaderProject(null);
