@@ -200,6 +200,7 @@ Deno.serve(async (req) => {
         doc_entry: expense.sap_doc_entry,
         doc_num: expense.sap_doc_num,
         lines_changed: changed,
+        ...(bulkPriceWarning ? { warning: bulkPriceWarning } : {}),
       });
     }
 
