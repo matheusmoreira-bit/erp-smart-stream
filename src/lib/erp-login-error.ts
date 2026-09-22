@@ -7,6 +7,7 @@
  */
 
 export type ErpLoginErrorKind =
+  | "sso_required"
   | "invalid_credentials"
   | "locked"
   | "password_expired"
