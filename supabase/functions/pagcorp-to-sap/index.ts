@@ -248,7 +248,7 @@ async function assertItemsActive(sap: SapSession, itemCodes: string[]): Promise<
 async function resolveActiveBranchId(sap: SapSession, preferred: number): Promise<number> {
   try {
     const url = `${sap.baseUrl}/BusinessPlaces?$select=BPLID,Disabled&$orderby=BPLID`;
-    const res = await fetch(url, { headers: { Cookie: sap.cookies } });
+    const res = await sapFetch(url, { headers: { Cookie: sap.cookies }, timeoutMs: 45_000, maxAttempts: 2 });
     if (!res.ok) return preferred;
     const body = await res.json().catch(() => null);
     const rows: any[] = Array.isArray(body?.value) ? body.value : [];
