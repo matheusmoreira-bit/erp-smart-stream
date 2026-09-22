@@ -107,7 +107,7 @@ async function sendWhatsApp(message: string) {
   const respBody = await resp.text().catch(() => "");
   await logSend({
     channel: "whatsapp",
-    recipient: typeof to === "string" ? to : WHATSAPP_TO,
+    recipient: WHATSAPP_TO,
     status: resp.ok ? "sent" : "failed",
     subject: message.slice(0, 120),
     errorMessage: resp.ok ? null : `${resp.status} ${respBody.slice(0, 200)}`,
