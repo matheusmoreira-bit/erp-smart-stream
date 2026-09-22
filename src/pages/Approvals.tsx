@@ -355,10 +355,21 @@ function ApprovalCard({
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               <DocKindBadge doc={doc} />
+              {showCompany && (doc as { __companyName?: string }).__companyName && (
+                <Badge
+                  variant="outline"
+                  className="gap-1 text-[10px] font-medium border-primary/40 text-primary"
+                  title={`Empresa: ${(doc as { __companyName?: string }).__companyName}`}
+                >
+                  <Building2 className="w-3 h-3" aria-hidden="true" />
+                  {(doc as { __companyName?: string }).__companyName}
+                </Badge>
+              )}
             </div>
 
             <h3 className="text-foreground font-semibold mt-2 font-mono">{docNumberLabel(doc)}</h3>
           </div>
+
         </div>
         <div className="text-right flex items-start gap-1">
           {onRelationsMap && (
