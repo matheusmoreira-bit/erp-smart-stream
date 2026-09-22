@@ -266,6 +266,9 @@ export function CreateExpenseModal({
   ]);
   // Índice da linha cujo rateio por projeto está aberto (null = fechado).
   const [splitLineIndex, setSplitLineIndex] = useState<number | null>(null);
+  // Planilha/texto de rateio detectado nos anexos, aguardando confirmação.
+  const [rateioPreview, setRateioPreview] = useState<{ fileName: string; result: RateioParseResult } | null>(null);
+
   const [aiWarning, setAiWarning] = useState<string | null>(null);
   const [suggestedSupplierName, setSuggestedSupplierName] = useState<string | undefined>(undefined);
   const [aiSupplierData, setAiSupplierData] = useState<SupplierFormPrefill | null>(null);
