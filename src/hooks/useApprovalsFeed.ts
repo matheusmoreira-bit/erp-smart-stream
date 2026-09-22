@@ -25,15 +25,26 @@ export interface ApprovalFeedDoc extends Expense {
   restricted_item_count?: number;
   /** O usuário atual já decidiu neste nível durante o ciclo vigente. */
   viewer_already_approved?: boolean;
+  /** Nome amigável da empresa dona do documento (modo multiempresa). */
+  company_name?: string;
+  /** Documento de outra empresa que não a logada. */
+  foreign_company?: boolean;
+}
+
+export interface ApprovalFeedCompany {
+  company_db: string;
+  display_name: string;
 }
 
 interface FeedState {
   docs: ApprovalFeedDoc[];
   privileged: boolean;
   generatedAt: string | null;
+  companies: ApprovalFeedCompany[];
 }
 
-const EMPTY: FeedState = { docs: [], privileged: false, generatedAt: null };
+const EMPTY: FeedState = { docs: [], privileged: false, generatedAt: null, companies: [] };
+
 
 function cacheKey(companyDb: string, user: string) {
   // Mantido apenas para limpar snapshots antigos gravados por versões anteriores.
