@@ -237,6 +237,7 @@ Deno.serve(async (req) => {
     const ccRecipients = cc ? assertSafeEmailList("cc", cc) : [];
     const bccRecipients = bcc ? assertSafeEmailList("bcc", bcc) : [];
     const safeReplyTo = sanitizeHeaderEmail(replyTo);
+    loggedRecipients = [...recipients, ...ccRecipients, ...bccRecipients];
     if (Array.isArray(attachments)) {
       for (const att of attachments) {
         if (att?.url) assertSafeAttachmentUrl(att.url);
@@ -293,6 +294,14 @@ Deno.serve(async (req) => {
     await client.send(sendOpts as any);
     await client.close();
 
+    await logSendMany(loggedRecipients, {
+      channel: "email",
+      status: "sent",
+      subject: loggedSubject,
+      source: "send-smtp-email",
+      metadata: { attachments: resolvedAttachments.length },
+    });
+
     return new Response(
       JSON.stringify({
         ok: true,
@@ -304,7 +313,15 @@ Deno.serve(async (req) => {
     );
   } catch (e) {
     console.error("send-smtp-email error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
+    const message = e instanceof Error ? e.message : String(e);
+    await logSendMany(loggedRecipients.length ? loggedRecipients : ["—"], {
+      channel: "email",
+      status: "failed",
+      subject: loggedSubject,
+      errorMessage: message,
+      source: "send-smtp-email",
+    });
+    return new Response(JSON.stringify({ error: message }), {
       status: e instanceof RequestValidationError ? 400 : 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
