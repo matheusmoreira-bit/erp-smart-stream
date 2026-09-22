@@ -4178,20 +4178,35 @@ export function CreateExpenseModal({
                   <li>… e mais {(rateioPreview?.result.rows.length ?? 0) - 8} linha(s)</li>
                 )}
               </ul>
+              {rateioIssues.length > 0 && (
+                <div className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-destructive">
+                  <p className="font-medium">
+                    {rateioIssues.length} linha(s) serão ignoradas por usarem cadastro inativo:
+                  </p>
+                  <ul className="mt-1 max-h-28 overflow-auto list-disc pl-5">
+                    {rateioIssues.slice(0, 6).map((msg, i) => (
+                      <li key={i}>{msg}</li>
+                    ))}
+                    {rateioIssues.length > 6 && <li>… e mais {rateioIssues.length - 6}.</li>}
+                  </ul>
+                </div>
+              )}
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="flex-col sm:flex-row gap-2">
           <AlertDialogCancel autoFocus>Manter anexo apenas</AlertDialogCancel>
           <AlertDialogAction
+            disabled={rateioValidRows === 0}
             onClick={() => {
               const rows = rateioPreview?.result.rows || [];
               setRateioPreview(null);
               if (rows.length > 0) applyRateioRows(rows);
             }}
           >
-            Aplicar linhas
+            {rateioValidRows === 0 ? "Nenhuma linha válida" : `Aplicar ${rateioValidRows} linha(s)`}
           </AlertDialogAction>
+
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
