@@ -381,9 +381,15 @@ function truncateSapText(value: unknown, maxLength: number): string {
   return text.length > maxLength ? text.slice(0, maxLength) : text;
 }
 
+const PAGCORP_PREFIX = "PagCorp - ";
+// Remove prefixos "PagCorp"/"Pagcorp" já existentes (com ou sem separador)
+// para que o texto final tenha exatamente um "PagCorp - " no início.
+const PAGCORP_PREFIX_RE = /^(?:\s*pag\s*corp\b\s*[-–—:|]*\s*)+/i;
+
 function formatPagCorpComments(details: string, maxLength: number): string {
-  const cleanDetails = truncateSapText(details, Math.max(0, maxLength - "PagCorp - ".length));
-  return truncateSapText(`PagCorp - ${cleanDetails}`, maxLength);
+  const withoutPrefix = String(details ?? "").replace(PAGCORP_PREFIX_RE, "");
+  const cleanDetails = truncateSapText(withoutPrefix, Math.max(0, maxLength - PAGCORP_PREFIX.length));
+  return truncateSapText(`${PAGCORP_PREFIX}${cleanDetails}`, maxLength);
 }
 
 async function resolveAccountMapping(
@@ -894,8 +900,8 @@ Deno.serve(async (req) => {
         journalTransactions.push({
           amount: Number(tx.amount) || 0,
           currency: txCurrency,
-          lineMemo: truncateSapText(
-            `PagCorp - ${transactions.length > 1 ? `[#${tx.id}] ` : ""}${tx.description || journalMemo}`,
+          lineMemo: formatPagCorpComments(
+            `${transactions.length > 1 ? `[#${tx.id}] ` : ""}${tx.description || journalMemo}`,
             50,
           ),
           costCenter: String(costCenter),
