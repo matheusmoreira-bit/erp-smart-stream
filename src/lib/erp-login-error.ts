@@ -7,6 +7,7 @@
  */
 
 export type ErpLoginErrorKind =
+  | "sso_required"
   | "invalid_credentials"
   | "locked"
   | "password_expired"
@@ -30,6 +31,18 @@ export function classifyErpLoginError(raw: unknown): ErpLoginErrorInfo {
   const lower = message.toLowerCase();
 
   const has = (...needles: string[]) => needles.some((n) => lower.includes(n));
+
+  // Usuário do ERP vinculado a login único (SSO/domínio): o servidor recusa
+  // qualquer senha, então repetir ou reprovisionar a senha nunca resolve.
+  if (has("none-sso", "non-sso", "nonsso", "sso login", "login from sld")) {
+    return {
+      kind: "sso_required",
+      title: "Este usuário do ERP não aceita senha",
+      description:
+        "No ERP, sua conta está configurada para entrar apenas por login único (SSO/domínio). Nenhuma senha vai funcionar aqui — peça ao administrador do ERP para liberar o login por senha (desvincular a conta do SSO) para o seu usuário.",
+      blocking: true,
+    };
+  }
 
   if (has("locked", "bloquead", "-131", "user is locked", "account is locked")) {
     return {
