@@ -260,19 +260,22 @@ Deno.serve(async (req) => {
       return json({ error: `SAP recusou o PATCH [${patchRes.status}]: ${t.slice(0, 500)}` }, 502);
     }
 
-    // Conferência pós-PATCH: se o SAP zerou algum preço, avisamos em vez de
-    // deixar o documento silenciosamente sem valor.
+    // Conferência pós-PATCH: o SAP recalcula o preço pela lista de preços do
+    // item trocado e pode gravar zero. Reaplicamos os valores corretos.
     let priceWarning: string | null = null;
-    const checkRes = await fetch(
-      `${baseUrl}/${endpoint}(${expense.sap_doc_entry})?$select=DocumentLines`,
-      { headers: { Cookie: cookies } },
-    );
-    if (checkRes.ok) {
-      const after = await checkRes.json().catch(() => ({}));
-      const lines: Record<string, unknown>[] = Array.isArray(after?.DocumentLines) ? after.DocumentLines : [];
-      if (lines.some((l) => num(l.UnitPrice) <= 0)) {
-        priceWarning = "O SAP retornou linha com preço unitário zerado após a troca. Revise o pedido no ERP.";
-      }
+    try {
+      await enforceSapLinePrices(
+        baseUrl,
+        cookies,
+        endpoint,
+        Number(expense.sap_doc_entry),
+        payloadLines.map((l, i) => ({
+          lineNum: num(l.LineNum ?? i),
+          unitPrice: num(l.UnitPrice),
+        })),
+      );
+    } catch (priceError) {
+      priceWarning = priceError instanceof Error ? priceError.message : String(priceError);
     }
 
 
