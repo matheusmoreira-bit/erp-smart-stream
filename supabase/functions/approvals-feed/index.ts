@@ -28,6 +28,7 @@ import {
   scopeApprovalDocumentToSegments,
   type ApprovalSegmentVisibilityRow,
 } from "../_shared/approval-segment-visibility.ts";
+import { identityMatches as approvalIdentityMatches } from "../_shared/text-normalize.ts";
 
 
 function json(status: number, body: unknown, cors: Record<string, string>) {
@@ -289,12 +290,22 @@ function hasPendingApproverClaim(
   row: Record<string, unknown>,
   aliases: Set<string>,
   substituteAliases?: Set<string> | null,
+  approvedAtCurrentLevel: Array<Record<string, unknown>> = [],
 ): boolean {
+  const alreadyApproved = (candidate: unknown): boolean => approvedAtCurrentLevel.some((approval) => {
+    const identities = [
+      approval.approver_name,
+      approval.approver_email,
+      approval.substituted_for_name,
+      approval.substituted_for_email,
+    ].filter(Boolean);
+    return identities.some((identity) => approvalIdentityMatches(identity, candidate));
+  });
   const candidates = [
     row.current_approver,
     row.original_approver,
     ...levelApproverCandidates(row.level_approvers),
-  ];
+  ].filter((candidate) => candidate && !alreadyApproved(candidate));
   const all = new Set([...aliases, ...(substituteAliases || [])]);
   for (const c of candidates) {
     if (!c) continue;
@@ -343,17 +354,47 @@ Deno.serve(async (req) => {
     // Precisam ser carregadas ANTES do recorte de visibilidade: quem nao tem
     // nenhuma trilha pendente nao deve ver o documento na fila.
     const segmentsByExpense = new Map<string, ApprovalSegmentVisibilityRow[]>();
+    const currentCycleApprovalsByExpense = new Map<string, Array<Record<string, unknown>>>();
     const allIds = docs.map((doc) => String(doc.id || "")).filter(Boolean);
     if (allIds.length > 0) {
-      const { data: segmentData, error: segmentError } = await admin
-        .from("expense_approval_segments")
-        .select("*")
-        .in("expense_id", allIds);
+      const [segmentsResult, logsResult] = await Promise.all([
+        admin.from("expense_approval_segments").select("*").in("expense_id", allIds),
+        admin
+          .from("expense_approval_log")
+          .select("expense_id, level_order, decision, approver_name, approver_email, substituted_for_name, substituted_for_email, decided_at, created_at")
+          .in("expense_id", allIds)
+          .order("created_at", { ascending: true }),
+      ]);
+      const { data: segmentData, error: segmentError } = segmentsResult;
       if (segmentError) return json(500, { error: segmentError.message }, cors);
+      if (logsResult.error) return json(500, { error: logsResult.error.message }, cors);
       for (const row of (segmentData || []) as ApprovalSegmentVisibilityRow[]) {
         const expenseId = String(row.expense_id || "");
         if (!segmentsByExpense.has(expenseId)) segmentsByExpense.set(expenseId, []);
         segmentsByExpense.get(expenseId)!.push(row);
+      }
+      const logsByExpense = new Map<string, Array<Record<string, unknown>>>();
+      for (const row of (logsResult.data || []) as Array<Record<string, unknown>>) {
+        const expenseId = String(row.expense_id || "");
+        if (!logsByExpense.has(expenseId)) logsByExpense.set(expenseId, []);
+        logsByExpense.get(expenseId)?.push(row);
+      }
+      const revisionDecisions = new Set(["created", "submitted", "returned", "edited", "reactivated"]);
+      for (const doc of docs) {
+        const expenseId = String(doc.id || "");
+        const rows = logsByExpense.get(expenseId) || [];
+        let revisionStart = -1;
+        rows.forEach((row, index) => {
+          const editedRevision = String(row.remarks || "").toLowerCase().includes("atualização da versão anterior");
+          if (revisionDecisions.has(String(row.decision || "")) || editedRevision) revisionStart = index;
+        });
+        const currentLevel = Number(doc.current_level_order ?? 1);
+        currentCycleApprovalsByExpense.set(
+          expenseId,
+          rows.slice(revisionStart + 1).filter((row) =>
+            row.decision === "approved" && Number(row.level_order ?? 0) === currentLevel
+          ),
+        );
       }
     }
 
@@ -396,7 +437,8 @@ Deno.serve(async (req) => {
           // cabeçalho (que pode apontar para a regra de outra ramificação).
           return segments.some((s) => pendingSegmentForCaller(s, effectiveAliases));
         }
-        if (hasPendingApproverClaim(d, caller.aliases, substituteAliases)) return true;
+        const approvalsAtLevel = currentCycleApprovalsByExpense.get(String(d.id || "")) || [];
+        if (hasPendingApproverClaim(d, caller.aliases, substituteAliases, approvalsAtLevel)) return true;
         if (!caller.directorateBranch) return false;
         return (d.items || []).some((it: Record<string, unknown>) =>
           costCenterInBranch(it.cost_center, caller.directorateBranch),
@@ -410,6 +452,19 @@ Deno.serve(async (req) => {
     // outras ramificacoes nao chegam ao navegador.
     if (docs.length > 0) {
       docs = docs.map((doc) => {
+        const approvalsAtLevel = currentCycleApprovalsByExpense.get(String(doc.id || "")) || [];
+        if (Array.isArray(doc.level_approvers) && approvalsAtLevel.length > 0) {
+          doc.level_approvers = doc.level_approvers.filter((approver: Record<string, unknown>) =>
+            !approvalsAtLevel.some((approval) => [
+              approval.approver_name,
+              approval.approver_email,
+              approval.substituted_for_name,
+              approval.substituted_for_email,
+            ].filter(Boolean).some((identity) =>
+              approvalIdentityMatches(identity, approver.name) || approvalIdentityMatches(identity, approver.email)
+            ))
+          );
+        }
         const segments = segmentsByExpense.get(String(doc.id || "")) || [];
         return scopeApprovalDocumentToSegments(
           doc,

@@ -617,6 +617,9 @@ export function useApprovals() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const silentLoginTriedRef = useRef<string | null>(null);
+  // Uma decisão confirmada pode demorar alguns segundos para desaparecer da
+  // view HANA. Durante essa janela, uma revalidação não deve recolocar o cartão.
+  const recentlyResolvedRef = useRef(new Map<number, number>());
 
 
   const fetchFromSap = useCallback(async (): Promise<ApprovalDoc[] | null> => {
@@ -742,10 +745,16 @@ export function useApprovals() {
       // `null` = consulta não realizada (sem sessão técnica). Nunca substitui a
       // lista já exibida por uma resposta que não representa a fila real.
       if (docs === null) return;
-      setApprovals(docs);
+      const nowMs = Date.now();
+      const freshIds = new Set(docs.map((doc) => doc.approvalRequestId));
+      for (const [id, expiresAt] of recentlyResolvedRef.current) {
+        if (expiresAt <= nowMs || !freshIds.has(id)) recentlyResolvedRef.current.delete(id);
+      }
+      const visibleDocs = docs.filter((doc) => !recentlyResolvedRef.current.has(doc.approvalRequestId));
+      setApprovals(visibleDocs);
       const now = new Date().toISOString();
       setLastUpdatedAt(now);
-      if (!skipCache) writeApprovalsCache(session as SapSession, docs).catch((e) => console.warn("approvals cache write failed:", e));
+      if (!skipCache) writeApprovalsCache(session as SapSession, visibleDocs).catch((e) => console.warn("approvals cache write failed:", e));
 
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Erro ao buscar aprovações";
@@ -787,6 +796,7 @@ export function useApprovals() {
   // cache persistente sem esperar o SAP replicar. Reduz drasticamente o
   // tempo percebido após aprovar/rejeitar.
   const removeLocal = useCallback((approvalRequestId: number) => {
+    recentlyResolvedRef.current.set(approvalRequestId, Date.now() + 30_000);
     setApprovals((prev) => {
       const next = prev.filter((d) => d.approvalRequestId !== approvalRequestId);
       if (next.length !== prev.length && session && session.erpType === "sap") {
