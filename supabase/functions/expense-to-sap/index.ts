@@ -11,6 +11,7 @@ import { tryAcquireIntegrationLock, releaseIntegrationLock } from "../_shared/sa
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
 import { getStandaloneMode, standaloneResponse } from "../_shared/standalone-mode.ts";
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
+import { enforceSapLinePrices } from "../_shared/sap-line-prices.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { normalizeExpenseItems } from "../_shared/expense-items.ts";
 import { callOmieApi, loadOmieCredentials } from "../_shared/omie-api.ts";
