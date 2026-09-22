@@ -302,6 +302,13 @@
       "when": 1790024627385,
       "tag": "0042_restrict_internal_functions_by_role",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1790081902817,
+      "tag": "0043_restaura_grants_companies",
+      "breakpoints": true
     }
   ]
 }
