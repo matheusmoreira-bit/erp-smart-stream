@@ -2369,13 +2369,33 @@ export default function ApprovalsPage() {
   // Documentos internos pendentes vêm de UM único feed servidor-side
   // (`approvals-feed`): escopo de visibilidade, itens, anexos e aprovadores do
   // nível atual já resolvidos, com pintura imediata a partir do cache local.
+  // Escopo multiempresa (desligado por padrão): traz as pendências do próprio
+  // aprovador nas demais empresas, sem precisar trocar de empresa.
+  const [allCompanies, setAllCompanies] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("approvals:all-companies") === "1";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("approvals:all-companies", allCompanies ? "1" : "0");
+    } catch { /* storage indisponível */ }
+  }, [allCompanies]);
+  const [companyFilter, setCompanyFilter] = useState<string>("all");
+  useEffect(() => {
+    if (!allCompanies) setCompanyFilter("all");
+  }, [allCompanies]);
   const {
     docs: feedDocs,
     privileged: feedPrivileged,
+    companies: feedCompanies,
     isLoading: isLoadingFeed,
     refresh: refreshFeed,
     removeLocal: removeFeedLocal,
-  } = useApprovalsFeed();
+  } = useApprovalsFeed({ includeAllCompanies: allCompanies });
+
   const purchaseExpenses = useMemo(
     () => feedDocs.filter((d) => (d as { doc_type?: string }).doc_type !== "sales"),
     [feedDocs],
