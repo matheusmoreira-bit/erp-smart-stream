@@ -158,6 +158,23 @@ export function NotificationAuditTab() {
         });
       }
 
+      for (const r of sends.data || []) {
+        merged.push({
+          id: `ms-${r.id}`,
+          sent_at: r.created_at,
+          channel: (r.channel || "email") as Channel,
+          kind: "envio",
+          recipient: r.recipient,
+          company_db: r.company_db,
+          title: r.subject || `Envio ${r.channel}`,
+          details: [r.source, r.status === "sent" ? "enviado" : `falhou: ${r.error_message ?? ""}`]
+            .filter(Boolean)
+            .join(" • "),
+          payload: (r.metadata || {}) as Record<string, unknown>,
+        });
+      }
+
+
       merged.sort((a, b) => (a.sent_at < b.sent_at ? 1 : -1));
       setEntries(merged);
     } finally {
