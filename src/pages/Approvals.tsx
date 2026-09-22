@@ -3235,7 +3235,7 @@ export default function ApprovalsPage() {
     useLazyList(filtered, {
       initial: 30,
       step: 10,
-      resetDeps: [search, typeFilter, originFilter, minValue, maxValue, createdFrom, createdTo, dueFrom, dueTo, showAll, viewMode, onlyOverdue, sortKey, sortDir, ccFilter.join(","), projectFilter.join(","), approverFilter.join(","), requesterFilter.join(",")],
+      resetDeps: [search, typeFilter, originFilter, minValue, maxValue, createdFrom, createdTo, dueFrom, dueTo, showAll, allCompanies, companyFilter, viewMode, onlyOverdue, sortKey, sortDir, ccFilter.join(","), projectFilter.join(","), approverFilter.join(","), requesterFilter.join(",")],
     });
 
   const handleApprovalAction = async (
