@@ -5,6 +5,8 @@
 // (chave pública raw base64url) e VAPID_SUBJECT (mailto:...).
 // deno-lint-ignore-file no-explicit-any
 
+import { logSend } from "./send-log.ts";
+
 const enc = new TextEncoder();
 
 export interface PushSubscriptionRow {
@@ -195,6 +197,19 @@ export async function pushToRecipient(
     if (subs.length === 0) return;
 
     const results = await Promise.all(subs.map((s) => sendWebPush(s, payload)));
+
+    await Promise.all(subs.map((s, i) =>
+      logSend({
+        channel: "push",
+        recipient: s.endpoint,
+        status: results[i].ok ? "sent" : "failed",
+        subject: payload.title,
+        errorMessage: results[i].ok ? null : `${results[i].status} ${results[i].error ?? ""}`.trim(),
+        source: "web-push",
+        metadata: { user_identifier: ident, tag: payload.tag ?? null },
+      })
+    ));
+
     const goneIds = subs.filter((s, i) => results[i].gone && s.id).map((s) => s.id as string);
     if (goneIds.length) {
       await admin.from("push_subscriptions").delete().in("id", goneIds);
