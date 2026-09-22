@@ -1982,6 +1982,18 @@ interface SapApprovalRequestPayload {
   Code?: number;
   Status?: string;
   ApprovalRequestDecisions?: SapApprovalDecisionRow[];
+  ApprovalRequestLines?: SapApprovalDecisionRow[];
+}
+
+/**
+ * O Service Layer expõe as decisões ora em `ApprovalRequestDecisions`, ora em
+ * `ApprovalRequestLines` (varia por versão/estágio). Ignorar `Lines` fazia o
+ * pré-check acusar "sem decisão pendente" mesmo com a linha pendente no SAP.
+ */
+function decisionRowsOf(request: SapApprovalRequestPayload | null | undefined): SapApprovalDecisionRow[] {
+  const decisions = request?.ApprovalRequestDecisions || [];
+  const lines = request?.ApprovalRequestLines || [];
+  return [...decisions, ...lines];
 }
 
 function isPendingSapDecision(status?: string): boolean {
@@ -2010,9 +2022,11 @@ async function getCurrentSapUserKey(session: SapSession): Promise<number> {
 }
 
 async function getSapApprovalRequest(session: SapSession, code: number): Promise<SapApprovalRequestPayload> {
+  // Sem `$select`/`$expand`: as coleções de decisão são internas à entidade e o
+  // Service Layer recusa expandi-las ("Cannot expand invalid navigation property").
   const res = await sapQuery(
     session,
-    `ApprovalRequests(${code})?$select=Code,Status&$expand=ApprovalRequestDecisions`,
+    `ApprovalRequests(${code})`,
     undefined,
     false,
   );
@@ -2055,7 +2069,7 @@ async function decideSapApprovalRequest(
   // pode aceitar um PATCH ambíguo sem alterar a decisão deste aprovador.
   const userKey = await getCurrentSapUserKey(session);
   const request = await getSapApprovalRequest(session, code);
-  const decisions = request.ApprovalRequestDecisions || [];
+  const decisions = decisionRowsOf(request);
   if (findCompletedDecisionForAction(decisions, userKey, action)) {
     return { recoveredFromSapError: true };
   }
@@ -2082,7 +2096,7 @@ async function decideSapApprovalRequest(
     for (const delayMs of [300, 700, 1400, 2500]) {
       await new Promise((resolve) => setTimeout(resolve, delayMs));
       const fresh = await getSapApprovalRequest(session, code);
-      if (findCompletedDecisionForAction(fresh.ApprovalRequestDecisions || [], userKey, action)) {
+      if (findCompletedDecisionForAction(decisionRowsOf(fresh), userKey, action)) {
         return { recoveredFromSapError: false };
       }
     }
@@ -2093,7 +2107,7 @@ async function decideSapApprovalRequest(
     const message = e instanceof Error ? e.message : String(e);
     try {
       const fresh = await getSapApprovalRequest(session, code);
-      const freshDecisions = fresh.ApprovalRequestDecisions || [];
+      const freshDecisions = decisionRowsOf(fresh);
       if (findCompletedDecisionForAction(freshDecisions, userKey, action)) {
         return { recoveredFromSapError: true };
       }

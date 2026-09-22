@@ -578,12 +578,15 @@ async function decideApproval(
   remarks: string,
 ) {
   const status = decision === "approve" ? "ardApproved" : "ardNotApproved";
+  // Sem `$select`: as coleções de decisão são internas à entidade e, dependendo
+  // da versão do Service Layer, vêm em `ApprovalRequestLines` em vez de
+  // `ApprovalRequestDecisions`. Ler só uma delas gera falso "sem decisão pendente".
   const req = (await sapGet(
     s,
-    `ApprovalRequests(${approvalRequestId})?$select=Code,Status,ApprovalRequestDecisions`,
-  )) as SLApprovalRequest;
+    `ApprovalRequests(${approvalRequestId})`,
+  )) as SLApprovalRequest & { ApprovalRequestLines?: SLDecision[] };
 
-  const decisions = req?.ApprovalRequestDecisions || [];
+  const decisions = [...(req?.ApprovalRequestDecisions || []), ...(req?.ApprovalRequestLines || [])];
   const target = decisions.find(
     (d) =>
       Number(d.UserID) === userKey &&
