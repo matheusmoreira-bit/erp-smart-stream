@@ -1930,6 +1930,7 @@ function mapInternalExpense(e: ApprovalFeedDoc, ruleName?: string | null): Appro
     restrictedItemCount: Number(e.restricted_item_count || 0),
     __internalId: e.id,
     __revision: Number(e.revision_number || 1),
+    __viewerAlreadyApproved: e.viewer_already_approved === true,
 
     __explain: {
       ruleId: e.approval_rule_id || null,
@@ -2029,19 +2030,19 @@ async function decideSapApprovalRequest(
   // permitted to perform this action" — por isso exigimos sessão do usuário.
   session = await ensureUserSapSession(session);
 
-  // Idempotência: se já existe decisão finalizada para este usuário com a
-  // mesma ação, tratamos como sucesso silencioso. Se a leitura falhar, seguimos
-  // para o PATCH — o SAP aplica a decisão ao usuário da sessão atual.
-  let userKey: number | null = null;
-  try {
-    userKey = await getCurrentSapUserKey(session);
-    const request = await getSapApprovalRequest(session, code);
-    const decisions = request.ApprovalRequestDecisions || [];
-    if (findCompletedDecisionForAction(decisions, userKey, action)) {
-      return { recoveredFromSapError: true };
-    }
-  } catch {
-    // Ignora — deixamos o SAP validar no PATCH abaixo.
+  // Confirma a identidade e a linha exata antes de escrever. Sem isso o SAP
+  // pode aceitar um PATCH ambíguo sem alterar a decisão deste aprovador.
+  const userKey = await getCurrentSapUserKey(session);
+  const request = await getSapApprovalRequest(session, code);
+  const decisions = request.ApprovalRequestDecisions || [];
+  if (findCompletedDecisionForAction(decisions, userKey, action)) {
+    return { recoveredFromSapError: true };
+  }
+  if (findPendingDecisionIndex(decisions, userKey) < 0) {
+    throw new Error(formatSapApprovalError(
+      "Não há uma decisão pendente para o seu usuário nesta solicitação. Atualize a lista antes de tentar novamente.",
+      doc,
+    ));
   }
 
   try {
@@ -2054,18 +2055,28 @@ async function decideSapApprovalRequest(
         Remarks: remarks || undefined,
       }],
     });
-    return { recoveredFromSapError: false };
+
+    // O Service Layer pode responder 200/204 antes da linha refletir a mudança.
+    // Só informamos sucesso após confirmar a decisão do usuário por leitura.
+    for (const delayMs of [300, 700, 1400, 2500]) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      const fresh = await getSapApprovalRequest(session, code);
+      if (findCompletedDecisionForAction(fresh.ApprovalRequestDecisions || [], userKey, action)) {
+        return { recoveredFromSapError: false };
+      }
+    }
+    throw new Error(
+      "O SAP recebeu a solicitação, mas não confirmou a sua decisão. O cartão foi mantido para evitar um falso sucesso; atualize e tente novamente.",
+    );
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    if (userKey !== null) {
-      try {
-        const fresh = await getSapApprovalRequest(session, code);
-        const freshDecisions = fresh.ApprovalRequestDecisions || [];
-        if (findCompletedDecisionForAction(freshDecisions, userKey, action)) {
-          return { recoveredFromSapError: true };
-        }
-      } catch { /* keep original SAP error */ }
-    }
+    try {
+      const fresh = await getSapApprovalRequest(session, code);
+      const freshDecisions = fresh.ApprovalRequestDecisions || [];
+      if (findCompletedDecisionForAction(freshDecisions, userKey, action)) {
+        return { recoveredFromSapError: true };
+      }
+    } catch { /* keep original SAP error */ }
     throw new Error(formatSapApprovalError(message, doc));
   }
 }
@@ -2955,9 +2966,15 @@ export default function ApprovalsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [sessionUserName, sessionUser, currentUserIdentities, identifiersForDoc, ccScopeAllows, isSuperUser],
   );
+  // Uma fila de ação não deve recolocar documentos que este usuário já
+  // aprovou no ciclo atual, mesmo com "Ver todas" ligado. O documento segue
+  // disponível em Compras/Vendas e para os demais aprovadores pendentes.
+  const actionableApprovals = allApprovals.filter(
+    (approval) => !(approval as unknown as { __viewerAlreadyApproved?: boolean }).__viewerAlreadyApproved,
+  );
   const userApprovals = effectiveShowAll
-    ? allApprovals
-    : allApprovals.filter(
+    ? actionableApprovals
+    : actionableApprovals.filter(
         (a) =>
           // Para documentos internos, o `approvals-feed` já aplica no servidor
           // o recorte por aliases, grupos, diretoria, substituição e aprovadores
