@@ -458,27 +458,40 @@ Deno.serve(async (req) => {
     // Recorte de visibilidade (mesma semântica de `expense-read`), em memória.
     let substituteAliases = new Set<string>();
     let effectiveAliases = new Set<string>(caller.aliases);
-    if (!caller.privileged) {
-      substituteAliases = await substituteOfficialAliases(admin, caller.aliases);
-      effectiveAliases = new Set([...caller.aliases, ...substituteAliases]);
-      docs = docs.filter((d) => {
-        if (ownsAsRequesterOrBranch(d, caller.aliases, caller.directorateBranch)) return true;
-        const segments = segmentsByExpense.get(String(d.id || "")) || [];
-        if (segments.length > 0) {
-          // Documento rateado: a pendência vem das trilhas, não do nível do
-          // cabeçalho (que pode apontar para a regra de outra ramificação).
-          return segments.some((s) => pendingSegmentForCaller(s, effectiveAliases));
-        }
-        const approvalsAtLevel = currentCycleApprovalsByExpense.get(String(d.id || "")) || [];
-        if (hasPendingApproverClaim(d, caller.aliases, substituteAliases, approvalsAtLevel)) return true;
-        if (!caller.directorateBranch) return false;
-        return (d.items || []).some((it: Record<string, unknown>) =>
-          costCenterInBranch(it.cost_center, caller.directorateBranch),
-        );
-      });
-    } else {
-      effectiveAliases = new Set([...caller.aliases]);
-    }
+    substituteAliases = await substituteOfficialAliases(admin, caller.aliases);
+    effectiveAliases = new Set([...caller.aliases, ...substituteAliases]);
+
+    /** Pendência de decisão do próprio caller (cabeçalho ou trilha de rateio). */
+    const callerIsPendingApprover = (d: Record<string, any>): boolean => {
+      const segments = segmentsByExpense.get(String(d.id || "")) || [];
+      if (segments.length > 0) {
+        return segments.some((s) => pendingSegmentForCaller(s, effectiveAliases));
+      }
+      const approvalsAtLevel = currentCycleApprovalsByExpense.get(String(d.id || "")) || [];
+      return hasPendingApproverClaim(d, caller.aliases, substituteAliases, approvalsAtLevel);
+    };
+
+    docs = docs.filter((d) => {
+      const docCompany = String(d.company_db || "");
+      // Fora da empresa logada, nenhuma permissão amplia a visão: só entram os
+      // documentos em que o caller é o aprovador pendente.
+      if (docCompany && docCompany !== companyDb) return callerIsPendingApprover(d);
+      if (caller.privileged) return true;
+      if (ownsAsRequesterOrBranch(d, caller.aliases, caller.directorateBranch)) return true;
+      const segments = segmentsByExpense.get(String(d.id || "")) || [];
+      if (segments.length > 0) {
+        // Documento rateado: a pendência vem das trilhas, não do nível do
+        // cabeçalho (que pode apontar para a regra de outra ramificação).
+        return segments.some((s) => pendingSegmentForCaller(s, effectiveAliases));
+      }
+      const approvalsAtLevel = currentCycleApprovalsByExpense.get(String(d.id || "")) || [];
+      if (hasPendingApproverClaim(d, caller.aliases, substituteAliases, approvalsAtLevel)) return true;
+      if (!caller.directorateBranch) return false;
+      return (d.items || []).some((it: Record<string, unknown>) =>
+        costCenterInBranch(it.cost_center, caller.directorateBranch),
+      );
+    });
+
 
     // Recorte do payload por trilha: valores, itens, CCs, projetos e cadeias de
     // outras ramificacoes nao chegam ao navegador.
