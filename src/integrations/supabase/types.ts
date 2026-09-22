@@ -5218,6 +5218,51 @@ export type Database = {
         }
         Relationships: []
       }
+      message_send_log: {
+        Row: {
+          channel: string
+          company_db: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error_message: string | null
+          id: string
+          metadata: Json
+          recipient: string
+          source: string | null
+          status: string
+          subject: string | null
+        }
+        Insert: {
+          channel: string
+          company_db?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json
+          recipient: string
+          source?: string | null
+          status: string
+          subject?: string | null
+        }
+        Update: {
+          channel?: string
+          company_db?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json
+          recipient?: string
+          source?: string | null
+          status?: string
+          subject?: string | null
+        }
+        Relationships: []
+      }
       nf_entrada_contas_pagar: {
         Row: {
           ap_currency: string | null
