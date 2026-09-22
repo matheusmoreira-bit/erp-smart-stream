@@ -2,6 +2,7 @@
 // e aplica o PATCH correspondente no SAP B1 (Service Layer), usando o Apiuser.
 // Somente administradores (ou chamadas com service role) podem executar.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { enforceSapLinePrices } from "../_shared/sap-line-prices.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
