@@ -18,6 +18,7 @@ import { getStandaloneMode, standaloneResponse } from "../_shared/standalone-mod
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { buildPagCorpJournalTransactionPairs } from "../_shared/pagcorp-journal-entry.ts";
+import { sapFetch } from "../_shared/sap-fetch.ts";
 
 const PAGCORP_JOURNAL_PAYLOAD_VERSION = "2026-08-26-pairs-per-transaction-v3";
 
