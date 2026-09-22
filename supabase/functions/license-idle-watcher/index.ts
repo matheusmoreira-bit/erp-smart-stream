@@ -2,6 +2,7 @@
 // e envia alerta via WhatsApp + e-mail. Re-alerta uma vez por semana ISO.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { logSend } from "../_shared/send-log.ts";
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
 import { listSapUsersHybrid } from "../_shared/sap-users-hybrid.ts";
@@ -183,6 +184,14 @@ async function sendWhatsApp(message: string) {
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: body.toString(),
+    });
+    await logSend({
+      channel: "whatsapp",
+      recipient: WHATSAPP_TO,
+      status: resp.ok ? "sent" : "failed",
+      subject: message.slice(0, 120),
+      errorMessage: resp.ok ? null : `HTTP ${resp.status}`,
+      source: "license-idle-watcher",
     });
     return resp.ok;
   } catch (e) {
