@@ -1714,8 +1714,16 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       delete patchPayload.TaxDate;
       delete patchPayload.DocCurrency;
 
-      patchPayload.DocumentLines = ((sapPayload as any).DocumentLines as Array<Record<string, unknown>>)
-        .map((l, i) => ({ LineNum: i, ...l }));
+      // A coleção é substituída inteira no PATCH: enviamos cada linha completa
+      // (campos atuais do SAP + campos personalizados) com os valores aprovados
+      // por cima, para o SAP não recriar a linha zerando o preço.
+      patchPayload.DocumentLines = await buildFullPatchLines(
+        sap.baseUrl,
+        sap.cookies,
+        sapEndpoint,
+        patchDocEntry,
+        (sapPayload as any).DocumentLines as Array<Record<string, unknown>>,
+      );
       lastSapPayload = patchPayload;
       const resp = await patchSapDocument(sap.baseUrl, sap.cookies, sapEndpoint, patchDocEntry, patchPayload);
       // O SAP recalcula o preço a partir da lista de preços quando a linha é
