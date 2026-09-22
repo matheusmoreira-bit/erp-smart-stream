@@ -1594,6 +1594,7 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
   // Recompute approver with self-approval guard on submit.
   let resolvedLevel = current.current_level_order || 1;
   let resolvedApprover: string | null = current.current_approver || null;
+  let resolvedApproverEmail: string | null = null;
   let fallbackUsed = false;
   let matrixGapOnSubmit = false;
   if (current.approval_rule_id) {
@@ -1611,9 +1612,11 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
     }, resolvedLevel);
     resolvedLevel = picked.level_order;
     resolvedApprover = picked.approver_name || resolvedApprover;
+    resolvedApproverEmail = picked.approver_email || null;
     fallbackUsed = picked.fallback_used;
   } else {
     resolvedApprover = MATRIX_FALLBACK_APPROVER.name;
+    resolvedApproverEmail = MATRIX_FALLBACK_APPROVER.email;
     resolvedLevel = 1;
     matrixGapOnSubmit = true;
   }
