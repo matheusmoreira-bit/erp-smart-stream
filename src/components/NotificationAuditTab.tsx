@@ -8,8 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, RefreshCw, MessageCircle, Mail, AlertTriangle, ShieldCheck, Search } from "lucide-react";
 import { format } from "date-fns";
 
-type Channel = "whatsapp" | "email" | "in_app";
-type Kind = "approval" | "login_failure" | "license_idle" | "in_app";
+type Channel = "whatsapp" | "email" | "in_app" | "push" | "slack" | "sms";
+type Kind = "approval" | "login_failure" | "license_idle" | "in_app" | "envio";
 
 interface AuditEntry {
   id: string;
@@ -28,6 +28,7 @@ const KIND_LABEL: Record<Kind, string> = {
   login_failure: "Falha de login",
   license_idle: "Licença ociosa",
   in_app: "In-App",
+  envio: "Envio",
 };
 
 const KIND_COLOR: Record<Kind, string> = {
@@ -35,6 +36,7 @@ const KIND_COLOR: Record<Kind, string> = {
   login_failure: "bg-red-500/15 text-red-600 border-red-500/30",
   license_idle: "bg-amber-500/15 text-amber-600 border-amber-500/30",
   in_app: "bg-violet-500/15 text-violet-600 border-violet-500/30",
+  envio: "bg-emerald-500/15 text-emerald-600 border-emerald-500/30",
 };
 
 function ChannelIcon({ channel }: { channel: Channel }) {
