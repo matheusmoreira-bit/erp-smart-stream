@@ -540,6 +540,12 @@ Deno.serve(async (req) => {
         docs,
         privileged: caller.privileged,
         directorate_branch: caller.directorateBranch,
+        all_companies: includeAllCompanies,
+        companies: Array.from(companyNames.entries()).map(([company_db, display_name]) => ({
+          company_db,
+          display_name,
+        })),
+
         // O cliente usa isto para NÃO substituir uma lista boa por uma
         // resposta calculada com permissões incompletas.
         degraded: !!caller.degraded,
