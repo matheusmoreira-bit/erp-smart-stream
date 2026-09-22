@@ -9,6 +9,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { pushToRecipient } from "./web-push.ts";
+import { logSend } from "./send-log.ts";
 import { getChannelSettings } from "./notification-channels.ts";
 import { detailsToPayload, emitNotificationEvent } from "./notification-engine.ts";
 
@@ -309,7 +310,15 @@ export async function sendSlackApproval(opts: {
     url: opts.appUrl,
   });
   blocks.push({ type: "actions", elements });
-  await slackCall("chat.postMessage", { channel, text: opts.title, blocks, unfurl_links: false });
+  const slackRes = await slackCall("chat.postMessage", { channel, text: opts.title, blocks, unfurl_links: false });
+  await logSend({
+    channel: "slack",
+    recipient: channel,
+    status: slackRes ? "sent" : "failed",
+    subject: opts.title.slice(0, 120),
+    errorMessage: slackRes ? null : "slack chat.postMessage falhou",
+    source: "approval-notify",
+  });
 }
 
 /**
