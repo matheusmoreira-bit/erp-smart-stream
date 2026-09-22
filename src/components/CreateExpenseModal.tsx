@@ -1339,41 +1339,88 @@ export function CreateExpenseModal({
     });
   };
 
+  /**
+   * Confere cada linha do arquivo contra as listas ativas do ERP.
+   * Centro de custo, item e projeto inativos (ou inexistentes) são recusados:
+   * o SAP rejeita o documento e o pedido ficaria travado na integração.
+   */
+  const validateRateioRows = useCallback(
+    (rows: RateioRow[]) => {
+      const valid: Array<{ row: RateioRow; cc: SapSearchOption; item: SapSearchOption | null; project: SapSearchOption | null }> = [];
+      const issues: string[] = [];
+      const findByCodeOrName = (list: SapSearchOption[], value: string) => {
+        const v = value.trim().toLowerCase();
+        return (
+          list.find((o) => o.code.toLowerCase() === v) ||
+          list.find((o) => (o.name || "").toLowerCase() === v) ||
+          null
+        );
+      };
+      rows.forEach((r, idx) => {
+        const n = idx + 1;
+        const cc = findByCodeOrName(costCenterOptions, r.cost_center);
+        if (!cc) {
+          issues.push(`Linha ${n}: centro de custo "${r.cost_center}" inativo ou inexistente.`);
+          return;
+        }
+        let item: SapSearchOption | null = null;
+        if (r.item_code) {
+          item = findByCodeOrName(itemOptions, r.item_code);
+          if (!item) {
+            issues.push(`Linha ${n}: item "${r.item_code}" inativo ou inexistente.`);
+            return;
+          }
+        }
+        let project: SapSearchOption | null = null;
+        if (r.project) {
+          project = findByCodeOrName(projectOptionsForCc(cc.code), r.project);
+          if (!project) {
+            issues.push(`Linha ${n}: projeto "${r.project}" inativo ou não permitido para o centro de custo ${cc.code}.`);
+            return;
+          }
+        }
+        valid.push({ row: r, cc, item, project });
+      });
+      return { valid, issues };
+    },
+    [costCenterOptions, itemOptions, projectOptionsForCc],
+  );
+
   /** Substitui as linhas do pedido pelas linhas da planilha de rateio. */
   const applyRateioRows = (rows: RateioRow[]) => {
-    const resolve = (list: SapSearchOption[], code: string) =>
-      code ? list.find((o) => o.code === code) || { code, name: code, extra: "" } : null;
-    const resolveByCodeOrName = (list: SapSearchOption[], value: string) => {
-      if (!value) return null;
-      const v = value.trim().toLowerCase();
-      return (
-        list.find((o) => o.code.toLowerCase() === v) ||
-        list.find((o) => (o.name || "").toLowerCase() === v) ||
-        { code: value.trim(), name: value.trim(), extra: "" }
-      );
-    };
-    const next = rows.map((r) => {
-      const ccOpt = resolve(costCenterOptions, r.cost_center);
-      const prOpt = resolveByCodeOrName(projectOptionsForCc(ccOpt?.code ?? null), r.project);
-      const itOpt = resolve(itemOptions, r.item_code);
+    if (costCenterOptions.length === 0 || itemOptions.length === 0) {
+      toast.error("As listas do ERP ainda estão carregando. Tente novamente em alguns segundos.");
+      return;
+    }
+    const { valid, issues } = validateRateioRows(rows);
+    if (issues.length > 0) {
+      issues.slice(0, 5).forEach((msg) => toast.error(msg));
+      if (issues.length > 5) toast.error(`… e mais ${issues.length - 5} linha(s) com cadastro inativo.`);
+    }
+    if (valid.length === 0) {
+      toast.error("Nenhuma linha do arquivo pôde ser usada: corrija os cadastros inativos e anexe novamente.");
+      return;
+    }
+    const next = valid.map(({ row: r, cc, item, project }) => {
       const quantity = r.quantity > 0 ? r.quantity : 1;
       const unitPrice = r.unit_price;
       return {
-        item_code: itOpt?.code || "",
-        description: r.description || itOpt?.name || "",
+        item_code: item?.code || "",
+        description: r.description || item?.name || "",
         quantity,
         unit_price: unitPrice,
         line_total: Math.round(quantity * unitPrice * 100) / 100,
-        cost_center: ccOpt?.code || "",
-        project: prOpt?.code || "",
-        sapItem: itOpt,
-        sapCostCenter: ccOpt,
-        sapProject: prOpt,
+        cost_center: cc.code,
+        project: project?.code || "",
+        sapItem: item,
+        sapCostCenter: cc,
+        sapProject: project,
       };
     });
     setItems(next);
     toast.success(`${next.length} linha(s) de rateio aplicadas ao pedido.`);
   };
+
 
 
   // Aplica UM grupo de documentos fiscais (todos do MESMO fornecedor).
