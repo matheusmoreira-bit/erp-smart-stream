@@ -275,6 +275,7 @@ function ApprovalCard({
   substituteName,
   selectedForTransfer,
   onToggleTransfer,
+  showCompany,
 }: {
   doc: ApprovalDoc;
   onOpen: () => void;
@@ -285,7 +286,10 @@ function ApprovalCard({
   substituteName?: string | null;
   selectedForTransfer?: boolean;
   onToggleTransfer?: (checked: boolean) => void;
+  /** Exibe a empresa do documento no cabeçalho (modo multiempresa). */
+  showCompany?: boolean;
 }) {
+
   const dueStatus = getDueStatus(doc.dueDate);
   const overdue = dueStatus === "overdue";
   const dueWarning = dueStatus === "warning";
