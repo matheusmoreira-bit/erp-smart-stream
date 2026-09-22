@@ -302,6 +302,20 @@
       "when": 1790024627385,
       "tag": "0042_restrict_internal_functions_by_role",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1790081902817,
+      "tag": "0043_restaura_grants_companies",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1790081925644,
+      "tag": "0044_grants_escrita_companies_admin",
+      "breakpoints": true
     }
   ]
 }
