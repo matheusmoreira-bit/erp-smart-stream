@@ -4097,7 +4097,56 @@ export function CreateExpenseModal({
     />
 
 
+    <AlertDialog open={!!rateioPreview} onOpenChange={(v) => { if (!v) setRateioPreview(null); }}>
+      <AlertDialogContent className="z-[60]" overlayClassName="z-[60] bg-black/40">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Usar este arquivo como referência de rateio?</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-2 text-sm">
+              <p>
+                Identificamos {rateioPreview?.result.rows.length} linha(s) de rateio em{" "}
+                <span className="font-medium">{rateioPreview?.fileName}</span>. Ao confirmar,
+                as linhas atuais do pedido serão substituídas pelas linhas do arquivo.
+              </p>
+              <p className="text-muted-foreground">
+                Total: {(rateioPreview?.result.total ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                {rateioPreview?.result.columns.length
+                  ? ` — colunas lidas: ${rateioPreview.result.columns.join(", ")}`
+                  : ""}
+              </p>
+              <ul className="max-h-40 overflow-auto list-disc pl-5">
+                {(rateioPreview?.result.rows || []).slice(0, 8).map((r, i) => (
+                  <li key={i}>
+                    {r.cost_center}
+                    {r.project ? ` · ${r.project}` : ""}
+                    {r.item_code ? ` · ${r.item_code}` : ""} —{" "}
+                    {(r.quantity * r.unit_price).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                  </li>
+                ))}
+                {(rateioPreview?.result.rows.length ?? 0) > 8 && (
+                  <li>… e mais {(rateioPreview?.result.rows.length ?? 0) - 8} linha(s)</li>
+                )}
+              </ul>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+          <AlertDialogCancel autoFocus>Manter anexo apenas</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              const rows = rateioPreview?.result.rows || [];
+              setRateioPreview(null);
+              if (rows.length > 0) applyRateioRows(rows);
+            }}
+          >
+            Aplicar linhas
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
     <AlertDialog open={!!dupConfirm} onOpenChange={(v) => { if (!v) setDupConfirm(null); }}>
+
       <AlertDialogContent className="z-[60]" overlayClassName="z-[60] bg-black/40">
         <AlertDialogHeader>
           <AlertDialogTitle>Anexo já utilizado em outro lançamento</AlertDialogTitle>
