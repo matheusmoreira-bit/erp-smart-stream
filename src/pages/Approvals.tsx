@@ -2577,14 +2577,24 @@ export default function ApprovalsPage() {
             e.requester_email,
           );
           if (current.length > 0) {
-            if (!doc.approverEmail && current[0]?.email) doc.approverEmail = current[0].email;
             // Uma delegação explícita em `current_approver` tem precedência.
-            const hasOverride = !!(e.current_approver && e.current_approver.trim());
-            if (!hasOverride) {
-              const names = current
-                .map((l) => displayUserName(l.name || l.email || ""))
-                .filter(Boolean);
+            const override = (e.current_approver || "").trim();
+            if (override) {
+              // O e-mail exibido tem que ser o do aprovador exibido — nunca o
+              // de outro aprovador paralelo do mesmo nível.
+              if (!doc.approverEmail) {
+                const match = current.find((l) =>
+                  isDesignatedApprover(override, l.name || null, l.email || null),
+                );
+                doc.approverEmail = match?.email || (override.includes("@") ? override : "");
+              }
+            } else {
+              const shown = current.filter((l) => l.name || l.email);
+              const names = shown.map((l) => displayUserName(l.name || l.email || "")).filter(Boolean);
               if (names.length > 0) doc.currentApprover = names.join(" / ");
+              if (!doc.approverEmail) {
+                doc.approverEmail = shown.map((l) => l.email).filter(Boolean).join(" / ");
+              }
             }
             // Lista completa do nível atual — usada pelo filtro "Para aprovar".
             (doc as unknown as { __levelApprovers?: Array<{ name: string; email: string }> }).__levelApprovers =
