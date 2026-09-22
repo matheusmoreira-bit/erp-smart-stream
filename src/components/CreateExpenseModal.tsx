@@ -63,6 +63,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { type ExpenseItem, type CreateExpenseInput, type RateioType, RATEIO_TYPE_LABELS } from "@/hooks/useExpenses";
+import {
+  isRateioCandidate,
+  parseRateioFile,
+  type RateioParseResult,
+  type RateioRow,
+} from "@/lib/rateio-sheet";
+
 import { SupplierFormModal, type SupplierFormPrefill } from "@/components/SupplierFormModal";
 import { useMyCapabilities } from "@/hooks/useMyCapabilities";
 import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
