@@ -4473,7 +4473,15 @@ export default function ApprovalsPage() {
                       <td className="py-3 px-3">
                         <div className="flex items-center gap-1.5 flex-wrap"><DocKindBadge doc={doc} /></div>
                       </td>
-                      <td className="py-3 px-3 font-mono text-xs text-foreground font-semibold">{docNumberLabel(doc)}</td>
+                      <td className="py-3 px-3 font-mono text-xs text-foreground font-semibold">
+                        {docNumberLabel(doc)}
+                        {allCompanies && (doc as { __companyName?: string }).__companyName && (
+                          <span className="block mt-1 font-sans text-[10px] font-medium text-primary">
+                            {(doc as { __companyName?: string }).__companyName}
+                          </span>
+                        )}
+                      </td>
+
                       <td className="py-3 px-3 text-right font-mono text-foreground font-medium">{formatCurrency(doc.docTotal, doc.currency)}</td>
                       <td className="py-3 px-3 text-foreground">{doc.cardName}</td>
                       <td className="py-3 px-3 text-foreground font-medium">
