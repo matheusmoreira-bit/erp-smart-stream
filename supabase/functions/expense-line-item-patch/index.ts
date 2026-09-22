@@ -3,6 +3,7 @@
 // Somente administradores (ou chamadas com service role) podem executar.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { enforceSapLinePrices } from "../_shared/sap-line-prices.ts";
+import { mergeSapDocumentLines } from "../_shared/sap-line-merge.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
