@@ -2,6 +2,7 @@
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 import { requireSchedulerAdminOrUserSession } from "../_shared/automation-auth.ts";
 import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
+import { logSendMany } from "../_shared/send-log.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -220,8 +221,11 @@ Deno.serve(async (req) => {
   const auth = await requireSchedulerAdminOrUserSession(req, corsHeaders);
   if (!auth.ok) return auth.response;
 
+  let loggedRecipients: string[] = [];
+  let loggedSubject = "";
   try {
     const { to, cc, bcc, subject, html, text, attachments, replyTo } = await req.json();
+    loggedSubject = String(subject ?? "");
     if (!to || !subject || (!html && !text)) {
       return new Response(JSON.stringify({ error: "to, subject and html/text required" }), {
         status: 400,
