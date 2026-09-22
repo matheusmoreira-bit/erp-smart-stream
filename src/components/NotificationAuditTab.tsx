@@ -61,7 +61,7 @@ export function NotificationAuditTab() {
       const fromIso = new Date(`${from}T00:00:00`).toISOString();
       const toIso = new Date(`${to}T23:59:59.999`).toISOString();
 
-      const [approvals, logins, idle, inApp] = await Promise.all([
+      const [approvals, logins, idle, inApp, sends] = await Promise.all([
         supabase
           .from("whatsapp_approval_alerts")
           .select("id, sent_at, whatsapp_to, company_db, approval_request_id, payload")
@@ -87,6 +87,13 @@ export function NotificationAuditTab() {
           .lte("created_at", toIso)
           .order("created_at", { ascending: false })
           .limit(500),
+        supabase
+          .from("message_send_log")
+          .select("id, created_at, channel, recipient, subject, status, error_message, source, company_db, metadata")
+          .gte("created_at", fromIso)
+          .lte("created_at", toIso)
+          .order("created_at", { ascending: false })
+          .limit(1000),
       ]);
 
       const merged: AuditEntry[] = [];
