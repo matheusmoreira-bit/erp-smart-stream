@@ -3991,6 +3991,29 @@ export default function ApprovalsPage() {
               <Switch id="show-all" checked={showAll} onCheckedChange={setShowAll} />
             </div>
           )}
+          <div className="flex items-center gap-2 glass-card px-3 py-2">
+            <Building2 className="w-4 h-4 text-primary/70" />
+            <Label htmlFor="all-companies" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+              Todas as empresas
+            </Label>
+            <Switch id="all-companies" checked={allCompanies} onCheckedChange={setAllCompanies} />
+          </div>
+          {allCompanies && feedCompanies.length > 0 && (
+            <Select value={companyFilter} onValueChange={setCompanyFilter}>
+              <SelectTrigger className="w-[220px] bg-muted/30 border-border" aria-label="Filtrar por empresa">
+                <SelectValue placeholder="Todas as empresas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as empresas</SelectItem>
+                {feedCompanies.map((c) => (
+                  <SelectItem key={c.company_db} value={c.company_db}>
+                    {c.display_name || c.company_db}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
           {isAdmin && transferEligibleDocs.length > 0 && (
             <div className="flex items-center gap-2">
               <Button
