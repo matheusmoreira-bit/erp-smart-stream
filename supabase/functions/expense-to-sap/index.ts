@@ -1496,22 +1496,16 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       return Number.isFinite(n) ? n : null;
     })();
 
-    // Regra PagCorp: o vencimento é sempre a data da compra. Se o lançamento
-    // acontecer fora do mês da compra (período contábil já fechado no SAP),
-    // usamos o dia 01 do mês corrente para docDate/dueDate.
+    // Regra PagCorp: o vencimento é sempre a data da compra e, por exceção às
+    // demais despesas, o lançamento pode ir ao SAP com data no passado
+    // (DocDate/TaxDate/DocDueDate = data da compra). Se o SAP recusar por
+    // período contábil fechado, o fallback abaixo reintegra com a data de hoje.
     const isPagCorp = String((expense as any).origin || "").toLowerCase() === "pagcorp"
       || !!(pagcorpLog as any)?.transaction;
     if (isPagCorp) {
-      const currentMonth = today.slice(0, 7);
-      const purchaseDate = docDate;
-      if (purchaseDate.slice(0, 7) === currentMonth) {
-        dueDate = purchaseDate;
-      } else {
-        const firstOfMonth = `${currentMonth}-01`;
-        docDate = firstOfMonth;
-        dueDate = firstOfMonth;
-      }
+      dueDate = docDate;
     }
+
 
 
     // Solicitante: usuário que criou a solicitação (login SAP, ex.: matheus.moreira).
@@ -1526,10 +1520,12 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
 
     const sapPayload: Record<string, unknown> = {
       CardCode: expense.supplier_code,
-      // DocDate = data de lançamento no SAP: sempre HOJE.
+      // DocDate = data de lançamento no SAP: HOJE para despesas comuns.
+      // Exceção PagCorp: usa a data da compra, mesmo que no passado.
       // TaxDate = data do documento (emissão da NF), vem do formulário.
       // DocDueDate = data de vencimento, vem do formulário.
-      DocDate: today,
+      DocDate: isPagCorp ? docDate : today,
+
       DocDueDate: dueDate,
       TaxDate: docDate,
       ...(paymentGroupCode !== null ? { PaymentGroupCode: paymentGroupCode } : {}),
