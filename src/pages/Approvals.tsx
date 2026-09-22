@@ -1982,6 +1982,18 @@ interface SapApprovalRequestPayload {
   Code?: number;
   Status?: string;
   ApprovalRequestDecisions?: SapApprovalDecisionRow[];
+  ApprovalRequestLines?: SapApprovalDecisionRow[];
+}
+
+/**
+ * O Service Layer expõe as decisões ora em `ApprovalRequestDecisions`, ora em
+ * `ApprovalRequestLines` (varia por versão/estágio). Ignorar `Lines` fazia o
+ * pré-check acusar "sem decisão pendente" mesmo com a linha pendente no SAP.
+ */
+function decisionRowsOf(request: SapApprovalRequestPayload | null | undefined): SapApprovalDecisionRow[] {
+  const decisions = request?.ApprovalRequestDecisions || [];
+  const lines = request?.ApprovalRequestLines || [];
+  return [...decisions, ...lines];
 }
 
 function isPendingSapDecision(status?: string): boolean {
@@ -2010,9 +2022,11 @@ async function getCurrentSapUserKey(session: SapSession): Promise<number> {
 }
 
 async function getSapApprovalRequest(session: SapSession, code: number): Promise<SapApprovalRequestPayload> {
+  // Sem `$select`/`$expand`: as coleções de decisão são internas à entidade e o
+  // Service Layer recusa expandi-las ("Cannot expand invalid navigation property").
   const res = await sapQuery(
     session,
-    `ApprovalRequests(${code})?$select=Code,Status&$expand=ApprovalRequestDecisions`,
+    `ApprovalRequests(${code})`,
     undefined,
     false,
   );
