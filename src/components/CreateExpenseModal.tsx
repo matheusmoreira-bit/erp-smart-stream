@@ -1421,6 +1421,16 @@ export function CreateExpenseModal({
     toast.success(`${next.length} linha(s) de rateio aplicadas ao pedido.`);
   };
 
+  // Pré-validação exibida na confirmação do arquivo de rateio.
+  const rateioCheck = useMemo(
+    () => validateRateioRows(rateioPreview?.result.rows || []),
+    [rateioPreview, validateRateioRows],
+  );
+  const rateioIssues = rateioCheck.issues;
+  const rateioValidRows = rateioCheck.valid.length;
+
+
+
 
 
   // Aplica UM grupo de documentos fiscais (todos do MESMO fornecedor).
