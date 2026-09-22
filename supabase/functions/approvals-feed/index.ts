@@ -453,6 +453,14 @@ Deno.serve(async (req) => {
     if (docs.length > 0) {
       docs = docs.map((doc) => {
         const approvalsAtLevel = currentCycleApprovalsByExpense.get(String(doc.id || "")) || [];
+        doc.viewer_already_approved = approvalsAtLevel.some((approval) => [
+          approval.approver_name,
+          approval.approver_email,
+          approval.substituted_for_name,
+          approval.substituted_for_email,
+        ].filter(Boolean).some((identity) =>
+          Array.from(caller.aliases).some((alias) => approvalIdentityMatches(identity, alias))
+        ));
         if (Array.isArray(doc.level_approvers) && approvalsAtLevel.length > 0) {
           doc.level_approvers = doc.level_approvers.filter((approver: Record<string, unknown>) =>
             !approvalsAtLevel.some((approval) => [

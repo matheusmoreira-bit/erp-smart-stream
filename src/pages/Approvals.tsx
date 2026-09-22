@@ -2965,9 +2965,15 @@ export default function ApprovalsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [sessionUserName, sessionUser, currentUserIdentities, identifiersForDoc, ccScopeAllows, isSuperUser],
   );
+  // Uma fila de ação não deve recolocar documentos que este usuário já
+  // aprovou no ciclo atual, mesmo com "Ver todas" ligado. O documento segue
+  // disponível em Compras/Vendas e para os demais aprovadores pendentes.
+  const actionableApprovals = allApprovals.filter(
+    (approval) => !(approval as unknown as { __viewerAlreadyApproved?: boolean }).__viewerAlreadyApproved,
+  );
   const userApprovals = effectiveShowAll
-    ? allApprovals
-    : allApprovals.filter(
+    ? actionableApprovals
+    : actionableApprovals.filter(
         (a) =>
           // Para documentos internos, o `approvals-feed` já aplica no servidor
           // o recorte por aliases, grupos, diretoria, substituição e aprovadores
