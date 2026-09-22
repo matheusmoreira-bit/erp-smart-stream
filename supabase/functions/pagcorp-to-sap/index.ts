@@ -18,6 +18,7 @@ import { getStandaloneMode, standaloneResponse } from "../_shared/standalone-mod
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { buildPagCorpJournalTransactionPairs } from "../_shared/pagcorp-journal-entry.ts";
+import { sapFetch } from "../_shared/sap-fetch.ts";
 
 const PAGCORP_JOURNAL_PAYLOAD_VERSION = "2026-08-26-pairs-per-transaction-v3";
 
@@ -135,23 +136,43 @@ async function getSapCredentials(
   return creds;
 }
 
+/** Erro de infraestrutura (base lenta/fora do ar), com mensagem acionável. */
+function unavailableError(companyDb: string, detail: string): Error {
+  return new Error(
+    `A base ${companyDb} do ERP não respondeu a tempo (${detail}). Nada foi lançado — tente integrar novamente em alguns minutos.`,
+  );
+}
+
 async function loginSap(sapCreds: Record<string, string>): Promise<SapSession> {
   let baseUrl = (sapCreds.service_layer_url || sapCreds.base_url || sapCreds.url || "").replace(/\/+$/, "");
   if (!baseUrl) throw new Error("URL do SAP B1 não configurada");
   if (baseUrl.includes("/b1s/v1")) baseUrl = baseUrl.replace("/b1s/v1", "/b1s/v2");
   else if (!baseUrl.includes("/b1s/v2")) baseUrl = `${baseUrl}/b1s/v2`;
 
-  const loginResp = await fetch(`${baseUrl}/Login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      CompanyDB: sapCreds.company_db || sapCreds.CompanyDB,
-      UserName: sapCreds.username || sapCreds.UserName,
-      Password: sapCreds.password || sapCreds.Password,
-    }),
-  });
+  const companyDb = String(sapCreds.company_db || sapCreds.CompanyDB || "ERP");
+  // Login com retry/backoff: a base às vezes leva >10s para responder e uma
+  // única tentativa sem timeout controlado derruba toda a integração.
+  let loginResp: Response;
+  try {
+    loginResp = await sapFetch(`${baseUrl}/Login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        CompanyDB: sapCreds.company_db || sapCreds.CompanyDB,
+        UserName: sapCreds.username || sapCreds.UserName,
+        Password: sapCreds.password || sapCreds.Password,
+      }),
+      timeoutMs: 45_000,
+      maxAttempts: 3,
+    });
+  } catch (e) {
+    throw unavailableError(companyDb, e instanceof Error ? e.message : String(e));
+  }
   if (!loginResp.ok) {
     const body = await loginResp.text().catch(() => "");
+    if (loginResp.status >= 500 || loginResp.status === 408 || loginResp.status === 429) {
+      throw unavailableError(companyDb, `login HTTP ${loginResp.status}`);
+    }
     throw new Error(`SAP Login falhou (HTTP ${loginResp.status}): ${body.slice(0, 200)}`);
   }
   return { baseUrl, cookies: loginResp.headers.get("set-cookie") || "" };
@@ -162,11 +183,23 @@ async function postSapDocument(
   payload: Record<string, unknown>,
   endpoint: string,
 ): Promise<{ docEntry: number; docNum: number; response: any }> {
-  const res = await fetch(`${sap.baseUrl}/${endpoint}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Cookie: sap.cookies },
-    body: JSON.stringify(payload),
-  });
+  // Gravação nunca é repetida automaticamente (evita documento duplicado),
+  // mas ganha uma janela ampla para bases lentas.
+  let res: Response;
+  try {
+    res = await sapFetch(`${sap.baseUrl}/${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: sap.cookies },
+      body: JSON.stringify(payload),
+      timeoutMs: 120_000,
+      maxAttempts: 1,
+    });
+  } catch (e) {
+    throw new Error(
+      `O ERP não respondeu ao gravar ${endpoint} (${e instanceof Error ? e.message : String(e)}). ` +
+        "Confira no ERP se o documento foi criado antes de tentar novamente.",
+    );
+  }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = body?.error?.message?.value || JSON.stringify(body);
@@ -188,8 +221,9 @@ async function assertItemsActive(sap: SapSession, itemCodes: string[]): Promise<
   if (codes.length === 0) return;
   const filter = codes.map((c) => `ItemCode eq '${c.replace(/'/g, "''")}'`).join(" or ");
   const url = `${sap.baseUrl}/Items?$select=ItemCode,ItemName,Valid,Frozen&$filter=${encodeURIComponent(filter)}`;
-  const res = await fetch(url, { headers: { Cookie: sap.cookies } });
-  if (!res.ok) return; // não bloqueia a integração se a checagem falhar
+  const res = await sapFetch(url, { headers: { Cookie: sap.cookies }, timeoutMs: 45_000, maxAttempts: 2 })
+    .catch(() => null);
+  if (!res || !res.ok) return; // não bloqueia a integração se a checagem falhar
   const body = await res.json().catch(() => null);
   const rows: any[] = Array.isArray(body?.value) ? body.value : [];
   const problems: string[] = [];
@@ -214,7 +248,7 @@ async function assertItemsActive(sap: SapSession, itemCodes: string[]): Promise<
 async function resolveActiveBranchId(sap: SapSession, preferred: number): Promise<number> {
   try {
     const url = `${sap.baseUrl}/BusinessPlaces?$select=BPLID,Disabled&$orderby=BPLID`;
-    const res = await fetch(url, { headers: { Cookie: sap.cookies } });
+    const res = await sapFetch(url, { headers: { Cookie: sap.cookies }, timeoutMs: 45_000, maxAttempts: 2 });
     if (!res.ok) return preferred;
     const body = await res.json().catch(() => null);
     const rows: any[] = Array.isArray(body?.value) ? body.value : [];
