@@ -3053,8 +3053,15 @@ export default function ApprovalsPage() {
   const dueToD = dueTo ? new Date(dueTo).getTime() + 86399999 : null;
 
   const preFiltered = userApprovals.filter((a) => {
+    // Empresa (modo multiempresa)
+    if (allCompanies && companyFilter !== "all") {
+      const db = (a as unknown as { __companyDb?: string }).__companyDb || session?.companyDB || "";
+      if (db !== companyFilter) return false;
+    }
+
     // Natureza do documento (compra / venda / outro)
     if (typeFilter !== "all" && docKind(a as never) !== typeFilter) return false;
+
 
     // Value range
     if (minV !== null && !Number.isNaN(minV) && a.docTotal < minV) return false;
