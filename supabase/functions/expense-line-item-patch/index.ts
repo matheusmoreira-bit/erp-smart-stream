@@ -154,6 +154,24 @@ Deno.serve(async (req) => {
         return json({ error: `SAP recusou o PATCH [${patchRes.status}]: ${t.slice(0, 500)}` }, 502);
       }
 
+      // O SAP recalcula o preço do item trocado pela lista de preços (às vezes
+      // zero) — reaplica os valores originais das linhas.
+      let bulkPriceWarning: string | null = null;
+      try {
+        await enforceSapLinePrices(
+          baseUrl,
+          cookies,
+          endpoint,
+          Number(expense.sap_doc_entry),
+          payloadLines.map((l, i) => ({
+            lineNum: Number(l.LineNum ?? i),
+            unitPrice: Number(l.UnitPrice ?? 0),
+          })),
+        );
+      } catch (priceError) {
+        bulkPriceWarning = priceError instanceof Error ? priceError.message : String(priceError);
+      }
+
       await supabase
         .from("expense_items")
         .update({ item_code: toItemCode })
