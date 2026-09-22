@@ -4353,6 +4353,8 @@ export default function ApprovalsPage() {
                 <motion.div key={doc.approvalRequestId} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
                 <ApprovalCard
                   doc={doc}
+                  showCompany={allCompanies}
+
                   onOpen={() => setSelectedDoc(doc)}
                   approverCCs={getCostCentersForEmail(doc.approverEmail)}
                   formatCostCenter={formatCostCenter}
