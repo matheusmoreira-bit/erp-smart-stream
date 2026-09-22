@@ -330,6 +330,11 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const companyDb = typeof body?.company_db === "string" ? body.company_db.trim() : "";
     if (!companyDb) return json(400, { error: "company_db obrigatório" }, cors);
+    // Modo multiempresa: traz também as pendências do aprovador nas demais
+    // empresas ativas, para que ele não precise trocar de empresa para decidir.
+    // O recorte é mais restrito que o da empresa logada: fora dela, só entram
+    // documentos em que o próprio caller é o aprovador pendente.
+    const includeAllCompanies = body?.include_all_companies === true;
 
     // Dados e identidade são independentes: buscamos os dois EM PARALELO e o
     // recorte de visibilidade é aplicado depois, em memória. O tempo total
@@ -337,6 +342,9 @@ Deno.serve(async (req) => {
     const tAuth = Date.now();
     // `.then()` força o início imediato: os builders do supabase-js são lazy.
     const bundlePromise = admin.rpc("approvals_feed_bundle", { _company_db: companyDb }).then((r) => r);
+    const companiesPromise = includeAllCompanies
+      ? admin.from("companies").select("company_db, display_name").eq("is_active", true).then((r) => r)
+      : Promise.resolve({ data: [], error: null } as { data: Array<Record<string, unknown>>; error: null });
     const caller = await identifyCallerCached(req, admin);
     const authMs = Date.now() - tAuth;
     if (!caller.identity) {
@@ -348,6 +356,30 @@ Deno.serve(async (req) => {
     if (bundleErr) return json(500, { error: bundleErr.message }, cors);
 
     let docs = (Array.isArray(bundle) ? bundle : []) as Array<Record<string, any>>;
+
+    // Empresas conhecidas (rótulo amigável no cabeçalho do documento).
+    const companyNames = new Map<string, string>();
+    const otherCompanies: string[] = [];
+    if (includeAllCompanies) {
+      const { data: companyRows, error: companiesErr } = await companiesPromise;
+      if (companiesErr) return json(500, { error: (companiesErr as { message: string }).message }, cors);
+      for (const row of (companyRows || []) as Array<Record<string, unknown>>) {
+        const db = String(row.company_db || "").trim();
+        if (!db) continue;
+        companyNames.set(db, String(row.display_name || db));
+        if (db !== companyDb) otherCompanies.push(db);
+      }
+      const results = await Promise.all(
+        otherCompanies.map((db) =>
+          admin
+            .rpc("approvals_feed_bundle", { _company_db: db })
+            .then(({ data }) => (Array.isArray(data) ? data : []) as Array<Record<string, any>>)
+            .catch(() => [] as Array<Record<string, any>>),
+        ),
+      );
+      for (const rows of results) docs = docs.concat(rows);
+    }
+
 
 
     // As trilhas persistidas sao a fonte de verdade do rateio (e da pendencia).
