@@ -1930,6 +1930,7 @@ function mapInternalExpense(e: ApprovalFeedDoc, ruleName?: string | null): Appro
     restrictedItemCount: Number(e.restricted_item_count || 0),
     __internalId: e.id,
     __revision: Number(e.revision_number || 1),
+    __viewerAlreadyApproved: e.viewer_already_approved === true,
 
     __explain: {
       ruleId: e.approval_rule_id || null,

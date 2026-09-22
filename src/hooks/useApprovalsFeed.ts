@@ -23,6 +23,8 @@ export interface ApprovalFeedDoc extends Expense {
   viewer_segmented?: boolean;
   restricted_segment_count?: number;
   restricted_item_count?: number;
+  /** O usuário atual já decidiu neste nível durante o ciclo vigente. */
+  viewer_already_approved?: boolean;
 }
 
 interface FeedState {
