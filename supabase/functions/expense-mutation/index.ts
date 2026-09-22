@@ -1594,6 +1594,7 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
   // Recompute approver with self-approval guard on submit.
   let resolvedLevel = current.current_level_order || 1;
   let resolvedApprover: string | null = current.current_approver || null;
+  let resolvedApproverEmail: string | null = null;
   let fallbackUsed = false;
   let matrixGapOnSubmit = false;
   if (current.approval_rule_id) {
@@ -1611,9 +1612,11 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
     }, resolvedLevel);
     resolvedLevel = picked.level_order;
     resolvedApprover = picked.approver_name || resolvedApprover;
+    resolvedApproverEmail = picked.approver_email || null;
     fallbackUsed = picked.fallback_used;
   } else {
     resolvedApprover = MATRIX_FALLBACK_APPROVER.name;
+    resolvedApproverEmail = MATRIX_FALLBACK_APPROVER.email;
     resolvedLevel = 1;
     matrixGapOnSubmit = true;
   }
@@ -1655,9 +1658,37 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
     });
   }
 
+  // Aviso multicanal (e-mail com link de ação, Slack, push, substitutos).
+  // No create com trava de anexo o documento nasce em rascunho, então é AQUI
+  // que o aprovador precisa ser avisado.
+  runAfterResponse(
+    notifyApprovalPending(admin, {
+      expenseId,
+      companyDb: String(current.company_db || ""),
+      approverEmail: resolvedApproverEmail,
+      approverName: resolvedApprover,
+      levelOrder: resolvedLevel,
+      requesterName: current.requester_name,
+      supplierName: current.supplier_name || current.supplier_code,
+      totalAmount: Number(current.total_amount || 0),
+      currency: current.currency || "BRL",
+      docType: String(current.doc_type || "purchase"),
+      resolution: {
+        source: matrixGapOnSubmit ? "default_fallback" : (fallbackUsed ? "self_approval_escalation" : "matrix_rule"),
+        reason: matrixGapOnSubmit
+          ? "Nenhuma regra ativa casou com os critérios do documento — aprovador global de contingência"
+          : fallbackUsed
+            ? "Solicitante era o aprovador designado — redirecionado para o aprovador de contingência"
+            : `Regra da matriz aplicada no nível ${resolvedLevel}`,
+        ruleId: matrixGapOnSubmit ? null : current.approval_rule_id || null,
+        costCenter: current.cost_center || null,
+        project: current.project || null,
+        metadata: { matrix_gap: matrixGapOnSubmit, fallback_used: fallbackUsed, via: "submit" },
+      },
+    }).catch((e) => console.warn("[expense-mutation] notifyApprovalPending (submit) failed:", e instanceof Error ? e.message : e)),
+  );
 
-
-  return json(200, { ok: true, expense: current });
+  return json(200, { ok: true, expense: { ...current, status: "pendente_aprovacao", current_level_order: resolvedLevel, current_approver: resolvedApprover } });
 }
 
 async function actionCancel(admin: SupabaseClient, caller: Caller, body: any) {
