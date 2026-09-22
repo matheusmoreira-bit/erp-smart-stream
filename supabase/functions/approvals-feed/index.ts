@@ -525,8 +525,10 @@ Deno.serve(async (req) => {
           (segment) => approvalSegmentBelongsToAliases(segment, effectiveAliases, matchesAlias),
         ) as Record<string, any>;
         const docCompany = String(scoped.company_db || companyDb);
+        scoped.company_db = docCompany;
         scoped.company_name = companyNames.get(docCompany) || docCompany;
         scoped.foreign_company = docCompany !== companyDb;
+
         return scoped;
       });
 
