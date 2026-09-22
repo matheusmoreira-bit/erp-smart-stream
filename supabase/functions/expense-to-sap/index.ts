@@ -1520,10 +1520,12 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
 
     const sapPayload: Record<string, unknown> = {
       CardCode: expense.supplier_code,
-      // DocDate = data de lançamento no SAP: sempre HOJE.
+      // DocDate = data de lançamento no SAP: HOJE para despesas comuns.
+      // Exceção PagCorp: usa a data da compra, mesmo que no passado.
       // TaxDate = data do documento (emissão da NF), vem do formulário.
       // DocDueDate = data de vencimento, vem do formulário.
-      DocDate: today,
+      DocDate: isPagCorp ? docDate : today,
+
       DocDueDate: dueDate,
       TaxDate: docDate,
       ...(paymentGroupCode !== null ? { PaymentGroupCode: paymentGroupCode } : {}),
