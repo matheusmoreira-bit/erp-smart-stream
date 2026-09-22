@@ -11,6 +11,7 @@ import { tryAcquireIntegrationLock, releaseIntegrationLock } from "../_shared/sa
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
 import { getStandaloneMode, standaloneResponse } from "../_shared/standalone-mode.ts";
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
+import { enforceSapLinePrices } from "../_shared/sap-line-prices.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { normalizeExpenseItems } from "../_shared/expense-items.ts";
 import { callOmieApi, loadOmieCredentials } from "../_shared/omie-api.ts";
@@ -1717,6 +1718,19 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         .map((l, i) => ({ LineNum: i, ...l }));
       lastSapPayload = patchPayload;
       const resp = await patchSapDocument(sap.baseUrl, sap.cookies, sapEndpoint, patchDocEntry, patchPayload);
+      // O SAP recalcula o preço a partir da lista de preços quando a linha é
+      // reenviada (principalmente com troca de item) e pode gravar valor zero.
+      // Reaplica os preços aprovados antes da conferência final.
+      await enforceSapLinePrices(
+        sap.baseUrl,
+        sap.cookies,
+        sapEndpoint,
+        patchDocEntry,
+        (patchPayload.DocumentLines as Array<Record<string, unknown>>).map((l, i) => ({
+          lineNum: Number(l.LineNum ?? i),
+          unitPrice: Number(l.UnitPrice ?? 0),
+        })),
+      );
       await verifySapDocumentLines(
         sap.baseUrl,
         sap.cookies,
