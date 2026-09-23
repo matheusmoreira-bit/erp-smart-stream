@@ -1998,7 +1998,7 @@ export default function PagCorp() {
                     const renderTxRow = (t: PagCorpTransaction, opts: { inGroup?: boolean } = {}) => {
                       const isSelected = selectedIds.has(t.id);
                       const inGroup = !!opts.inGroup;
-                      const aiEligible = isPagCorpAiEligible(t);
+                      const aiEligible = canAnalyzePagCorpDocuments(t);
                       const isExpanded = expandedTransactions.has(String(t.id));
                       const stage = settleStage(t);
                       const canSettleSelect = t.integrated && !t.isReversed && t.postingType !== "journal_entry" && stage !== "settled";
