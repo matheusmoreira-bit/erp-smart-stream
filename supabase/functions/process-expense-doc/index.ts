@@ -3,12 +3,7 @@ import { normalizeText as baseNormalizeText } from "../_shared/text-normalize.ts
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { hashInput, getCachedAnalysis, saveAnalysis } from "../_shared/ai-doc-cache.ts";
 import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 // Static fallback aliases (used only if DB lookup fails)
 const FALLBACK_COMPANY_NAMES: Record<string, string[]> = {
@@ -31,7 +26,9 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const LOVABLE_AI_MODEL = "google/gemini-2.5-flash";
 const OPENAI_AI_MODEL = Deno.env.get("OPENAI_MODEL") || "gpt-4.1-mini";
-const PAGCORP_CACHE_PROMPT_VERSION = "pagcorp-expense-v1";
+// v2 inclui valor/moeda/contagem/origem. Não reutilize leituras antigas que
+// classificavam o documento, mas não garantiam esses campos.
+const PAGCORP_CACHE_PROMPT_VERSION = "pagcorp-expense-v2";
 
 type AiProvider = "lovable" | "openai";
 
@@ -287,6 +284,9 @@ async function fetchCompanyContext(companyDB: string): Promise<{
 }
 
 serve(async (req) => {
+  const foreignOrigin = rejectForeignOrigin(req);
+  if (foreignOrigin) return foreignOrigin;
+  const corsHeaders = corsFor(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {

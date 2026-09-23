@@ -27,10 +27,25 @@ export function summarizeDocumentAmounts(documents: unknown[]): {
   count: number;
   international: boolean | null;
 } {
+  const parseAmount = (value: unknown): number | null => {
+    if (typeof value === "number") return Number.isFinite(value) ? value : null;
+    if (typeof value !== "string") return null;
+    const compact = value.trim().replace(/[^0-9,.-]/g, "");
+    if (!compact) return null;
+    const decimal = compact.includes(",")
+      ? compact.replace(/\./g, "").replace(",", ".")
+      : compact;
+    const parsed = Number(decimal);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
   const entries = documents
     .map((value) => (value && typeof value === "object" ? value as Record<string, unknown> : null))
     .filter((value): value is Record<string, unknown> => value != null);
-  const withAmount = entries.filter((doc) => Number.isFinite(Number(doc.total_amount)) && Number(doc.total_amount) > 0);
+  const withAmount = entries
+    .map((doc) => ({ doc, amount: parseAmount(doc.total_amount) }))
+    .filter((entry): entry is { doc: Record<string, unknown>; amount: number } =>
+      entry.amount != null && entry.amount > 0
+    );
   const countries = entries
     .map((doc) => String(doc.supplier_country || "").trim().toUpperCase())
     .filter(Boolean);
@@ -39,9 +54,9 @@ export function summarizeDocumentAmounts(documents: unknown[]): {
     return { total: null, currency: null, count: 0, international };
   }
   const currencies = Array.from(new Set(
-    withAmount.map((doc) => String(doc.currency || "").trim().toUpperCase()).filter(Boolean),
+    withAmount.map(({ doc }) => String(doc.currency || "").trim().toUpperCase()).filter(Boolean),
   ));
-  const total = withAmount.reduce((sum, doc) => sum + Number(doc.total_amount), 0);
+  const total = withAmount.reduce((sum, { amount }) => sum + amount, 0);
   return {
     total: Number(total.toFixed(2)),
     currency: currencies.length === 1 ? currencies[0] : null,
