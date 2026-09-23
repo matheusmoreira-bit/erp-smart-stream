@@ -103,3 +103,6 @@ verify_jwt = false
 
 [functions.accounts-payable-cnab]
 verify_jwt = false
+
+[functions.pagcorp-portal-approve]
+verify_jwt = false
