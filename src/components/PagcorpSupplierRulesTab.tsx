@@ -40,6 +40,9 @@ interface EditableRule {
 
 export function PagcorpSupplierRulesTab({ companyDb }: { companyDb: string }) {
   const { rules, isLoading, reload } = usePagCorpSupplierRules(companyDb || undefined);
+  // Fornecedores vêm da base local (cache em public.sap_cache + public.suppliers),
+  // sem consultar o ERP a cada digitação.
+  const { options: supplierOptions, isLoading: isLoadingSuppliers } = useMergedSupplierOptions({ companyDb });
   const [draft, setDraft] = useState<EditableRule[] | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [search, setSearch] = useState("");
