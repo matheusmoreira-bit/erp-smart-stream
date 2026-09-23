@@ -3,7 +3,7 @@ import type { CardMappingStatus } from "@/hooks/usePagCorpCardMapping";
 
 interface Props {
   status: CardMappingStatus;
-  source: "card" | "fallback" | null;
+  source: "card_supplier" | "card" | "fallback" | null;
   missingFields: string[];
   cardKey: string | null;
 }

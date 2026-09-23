@@ -830,7 +830,7 @@ export function CreateExpenseModal({
   const [cardDefaultsApplied, setCardDefaultsApplied] = useState(false);
   const [mappingInfo, setMappingInfo] = useState<{
     status: CardMappingStatus;
-    source: "card" | "fallback" | null;
+    source: "card_supplier" | "card" | "fallback" | null;
     missingFields: string[];
     cardKey: string | null;
   } | null>(null);
