@@ -361,15 +361,40 @@ Deno.serve(async (req) => {
     // Empresas conhecidas (rótulo amigável no cabeçalho do documento).
     const companyNames = new Map<string, string>();
     const otherCompanies: string[] = [];
+    // Empresas em que o caller tem a mesma amplitude de visão da empresa
+    // logada (admin/"ver todos"): fora delas, só entram documentos em que ele
+    // é o aprovador pendente.
+    const fullAccessCompanies = new Set<string>([companyDb]);
     if (includeAllCompanies) {
       const { data: companyRows, error: companiesErr } = await companiesPromise;
       if (companiesErr) return json(500, { error: (companiesErr as { message: string }).message }, cors);
+      const callerEmail = (caller.identity || "").includes("@") ? String(caller.identity) : "";
+      const erpTypeByDb = new Map<string, string>();
       for (const row of (companyRows || []) as Array<Record<string, unknown>>) {
         const db = String(row.company_db || "").trim();
         if (!db) continue;
         companyNames.set(db, String(row.display_name || db));
+        erpTypeByDb.set(db, String(row.erp_type || "").toLowerCase());
         if (db !== companyDb) otherCompanies.push(db);
       }
+
+      // O usuário só ganha a visão ampliada nas empresas em que pode entrar.
+      if (caller.privileged) {
+        const allowed = await Promise.all(
+          otherCompanies.map(async (db) => {
+            if (!callerEmail) return false;
+            const rpcName = erpTypeByDb.get(db) === "omie"
+              ? "is_email_allowed_for_omie_company"
+              : "is_email_allowed_for_company";
+            const { data } = await admin
+              .rpc(rpcName, { _email: callerEmail, _company_db: db })
+              .catch(() => ({ data: false } as { data: unknown }));
+            return data === true;
+          }),
+        );
+        otherCompanies.forEach((db, i) => { if (allowed[i]) fullAccessCompanies.add(db); });
+      }
+
       const results = await Promise.all(
         otherCompanies.map((db) =>
           admin
@@ -380,6 +405,7 @@ Deno.serve(async (req) => {
       );
       for (const rows of results) docs = docs.concat(rows);
     }
+
 
 
 
