@@ -842,7 +842,12 @@ export default function PagCorp() {
     if (!companyDb || bulkAiRunning) return;
     const list = filteredTransactions.filter((t) => canAnalyzePagCorpDocuments(t));
     if (!list.length) {
-      toast.info("Nenhuma transação elegível para leitura por IA no filtro atual.");
+      const pending = filteredTransactions.filter((t) => !t.integrated && !t.isReversed).length;
+      toast.info("Nenhuma transação com comprovante para ler no filtro atual.", {
+        description: pending > 0
+          ? `${pending} transação(ões) abertas, mas sem arquivo de comprovante disponível na PagCorp.`
+          : undefined,
+      });
       return;
     }
     setBulkAiRunning(true);
