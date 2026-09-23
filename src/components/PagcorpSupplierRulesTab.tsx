@@ -20,7 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SapSearchCombobox, type SapSearchOption } from "@/components/SapSearchCombobox";
+import { type SapSearchOption } from "@/components/SapSearchCombobox";
+import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
+import { useMergedSupplierOptions } from "@/hooks/useMergedSupplierOptions";
 import { toast } from "sonner";
 import { usePagCorpSupplierRules } from "@/hooks/usePagCorpSupplierRules";
 import { findSupplierRule, type SupplierRuleMatchType } from "@/lib/pagcorp-supplier-rules";
