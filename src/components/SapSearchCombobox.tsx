@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
 import { Loader2, Search, X, CheckCircle2 } from "lucide-react";
 import { sapQuery } from "@/lib/sap-client";
@@ -60,7 +61,13 @@ export function SapSearchCombobox({
   const [isOpen, setIsOpen] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const appliedSuggestionRef = useRef<string | null>(null);
+  const [dropdownRect, setDropdownRect] = useState<DOMRect | null>(null);
+
+  const updateDropdownPosition = useCallback(() => {
+    setDropdownRect(containerRef.current?.getBoundingClientRect() ?? null);
+  }, []);
 
   // Apply suggestedQuery when it changes (AI pre-fill)
   useEffect(() => {
@@ -78,13 +85,29 @@ export function SapSearchCombobox({
   // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(target) &&
+        !dropdownRef.current?.contains(target)
+      ) {
         setIsOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    updateDropdownPosition();
+    window.addEventListener("resize", updateDropdownPosition);
+    window.addEventListener("scroll", updateDropdownPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateDropdownPosition);
+      window.removeEventListener("scroll", updateDropdownPosition, true);
+    };
+  }, [isOpen, updateDropdownPosition]);
 
   const search = useCallback(
     async (term: string) => {
@@ -195,6 +218,7 @@ export function SapSearchCombobox({
             if (value) {
               // Allow re-searching
             } else if (query.length >= minChars) {
+              updateDropdownPosition();
               setIsOpen(true);
             }
           }}
@@ -204,6 +228,7 @@ export function SapSearchCombobox({
         />
         {(value || query) && (
           <button
+            type="button"
             onClick={handleClear}
             className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           >
@@ -215,8 +240,16 @@ export function SapSearchCombobox({
         )}
       </div>
 
-      {isOpen && options.length > 0 && (
-        <div className="absolute z-50 mt-1 w-full max-h-72 overflow-y-auto rounded-md border border-border bg-popover shadow-md">
+      {isOpen && options.length > 0 && dropdownRect && createPortal(
+        <div
+          ref={dropdownRef}
+          className="fixed z-[100] max-h-72 overflow-y-auto rounded-md border border-border bg-popover shadow-md"
+          style={{
+            left: dropdownRect.left,
+            top: dropdownRect.bottom + 4,
+            width: dropdownRect.width,
+          }}
+        >
           {(() => {
             // Detecta nomes duplicados nos resultados para alertar o usuário a escolher pelo CNPJ
             const nameCount = new Map<string, number>();
@@ -229,6 +262,7 @@ export function SapSearchCombobox({
               const isDup = (nameCount.get((opt.name || "").trim().toLowerCase()) || 0) > 1;
               return (
                 <button
+                  type="button"
                   key={opt.code}
                   onClick={() => handleSelect(opt)}
                   className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -273,13 +307,23 @@ export function SapSearchCombobox({
               );
             });
           })()}
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {isOpen && !isLoading && query.length >= minChars && options.length === 0 && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-popover shadow-md p-3 text-center text-sm text-muted-foreground">
+      {isOpen && !isLoading && query.length >= minChars && options.length === 0 && dropdownRect && createPortal(
+        <div
+          ref={dropdownRef}
+          className="fixed z-[100] rounded-md border border-border bg-popover p-3 text-center text-sm text-muted-foreground shadow-md"
+          style={{
+            left: dropdownRect.left,
+            top: dropdownRect.bottom + 4,
+            width: dropdownRect.width,
+          }}
+        >
           Nenhum resultado encontrado
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
