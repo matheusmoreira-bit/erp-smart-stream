@@ -127,24 +127,47 @@ export function SapSearchCombobox({
         );
 
         const safe = (s: string) => s.replace(/'/g, "''");
+        // Alguns servidores do Service Layer não suportam `tolower(...)` no
+        // $filter e respondem 400 ("invalid function parameter"). Nesse caso
+        // repetimos a busca sem `tolower`, testando maiúsculas e minúsculas.
+        const stripToLower = (f: string) => f.replace(/tolower\(\s*([A-Za-z0-9_.]+)\s*\)/g, "$1");
+        const buildFilter = (t: string, lower: boolean) =>
+          filterTemplate
+            .replace(/\{qLower\}/g, lower ? safe(t).toLowerCase() : safe(t).toUpperCase())
+            .replace(/\{q\}/g, safe(t));
+
+        const runFilter = async (filter: string) => {
+          const { data } = await sapQuery(session, endpoint, {
+            $filter: filter,
+            $select: selectFields,
+            $top: topResults,
+          });
+          return ((data as any)?.value || []).map(mapRow) as SapSearchOption[];
+        };
+
         const results = await Promise.all(
           termsToQuery.map(async (t) => {
-            const filter = filterTemplate
-              .replace(/\{qLower\}/g, safe(t).toLowerCase())
-              .replace(/\{q\}/g, safe(t));
             try {
-              const { data } = await sapQuery(session, endpoint, {
-                $filter: filter,
-                $select: selectFields,
-                $top: topResults,
-              });
-              return ((data as any)?.value || []).map(mapRow) as SapSearchOption[];
+              return await runFilter(buildFilter(t, true));
             } catch (e) {
-              console.warn("SAP search variant error:", t, e);
+              if (!/tolower\(/i.test(filterTemplate)) {
+                console.warn("SAP search variant error:", t, e);
+                return [] as SapSearchOption[];
+              }
+              // Fallback sem tolower: tenta MAIÚSCULAS e depois minúsculas.
+              for (const lower of [false, true]) {
+                try {
+                  const rows = await runFilter(stripToLower(buildFilter(t, lower)));
+                  if (rows.length > 0) return rows;
+                } catch (err) {
+                  console.warn("SAP search fallback error:", t, err);
+                }
+              }
               return [] as SapSearchOption[];
             }
           }),
         );
+
 
         // Dedupe por code
         const seen = new Set<string>();
