@@ -1812,6 +1812,18 @@ export default function PagCorp() {
           </Button>
 
           <Button
+            onClick={() => setPortalApproveOpen(true)}
+            disabled={selectedAccountabilityIds.length === 0}
+            variant="outline"
+            className="gap-2"
+            title="Aprova as prestações de contas selecionadas diretamente no portal PagCorp"
+          >
+            <CheckCircle className="w-4 h-4" />
+            Aprovar no PagCorp
+            {selectedAccountabilityIds.length > 0 ? ` (${selectedAccountabilityIds.length})` : ""}
+          </Button>
+
+          <Button
             onClick={() => setPresentationDialogOpen(true)}
             variant="outline"
             className="gap-2"
