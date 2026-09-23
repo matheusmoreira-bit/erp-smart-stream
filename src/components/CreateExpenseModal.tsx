@@ -835,19 +835,23 @@ export function CreateExpenseModal({
     cardKey: string | null;
   } | null>(null);
 
+  // Último valor aplicado automaticamente (para não sobrescrever edições manuais)
+  // e fornecedor considerado na última aplicação (regra Cartão + Fornecedor).
+  const cardAutoRef = useRef<{ cc?: string; pr?: string; it?: string; supplier?: string | null }>({});
+  const supplierCodeForMapping = supplier?.code ?? null;
+
   useEffect(() => {
     if (!open) {
       setCardDefaultsApplied(false);
       setMappingInfo(null);
+      cardAutoRef.current = {};
       return;
     }
-    if (cardDefaultsApplied) return;
     if (origin !== "pagcorp" || !prefill) return;
-    // Aguarda o effect de prefill rodar primeiro (que reseta `items`),
-    // senão nossas defaults são sobrescritas imediatamente.
+    // Reaplica quando o fornecedor muda (regra Cartão + Fornecedor).
+    if (cardDefaultsApplied && cardAutoRef.current.supplier === supplierCodeForMapping) return;
+    // Aguarda o effect de prefill rodar primeiro (que reseta `items`).
     if (!initialized) return;
-    // Aguarda carregar os mapeamentos do backend. Antes disso `rows=[]` faria
-    // o modal concluir incorretamente que não existe mapeamento.
     if (!cardMappingLoaded) return;
 
     const info = describeCardMapping({
@@ -856,7 +860,7 @@ export function CreateExpenseModal({
       cardName: prefill.cardName,
       accountAlias: prefill.accountAlias,
       accountName: prefill.accountName,
-    });
+    }, supplierCodeForMapping);
 
     setMappingInfo({
       status: info.status,
@@ -865,17 +869,16 @@ export function CreateExpenseModal({
       cardKey: info.cardKey,
     });
 
+    const last = cardAutoRef.current;
+    last.supplier = supplierCodeForMapping;
+
     if (info.status === "none") {
-      // Nada para aplicar — apenas marca como tratado para não rodar de novo
       setCardDefaultsApplied(true);
       return;
     }
 
     const { costCenter, project, itemCode } = info.resolved;
 
-    // Resolve options from SAP cache; if not found (cache vazio ou ainda
-    // carregando), sintetiza uma opção mínima para que o valor apareça
-    // selecionado mesmo assim — o usuário pode trocar depois.
     const ccOpt = costCenter
       ? costCenterOptions.find((o) => o.code === costCenter)
         || { code: costCenter, name: costCenter, extra: "" }
@@ -889,18 +892,29 @@ export function CreateExpenseModal({
         || { code: itemCode, name: itemCode, extra: "" }
       : null;
 
-    if (ccOpt) setHeaderCostCenter(ccOpt);
-    if (prOpt) setHeaderProject(prOpt);
-    setItems((prev) => prev.map((it) => ({
-      ...it,
-      ...(ccOpt ? { sapCostCenter: ccOpt, cost_center: ccOpt.code } : {}),
-      ...(prOpt ? { sapProject: prOpt, project: prOpt.code } : {}),
-      ...(itOpt && !it.sapItem ? { sapItem: itOpt, item_code: itOpt.code, description: it.description || itOpt.name } : {}),
-    })));
+    // Só substitui valores vazios ou que ainda são o último valor automático.
+    const canReplace = (current: string | null | undefined, key: "cc" | "pr" | "it") =>
+      !current || current === last[key];
+
+    if (ccOpt) setHeaderCostCenter((prev) => (canReplace(prev?.code, "cc") ? ccOpt : prev));
+    if (prOpt) setHeaderProject((prev) => (canReplace(prev?.code, "pr") ? prOpt : prev));
+    const prevAuto = { ...last };
+    setItems((prev) => prev.map((it) => {
+      const keep = (cur: string | null | undefined, key: "cc" | "pr" | "it") => !cur || cur === prevAuto[key];
+      return {
+        ...it,
+        ...(ccOpt && keep(it.cost_center, "cc") ? { sapCostCenter: ccOpt, cost_center: ccOpt.code } : {}),
+        ...(prOpt && keep(it.project, "pr") ? { sapProject: prOpt, project: prOpt.code } : {}),
+        ...(itOpt && keep(it.item_code, "it") ? { sapItem: itOpt, item_code: itOpt.code, description: it.description || itOpt.name } : {}),
+      };
+    }));
+    if (ccOpt) last.cc = ccOpt.code;
+    if (prOpt) last.pr = prOpt.code;
+    if (itOpt) last.it = itOpt.code;
     setCardDefaultsApplied(true);
   }, [
     open, origin, prefill, initialized, cardDefaultsApplied, describeCardMapping,
-    cardMappingLoaded, costCenterOptions, projectOptions, itemOptions,
+    cardMappingLoaded, costCenterOptions, projectOptions, itemOptions, supplierCodeForMapping,
   ]);
 
   // Pré-preenche o CC do cabeçalho com o centro de custo do usuário logado
