@@ -337,6 +337,13 @@
       "when": 1790165935475,
       "tag": "0047_pagcorp_classification_amounts",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1790171789536,
+      "tag": "0048_pagcorp_description_supplier_rules",
+      "breakpoints": true
     }
   ]
 }
