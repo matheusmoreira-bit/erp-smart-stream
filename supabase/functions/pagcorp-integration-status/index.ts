@@ -291,32 +291,34 @@ Deno.serve(async (req) => {
     // 3. Overrides por expense.
     let ndExpenses: any[] = [];
     if (expenseIds.length > 0) {
-      const { data, error } = await admin
-        .from("pagcorp_nondeductible_expenses")
-        .select("pagcorp_expense_id, supplier_code, supplier_name")
-        .eq("company_db", companyDb)
-        .in("pagcorp_expense_id", expenseIds);
-      if (error) throw error;
-      ndExpenses = data || [];
+      ndExpenses = await selectInChunks<any>(expenseIds, (slice) =>
+        admin
+          .from("pagcorp_nondeductible_expenses")
+          .select("pagcorp_expense_id, supplier_code, supplier_name")
+          .eq("company_db", companyDb)
+          .in("pagcorp_expense_id", slice) as any,
+      );
     }
 
     let classifications: any[] = [];
     let classificationStoreUnavailable = false;
     if (expenseIds.length > 0) {
-      const { data, error } = await admin
-        .from("pagcorp_document_classification")
-        .select("pagcorp_expense_id,status,has_fiscal_document,document_kinds,confidence,error_message,analyzed_at,documents_total,documents_currency,documents_count,is_international")
-        .eq("company_db", companyDb)
-        .in("pagcorp_expense_id", expenseIds);
-      if (error) {
-        if (isMissingClassificationStore(error)) {
+      try {
+        classifications = await selectInChunks<any>(expenseIds, (slice) =>
+          admin
+            .from("pagcorp_document_classification")
+            .select("pagcorp_expense_id,status,has_fiscal_document,document_kinds,confidence,error_message,analyzed_at,documents_total,documents_currency,documents_count,is_international")
+            .eq("company_db", companyDb)
+            .in("pagcorp_expense_id", slice) as any,
+        );
+      } catch (clsErr) {
+        if (isMissingClassificationStore(clsErr)) {
           classificationStoreUnavailable = true;
-          console.warn("[pagcorp-integration-status] classification read skipped", errorMessage(error));
+          classifications = [];
+          console.warn("[pagcorp-integration-status] classification read skipped", errorMessage(clsErr));
         } else {
-          throw error;
+          throw clsErr;
         }
-      } else {
-        classifications = data || [];
       }
     }
 
