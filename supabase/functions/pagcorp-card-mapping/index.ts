@@ -136,6 +136,93 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === "list-supplier-rules") {
+      const companyDb = String(body?.company_db || req.headers.get("x-company-db") || "").trim();
+      if (!companyDb) {
+        return new Response(JSON.stringify({ error: "company_db obrigatório" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data, error } = await sb
+        .from("pagcorp_description_supplier_rules")
+        .select("*")
+        .eq("company_db", companyDb)
+        .order("priority", { ascending: true })
+        .order("pattern", { ascending: true });
+      if (error) throw error;
+      return new Response(JSON.stringify({ success: true, rules: data || [] }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "save-supplier-rules") {
+      const companyDb = String(body?.company_db || req.headers.get("x-company-db") || "").trim();
+      const incoming: any[] = Array.isArray(body?.rules) ? body.rules : [];
+      if (!companyDb) {
+        return new Response(JSON.stringify({ error: "company_db obrigatório" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (incoming.length === 0) {
+        return new Response(JSON.stringify({ error: "rules vazio" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const saved: any[] = [];
+      for (const r of incoming) {
+        const pattern = String(r?.pattern ?? "").trim();
+        const supplierCode = String(r?.supplier_code ?? "").trim();
+        const matchType = r?.match_type === "contains" ? "contains" : "startswith";
+        if (!pattern || !supplierCode) continue;
+        const priority = Number.isFinite(Number(r?.priority)) ? Math.trunc(Number(r.priority)) : 100;
+        const payload = {
+          company_db: companyDb,
+          pattern,
+          match_type: matchType,
+          supplier_code: supplierCode,
+          supplier_name: r?.supplier_name ? String(r.supplier_name) : null,
+          priority,
+          is_active: r?.is_active === false ? false : true,
+        };
+        if (r?.id) {
+          const { data, error } = await sb
+            .from("pagcorp_description_supplier_rules")
+            .update({ ...payload, updated_at: new Date().toISOString() })
+            .eq("id", String(r.id))
+            .eq("company_db", companyDb)
+            .select()
+            .single();
+          if (error) throw error;
+          saved.push(data);
+        } else {
+          const { data, error } = await sb
+            .from("pagcorp_description_supplier_rules")
+            .insert(payload)
+            .select()
+            .single();
+          if (error) throw error;
+          saved.push(data);
+        }
+      }
+      return new Response(JSON.stringify({ success: true, rules: saved }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "delete-supplier-rule") {
+      const id = body?.id;
+      if (typeof id !== "string" || !id) {
+        return new Response(JSON.stringify({ error: "id obrigatório" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { error } = await sb.from("pagcorp_description_supplier_rules").delete().eq("id", id);
+      if (error) throw error;
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (action === "delete") {
       const id = body?.id;
       if (typeof id !== "string" || !id) {
