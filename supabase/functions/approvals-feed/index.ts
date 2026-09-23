@@ -487,10 +487,11 @@ Deno.serve(async (req) => {
 
     docs = docs.filter((d) => {
       const docCompany = String(d.company_db || "");
-      // Fora da empresa logada, nenhuma permissão amplia a visão: só entram os
-      // documentos em que o caller é o aprovador pendente.
-      if (docCompany && docCompany !== companyDb) return callerIsPendingApprover(d);
+      // Em empresa sem visão ampliada, só entram os documentos em que o caller
+      // é o aprovador pendente.
+      if (docCompany && !fullAccessCompanies.has(docCompany)) return callerIsPendingApprover(d);
       if (caller.privileged) return true;
+
       if (ownsAsRequesterOrBranch(d, caller.aliases, caller.directorateBranch)) return true;
       const segments = segmentsByExpense.get(String(d.id || "")) || [];
       if (segments.length > 0) {
