@@ -102,12 +102,19 @@ export function collectPagCorpAttachments(transaction: Pick<PagCorpTransaction, 
     });
   };
   const visit = (value: unknown) => {
+    // A PagCorp às vezes entrega o anexo como string simples dentro de `files[]`.
+    if (typeof value === "string") {
+      push(value);
+      return;
+    }
     const entry = value && typeof value === "object" ? value as Record<string, unknown> : null;
     if (!entry || typeof entry !== "object") return;
     push(entry.downloadUrl, entry.fileName || entry.name);
     push(entry.fileUrl, entry.fileName || entry.name);
     push(entry.receiptUrl, entry.fileName || entry.name);
     push(entry.imageUrl, entry.fileName || entry.name);
+    push(entry.link, entry.fileName || entry.name);
+    push(entry.path, entry.fileName || entry.name);
     push(entry.url, entry.fileName || entry.name);
     if (entry.file && typeof entry.file === "object") visit(entry.file);
     if (Array.isArray(entry.files)) entry.files.forEach(visit);
