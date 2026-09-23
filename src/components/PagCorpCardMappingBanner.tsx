@@ -19,7 +19,7 @@ export function PagCorpCardMappingBanner({ status, source, missingFields, cardKe
   // Sem cartão identificável — nada a mostrar
   if (!cardKey && status === "none") return null;
 
-  if (status === "full" && source === "card") {
+  if (status === "full" && (source === "card" || source === "card_supplier")) {
     return (
       <div className="flex items-start gap-2 p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
         <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
