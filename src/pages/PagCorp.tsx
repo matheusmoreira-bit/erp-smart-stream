@@ -75,6 +75,7 @@ import {
 import { PagCorpConsolidateDialog } from "@/components/PagCorpConsolidateDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PagCorpPresentationDialog } from "@/components/PagCorpPresentationDialog";
+import { PagCorpPortalApproveDialog } from "@/components/PagCorpPortalApproveDialog";
 import { SapValidationDialog } from "@/components/SapValidationDialog";
 import { RelationsMap, type RelationsMapExpense } from "@/components/RelationsMap";
 import { CreateExpenseModal } from "@/components/CreateExpenseModal";
