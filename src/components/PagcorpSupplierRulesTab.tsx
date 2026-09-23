@@ -286,15 +286,9 @@ export function PagcorpSupplierRulesTab({ companyDb }: { companyDb: string }) {
                     />
                   </TableCell>
                   <TableCell>
-                    <SapSearchCombobox
-                      endpoint="BusinessPartners"
-                      filterTemplate="CardType eq 'cSupplier' and Frozen ne 'tYES' and (contains(tolower(CardName),'{qLower}') or contains(tolower(CardCode),'{qLower}') or contains(tolower(AliasName),'{qLower}') or contains(FederalTaxID,'{q}'))"
-                      selectFields="CardCode,CardName,AliasName,FederalTaxID"
-                      mapRow={(row: Record<string, unknown>) => ({
-                        code: String(row.CardCode ?? ""),
-                        name: String(row.CardName ?? ""),
-                        extra: (row.FederalTaxID as string) || undefined,
-                      })}
+                    <CachedSearchCombobox
+                      options={supplierOptions}
+                      isLoading={isLoadingSuppliers}
                       value={
                         r.supplier_code
                           ? ({ code: r.supplier_code, name: r.supplier_name || r.supplier_code } as SapSearchOption)
@@ -307,7 +301,6 @@ export function PagcorpSupplierRulesTab({ companyDb }: { companyDb: string }) {
                         })
                       }
                       placeholder="Buscar fornecedor…"
-                      topResults={50}
                     />
                   </TableCell>
                   <TableCell>
