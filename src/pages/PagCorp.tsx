@@ -2699,6 +2699,16 @@ export default function PagCorp() {
         onGenerate={handleGeneratePresentation}
       />
 
+      <PagCorpPortalApproveDialog
+        open={portalApproveOpen}
+        onOpenChange={setPortalApproveOpen}
+        companyDb={session?.companyDB || ""}
+        accountabilityIds={selectedAccountabilityIds}
+        onApproved={() => {
+          if (session?.companyDB) fetchTransactions(startDate, endDate, session.companyDB);
+        }}
+      />
+
       <SapValidationDialog
         open={validateDialog.open}
         onClose={() => setValidateDialog({ open: false, tx: null })}
