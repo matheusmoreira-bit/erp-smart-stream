@@ -36,6 +36,32 @@ interface RequestBody {
   };
 }
 
+/**
+ * PostgREST recebe os filtros na URL — listas grandes em `in.(...)` estouram
+ * o limite de tamanho da requisição ("error sending request"). Por isso toda
+ * consulta por lista de IDs é quebrada em blocos.
+ */
+const ID_CHUNK = 150;
+
+function chunk<T>(list: T[], size = ID_CHUNK): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+  return out;
+}
+
+async function selectInChunks<T = Record<string, unknown>>(
+  ids: (number | string)[],
+  run: (slice: (number | string)[]) => Promise<{ data: T[] | null; error: unknown }>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (const slice of chunk(ids)) {
+    const { data, error } = await run(slice);
+    if (error) throw error;
+    if (data) rows.push(...data);
+  }
+  return rows;
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -215,18 +241,20 @@ Deno.serve(async (req) => {
     // Para status de tela, DocEntry real prevalece sobre o status textual antigo.
     let integrations: any[] = [];
     if (expenseIds.length > 0) {
-      const { data, error } = await admin
-        .from("pagcorp_integration_log")
-        .select(
-          "pagcorp_expense_id, id, status, integration_type, pagcorp_data, sap_doc_num, sap_doc_entry, sap_payload, sap_response, settlement_status, settlement_payment_doc_num, settlement_error, created_at",
-        )
-        .eq("company_db", companyDb)
-        .in("pagcorp_expense_id", expenseIds)
-        // Uma transação pode ter N pedidos (fornecedores diferentes no mesmo
-        // comprovante) — devolvemos todos, do mais antigo para o mais novo.
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      integrations = (data || [])
+      // Uma transação pode ter N pedidos (fornecedores diferentes no mesmo
+      // comprovante) — devolvemos todos, do mais antigo para o mais novo.
+      const logRows = await selectInChunks<Record<string, unknown>>(expenseIds, (slice) =>
+        admin
+          .from("pagcorp_integration_log")
+          .select(
+            "pagcorp_expense_id, id, status, integration_type, pagcorp_data, sap_doc_num, sap_doc_entry, sap_payload, sap_response, settlement_status, settlement_payment_doc_num, settlement_error, created_at",
+          )
+          .eq("company_db", companyDb)
+          .in("pagcorp_expense_id", slice)
+          .order("created_at", { ascending: true }) as any,
+      );
+      logRows.sort((a, b) => String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")));
+      integrations = logRows
         .map((row: Record<string, unknown>) => {
           const doc = materialSapDoc(row);
           if (row.status !== "success" && !doc.docEntry) return null;
@@ -245,13 +273,12 @@ Deno.serve(async (req) => {
     let relations: any[] = [];
     if (integrations.length > 0) {
       const logIds = integrations.map((l: any) => l.id);
-      const { data: rel, error: relErr } = await admin
-        .from("pagcorp_document_relations")
-        .select("pagcorp_log_id, nf_found, payment_found, nf_doc_entries, payment_doc_entries")
-        .in("pagcorp_log_id", logIds);
-      if (relErr) throw relErr;
-      relations = rel || [];
-
+      relations = await selectInChunks<any>(logIds, (slice) =>
+        admin
+          .from("pagcorp_document_relations")
+          .select("pagcorp_log_id, nf_found, payment_found, nf_doc_entries, payment_doc_entries")
+          .in("pagcorp_log_id", slice) as any,
+      );
     }
 
     // 2. Cartões marcados como não-dedutíveis (por company_db).
@@ -264,32 +291,34 @@ Deno.serve(async (req) => {
     // 3. Overrides por expense.
     let ndExpenses: any[] = [];
     if (expenseIds.length > 0) {
-      const { data, error } = await admin
-        .from("pagcorp_nondeductible_expenses")
-        .select("pagcorp_expense_id, supplier_code, supplier_name")
-        .eq("company_db", companyDb)
-        .in("pagcorp_expense_id", expenseIds);
-      if (error) throw error;
-      ndExpenses = data || [];
+      ndExpenses = await selectInChunks<any>(expenseIds, (slice) =>
+        admin
+          .from("pagcorp_nondeductible_expenses")
+          .select("pagcorp_expense_id, supplier_code, supplier_name")
+          .eq("company_db", companyDb)
+          .in("pagcorp_expense_id", slice) as any,
+      );
     }
 
     let classifications: any[] = [];
     let classificationStoreUnavailable = false;
     if (expenseIds.length > 0) {
-      const { data, error } = await admin
-        .from("pagcorp_document_classification")
-        .select("pagcorp_expense_id,status,has_fiscal_document,document_kinds,confidence,error_message,analyzed_at,documents_total,documents_currency,documents_count,is_international")
-        .eq("company_db", companyDb)
-        .in("pagcorp_expense_id", expenseIds);
-      if (error) {
-        if (isMissingClassificationStore(error)) {
+      try {
+        classifications = await selectInChunks<any>(expenseIds, (slice) =>
+          admin
+            .from("pagcorp_document_classification")
+            .select("pagcorp_expense_id,status,has_fiscal_document,document_kinds,confidence,error_message,analyzed_at,documents_total,documents_currency,documents_count,is_international")
+            .eq("company_db", companyDb)
+            .in("pagcorp_expense_id", slice) as any,
+        );
+      } catch (clsErr) {
+        if (isMissingClassificationStore(clsErr)) {
           classificationStoreUnavailable = true;
-          console.warn("[pagcorp-integration-status] classification read skipped", errorMessage(error));
+          classifications = [];
+          console.warn("[pagcorp-integration-status] classification read skipped", errorMessage(clsErr));
         } else {
-          throw error;
+          throw clsErr;
         }
-      } else {
-        classifications = data || [];
       }
     }
 
