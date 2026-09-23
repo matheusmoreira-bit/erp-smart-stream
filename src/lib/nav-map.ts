@@ -64,7 +64,7 @@ export const NAV_MODULES: NavModule[] = [
       { label: "Analytics", path: "/cartoes/analytics", moduleKey: "pagcorp" },
       { label: "Mapeamento de Cartões", path: "/cartoes/mapeamento", moduleKey: "pagcorp" },
       { label: "Baixas PagCorp", path: "/cartoes/baixas", moduleKey: "pagcorp" },
-      { label: "Indedutíveis", path: "/cartoes/indedutiveis", moduleKey: "pagcorp" },
+      { label: "Indedutíveis", path: "/cartoes/mapeamento?tab=nondeductible", moduleKey: "pagcorp" },
       { label: "Histórico de Integrações", path: "/cartoes/historico", moduleKey: "pagcorp" },
     ],
   },

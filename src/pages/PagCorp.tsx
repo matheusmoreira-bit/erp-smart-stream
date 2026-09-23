@@ -1667,7 +1667,7 @@ export default function PagCorp() {
             <Button variant="outline" size="sm" onClick={() => navigate("/cartoes/mapeamento")} className="gap-2">
               <MapPin className="w-4 h-4" /> Mapeamento
             </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/cartoes/indedutiveis")} className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate("/cartoes/mapeamento?tab=nondeductible")} className="gap-2">
               <ShieldOff className="w-4 h-4" /> Indedutíveis
             </Button>
             <ThemeToggle />

@@ -351,6 +351,13 @@
       "when": 1790175391262,
       "tag": "0049_pagcorp_portal_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1790181706750,
+      "tag": "0050_pagcorp_card_supplier_mapping",
+      "breakpoints": true
     }
   ]
 }

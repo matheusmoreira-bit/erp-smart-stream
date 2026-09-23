@@ -1,5 +1,5 @@
 import { pagcorpDisplayDescription } from "@/lib/pagcorp-accountability";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Loader2, CreditCard, Sparkles, Upload, Plus, AlertCircle, Paperclip, ExternalLink, Wand2, ShieldOff, FileText, BookOpen } from "lucide-react";
 import {
   Dialog,
@@ -23,7 +23,7 @@ import { findSupplierByTaxId, type Supplier } from "@/hooks/useSuppliers";
 import { normalizeTaxKey, formatTaxId } from "@/lib/tax-id";
 
 import { RegistrationRequestModal } from "@/components/RegistrationRequestModal";
-import { usePagCorpCardMapping } from "@/hooks/usePagCorpCardMapping";
+import { usePagCorpCardMapping, EMPTY_CARD_MAPPING } from "@/hooks/usePagCorpCardMapping";
 import { usePagCorpSupplierRules } from "@/hooks/usePagCorpSupplierRules";
 import { hashUrls, withAiCache } from "@/lib/ai-file-cache";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
@@ -154,8 +154,12 @@ export function PagCorpIntegrateDialog({
   // Regras de fornecedor padrão por trecho da descrição (por empresa)
   const { resolve: resolveSupplierRule, isLoaded: supplierRulesLoaded } = usePagCorpSupplierRules(companyDb);
   const cardDefaults = useMemo(
-    () => (transaction && cardMappingLoaded ? resolveCardMapping(transaction) : { costCenter: null, project: null, itemCode: null, source: null }),
-    [resolveCardMapping, transaction, cardMappingLoaded],
+    () => (transaction && cardMappingLoaded ? resolveCardMapping(transaction, supplier?.code ?? null) : EMPTY_CARD_MAPPING),
+    [resolveCardMapping, transaction, cardMappingLoaded, supplier?.code],
+  );
+  const cardDefaultAC = useMemo(
+    () => (cardDefaults.accountCode ? accountOptions.find((o) => o.code === cardDefaults.accountCode) || { code: cardDefaults.accountCode, name: cardDefaults.accountCode } : null),
+    [cardDefaults.accountCode, accountOptions],
   );
   const cardDefaultCC = useMemo(
     () => (cardDefaults.costCenter ? ccOptions.find((o) => o.code === cardDefaults.costCenter) || { code: cardDefaults.costCenter, name: cardDefaults.costCenter } : null),
@@ -375,12 +379,29 @@ export function PagCorpIntegrateDialog({
     void runAi(transaction);
   }, [open, transaction, autoSupplierDone, postingType, companyDb, supplierRulesLoaded, resolveSupplierRule, runAi]);
 
+  // Aplica os padrões do mapeamento; ao trocar o fornecedor recalcula, mas
+  // preserva campos que o usuário alterou manualmente (diferentes do último auto).
+  const lastAutoRef = useRef<{ cc?: string; pr?: string; it?: string; ac?: string }>({});
+  useEffect(() => {
+    if (!open) lastAutoRef.current = {};
+  }, [open]);
   useEffect(() => {
     if (!open || !transaction || !cardMappingLoaded) return;
-    if (cardDefaultCC) setCostCenter((prev) => prev || cardDefaultCC);
-    if (cardDefaultPR) setProject((prev) => prev || cardDefaultPR);
-    if (cardDefaultIT) setItem((prev) => prev || cardDefaultIT);
-  }, [open, transaction, cardMappingLoaded, cardDefaultCC, cardDefaultPR, cardDefaultIT]);
+    const last = lastAutoRef.current;
+    const apply = (
+      next: SapSearchOption | null,
+      key: "cc" | "pr" | "it" | "ac",
+      setter: React.Dispatch<React.SetStateAction<SapSearchOption | null>>,
+    ) => {
+      if (!next) return;
+      setter((prev) => (!prev || prev.code === last[key] ? next : prev));
+      last[key] = next.code;
+    };
+    apply(cardDefaultCC, "cc", setCostCenter);
+    apply(cardDefaultPR, "pr", setProject);
+    apply(cardDefaultIT, "it", setItem);
+    apply(cardDefaultAC, "ac", setDebitAccount);
+  }, [open, transaction, cardMappingLoaded, cardDefaultCC, cardDefaultPR, cardDefaultIT, cardDefaultAC]);
 
   // Persist selections so an accidental close doesn't lose work
   useEffect(() => {
@@ -631,7 +652,7 @@ export function PagCorpIntegrateDialog({
                     Padrões aplicados automaticamente
                   </span>
                   <Badge variant="secondary" className="text-[10px] uppercase">
-                    {cardDefaults.source === "card" ? "Mapeamento do cartão" : "Fallback da empresa"}
+                    {cardDefaults.source === "card_supplier" ? "Regra cartão + fornecedor" : cardDefaults.source === "card" ? "Mapeamento do cartão" : "Fallback da empresa"}
                   </Badge>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-[11px]">
