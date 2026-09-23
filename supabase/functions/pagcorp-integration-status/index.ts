@@ -36,6 +36,32 @@ interface RequestBody {
   };
 }
 
+/**
+ * PostgREST recebe os filtros na URL — listas grandes em `in.(...)` estouram
+ * o limite de tamanho da requisição ("error sending request"). Por isso toda
+ * consulta por lista de IDs é quebrada em blocos.
+ */
+const ID_CHUNK = 150;
+
+function chunk<T>(list: T[], size = ID_CHUNK): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+  return out;
+}
+
+async function selectInChunks<T = Record<string, unknown>>(
+  ids: (number | string)[],
+  run: (slice: (number | string)[]) => Promise<{ data: T[] | null; error: unknown }>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (const slice of chunk(ids)) {
+    const { data, error } = await run(slice);
+    if (error) throw error;
+    if (data) rows.push(...data);
+  }
+  return rows;
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
