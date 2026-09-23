@@ -75,6 +75,7 @@ import {
 import { PagCorpConsolidateDialog } from "@/components/PagCorpConsolidateDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PagCorpPresentationDialog } from "@/components/PagCorpPresentationDialog";
+import { PagCorpPortalApproveDialog } from "@/components/PagCorpPortalApproveDialog";
 import { SapValidationDialog } from "@/components/SapValidationDialog";
 import { RelationsMap, type RelationsMapExpense } from "@/components/RelationsMap";
 import { CreateExpenseModal } from "@/components/CreateExpenseModal";
@@ -436,6 +437,7 @@ export default function PagCorp() {
     filtered: PagCorpTransaction[];
   }>({ open: false, oldest: "", kept: 0, dropped: 0, filtered: [] });
   const [presentationDialogOpen, setPresentationDialogOpen] = useState(false);
+  const [portalApproveOpen, setPortalApproveOpen] = useState(false);
   const [showNondeductible, setShowNondeductible] = useState(false);
   const [integratingNondeductible, setIntegratingNondeductible] = useState(false);
   // Grupos de PCs consolidados (várias transações → um único PC no SAP)
@@ -1027,6 +1029,18 @@ export default function PagCorp() {
   );
 
 
+
+  // IDs de prestação de contas (PagCorp) das transações selecionadas — usados
+  // para aprovar em lote diretamente no portal.
+  const selectedAccountabilityIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const t of filteredTransactions) {
+      if (!selectedIds.has(t.id)) continue;
+      const id = t.accountabilityId != null ? String(t.accountabilityId).trim() : "";
+      if (/^\d+$/.test(id) && !ids.includes(id)) ids.push(id);
+    }
+    return ids;
+  }, [filteredTransactions, selectedIds]);
 
   const allSelected =
     selectableTransactions.length > 0 &&
@@ -1795,6 +1809,18 @@ export default function PagCorp() {
               <DownloadCloud className="w-4 h-4" />
             )}
             Baixar em lote{settleSelected.size > 0 ? ` (${settleSelected.size})` : ""}
+          </Button>
+
+          <Button
+            onClick={() => setPortalApproveOpen(true)}
+            disabled={selectedAccountabilityIds.length === 0}
+            variant="outline"
+            className="gap-2"
+            title="Aprova as prestações de contas selecionadas diretamente no portal PagCorp"
+          >
+            <CheckCircle className="w-4 h-4" />
+            Aprovar no PagCorp
+            {selectedAccountabilityIds.length > 0 ? ` (${selectedAccountabilityIds.length})` : ""}
           </Button>
 
           <Button
@@ -2671,6 +2697,16 @@ export default function PagCorp() {
         onClose={() => setPresentationDialogOpen(false)}
         companyLabel={companyLabel || session?.companyDB || ""}
         onGenerate={handleGeneratePresentation}
+      />
+
+      <PagCorpPortalApproveDialog
+        open={portalApproveOpen}
+        onOpenChange={setPortalApproveOpen}
+        companyDb={session?.companyDB || ""}
+        accountabilityIds={selectedAccountabilityIds}
+        onApproved={() => {
+          if (session?.companyDB) fetchTransactions(startDate, endDate, session.companyDB);
+        }}
       />
 
       <SapValidationDialog

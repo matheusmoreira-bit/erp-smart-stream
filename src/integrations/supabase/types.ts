@@ -7211,6 +7211,48 @@ export type Database = {
         }
         Relationships: []
       }
+      pagcorp_portal_sessions: {
+        Row: {
+          company_db: string
+          cookie_enc: string
+          created_at: string
+          csrf_token_enc: string
+          expires_at: string
+          id: string
+          last_used_at: string | null
+          owner_key: string
+          portal_user: string | null
+          updated_at: string
+          xsrf_token_enc: string
+        }
+        Insert: {
+          company_db: string
+          cookie_enc: string
+          created_at?: string
+          csrf_token_enc: string
+          expires_at: string
+          id?: string
+          last_used_at?: string | null
+          owner_key: string
+          portal_user?: string | null
+          updated_at?: string
+          xsrf_token_enc: string
+        }
+        Update: {
+          company_db?: string
+          cookie_enc?: string
+          created_at?: string
+          csrf_token_enc?: string
+          expires_at?: string
+          id?: string
+          last_used_at?: string | null
+          owner_key?: string
+          portal_user?: string | null
+          updated_at?: string
+          xsrf_token_enc?: string
+        }
+        Relationships: []
+      }
       pagcorp_settlement_accounts: {
         Row: {
           card_identifier: string | null
