@@ -4,7 +4,7 @@
 // requisição exigindo um JWT válido OU os headers de sessão SAP.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
-import { requireUserOrSapSessionHeaders, authErrorResponse } from "../_shared/auth.ts";
+import { requireUserOrSapSessionHeaders, requireAdminOrSapModule, authErrorResponse } from "../_shared/auth.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 const corsHeaders = {
@@ -67,15 +67,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  const action:
-    | "save"
-    | "delete"
-    | "catalog"
-    | "list"
-    | "list-mappings"
-    | "list-supplier-rules"
-    | "save-supplier-rules"
-    | "delete-supplier-rule" = body?.action;
+  const action: string = typeof body?.action === "string" ? body.action : "";
   const allowedActions = [
     "save",
     "delete",
@@ -85,6 +77,9 @@ Deno.serve(async (req) => {
     "list-supplier-rules",
     "save-supplier-rules",
     "delete-supplier-rule",
+    "list-card-supplier",
+    "save-card-supplier",
+    "delete-card-supplier",
   ];
   if (!allowedActions.includes(action)) {
     return new Response(JSON.stringify({ error: "Ação inválida" }), {
@@ -98,6 +93,86 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
+
+  const jsonResp = (payload: unknown, status = 200) =>
+    new Response(JSON.stringify(payload), {
+      status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  const cleanCode = (v: unknown, max = 60): string | null => {
+    const s = String(v ?? "").trim();
+    if (!s) return null;
+    return s.slice(0, max);
+  };
+
+  if (action === "list-card-supplier") {
+    const companyDb = String(body?.company_db || req.headers.get("x-company-db") || "").trim();
+    if (!companyDb) return jsonResp({ error: "company_db obrigatório" }, 400);
+    const { data, error } = await sb
+      .from("pagcorp_card_supplier_mapping")
+      .select("*")
+      .eq("company_db", companyDb)
+      .order("card_identifier", { ascending: true });
+    if (error) return jsonResp({ error: error.message }, 500);
+    return jsonResp({ success: true, rules: data || [] });
+  }
+
+  if (action === "save-card-supplier" || action === "delete-card-supplier") {
+    let actor = "";
+    try {
+      const who: any = await requireAdminOrSapModule(req, "pagcorp");
+      actor = String(who?.email || who?.userName || who?.user?.email || "");
+    } catch (err) {
+      return authErrorResponse(err, corsHeaders) ?? jsonResp({ error: "Sem permissão" }, 403);
+    }
+    const companyDb = String(body?.company_db || req.headers.get("x-company-db") || "").trim();
+    if (!companyDb) return jsonResp({ error: "company_db obrigatório" }, 400);
+
+    if (action === "delete-card-supplier") {
+      const id = typeof body?.id === "string" ? body.id : "";
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return jsonResp({ error: "id inválido" }, 400);
+      const { error } = await sb.from("pagcorp_card_supplier_mapping").delete().eq("id", id).eq("company_db", companyDb);
+      if (error) return jsonResp({ error: error.message }, 500);
+      await sb.rpc("insert_audit_log", {
+        p_action: "pagcorp_card_supplier_deleted", p_entity_type: "pagcorp_card_supplier_mapping",
+        p_entity_id: id, p_company_db: companyDb, p_actor_email: actor, p_details: {},
+      }).then(() => {}, () => {});
+      return jsonResp({ success: true });
+    }
+
+    const r = body?.rule ?? {};
+    const card = cleanCode(r.card_identifier, 120);
+    const supplierCode = cleanCode(r.supplier_code);
+    if (!card || !supplierCode) return jsonResp({ error: "Cartão e fornecedor são obrigatórios" }, 400);
+    const payload = {
+      company_db: companyDb,
+      card_identifier: card,
+      card_label: cleanCode(r.card_label, 200),
+      supplier_code: supplierCode,
+      supplier_name: cleanCode(r.supplier_name, 200),
+      cost_center: cleanCode(r.cost_center),
+      project: cleanCode(r.project),
+      item_code: cleanCode(r.item_code),
+      account_code: cleanCode(r.account_code),
+      is_active: r.is_active === false ? false : true,
+    };
+    if (!payload.cost_center && !payload.project && !payload.item_code && !payload.account_code) {
+      return jsonResp({ error: "Defina ao menos um campo (CC, projeto, item ou conta)" }, 400);
+    }
+    const q = typeof r.id === "string" && r.id
+      ? sb.from("pagcorp_card_supplier_mapping").update(payload).eq("id", r.id).eq("company_db", companyDb)
+      : sb.from("pagcorp_card_supplier_mapping").insert(payload);
+    const { data, error } = await q.select().single();
+    if (error) {
+      const dup = (error as any).code === "23505";
+      return jsonResp({ error: dup ? "Já existe regra para este cartão + fornecedor" : error.message }, dup ? 409 : 500);
+    }
+    await sb.rpc("insert_audit_log", {
+      p_action: "pagcorp_card_supplier_saved", p_entity_type: "pagcorp_card_supplier_mapping",
+      p_entity_id: (data as any)?.id ?? "", p_company_db: companyDb, p_actor_email: actor,
+      p_details: { card: card, supplier: supplierCode },
+    }).then(() => {}, () => {});
+    return jsonResp({ success: true, rule: data });
+  }
 
   try {
     if (action === "list") {
