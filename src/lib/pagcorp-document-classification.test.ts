@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  canAnalyzePagCorpDocuments,
   classifyPagCorpDocuments,
   hasInvoiceEquivalent,
   isPagCorpAiEligible,
+  summarizeDocumentAmounts,
 } from "./pagcorp-document-classification";
 import type { PagCorpTransaction } from "@/hooks/usePagCorp";
 
@@ -30,6 +32,15 @@ describe("hasInvoiceEquivalent", () => {
   });
 });
 
+describe("summarizeDocumentAmounts", () => {
+  it("sums numeric and localized string totals", () => {
+    expect(summarizeDocumentAmounts([
+      { total_amount: 100.5, currency: "BRL", supplier_country: "BR" },
+      { total_amount: "R$ 2.703,51", currency: "BRL", supplier_country: "BR" },
+    ])).toEqual({ total: 2804.01, currency: "BRL", count: 2, international: false });
+  });
+});
+
 describe("classifyPagCorpDocuments", () => {
   beforeEach(() => {
     mocks.publicFunctionFetch.mockReset();
@@ -51,18 +62,16 @@ describe("classifyPagCorpDocuments", () => {
     expect(isPagCorpAiEligible({ ...eligibleTransaction, isReversed: true })).toBe(false);
   });
 
-  it("does not call storage or AI for an unapproved transaction", async () => {
-    const result = await classifyPagCorpDocuments({
+  it("allows document analysis before accountability approval", () => {
+    const transaction = {
       id: 100,
       ...eligibleTransaction,
       accountabilityApproved: false,
       receipts: [{ downloadUrl: "https://example.test/nf.pdf", fileName: "nf.pdf" }],
       attachments: [],
-    } as unknown as PagCorpTransaction, "EMPRESA");
+    } as unknown as PagCorpTransaction;
 
-    expect(result.status).toBe("pending");
-    expect(mocks.sapFunctionFetch).not.toHaveBeenCalled();
-    expect(mocks.publicFunctionFetch).not.toHaveBeenCalled();
+    expect(canAnalyzePagCorpDocuments(transaction)).toBe(true);
   });
 
   it("does not call storage or AI for an integrated transaction", async () => {
@@ -122,6 +131,10 @@ describe("classifyPagCorpDocuments", () => {
       hasFiscalDocument: true,
       documentKinds: ["nota_fiscal"],
       confidence: 0.91,
+      documentsTotal: null,
+      documentsCurrency: null,
+      documentsCount: null,
+      documentsInternational: null,
       errorMessage: undefined,
     });
     expect(mocks.publicFunctionFetch).not.toHaveBeenCalled();

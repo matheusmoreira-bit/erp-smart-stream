@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { classifyPagCorpDocuments, isPagCorpAiEligible } from "@/lib/pagcorp-document-classification";
+import { canAnalyzePagCorpDocuments, classifyPagCorpDocuments, isPagCorpAiEligible } from "@/lib/pagcorp-document-classification";
 import { extractPagCorpAccountability } from "@/lib/pagcorp-accountability";
 
 // ---------------------------------------------------------------------------
@@ -839,7 +839,7 @@ export function usePagCorp() {
     companyDb: string,
     options: { force?: boolean } = {},
   ) => {
-    if (!isPagCorpAiEligible(transaction)) {
+    if (!canAnalyzePagCorpDocuments(transaction)) {
       return {
         status: "pending" as const,
         hasFiscalDocument: null,
