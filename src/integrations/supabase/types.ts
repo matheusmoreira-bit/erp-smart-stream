@@ -6843,6 +6843,45 @@ export type Database = {
         }
         Relationships: []
       }
+      pagcorp_description_supplier_rules: {
+        Row: {
+          company_db: string
+          created_at: string
+          id: string
+          is_active: boolean
+          match_type: string
+          pattern: string
+          priority: number
+          supplier_code: string
+          supplier_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          match_type?: string
+          pattern: string
+          priority?: number
+          supplier_code: string
+          supplier_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          match_type?: string
+          pattern?: string
+          priority?: number
+          supplier_code?: string
+          supplier_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pagcorp_document_classification: {
         Row: {
           analyzed_at: string | null
