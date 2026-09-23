@@ -368,7 +368,6 @@ Deno.serve(async (req) => {
     if (includeAllCompanies) {
       const { data: companyRows, error: companiesErr } = await companiesPromise;
       if (companiesErr) return json(500, { error: (companiesErr as { message: string }).message }, cors);
-      const callerEmail = (caller.identity || "").includes("@") ? String(caller.identity) : "";
       const erpTypeByDb = new Map<string, string>();
       for (const row of (companyRows || []) as Array<Record<string, unknown>>) {
         const db = String(row.company_db || "").trim();
@@ -378,22 +377,10 @@ Deno.serve(async (req) => {
         if (db !== companyDb) otherCompanies.push(db);
       }
 
-      // O usuário só ganha a visão ampliada nas empresas em que pode entrar.
-      if (caller.privileged) {
-        const allowed = await Promise.all(
-          otherCompanies.map(async (db) => {
-            if (!callerEmail) return false;
-            const rpcName = erpTypeByDb.get(db) === "omie"
-              ? "is_email_allowed_for_omie_company"
-              : "is_email_allowed_for_company";
-            const { data } = await admin
-              .rpc(rpcName, { _email: callerEmail, _company_db: db })
-              .catch(() => ({ data: false } as { data: unknown }));
-            return data === true;
-          }),
-        );
-        otherCompanies.forEach((db, i) => { if (allowed[i]) fullAccessCompanies.add(db); });
-      }
+      // Capacidades de "ver todas as aprovações"/admin não são por empresa:
+      // quem tem visão ampla na empresa logada mantém a mesma visão nas demais.
+      if (caller.privileged) for (const db of otherCompanies) fullAccessCompanies.add(db);
+
 
       const results = await Promise.all(
         otherCompanies.map((db) =>
