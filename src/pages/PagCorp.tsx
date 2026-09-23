@@ -1030,6 +1030,18 @@ export default function PagCorp() {
 
 
 
+  // IDs de prestação de contas (PagCorp) das transações selecionadas — usados
+  // para aprovar em lote diretamente no portal.
+  const selectedAccountabilityIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const t of filteredTransactions) {
+      if (!selectedIds.has(t.id)) continue;
+      const id = t.accountabilityId != null ? String(t.accountabilityId).trim() : "";
+      if (/^\d+$/.test(id) && !ids.includes(id)) ids.push(id);
+    }
+    return ids;
+  }, [filteredTransactions, selectedIds]);
+
   const allSelected =
     selectableTransactions.length > 0 &&
     selectableTransactions.every((t) => selectedIds.has(t.id));
