@@ -652,7 +652,7 @@ export function PagCorpIntegrateDialog({
                     Padrões aplicados automaticamente
                   </span>
                   <Badge variant="secondary" className="text-[10px] uppercase">
-                    {cardDefaults.source === "card" ? "Mapeamento do cartão" : "Fallback da empresa"}
+                    {cardDefaults.source === "card_supplier" ? "Regra cartão + fornecedor" : cardDefaults.source === "card" ? "Mapeamento do cartão" : "Fallback da empresa"}
                   </Badge>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-[11px]">
