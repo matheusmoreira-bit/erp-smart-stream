@@ -67,8 +67,26 @@ Deno.serve(async (req) => {
     });
   }
 
-  const action: "save" | "delete" | "catalog" | "list" | "list-mappings" = body?.action;
-  if (action !== "save" && action !== "delete" && action !== "catalog" && action !== "list" && action !== "list-mappings") {
+  const action:
+    | "save"
+    | "delete"
+    | "catalog"
+    | "list"
+    | "list-mappings"
+    | "list-supplier-rules"
+    | "save-supplier-rules"
+    | "delete-supplier-rule" = body?.action;
+  const allowedActions = [
+    "save",
+    "delete",
+    "catalog",
+    "list",
+    "list-mappings",
+    "list-supplier-rules",
+    "save-supplier-rules",
+    "delete-supplier-rule",
+  ];
+  if (!allowedActions.includes(action)) {
     return new Response(JSON.stringify({ error: "Ação inválida" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
