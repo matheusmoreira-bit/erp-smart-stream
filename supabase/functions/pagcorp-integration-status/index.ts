@@ -26,6 +26,10 @@ interface RequestBody {
     hasFiscalDocument?: boolean | null;
     documentKinds?: string[];
     confidence?: number | null;
+    documentsTotal?: number | null;
+    documentsCurrency?: string | null;
+    documentsCount?: number | null;
+    documentsInternational?: boolean | null;
     errorMessage?: string | null;
     accountabilityApproved?: boolean;
     requireUnintegrated?: boolean;
@@ -178,6 +182,10 @@ Deno.serve(async (req) => {
           has_fiscal_document: body.classification.hasFiscalDocument ?? null,
           document_kinds: body.classification.documentKinds || [],
           confidence: body.classification.confidence ?? null,
+          documents_total: body.classification.documentsTotal ?? null,
+          documents_currency: body.classification.documentsCurrency ?? null,
+          documents_count: body.classification.documentsCount ?? null,
+          is_international: body.classification.documentsInternational ?? null,
           error_message: body.classification.errorMessage ?? null,
           analyzed_at: status === "completed" || status === "error" ? new Date().toISOString() : null,
         }, { onConflict: "company_db,pagcorp_expense_id" })
@@ -270,7 +278,7 @@ Deno.serve(async (req) => {
     if (expenseIds.length > 0) {
       const { data, error } = await admin
         .from("pagcorp_document_classification")
-        .select("pagcorp_expense_id,status,has_fiscal_document,document_kinds,confidence,error_message,analyzed_at")
+        .select("pagcorp_expense_id,status,has_fiscal_document,document_kinds,confidence,error_message,analyzed_at,documents_total,documents_currency,documents_count,is_international")
         .eq("company_db", companyDb)
         .in("pagcorp_expense_id", expenseIds);
       if (error) {

@@ -11,7 +11,43 @@ export interface PagCorpDocumentClassification {
   hasFiscalDocument: boolean | null;
   documentKinds: string[];
   confidence: number | null;
+  /** Soma dos valores identificados nos documentos (null quando indisponível). */
+  documentsTotal?: number | null;
+  documentsCurrency?: string | null;
+  documentsCount?: number | null;
+  /** True quando ao menos um documento é de fornecedor fora do Brasil. */
+  documentsInternational?: boolean | null;
   errorMessage?: string;
+}
+
+/** Soma os valores dos documentos lidos pela IA e detecta origem internacional. */
+export function summarizeDocumentAmounts(documents: unknown[]): {
+  total: number | null;
+  currency: string | null;
+  count: number;
+  international: boolean | null;
+} {
+  const entries = documents
+    .map((value) => (value && typeof value === "object" ? value as Record<string, unknown> : null))
+    .filter((value): value is Record<string, unknown> => value != null);
+  const withAmount = entries.filter((doc) => Number.isFinite(Number(doc.total_amount)) && Number(doc.total_amount) > 0);
+  const countries = entries
+    .map((doc) => String(doc.supplier_country || "").trim().toUpperCase())
+    .filter(Boolean);
+  const international = countries.length === 0 ? null : countries.some((c) => c !== "BR");
+  if (withAmount.length === 0) {
+    return { total: null, currency: null, count: 0, international };
+  }
+  const currencies = Array.from(new Set(
+    withAmount.map((doc) => String(doc.currency || "").trim().toUpperCase()).filter(Boolean),
+  ));
+  const total = withAmount.reduce((sum, doc) => sum + Number(doc.total_amount), 0);
+  return {
+    total: Number(total.toFixed(2)),
+    currency: currencies.length === 1 ? currencies[0] : null,
+    count: withAmount.length,
+    international,
+  };
 }
 
 export function isPagCorpAiEligible(
@@ -116,6 +152,10 @@ async function readPersisted(
       hasFiscalDocument: row.has_fiscal_document == null ? null : row.has_fiscal_document === true,
       documentKinds: Array.isArray(row.document_kinds) ? row.document_kinds.map((kind) => String(kind)) : [],
       confidence: row.confidence == null ? null : Number(row.confidence),
+      documentsTotal: row.documents_total == null ? null : Number(row.documents_total),
+      documentsCurrency: row.documents_currency == null ? null : String(row.documents_currency),
+      documentsCount: row.documents_count == null ? null : Number(row.documents_count),
+      documentsInternational: row.is_international == null ? null : row.is_international === true,
       errorMessage: row.error_message == null ? undefined : String(row.error_message),
     };
   } catch {
@@ -209,11 +249,16 @@ export async function classifyPagCorpDocuments(
       })
       .filter((value): value is number => Number.isFinite(value));
     const confidence = confidenceValues.length > 0 ? Math.max(...confidenceValues) : null;
+    const amounts = summarizeDocumentAmounts(docs);
     const result: PagCorpDocumentClassification = {
       status: "completed",
       hasFiscalDocument,
       documentKinds,
       confidence,
+      documentsTotal: amounts.total,
+      documentsCurrency: amounts.currency,
+      documentsCount: amounts.count,
+      documentsInternational: amounts.international,
     };
     await persist(companyDb, transaction.id, result);
     return result;
@@ -230,6 +275,10 @@ export async function classifyPagCorpDocuments(
         hasFiscalDocument: previousCompleted.hasFiscalDocument,
         documentKinds: previousCompleted.documentKinds,
         confidence: previousCompleted.confidence,
+        documentsTotal: previousCompleted.documentsTotal ?? null,
+        documentsCurrency: previousCompleted.documentsCurrency ?? null,
+        documentsCount: previousCompleted.documentsCount ?? null,
+        documentsInternational: previousCompleted.documentsInternational ?? null,
         errorMessage: restored.errorMessage,
       }).catch(() => undefined);
       return restored;

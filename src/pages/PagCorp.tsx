@@ -85,6 +85,7 @@ import { generatePagCorpPresentation, type PresentationPeriod } from "@/lib/pagc
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { PageTitle } from "@/components/PageTitle";
 import { isPagCorpAiEligible } from "@/lib/pagcorp-document-classification";
+import { AiEvaluationCell } from "@/components/pagcorp/AiEvaluationCell";
 
 function formatCurrency(value: number, currency: string = "BRL") {
   const validCode = /^[A-Z]{3}$/.test(currency) ? currency : "BRL";
@@ -1940,6 +1941,7 @@ export default function PagCorp() {
                     <TableHead className="text-muted-foreground text-right">Valor</TableHead>
                     <TableHead className="text-muted-foreground text-center">Saldo</TableHead>
                     <TableHead className="text-muted-foreground text-center">Pedido SAP</TableHead>
+                    <TableHead className="text-muted-foreground text-center">Avaliação IA</TableHead>
                     <TableHead className="text-muted-foreground text-center">Prestação</TableHead>
                     <TableHead className="text-muted-foreground text-center">Ações</TableHead>
 
@@ -2045,6 +2047,10 @@ export default function PagCorp() {
                         </TableCell>
 
                         <TableCell className="text-center">
+                          <AiEvaluationCell transaction={t} />
+                        </TableCell>
+
+                        <TableCell className="text-center">
                           {(() => {
                             const receiptCount =
                               (Array.isArray(t.receipts) ? t.receipts.length : 0) +
@@ -2072,24 +2078,6 @@ export default function PagCorp() {
                             return (
                               <div className="flex items-center justify-center gap-2">
                                 {statusBadge}
-                                {aiEligible && (
-                                  t.documentAnalysisStatus === "completed" ? (
-                                    <Badge
-                                      variant="outline"
-                                      className={t.hasFiscalDocument
-                                        ? "text-[10px] border-success/40 text-success"
-                                        : "text-[10px] border-warning/40 text-warning"}
-                                    >
-                                      {t.hasFiscalDocument ? "Documento fiscal" : "Sem documento fiscal"}
-                                    </Badge>
-                                  ) : t.documentAnalysisStatus === "error" ? (
-                                    <Badge variant="destructive" className="text-[10px]">Falha na leitura IA</Badge>
-                                  ) : (
-                                    <Badge variant="secondary" className="text-[10px] gap-1">
-                                      <Loader2 className="w-3 h-3 animate-spin" /> Analisando documentos
-                                    </Badge>
-                                  )
-                                )}
                                 {receiptCount > 0 && (
                                   <button
                                     type="button"
@@ -2368,7 +2356,7 @@ export default function PagCorp() {
                       </TableRow>
                       {isExpanded && (
                         <TableRow className={inGroup ? "border-border bg-success/[0.03]" : "border-border bg-muted/20"}>
-                          <TableCell colSpan={9} className="px-6 py-4">
+                          <TableCell colSpan={10} className="px-6 py-4">
                             <PagCorpTransactionDetails
                               transaction={t}
                               onOpenAttachments={openAttachments}
@@ -2425,7 +2413,7 @@ export default function PagCorp() {
                               )}
                             </div>
                           </TableCell>
-                          <TableCell colSpan={8} className="py-2">
+                          <TableCell colSpan={9} className="py-2">
                             <div className="flex flex-wrap items-center gap-2 text-sm">
                               <Layers className="w-4 h-4 text-muted-foreground shrink-0" />
                               <span className="font-semibold text-foreground">

@@ -154,6 +154,14 @@ export interface PagCorpTransaction {
   integrationStatusResolved?: boolean;
   hasFiscalDocument?: boolean | null;
   documentKinds?: string[];
+  /** Soma dos valores identificados pela IA nos comprovantes. */
+  documentsTotal?: number | null;
+  /** Moeda dos comprovantes lidos pela IA (ISO 4217). */
+  documentsCurrency?: string | null;
+  /** Quantidade de documentos considerados na soma. */
+  documentsCount?: number | null;
+  /** True quando ao menos um documento é de fornecedor fora do Brasil. */
+  documentsInternational?: boolean | null;
   documentAnalysisError?: string | null;
   postingType?: "purchase_order" | "journal_entry";
 
@@ -289,6 +297,10 @@ async function applyIntegrationStatus(
       transaction.documentAnalysisStatus = row?.status || "pending";
       transaction.hasFiscalDocument = row?.has_fiscal_document ?? null;
       transaction.documentKinds = Array.isArray(row?.document_kinds) ? row.document_kinds : [];
+      transaction.documentsTotal = row?.documents_total == null ? null : Number(row.documents_total);
+      transaction.documentsCurrency = row?.documents_currency ?? null;
+      transaction.documentsCount = row?.documents_count == null ? null : Number(row.documents_count);
+      transaction.documentsInternational = row?.is_international ?? null;
       transaction.documentAnalysisError = row?.error_message ?? null;
       transaction.postingType = row?.has_fiscal_document === true ? "purchase_order" : row?.status === "completed" ? "journal_entry" : undefined;
     });
@@ -840,7 +852,15 @@ export function usePagCorp() {
     setTransactions((current) => current.map((item) =>
       item.id === transaction.id ? { ...item, documentAnalysisStatus: "processing", documentAnalysisError: null } : item
     ));
-    const previous = { hasFiscalDocument: transaction.hasFiscalDocument, documentKinds: transaction.documentKinds, postingType: transaction.postingType };
+    const previous = {
+      hasFiscalDocument: transaction.hasFiscalDocument,
+      documentKinds: transaction.documentKinds,
+      postingType: transaction.postingType,
+      documentsTotal: transaction.documentsTotal,
+      documentsCurrency: transaction.documentsCurrency,
+      documentsCount: transaction.documentsCount,
+      documentsInternational: transaction.documentsInternational,
+    };
     const result = await classifyPagCorpDocuments(transaction, companyDb, options).catch((error) => ({
       status: "error" as const,
       hasFiscalDocument: null,
@@ -856,6 +876,10 @@ export function usePagCorp() {
           // Falha no reprocessamento não apaga o que já havia sido classificado.
           hasFiscalDocument: result.status === "error" ? previous.hasFiscalDocument ?? null : result.hasFiscalDocument,
           documentKinds: result.status === "error" ? previous.documentKinds ?? [] : result.documentKinds,
+          documentsTotal: result.status === "error" ? previous.documentsTotal ?? null : result.documentsTotal ?? null,
+          documentsCurrency: result.status === "error" ? previous.documentsCurrency ?? null : result.documentsCurrency ?? null,
+          documentsCount: result.status === "error" ? previous.documentsCount ?? null : result.documentsCount ?? null,
+          documentsInternational: result.status === "error" ? previous.documentsInternational ?? null : result.documentsInternational ?? null,
           documentAnalysisError: result.errorMessage ?? null,
           postingType: result.hasFiscalDocument
             ? "purchase_order"
