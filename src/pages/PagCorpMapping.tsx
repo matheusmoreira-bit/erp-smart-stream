@@ -48,6 +48,7 @@ import { useSap } from "@/contexts/SapContext";
 import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { PageTitle } from "@/components/PageTitle";
 import { PagcorpSettlementAccountsTab } from "@/components/PagcorpSettlementAccountsTab";
+import { PagcorpSupplierRulesTab } from "@/components/PagcorpSupplierRulesTab";
 
 /* ── Account → Cost Center / Project mapping ── */
 interface AccountMapping {
