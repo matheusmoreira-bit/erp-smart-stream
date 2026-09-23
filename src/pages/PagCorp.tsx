@@ -834,6 +834,42 @@ export default function PagCorp() {
     }
   };
 
+  const [bulkAiRunning, setBulkAiRunning] = useState(false);
+
+  // Reprocessa a leitura por IA de todas as transações visíveis no filtro atual.
+  const handleReprocessFiltered = async () => {
+    const companyDb = session?.companyDB;
+    if (!companyDb || bulkAiRunning) return;
+    const list = filteredTransactions.filter((t) => isPagCorpAiEligible(t));
+    if (!list.length) {
+      toast.info("Nenhuma transação elegível para leitura por IA no filtro atual.");
+      return;
+    }
+    setBulkAiRunning(true);
+    let done = 0;
+    let failed = 0;
+    const toastId = toast.loading(`Reprocessando IA: 0/${list.length}`);
+    try {
+      for (const t of list) {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          const result = await classifyDocuments(t, companyDb, { force: true });
+          if (result.errorMessage) failed += 1;
+        } catch {
+          failed += 1;
+        }
+        done += 1;
+        toast.loading(`Reprocessando IA: ${done}/${list.length}`, { id: toastId });
+      }
+      toast.success(`Leitura por IA concluída em ${done} transação(ões)`, {
+        id: toastId,
+        description: failed > 0 ? `${failed} com falha — use “Reprocessar falhas”.` : undefined,
+      });
+    } finally {
+      setBulkAiRunning(false);
+    }
+  };
+
   const rowItems = useMemo(() => {
     const groupKeyOf = (t: PagCorpTransaction): string | null => {
       if (!t.integrated) return null;
