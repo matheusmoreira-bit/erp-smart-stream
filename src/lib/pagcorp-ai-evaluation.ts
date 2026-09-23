@@ -34,9 +34,6 @@ export function evaluatePagCorpAi(t: PagCorpTransaction): AiCheck[] {
     (Array.isArray(t.receipts) ? t.receipts.length : 0) +
       (Array.isArray(t.attachments) ? t.attachments.length : 0) > 0;
 
-  const notRun = (title: string, reason: string): AiCheck["status"] extends never ? never : AiCheck =>
-    ({ key: "fiscal_document", title, detail: reason, status: "idle" } as AiCheck);
-
   // --- 1) Documento fiscal ---
   let fiscal: AiCheck;
   if (!eligible || !status || status === "pending") {
@@ -143,6 +140,5 @@ export function evaluatePagCorpAi(t: PagCorpTransaction): AiCheck[] {
     }
   }
 
-  void notRun;
   return [fiscal, amount];
 }
