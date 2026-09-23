@@ -437,6 +437,7 @@ export default function PagCorp() {
     filtered: PagCorpTransaction[];
   }>({ open: false, oldest: "", kept: 0, dropped: 0, filtered: [] });
   const [presentationDialogOpen, setPresentationDialogOpen] = useState(false);
+  const [portalApproveOpen, setPortalApproveOpen] = useState(false);
   const [showNondeductible, setShowNondeductible] = useState(false);
   const [integratingNondeductible, setIntegratingNondeductible] = useState(false);
   // Grupos de PCs consolidados (várias transações → um único PC no SAP)
