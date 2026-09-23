@@ -343,8 +343,9 @@ Deno.serve(async (req) => {
     // `.then()` força o início imediato: os builders do supabase-js são lazy.
     const bundlePromise = admin.rpc("approvals_feed_bundle", { _company_db: companyDb }).then((r) => r);
     const companiesPromise = includeAllCompanies
-      ? admin.from("companies").select("company_db, display_name").eq("is_active", true).then((r) => r)
+      ? admin.from("companies").select("company_db, display_name, erp_type").eq("is_active", true).then((r) => r)
       : Promise.resolve({ data: [], error: null } as { data: Array<Record<string, unknown>>; error: null });
+
     const caller = await identifyCallerCached(req, admin);
     const authMs = Date.now() - tAuth;
     if (!caller.identity) {
