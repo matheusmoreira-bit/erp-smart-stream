@@ -1,4 +1,4 @@
-import { publicFunctionFetch, sapFunctionFetch } from "@/lib/auth-fetch";
+import { sapFunctionFetch } from "@/lib/auth-fetch";
 import type { PagCorpTransaction } from "@/hooks/usePagCorp";
 
 export interface PagCorpAttachment {
