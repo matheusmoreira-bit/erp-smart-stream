@@ -2976,6 +2976,22 @@ export default function ApprovalsPage() {
       const isDirectApprover = isCurrentUserApprover(doc);
       if (isDirectApprover) return true;
 
+      // Aprovadores PARALELOS do nível atual: `current_approver` guarda só um
+      // nome, então o segundo aprovador (ex.: Robson no nível unânime) ficava
+      // sem botão. Quem já aprovou o nível não recebe o botão de novo.
+      const docExt = doc as unknown as {
+        __levelApprovers?: Array<{ name: string; email: string }>;
+        __viewerAlreadyApproved?: boolean;
+      };
+      if (
+        !docExt.__viewerAlreadyApproved &&
+        (docExt.__levelApprovers || []).some((l) =>
+          matchesApproverIdentity(currentUserIdentities, null, l.name, l.email),
+        )
+      ) {
+        return true;
+      }
+
       // Substituto ativo: se o usuário é atualmente substituto oficial do aprovador
       // do documento (activeOfficials cobre a janela "agora"), permite a ação —
       // independente da docDate cair fora do grant, pois a aprovação acontece agora.
