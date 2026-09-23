@@ -332,22 +332,44 @@ export function PagCorpIntegrateDialog({
       } catch {/* ignore */}
     }
 
-    if (initialPostingType === "journal_entry") return;
+    setAutoSupplierDone(false);
+
+    if (initialPostingType === "journal_entry") {
+      setAutoSupplierDone(true);
+      return;
+    }
 
     if (!restored && transaction.nondeductibleSupplierCode) {
       setSupplier({
         code: String(transaction.nondeductibleSupplierCode),
         name: String(transaction.nondeductibleSupplierName || transaction.nondeductibleSupplierCode),
       });
+      setAutoSupplierDone(true);
       return;
     }
 
-    if (restored) return;
+    if (restored) setAutoSupplierDone(true);
+    // Regra de descrição / IA são resolvidas no efeito abaixo.
+  }, [open, transaction?.id, transaction, storageKey, initialPostingType]);
 
-    // Auto-trigger AI extraction
+  /**
+   * Fornecedor padrão por trecho da descrição (mapeamento por empresa).
+   * Quando há regra, ela vence e a leitura por IA não é disparada.
+   */
+  useEffect(() => {
+    if (!open || !transaction || autoSupplierDone) return;
+    if (postingType === "journal_entry") return;
+    if (companyDb && !supplierRulesLoaded) return;
+    setAutoSupplierDone(true);
+    const rule = companyDb ? resolveSupplierRule(transaction.description) : null;
+    if (rule) {
+      setSupplier({ code: rule.supplier_code, name: rule.supplier_name || rule.supplier_code });
+      setAiNotice(`Fornecedor padrão aplicado pela regra de descrição "${rule.pattern}".`);
+      return;
+    }
     setAiTried(true);
     void runAi(transaction);
-  }, [open, transaction?.id, runAi, transaction, storageKey, initialPostingType]);
+  }, [open, transaction, autoSupplierDone, postingType, companyDb, supplierRulesLoaded, resolveSupplierRule, runAi]);
 
   useEffect(() => {
     if (!open || !transaction || !cardMappingLoaded) return;
