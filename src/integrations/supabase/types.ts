@@ -6850,9 +6850,13 @@ export type Database = {
           confidence: number | null
           created_at: string
           document_kinds: Json
+          documents_count: number | null
+          documents_currency: string | null
+          documents_total: number | null
           error_message: string | null
           has_fiscal_document: boolean | null
           id: string
+          is_international: boolean | null
           pagcorp_expense_id: number
           status: string
           updated_at: string
@@ -6863,9 +6867,13 @@ export type Database = {
           confidence?: number | null
           created_at?: string
           document_kinds?: Json
+          documents_count?: number | null
+          documents_currency?: string | null
+          documents_total?: number | null
           error_message?: string | null
           has_fiscal_document?: boolean | null
           id?: string
+          is_international?: boolean | null
           pagcorp_expense_id: number
           status?: string
           updated_at?: string
@@ -6876,9 +6884,13 @@ export type Database = {
           confidence?: number | null
           created_at?: string
           document_kinds?: Json
+          documents_count?: number | null
+          documents_currency?: string | null
+          documents_total?: number | null
           error_message?: string | null
           has_fiscal_document?: boolean | null
           id?: string
+          is_international?: boolean | null
           pagcorp_expense_id?: number
           status?: string
           updated_at?: string

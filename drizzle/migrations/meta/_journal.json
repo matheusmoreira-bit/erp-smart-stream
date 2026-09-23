@@ -330,6 +330,13 @@
       "when": 1790106603512,
       "tag": "0046_fix_santiago_email_and_add_phones",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1790165935475,
+      "tag": "0047_pagcorp_classification_amounts",
+      "breakpoints": true
     }
   ]
 }
