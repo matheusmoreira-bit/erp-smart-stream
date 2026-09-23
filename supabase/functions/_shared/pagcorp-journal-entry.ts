@@ -55,7 +55,11 @@ export function buildPagCorpJournalTransactionPairs(
     const currency = String(transaction.currency || localCurrency).toUpperCase();
     const isForeignCurrency = currency !== localCurrency && /^[A-Z]{3}$/.test(currency);
     const rate = Number(transaction.exchangeRate);
-    const rateFields = isForeignCurrency && Number.isFinite(rate) && rate > 0 ? { Rate: rate } : {};
+    // JournalEntryLine não aceita "Rate": enviamos o valor em moeda local
+    // já convertido pela PTAX junto com o valor em moeda estrangeira.
+    const local = isForeignCurrency && Number.isFinite(rate) && rate > 0
+      ? Math.round(transaction.amount * rate * 100) / 100
+      : null;
     const dimensions = {
       branchId: options.branchId,
       costCenter: transaction.costCenter,
@@ -67,14 +71,14 @@ export function buildPagCorpJournalTransactionPairs(
         AccountCode: options.debitAccount,
         LineMemo: transaction.lineMemo,
         ...(isForeignCurrency
-          ? { FCDebit: transaction.amount, FCCurrency: currency, ...rateFields }
+          ? { FCDebit: transaction.amount, FCCurrency: currency, ...(local != null ? { Debit: local } : {}) }
           : { Debit: transaction.amount }),
       },
       {
         AccountCode: options.creditAccount,
         LineMemo: transaction.lineMemo,
         ...(isForeignCurrency
-          ? { FCCredit: transaction.amount, FCCurrency: currency, ...rateFields }
+          ? { FCCredit: transaction.amount, FCCurrency: currency, ...(local != null ? { Credit: local } : {}) }
           : { Credit: transaction.amount }),
       },
     ], dimensions) as PagCorpJournalLine[];
