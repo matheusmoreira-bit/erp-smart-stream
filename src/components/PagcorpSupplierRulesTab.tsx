@@ -20,7 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SapSearchCombobox, type SapSearchOption } from "@/components/SapSearchCombobox";
+import { type SapSearchOption } from "@/components/SapSearchCombobox";
+import { CachedSearchCombobox } from "@/components/CachedSearchCombobox";
+import { useMergedSupplierOptions } from "@/hooks/useMergedSupplierOptions";
 import { toast } from "sonner";
 import { usePagCorpSupplierRules } from "@/hooks/usePagCorpSupplierRules";
 import { findSupplierRule, type SupplierRuleMatchType } from "@/lib/pagcorp-supplier-rules";
@@ -38,6 +40,9 @@ interface EditableRule {
 
 export function PagcorpSupplierRulesTab({ companyDb }: { companyDb: string }) {
   const { rules, isLoading, reload } = usePagCorpSupplierRules(companyDb || undefined);
+  // Fornecedores vêm da base local (cache em public.sap_cache + public.suppliers),
+  // sem consultar o ERP a cada digitação.
+  const { options: supplierOptions, isLoading: isLoadingSuppliers } = useMergedSupplierOptions({ companyDb });
   const [draft, setDraft] = useState<EditableRule[] | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [search, setSearch] = useState("");
@@ -281,15 +286,9 @@ export function PagcorpSupplierRulesTab({ companyDb }: { companyDb: string }) {
                     />
                   </TableCell>
                   <TableCell>
-                    <SapSearchCombobox
-                      endpoint="BusinessPartners"
-                      filterTemplate="CardType eq 'cSupplier' and Frozen ne 'tYES' and (contains(tolower(CardName),'{qLower}') or contains(tolower(CardCode),'{qLower}') or contains(tolower(AliasName),'{qLower}') or contains(FederalTaxID,'{q}'))"
-                      selectFields="CardCode,CardName,AliasName,FederalTaxID"
-                      mapRow={(row: Record<string, unknown>) => ({
-                        code: String(row.CardCode ?? ""),
-                        name: String(row.CardName ?? ""),
-                        extra: (row.FederalTaxID as string) || undefined,
-                      })}
+                    <CachedSearchCombobox
+                      options={supplierOptions}
+                      isLoading={isLoadingSuppliers}
                       value={
                         r.supplier_code
                           ? ({ code: r.supplier_code, name: r.supplier_name || r.supplier_code } as SapSearchOption)
@@ -302,7 +301,6 @@ export function PagcorpSupplierRulesTab({ companyDb }: { companyDb: string }) {
                         })
                       }
                       placeholder="Buscar fornecedor…"
-                      topResults={50}
                     />
                   </TableCell>
                   <TableCell>
