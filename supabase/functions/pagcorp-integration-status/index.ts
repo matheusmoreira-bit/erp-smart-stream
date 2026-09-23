@@ -241,18 +241,20 @@ Deno.serve(async (req) => {
     // Para status de tela, DocEntry real prevalece sobre o status textual antigo.
     let integrations: any[] = [];
     if (expenseIds.length > 0) {
-      const { data, error } = await admin
-        .from("pagcorp_integration_log")
-        .select(
-          "pagcorp_expense_id, id, status, integration_type, pagcorp_data, sap_doc_num, sap_doc_entry, sap_payload, sap_response, settlement_status, settlement_payment_doc_num, settlement_error, created_at",
-        )
-        .eq("company_db", companyDb)
-        .in("pagcorp_expense_id", expenseIds)
-        // Uma transação pode ter N pedidos (fornecedores diferentes no mesmo
-        // comprovante) — devolvemos todos, do mais antigo para o mais novo.
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      integrations = (data || [])
+      // Uma transação pode ter N pedidos (fornecedores diferentes no mesmo
+      // comprovante) — devolvemos todos, do mais antigo para o mais novo.
+      const logRows = await selectInChunks<Record<string, unknown>>(expenseIds, (slice) =>
+        admin
+          .from("pagcorp_integration_log")
+          .select(
+            "pagcorp_expense_id, id, status, integration_type, pagcorp_data, sap_doc_num, sap_doc_entry, sap_payload, sap_response, settlement_status, settlement_payment_doc_num, settlement_error, created_at",
+          )
+          .eq("company_db", companyDb)
+          .in("pagcorp_expense_id", slice)
+          .order("created_at", { ascending: true }) as any,
+      );
+      logRows.sort((a, b) => String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")));
+      integrations = logRows
         .map((row: Record<string, unknown>) => {
           const doc = materialSapDoc(row);
           if (row.status !== "success" && !doc.docEntry) return null;
