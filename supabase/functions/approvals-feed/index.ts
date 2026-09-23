@@ -343,8 +343,9 @@ Deno.serve(async (req) => {
     // `.then()` força o início imediato: os builders do supabase-js são lazy.
     const bundlePromise = admin.rpc("approvals_feed_bundle", { _company_db: companyDb }).then((r) => r);
     const companiesPromise = includeAllCompanies
-      ? admin.from("companies").select("company_db, display_name").eq("is_active", true).then((r) => r)
+      ? admin.from("companies").select("company_db, display_name, erp_type").eq("is_active", true).then((r) => r)
       : Promise.resolve({ data: [], error: null } as { data: Array<Record<string, unknown>>; error: null });
+
     const caller = await identifyCallerCached(req, admin);
     const authMs = Date.now() - tAuth;
     if (!caller.identity) {
@@ -360,15 +361,27 @@ Deno.serve(async (req) => {
     // Empresas conhecidas (rótulo amigável no cabeçalho do documento).
     const companyNames = new Map<string, string>();
     const otherCompanies: string[] = [];
+    // Empresas em que o caller tem a mesma amplitude de visão da empresa
+    // logada (admin/"ver todos"): fora delas, só entram documentos em que ele
+    // é o aprovador pendente.
+    const fullAccessCompanies = new Set<string>([companyDb]);
     if (includeAllCompanies) {
       const { data: companyRows, error: companiesErr } = await companiesPromise;
       if (companiesErr) return json(500, { error: (companiesErr as { message: string }).message }, cors);
+      const erpTypeByDb = new Map<string, string>();
       for (const row of (companyRows || []) as Array<Record<string, unknown>>) {
         const db = String(row.company_db || "").trim();
         if (!db) continue;
         companyNames.set(db, String(row.display_name || db));
+        erpTypeByDb.set(db, String(row.erp_type || "").toLowerCase());
         if (db !== companyDb) otherCompanies.push(db);
       }
+
+      // Capacidades de "ver todas as aprovações"/admin não são por empresa:
+      // quem tem visão ampla na empresa logada mantém a mesma visão nas demais.
+      if (caller.privileged) for (const db of otherCompanies) fullAccessCompanies.add(db);
+
+
       const results = await Promise.all(
         otherCompanies.map((db) =>
           admin
@@ -379,6 +392,7 @@ Deno.serve(async (req) => {
       );
       for (const rows of results) docs = docs.concat(rows);
     }
+
 
 
 
@@ -473,10 +487,11 @@ Deno.serve(async (req) => {
 
     docs = docs.filter((d) => {
       const docCompany = String(d.company_db || "");
-      // Fora da empresa logada, nenhuma permissão amplia a visão: só entram os
-      // documentos em que o caller é o aprovador pendente.
-      if (docCompany && docCompany !== companyDb) return callerIsPendingApprover(d);
+      // Em empresa sem visão ampliada, só entram os documentos em que o caller
+      // é o aprovador pendente.
+      if (docCompany && !fullAccessCompanies.has(docCompany)) return callerIsPendingApprover(d);
       if (caller.privileged) return true;
+
       if (ownsAsRequesterOrBranch(d, caller.aliases, caller.directorateBranch)) return true;
       const segments = segmentsByExpense.get(String(d.id || "")) || [];
       if (segments.length > 0) {
