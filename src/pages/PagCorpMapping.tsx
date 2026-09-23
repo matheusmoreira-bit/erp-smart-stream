@@ -49,6 +49,9 @@ import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { PageTitle } from "@/components/PageTitle";
 import { PagcorpSettlementAccountsTab } from "@/components/PagcorpSettlementAccountsTab";
 import { PagcorpSupplierRulesTab } from "@/components/PagcorpSupplierRulesTab";
+import { PagcorpCardSupplierTab } from "@/components/PagcorpCardSupplierTab";
+import { PagcorpNondeductibleTab } from "@/components/PagcorpNondeductibleTab";
+import { Link2, ShieldOff } from "lucide-react";
 
 /* ── Account → Cost Center / Project mapping ── */
 interface AccountMapping {
@@ -514,15 +517,40 @@ export default function PagCorpMapping() {
 
       <main className="flex-1 px-6 py-6">
         <div className="max-w-7xl mx-auto">
-          <Tabs defaultValue="cards" className="space-y-4">
-            <TabsList>
+          <Tabs
+            value={searchParams.get("tab") || "cards"}
+            onValueChange={(v) => {
+              const next = new URLSearchParams(searchParams);
+              next.set("tab", v);
+              setSearchParams(next, { replace: true });
+            }}
+            className="space-y-4"
+          >
+            <TabsList className="flex-wrap h-auto">
               <TabsTrigger value="cards" className="gap-2"><CreditCard className="w-4 h-4" /> Cartões</TabsTrigger>
+              <TabsTrigger value="card_supplier" className="gap-2"><Link2 className="w-4 h-4" /> Cartão + Fornecedor</TabsTrigger>
               <TabsTrigger value="suppliers" className="gap-2"><Store className="w-4 h-4" /> Fornecedores</TabsTrigger>
+              <TabsTrigger value="nondeductible" className="gap-2"><ShieldOff className="w-4 h-4" /> Indedutíveis</TabsTrigger>
               <TabsTrigger value="settlement" className="gap-2"><Banknote className="w-4 h-4" /> Contas de baixa</TabsTrigger>
             </TabsList>
 
+            <TabsContent value="card_supplier" className="space-y-4">
+              <PagcorpCardSupplierTab
+                companyDb={companyDB}
+                cardSuggestions={cardSuggestions}
+                costCenterCache={costCenterCache}
+                projectCache={projectCache}
+                itemCache={itemCache}
+                accountCache={accountCache}
+              />
+            </TabsContent>
+
             <TabsContent value="suppliers" className="space-y-4">
               <PagcorpSupplierRulesTab companyDb={companyDB} />
+            </TabsContent>
+
+            <TabsContent value="nondeductible" className="space-y-4">
+              <PagcorpNondeductibleTab />
             </TabsContent>
 
             <TabsContent value="settlement" className="space-y-4">
