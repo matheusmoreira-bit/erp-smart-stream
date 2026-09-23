@@ -103,6 +103,13 @@ export function evaluatePagCorpAi(t: PagCorpTransaction): AiCheck[] {
       detail: "Erro na leitura — não foi possível somar os valores dos comprovantes.",
       status: "error",
     };
+  } else if (t.documentsCount == null && t.documentsTotal == null) {
+    amount = {
+      key: "amount_match",
+      title: "Valor dos comprovantes",
+      detail: "Conferência de valores não realizada nesta leitura — reprocesse a IA para comparar os valores.",
+      status: "idle",
+    };
   } else if (typeof t.documentsTotal !== "number" || !Number.isFinite(t.documentsTotal) || t.documentsTotal <= 0) {
     amount = {
       key: "amount_match",
