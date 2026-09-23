@@ -273,13 +273,12 @@ Deno.serve(async (req) => {
     let relations: any[] = [];
     if (integrations.length > 0) {
       const logIds = integrations.map((l: any) => l.id);
-      const { data: rel, error: relErr } = await admin
-        .from("pagcorp_document_relations")
-        .select("pagcorp_log_id, nf_found, payment_found, nf_doc_entries, payment_doc_entries")
-        .in("pagcorp_log_id", logIds);
-      if (relErr) throw relErr;
-      relations = rel || [];
-
+      relations = await selectInChunks<any>(logIds, (slice) =>
+        admin
+          .from("pagcorp_document_relations")
+          .select("pagcorp_log_id, nf_found, payment_found, nf_doc_entries, payment_doc_entries")
+          .in("pagcorp_log_id", slice) as any,
+      );
     }
 
     // 2. Cartões marcados como não-dedutíveis (por company_db).
