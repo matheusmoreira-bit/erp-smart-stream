@@ -59,6 +59,16 @@ export function isPagCorpAiEligible(
     transaction.isReversed !== true;
 }
 
+/**
+ * Pode ser analisada pela IA: basta não estar integrada/estornada e ter anexos.
+ * Diferente de `isPagCorpAiEligible`, não exige prestação aprovada — a leitura
+ * dos comprovantes é útil também enquanto a prestação está em análise.
+ */
+export function canAnalyzePagCorpDocuments(transaction: PagCorpTransaction): boolean {
+  if (transaction.integrated === true || transaction.isReversed === true) return false;
+  return collectPagCorpAttachments(transaction).length > 0;
+}
+
 export function hasInvoiceEquivalent(documents: unknown[]): boolean {
   const invoiceKinds = new Set([
     "invoice",
@@ -168,7 +178,7 @@ export async function classifyPagCorpDocuments(
   companyDb: string,
   options: { force?: boolean } = {},
 ): Promise<PagCorpDocumentClassification> {
-  if (!isPagCorpAiEligible(transaction)) {
+  if (!canAnalyzePagCorpDocuments(transaction)) {
     return {
       status: "pending",
       hasFiscalDocument: null,

@@ -84,7 +84,7 @@ import type { SapSearchOption } from "@/components/SapSearchCombobox";
 import { generatePagCorpPresentation, type PresentationPeriod } from "@/lib/pagcorp-presentation";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { PageTitle } from "@/components/PageTitle";
-import { isPagCorpAiEligible } from "@/lib/pagcorp-document-classification";
+import { isPagCorpAiEligible, canAnalyzePagCorpDocuments } from "@/lib/pagcorp-document-classification";
 import { AiEvaluationCell } from "@/components/pagcorp/AiEvaluationCell";
 
 function formatCurrency(value: number, currency: string = "BRL") {
@@ -840,7 +840,7 @@ export default function PagCorp() {
   const handleReprocessFiltered = async () => {
     const companyDb = session?.companyDB;
     if (!companyDb || bulkAiRunning) return;
-    const list = filteredTransactions.filter((t) => isPagCorpAiEligible(t));
+    const list = filteredTransactions.filter((t) => canAnalyzePagCorpDocuments(t));
     if (!list.length) {
       toast.info("Nenhuma transação elegível para leitura por IA no filtro atual.");
       return;
@@ -1998,7 +1998,7 @@ export default function PagCorp() {
                     const renderTxRow = (t: PagCorpTransaction, opts: { inGroup?: boolean } = {}) => {
                       const isSelected = selectedIds.has(t.id);
                       const inGroup = !!opts.inGroup;
-                      const aiEligible = isPagCorpAiEligible(t);
+                      const aiEligible = canAnalyzePagCorpDocuments(t);
                       const isExpanded = expandedTransactions.has(String(t.id));
                       const stage = settleStage(t);
                       const canSettleSelect = t.integrated && !t.isReversed && t.postingType !== "journal_entry" && stage !== "settled";

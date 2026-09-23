@@ -1,5 +1,5 @@
 import type { PagCorpTransaction } from "@/hooks/usePagCorp";
-import { isPagCorpAiEligible } from "@/lib/pagcorp-document-classification";
+import { canAnalyzePagCorpDocuments } from "@/lib/pagcorp-document-classification";
 
 export type AiCheckStatus = "ok" | "warning" | "error" | "idle";
 
@@ -28,7 +28,7 @@ export function amountsMatch(a: number, b: number): boolean {
 }
 
 export function evaluatePagCorpAi(t: PagCorpTransaction): AiCheck[] {
-  const eligible = isPagCorpAiEligible(t);
+  const eligible = canAnalyzePagCorpDocuments(t);
   const status = t.documentAnalysisStatus;
   const hasAttachments =
     (Array.isArray(t.receipts) ? t.receipts.length : 0) +
