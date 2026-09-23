@@ -2518,7 +2518,9 @@ export function CreateExpenseModal({
       toast.error("Informe a data de vencimento");
       return;
     }
-    {
+    // Exceção PagCorp: gastos de cartão já foram pagos na data da compra,
+    // então data retroativa/vencida é permitida.
+    if (origin !== "pagcorp") {
       const todayRef = new Date();
       todayRef.setHours(0, 0, 0, 0);
       const dueRef = new Date(`${dueDate}T00:00:00`);
@@ -3678,7 +3680,7 @@ export function CreateExpenseModal({
           </div>
 
           {(() => {
-            if (!dueDate) return null;
+            if (!dueDate || origin === "pagcorp") return null;
             const today = new Date(); today.setHours(0, 0, 0, 0);
             const due = new Date(`${dueDate}T00:00:00`);
             const diffDays = Math.round((due.getTime() - today.getTime()) / 86400000);
