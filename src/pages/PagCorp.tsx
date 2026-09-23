@@ -1758,6 +1758,16 @@ export default function PagCorp() {
             Buscar
           </Button>
           <Button
+            onClick={handleReprocessFiltered}
+            disabled={isLoading || bulkAiRunning}
+            variant="outline"
+            className="gap-2"
+            title="Refaz a leitura por IA (documento fiscal e valores) de todas as transações do filtro atual"
+          >
+            <Sparkles className={`w-4 h-4 ${bulkAiRunning ? "animate-pulse" : ""}`} />
+            Reprocessar IA
+          </Button>
+          <Button
             onClick={handleIntegrateBatchUnified}
             disabled={selectedIds.size === 0 || batchActive}
             variant="secondary"
