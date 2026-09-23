@@ -7343,6 +7343,42 @@ export type Database = {
         }
         Relationships: []
       }
+      pagcorp_settlement_candidate_notices: {
+        Row: {
+          amount: number | null
+          company_db: string
+          first_notified_at: string
+          id: string
+          last_seen_at: string
+          nf_doc_nums: string[]
+          po_doc_num: string
+          resolved_at: string | null
+          vendor_name: string | null
+        }
+        Insert: {
+          amount?: number | null
+          company_db: string
+          first_notified_at?: string
+          id?: string
+          last_seen_at?: string
+          nf_doc_nums?: string[]
+          po_doc_num: string
+          resolved_at?: string | null
+          vendor_name?: string | null
+        }
+        Update: {
+          amount?: number | null
+          company_db?: string
+          first_notified_at?: string
+          id?: string
+          last_seen_at?: string
+          nf_doc_nums?: string[]
+          po_doc_num?: string
+          resolved_at?: string | null
+          vendor_name?: string | null
+        }
+        Relationships: []
+      }
       pagcorp_supplier_links: {
         Row: {
           card_code: string | null
