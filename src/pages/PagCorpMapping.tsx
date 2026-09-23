@@ -515,8 +515,13 @@ export default function PagCorpMapping() {
           <Tabs defaultValue="cards" className="space-y-4">
             <TabsList>
               <TabsTrigger value="cards" className="gap-2"><CreditCard className="w-4 h-4" /> Cartões</TabsTrigger>
+              <TabsTrigger value="suppliers" className="gap-2"><Store className="w-4 h-4" /> Fornecedores</TabsTrigger>
               <TabsTrigger value="settlement" className="gap-2"><Banknote className="w-4 h-4" /> Contas de baixa</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="suppliers" className="space-y-4">
+              <PagcorpSupplierRulesTab companyDb={companyDB} />
+            </TabsContent>
 
             <TabsContent value="settlement" className="space-y-4">
               <PagcorpSettlementAccountsTab
