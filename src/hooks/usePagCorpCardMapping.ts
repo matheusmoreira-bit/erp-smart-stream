@@ -1,4 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
+import {
+  resolveCardMapping,
+  type CardSupplierRuleLike,
+  type MappingSource,
+} from "@/lib/pagcorp-card-resolve";
 
 export interface PagCorpCardMappingRow {
   card_identifier: string | null;
@@ -12,35 +17,55 @@ export interface PagCorpCardMappingResolved {
   costCenter: string | null;
   project: string | null;
   itemCode: string | null;
-  /** Source: 'card' = mapping específico do cartão; 'fallback' = fallback da empresa; null = não há mapeamento */
-  source: "card" | "fallback" | null;
+  accountCode: string | null;
+  /** Origem mais específica aplicada; null = sem mapeamento */
+  source: MappingSource | null;
+  fieldSources: Partial<Record<"costCenter" | "project" | "itemCode" | "accountCode", MappingSource>>;
 }
 
 export type CardMappingStatus = "none" | "partial" | "full";
 
 export interface PagCorpCardMappingDescribed {
   resolved: PagCorpCardMappingResolved;
-  /** none = nenhum mapeamento aplicável; partial = aplicado mas faltam campos; full = todos os 3 campos vieram */
   status: CardMappingStatus;
-  /** Labels human-readable dos campos faltantes ('Centro de Custo' | 'Projeto' | 'Item') */
   missingFields: string[];
   cardKey: string | null;
 }
 
+type TxLike = {
+  cardLastDigits?: unknown;
+  cardId?: unknown;
+  cardName?: unknown;
+  accountAlias?: unknown;
+  accountName?: unknown;
+};
+
+export const EMPTY_CARD_MAPPING: PagCorpCardMappingResolved = {
+  costCenter: null, project: null, itemCode: null, accountCode: null, source: null, fieldSources: {},
+};
+
+export function resolveTxCardKeys(tx: TxLike): string[] {
+  const candidates = [tx.cardLastDigits, tx.cardId, tx.cardName, tx.accountAlias, tx.accountName]
+    .map((v) => (v == null ? "" : String(v).trim()))
+    .filter(Boolean);
+  return Array.from(new Set(candidates));
+}
+
 /**
- * Carrega TODAS as linhas de pagcorp_card_mapping da empresa atual e expõe
- * uma função que resolve o mapeamento aplicável a uma transação (por
- * cardLastDigits/cardName). Resultados em cache local do hook (1 fetch por
- * mudança de empresa).
+ * Carrega mapeamentos por cartão e regras Cartão + Fornecedor da empresa
+ * e resolve CC/Projeto/Item/Conta para uma transação (merge por campo:
+ * Cartão+Fornecedor > Cartão > Fallback).
  */
 export function usePagCorpCardMapping(companyDb: string | undefined) {
   const [rows, setRows] = useState<PagCorpCardMappingRow[]>([]);
+  const [rules, setRules] = useState<CardSupplierRuleLike[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadedCompanyDb, setLoadedCompanyDb] = useState<string | null>(null);
 
   useEffect(() => {
     if (!companyDb) {
       setRows([]);
+      setRules([]);
       setLoadedCompanyDb(null);
       return;
     }
@@ -48,106 +73,53 @@ export function usePagCorpCardMapping(companyDb: string | undefined) {
     (async () => {
       setIsLoading(true);
       setLoadedCompanyDb(null);
-      try {
-        const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+      const { sapFunctionFetch } = await import("@/lib/auth-fetch");
+      const call = async (action: string) => {
         const res = await sapFunctionFetch("pagcorp-card-mapping", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "list-mappings", company_db: companyDb }),
+          body: JSON.stringify({ action, company_db: companyDb }),
         });
         const result = await res.json().catch(() => ({}));
-        if (!res.ok || result.success === false) {
-          throw new Error(result.error || `Erro ${res.status}`);
-        }
-        if (!cancelled) {
-          setRows(((result.mappings as PagCorpCardMappingRow[]) || []).map((r) => ({
-            card_identifier: r.card_identifier,
-            is_fallback: !!r.is_fallback,
-            cost_center: r.cost_center || null,
-            project: r.project || null,
-            item_code: r.item_code || null,
-          })));
-          setLoadedCompanyDb(companyDb);
-        }
-      } catch (e) {
-        console.warn("PagCorp card mapping load failed:", e);
-        if (!cancelled) {
-          setRows([]);
-          setLoadedCompanyDb(companyDb);
-        }
-      } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!res.ok || result.success === false) throw new Error(result.error || `Erro ${res.status}`);
+        return result;
+      };
+      const [m, r] = await Promise.allSettled([call("list-mappings"), call("list-card-supplier")]);
+      if (cancelled) return;
+      if (m.status === "fulfilled") {
+        setRows(((m.value.mappings as PagCorpCardMappingRow[]) || []).map((x) => ({
+          card_identifier: x.card_identifier,
+          is_fallback: !!x.is_fallback,
+          cost_center: x.cost_center || null,
+          project: x.project || null,
+          item_code: x.item_code || null,
+        })));
+      } else {
+        console.warn("PagCorp card mapping load failed:", m.reason);
+        setRows([]);
       }
+      if (r.status === "fulfilled") setRules((r.value.rules as CardSupplierRuleLike[]) || []);
+      else {
+        console.warn("PagCorp card+supplier rules load failed:", r.reason);
+        setRules([]);
+      }
+      setLoadedCompanyDb(companyDb);
+      setIsLoading(false);
     })();
     return () => {
       cancelled = true;
     };
   }, [companyDb]);
 
-  const normalizeKey = (value: unknown): string => String(value ?? "").trim().toLowerCase();
-  const digitKey = (value: unknown): string => String(value ?? "").replace(/\D/g, "");
-
-  const resolveKeys = (tx: {
-    cardLastDigits?: unknown;
-    cardId?: unknown;
-    cardName?: unknown;
-    accountAlias?: unknown;
-    accountName?: unknown;
-  }): string[] => {
-    const candidates = [tx.cardLastDigits, tx.cardId, tx.cardName, tx.accountAlias, tx.accountName]
-      .map((v) => (v == null ? "" : String(v).trim()))
-      .filter(Boolean);
-    return Array.from(new Set(candidates));
-  };
-
-  const resolveKey = (tx: {
-    cardLastDigits?: unknown;
-    cardId?: unknown;
-    cardName?: unknown;
-    accountAlias?: unknown;
-    accountName?: unknown;
-  }): string | null => {
-    return resolveKeys(tx)[0] || null;
-  };
-
   const resolve = useCallback(
-    (tx: { cardLastDigits?: unknown; cardId?: unknown; cardName?: unknown; accountAlias?: unknown; accountName?: unknown }): PagCorpCardMappingResolved => {
-      const keys = resolveKeys(tx);
-      const normalizedKeys = keys.map(normalizeKey);
-      const digitKeys = keys.map(digitKey).filter((v) => v.length >= 4);
-      const specific = rows.find(
-        (r) => {
-          if (r.is_fallback || !r.card_identifier) return false;
-          const rowKey = normalizeKey(r.card_identifier);
-          const rowDigits = digitKey(r.card_identifier);
-          return normalizedKeys.includes(rowKey) || (rowDigits.length >= 4 && digitKeys.includes(rowDigits));
-        },
-      );
-      if (specific) {
-        return {
-          costCenter: specific.cost_center,
-          project: specific.project,
-          itemCode: specific.item_code,
-          source: "card",
-        };
-      }
-      const fallback = rows.find((r) => r.is_fallback);
-      if (fallback) {
-        return {
-          costCenter: fallback.cost_center,
-          project: fallback.project,
-          itemCode: fallback.item_code,
-          source: "fallback",
-        };
-      }
-      return { costCenter: null, project: null, itemCode: null, source: null };
-    },
-    [rows],
+    (tx: TxLike, supplierCode?: string | null): PagCorpCardMappingResolved =>
+      resolveCardMapping(resolveTxCardKeys(tx), supplierCode, rows, rules),
+    [rows, rules],
   );
 
   const describe = useCallback(
-    (tx: { cardLastDigits?: unknown; cardId?: unknown; cardName?: unknown; accountAlias?: unknown; accountName?: unknown }): PagCorpCardMappingDescribed => {
-      const resolved = resolve(tx);
+    (tx: TxLike, supplierCode?: string | null): PagCorpCardMappingDescribed => {
+      const resolved = resolve(tx, supplierCode);
       const missing: string[] = [];
       if (!resolved.costCenter) missing.push("Centro de Custo");
       if (!resolved.project) missing.push("Projeto");
@@ -156,12 +128,12 @@ export function usePagCorpCardMapping(companyDb: string | undefined) {
       if (!resolved.source) status = "none";
       else if (missing.length === 0) status = "full";
       else status = "partial";
-      return { resolved, status, missingFields: missing, cardKey: resolveKey(tx) };
+      return { resolved, status, missingFields: missing, cardKey: resolveTxCardKeys(tx)[0] || null };
     },
     [resolve],
   );
 
   const isLoaded = !!companyDb && loadedCompanyDb === companyDb && !isLoading;
 
-  return { rows, isLoading, isLoaded, resolve, describe };
+  return { rows, rules, isLoading, isLoaded, resolve, describe };
 }
