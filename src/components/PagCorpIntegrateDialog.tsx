@@ -108,6 +108,7 @@ export function PagCorpIntegrateDialog({
   const [aiResult, setAiResult] = useState<SupplierFormPrefill | null>(null);
   const [aiNotice, setAiNotice] = useState<string | null>(null);
   const [supplierRequestOpen, setSupplierRequestOpen] = useState(false);
+  const [autoSupplierDone, setAutoSupplierDone] = useState(false);
   const [supplierFormOpen, setSupplierFormOpen] = useState(false);
   const activeTransactions = useMemo(
     () => transactions && transactions.length > 0 ? transactions : transaction ? [transaction] : [],
