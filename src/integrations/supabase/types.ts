@@ -6801,6 +6801,54 @@ export type Database = {
         }
         Relationships: []
       }
+      pagcorp_card_supplier_mapping: {
+        Row: {
+          account_code: string | null
+          card_identifier: string
+          card_label: string | null
+          company_db: string
+          cost_center: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          item_code: string | null
+          project: string | null
+          supplier_code: string
+          supplier_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_code?: string | null
+          card_identifier: string
+          card_label?: string | null
+          company_db: string
+          cost_center?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          item_code?: string | null
+          project?: string | null
+          supplier_code: string
+          supplier_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_code?: string | null
+          card_identifier?: string
+          card_label?: string | null
+          company_db?: string
+          cost_center?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          item_code?: string | null
+          project?: string | null
+          supplier_code?: string
+          supplier_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pagcorp_cards: {
         Row: {
           account_alias: string | null
