@@ -150,6 +150,8 @@ export function PagCorpIntegrateDialog({
 
   // Mapeamento por cartão (fallback) — usado para mostrar valores aplicados automaticamente
   const { resolve: resolveCardMapping, isLoaded: cardMappingLoaded } = usePagCorpCardMapping(companyDb);
+  // Regras de fornecedor padrão por trecho da descrição (por empresa)
+  const { resolve: resolveSupplierRule, isLoaded: supplierRulesLoaded } = usePagCorpSupplierRules(companyDb);
   const cardDefaults = useMemo(
     () => (transaction && cardMappingLoaded ? resolveCardMapping(transaction) : { costCenter: null, project: null, itemCode: null, source: null }),
     [resolveCardMapping, transaction, cardMappingLoaded],
