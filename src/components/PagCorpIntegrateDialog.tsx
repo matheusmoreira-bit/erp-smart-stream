@@ -1,5 +1,5 @@
 import { pagcorpDisplayDescription } from "@/lib/pagcorp-accountability";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Loader2, CreditCard, Sparkles, Upload, Plus, AlertCircle, Paperclip, ExternalLink, Wand2, ShieldOff, FileText, BookOpen } from "lucide-react";
 import {
   Dialog,
@@ -23,7 +23,7 @@ import { findSupplierByTaxId, type Supplier } from "@/hooks/useSuppliers";
 import { normalizeTaxKey, formatTaxId } from "@/lib/tax-id";
 
 import { RegistrationRequestModal } from "@/components/RegistrationRequestModal";
-import { usePagCorpCardMapping } from "@/hooks/usePagCorpCardMapping";
+import { usePagCorpCardMapping, EMPTY_CARD_MAPPING } from "@/hooks/usePagCorpCardMapping";
 import { usePagCorpSupplierRules } from "@/hooks/usePagCorpSupplierRules";
 import { hashUrls, withAiCache } from "@/lib/ai-file-cache";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
