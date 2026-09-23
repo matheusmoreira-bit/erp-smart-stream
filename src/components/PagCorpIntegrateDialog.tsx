@@ -24,6 +24,7 @@ import { normalizeTaxKey, formatTaxId } from "@/lib/tax-id";
 
 import { RegistrationRequestModal } from "@/components/RegistrationRequestModal";
 import { usePagCorpCardMapping } from "@/hooks/usePagCorpCardMapping";
+import { usePagCorpSupplierRules } from "@/hooks/usePagCorpSupplierRules";
 import { hashUrls, withAiCache } from "@/lib/ai-file-cache";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { toast } from "sonner";
