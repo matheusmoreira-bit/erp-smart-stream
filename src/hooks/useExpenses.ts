@@ -711,8 +711,8 @@ export function useExpenses(
       // Determine initial status
       // Regra de negócio: despesas de cartão corporativo (PagCorp) NÃO passam
       // por processo de aprovação — vão direto para integração no ERP. Vale
-      // tanto para a origem "pagcorp" quanto para documentos digitados
-      // manualmente pelo time de cartões (observação com "PagCorp").
+      // somente para a origem "pagcorp" (validada no servidor — F04).
+      // Texto na observação nunca define a origem.
       const isCardExpense = origin === "pagcorp";
       const pagcorpDefaultStatus: ExpenseStatus | undefined =
         isCardExpense ? "aprovado" : undefined;
