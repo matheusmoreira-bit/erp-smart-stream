@@ -2,6 +2,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
 import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { requireUser, authErrorResponse } from "../_shared/auth.ts";
+
+/** Identificador opaco da sessão da conta de serviço (a sessão real fica no servidor). */
+const SERVICE_HANDLE_PREFIX = "svc.";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -217,13 +221,11 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
 
   try {
     const reqBody = await req.json();
-    const { action, credentials, endpoint, params, sessionId, routeId, table, database, companyDB } = reqBody;
+    const { action, credentials, endpoint, params, table, database, companyDB } = reqBody;
+    let sessionId: string = typeof reqBody.sessionId === "string" ? reqBody.sessionId.trim() : "";
+    let routeId: string = typeof reqBody.routeId === "string" ? reqBody.routeId : "";
     metricsCtx.companyDb = companyDB || credentials?.CompanyDB || null;
     metricsCtx.meta = { action };
-
-    // Authentication is handled by SAP session (B1SESSION cookie).
-    // Each action validates its own required params (sessionId, etc.).
-    // Supabase auth is not required since users authenticate via SAP credentials.
 
     if (!action || typeof action !== "string") {
       return new Response(JSON.stringify({ error: "action é obrigatória" }), {
@@ -231,7 +233,59 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
       });
     }
 
-    const SAP_BASE_URL = await getSapBaseUrl(companyDB || credentials?.CompanyDB);
+    // F03: login no sistema (JWT) é obrigatório em TODAS as ações. A sessão do
+    // ERP só é usada se pertencer ao próprio usuário (erp_session_cache).
+    const caller = await requireUser(req);
+    const svcDb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    let sessionCompanyDb: string | null = null;
+    let isServiceSession = false;
+    const SESSION_ACTIONS = new Set(["query", "queryAll", "queryView", "sapAction", "downloadAttachment", "issueSapAuthToken", "logout"]);
+    const expired = () => new Response(JSON.stringify({ error: "Sessão SAP expirada", sapStatus: 401, data: null }), {
+      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+
+    if (SESSION_ACTIONS.has(action) && sessionId) {
+      if (sessionId.startsWith(SERVICE_HANDLE_PREFIX)) {
+        // Sessão da conta de serviço (ApiUser): nunca sai do servidor e é
+        // somente leitura. O cliente só conhece um identificador opaco.
+        if (action === "sapAction" || action === "issueSapAuthToken") {
+          return new Response(JSON.stringify({ error: "A conta de serviço do ERP é somente leitura. Entre com o seu usuário do ERP para gravar." }), {
+            status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const handleDb = sessionId.slice(SERVICE_HANDLE_PREFIX.length);
+        const { data: row } = await svcDb.from("erp_session_cache")
+          .select("session_id, route_id, company_db, expires_at")
+          .eq("user_id", caller.id).eq("company_db", handleDb).eq("is_service", true)
+          .maybeSingle();
+        if (action === "logout") {
+          return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        if (!row?.session_id || !row.expires_at || Date.parse(row.expires_at) <= Date.now()) return expired();
+        sessionId = row.session_id;
+        routeId = row.route_id || "";
+        sessionCompanyDb = row.company_db;
+        isServiceSession = true;
+      } else {
+        const { data: row } = await svcDb.from("erp_session_cache")
+          .select("session_id, route_id, company_db, expires_at")
+          .eq("user_id", caller.id).eq("session_id", sessionId).eq("is_service", false)
+          .maybeSingle();
+        if (!row) {
+          if (action === "logout") {
+            return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+          console.warn("sap-b1-proxy: sessão não pertence ao usuário", { action, companyDB });
+          return expired();
+        }
+        routeId = row.route_id || routeId;
+        sessionCompanyDb = row.company_db;
+      }
+    }
+    metricsCtx.meta = { action, service: isServiceSession };
+
+    const SAP_BASE_URL = await getSapBaseUrl(sessionCompanyDb || companyDB || credentials?.CompanyDB);
 
     // LOGIN
     if (action === "login") {
@@ -242,6 +296,23 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
       }
 
       const effectiveCompanyDB = await getConfiguredSapCompanyDb(companyDB || credentials.CompanyDB);
+
+      // F03: o usuário da conta de serviço (ApiUser) não abre sessão para o
+      // usuário final pelo navegador — só administradores.
+      {
+        const loginDb = String(companyDB || credentials.CompanyDB);
+        const { data: svcUser } = await svcDb.from("system_credentials").select("credential_value")
+          .eq("company_db", loginDb).eq("system_name", "sap").eq("credential_key", "username").maybeSingle();
+        const svcName = String(svcUser?.credential_value || "").trim().toLowerCase();
+        if (svcName && String(credentials.UserName).trim().toLowerCase() === svcName) {
+          const { data: isAdm } = await svcDb.rpc("has_role", { _user_id: caller.id, _role: "admin" });
+          if (isAdm !== true) {
+            return new Response(JSON.stringify({ error: "Use o seu próprio usuário do ERP. A conta de serviço não pode ser usada aqui." }), {
+              status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+        }
+      }
 
       const loginResp = await fetch(`${SAP_BASE_URL}/Login`, {
         method: "POST",
@@ -304,6 +375,24 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
         sessionId,
         expiresAt,
       });
+
+      // F03: amarra a sessão ao usuário logado. Só ela será aceita depois.
+      const { error: bindErr } = await svcDb.from("erp_session_cache").upsert({
+        user_id: caller.id,
+        company_db: String(companyDB || credentials.CompanyDB),
+        sap_user: String(credentials.UserName).slice(0, 200),
+        is_service: false,
+        session_id: sessionId,
+        route_id: routeMatch?.[1] || "",
+        expires_at: new Date(expiresAt).toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id,company_db,is_service" });
+      if (bindErr) {
+        console.error("sap-b1-proxy: falha ao registrar sessão", bindErr.message);
+        return new Response(JSON.stringify({ error: "Não foi possível registrar a sessão do ERP. Tente novamente." }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
       return new Response(JSON.stringify({
         sessionId,
@@ -757,12 +846,14 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
 
     // LOGOUT
     if (action === "logout") {
-      if (sessionId) {
+      if (sessionId && !isServiceSession) {
         const cookies = `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
         await fetch(`${SAP_BASE_URL}/Logout`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Cookie: cookies },
         }).catch(() => {});
+        await svcDb.from("erp_session_cache").delete()
+          .eq("user_id", caller.id).eq("session_id", sessionId).eq("is_service", false);
       }
       return new Response(JSON.stringify({ success: true }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -887,6 +978,11 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
+    const authResp = authErrorResponse(e, corsHeaders);
+    if (authResp) {
+      metricsCtx.errorCode = "UNAUTHORIZED";
+      return authResp;
+    }
     if (e instanceof Error && e.message === "UNAUTHORIZED") {
       metricsCtx.errorCode = "UNAUTHORIZED";
       return new Response(JSON.stringify({ error: "Não autenticado" }), {

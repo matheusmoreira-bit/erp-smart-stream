@@ -130,23 +130,23 @@ Deno.serve(async (req) => {
       return json({ ok: true, invalidated: true });
     }
 
-    // ── 0) Registro de sessão criada fora daqui (login interativo) ──────
-    const store = body.store;
-    if (store && typeof store.session_id === "string" && store.session_id.trim()) {
-      const timeout = Math.min(Math.max(Number(store.session_timeout) || 30, 1), 30);
-      const { error: storeErr } = await admin.from("erp_session_cache").upsert({
-        user_id: user.id,
-        company_db: companyDb,
-        sap_user: String(store.sap_user || user.email || "").slice(0, 200),
-        is_service: false,
-        session_id: store.session_id.trim(),
-        route_id: typeof store.route_id === "string" ? store.route_id : "",
-        expires_at: new Date(Date.now() + timeout * 60 * 1000).toISOString(),
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "user_id,company_db,is_service" });
-      if (storeErr) return json({ error: storeErr.message }, 500);
-      return json({ ok: true, stored: true });
+    // ── 0) Registro vindo do navegador: desativado (F03) ────────────────
+    // O login interativo já registra a sessão no servidor (sap-b1-proxy).
+    // Aceitar um session_id enviado pelo cliente permitiria amarrar à conta
+    // uma sessão de outra pessoa.
+    if (body.store) return json({ ok: true, stored: false });
+
+    // F03: a conta de serviço (ApiUser) só é usada para quem tem vínculo com
+    // a empresa (ou é administrador), e a sessão nunca vai para o navegador.
+    let serviceAllowed = false;
+    if (allowService) {
+      const [{ data: linked }, { data: isAdm }] = await Promise.all([
+        admin.rpc("is_email_allowed_for_company", { _email: user.email ?? "", _company_db: companyDb }),
+        admin.rpc("has_role", { _user_id: user.id, _role: "admin" }),
+      ]);
+      serviceAllowed = linked === true || isAdm === true;
     }
+    const svcHandle = `svc.${companyDb}`;
 
     // ── 1) Sessão em cache ainda válida? ────────────────────────────────
     // Evita um /Login novo a cada integração (ex.: PagCorp em lote).
@@ -163,13 +163,13 @@ Deno.serve(async (req) => {
       }>;
       // Preferimos sempre a sessão do próprio usuário; a de serviço só entra
       // quando o fluxo permite (leituras).
-      const cached = rows.find((r) => !r.is_service) || (allowService ? rows.find((r) => r.is_service) : undefined);
+      const cached = rows.find((r) => !r.is_service) || (serviceAllowed ? rows.find((r) => r.is_service) : undefined);
       const cachedExp = cached?.expires_at ? Date.parse(cached.expires_at) : 0;
       if (cached?.session_id && cachedExp - SAFETY_MS > Date.now()) {
         return json({
           ok: true,
-          sessionId: cached.session_id,
-          routeId: cached.route_id || "",
+          sessionId: cached.is_service ? svcHandle : cached.session_id,
+          routeId: cached.is_service ? "" : (cached.route_id || ""),
           companyDB: companyDb,
           sapUser: cached.sap_user,
           sessionTimeout: Math.max(1, Math.floor((cachedExp - Date.now()) / 60000)),
@@ -193,13 +193,23 @@ Deno.serve(async (req) => {
     // conta como senha incorreta e acaba bloqueando o usuário no ERP.
     const cred = credRow?.invalid_at ? null : credRow;
 
+    // F03: senha pessoal cadastrada com o usuário da conta de serviço não
+    // vira acesso de gravação — é tratada como conta de serviço.
+    const svcForCheck = cred ? await getServiceCredentials(admin, companyDb) : null;
+    const credIsServiceAccount = !!(cred && svcForCheck &&
+      cred.sap_user.trim().toLowerCase() === svcForCheck.username.toLowerCase());
+
     let sapUserName = cred?.sap_user || "";
     let password = "";
     let usingService = false;
 
-    if (cred) {
+    if (cred && credIsServiceAccount) {
+      if (!serviceAllowed) return json({ error: "no_credentials" }, 404);
       password = await decryptSecret(cred.sap_password_encrypted);
-    } else if (allowService) {
+      usingService = true;
+    } else if (cred) {
+      password = await decryptSecret(cred.sap_password_encrypted);
+    } else if (serviceAllowed) {
       // Sem senha provisionada: usa a credencial de serviço (ApiUser) da empresa.
       const svc = await getServiceCredentials(admin, companyDb);
       if (!svc) return json({ error: "no_credentials" }, 404);
@@ -260,7 +270,7 @@ Deno.serve(async (req) => {
 
     // Leituras silenciosas podem usar ApiUser. Se a credencial pessoal estiver
     // vencida ou for somente SSO, tenta a credencial técnica antes de desistir.
-    if (!loginResp.ok && allowService && !usingService) {
+    if (!loginResp.ok && serviceAllowed && !usingService) {
       const svc = await getServiceCredentials(admin, companyDb);
       if (svc && (svc.username !== sapUserName || svc.password !== password)) {
         try {
@@ -350,8 +360,8 @@ Deno.serve(async (req) => {
 
     return json({
       ok: true,
-      sessionId: loginData.SessionId,
-      routeId,
+      sessionId: usingService ? svcHandle : loginData.SessionId,
+      routeId: usingService ? "" : routeId,
       companyDB: companyDb,
       sapUser: sapUserName,
       sessionTimeout,
