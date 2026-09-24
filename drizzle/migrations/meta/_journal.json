@@ -379,6 +379,13 @@
       "when": 1790262217352,
       "tag": "0053_system_credentials_decrypt_view_f06",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1790262585760,
+      "tag": "0054_system_credentials_encrypt_at_rest_f06",
+      "breakpoints": true
     }
   ]
 }
