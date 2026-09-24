@@ -247,7 +247,8 @@ const defaultDueFrom = () => daysAgo(10);
 const defaultDueTo = today;
 
 const batchStatus: Record<string, string> = {
-  generated: "Remessa gerada",
+  generated: "Aguardando aprovação",
+  approved: "Aprovada",
   processing: "Processando retorno",
   processed: "Processado",
   partial: "Processado parcialmente",
