@@ -131,7 +131,6 @@ Deno.serve(async (req) => {
       });
       if (mappedAdmin === true) isAdminCaller = true;
     } catch { /* noop */ }
-    if (normalize(sap.userName) === "manager") isAdminCaller = true;
   }
 
   if (identities.size === 0 && !isAdminCaller) {

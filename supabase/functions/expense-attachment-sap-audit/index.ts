@@ -82,7 +82,7 @@ async function isCallerPrivileged(req: Request, admin: SupabaseClient) {
   const sap = await validateSapSession(req);
   if (sap) {
     const { data: mapped } = await admin.rpc("is_sap_user_admin", { _sap_username: sap.userName.toLowerCase() });
-    if (mapped === true || sap.userName.toLowerCase() === "manager") return true;
+    if (mapped === true) return true;
   }
   return false;
 }

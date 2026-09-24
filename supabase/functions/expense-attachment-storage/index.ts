@@ -114,7 +114,6 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
       });
       if (mapped === true) isSuperUser = true;
     } catch { /* ignore */ }
-    if (!isSuperUser && sap.userName.toLowerCase() === "manager") isSuperUser = true;
   }
 
   // Identidades equivalentes (e-mail corporativo x UserCode SAP x aliases IdP).

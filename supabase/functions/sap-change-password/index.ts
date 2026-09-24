@@ -330,16 +330,12 @@ Deno.serve(withEdgeMetrics("sap-change-password", async (req, _mctx) => {
         if (hasRole === true) isAdmin = true;
       }
     }
-    // SAP session: check SAP admin mapping or manager
+    // SAP session: check SAP admin mapping
     if (!isAdmin && callerSource === "sap_session" && callerUserCode) {
-      if (callerUserCode.toLowerCase() === "manager") {
-        isAdmin = true;
-      } else {
-        const { data: isSapAdmin } = await adminSvc.rpc("is_sap_user_admin", {
-          _sap_username: callerUserCode.toLowerCase(),
-        });
-        if (isSapAdmin === true) isAdmin = true;
-      }
+      const { data: isSapAdmin } = await adminSvc.rpc("is_sap_user_admin", {
+        _sap_username: callerUserCode.toLowerCase(),
+      });
+      if (isSapAdmin === true) isAdmin = true;
     }
     if (callerSource === "cloud_admin" || callerSource === "sap_admin") isAdmin = true;
 

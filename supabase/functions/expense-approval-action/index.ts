@@ -547,7 +547,6 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     } catch (e) {
       stageLog("auth_sap", "warn", { requestId, phase: "is_sap_user_admin", error: (e as Error).message });
     }
-    if (!isSuperUser && sapValidated.userName.toLowerCase() === "manager") isSuperUser = true;
     // NOTE: expensive SAP `Users` fetch is deferred — see lazy check below.
     stageLog("auth_sap", "info", {
       requestId, sapUser: sapValidated.userName, companyDB: sapValidated.companyDB, isSuperUser,

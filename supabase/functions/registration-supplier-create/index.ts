@@ -46,8 +46,6 @@ async function isAgent(sb: Sb, email: string): Promise<boolean> {
   if (!lower) return false;
   const key = canonicalKey(lower);
 
-  // Super-admin / admin do SAP (mesma regra usada nos demais módulos).
-  if (lower === "manager") return true;
   const { data: sapAdmin } = await sb.rpc("is_sap_user_admin", {
     _sap_username: lower.split("@")[0],
   });
