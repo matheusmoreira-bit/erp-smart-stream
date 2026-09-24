@@ -163,13 +163,13 @@ Deno.serve(async (req) => {
       }>;
       // Preferimos sempre a sessão do próprio usuário; a de serviço só entra
       // quando o fluxo permite (leituras).
-      const cached = rows.find((r) => !r.is_service) || (allowService ? rows.find((r) => r.is_service) : undefined);
+      const cached = rows.find((r) => !r.is_service) || (serviceAllowed ? rows.find((r) => r.is_service) : undefined);
       const cachedExp = cached?.expires_at ? Date.parse(cached.expires_at) : 0;
       if (cached?.session_id && cachedExp - SAFETY_MS > Date.now()) {
         return json({
           ok: true,
-          sessionId: cached.session_id,
-          routeId: cached.route_id || "",
+          sessionId: cached.is_service ? svcHandle : cached.session_id,
+          routeId: cached.is_service ? "" : (cached.route_id || ""),
           companyDB: companyDb,
           sapUser: cached.sap_user,
           sessionTimeout: Math.max(1, Math.floor((cachedExp - Date.now()) / 60000)),
@@ -199,7 +199,7 @@ Deno.serve(async (req) => {
 
     if (cred) {
       password = await decryptSecret(cred.sap_password_encrypted);
-    } else if (allowService) {
+    } else if (serviceAllowed) {
       // Sem senha provisionada: usa a credencial de serviço (ApiUser) da empresa.
       const svc = await getServiceCredentials(admin, companyDb);
       if (!svc) return json({ error: "no_credentials" }, 404);
@@ -260,7 +260,7 @@ Deno.serve(async (req) => {
 
     // Leituras silenciosas podem usar ApiUser. Se a credencial pessoal estiver
     // vencida ou for somente SSO, tenta a credencial técnica antes de desistir.
-    if (!loginResp.ok && allowService && !usingService) {
+    if (!loginResp.ok && serviceAllowed && !usingService) {
       const svc = await getServiceCredentials(admin, companyDb);
       if (svc && (svc.username !== sapUserName || svc.password !== password)) {
         try {
@@ -350,8 +350,8 @@ Deno.serve(async (req) => {
 
     return json({
       ok: true,
-      sessionId: loginData.SessionId,
-      routeId,
+      sessionId: usingService ? svcHandle : loginData.SessionId,
+      routeId: usingService ? "" : routeId,
       companyDB: companyDb,
       sapUser: sapUserName,
       sessionTimeout,
