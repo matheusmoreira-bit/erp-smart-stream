@@ -2,6 +2,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
 import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { requireUser, authErrorResponse } from "../_shared/auth.ts";
+
+/** Identificador opaco da sessão da conta de serviço (a sessão real fica no servidor). */
+const SERVICE_HANDLE_PREFIX = "svc.";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
