@@ -769,6 +769,8 @@ function ConsolidatedTable({
   hideNameColumn?: boolean;
 }) {
   const [pending, setPending] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
     if (!s) return rows;
@@ -778,6 +780,49 @@ function ConsolidatedTable({
         Array.from(r.names).some((n) => n.toLowerCase().includes(s)),
     );
   }, [rows, search]);
+
+  const selectable = useMemo(
+    () =>
+      onReplicate
+        ? filtered.filter(
+            (r) => r.presence.size > 0 && companies.some((c) => !r.presence.has(c.db)),
+          )
+        : [],
+    [filtered, companies, onReplicate],
+  );
+  const selectedVisible = selectable.filter((r) => selected.has(r.code));
+  const allSelected = selectable.length > 0 && selectedVisible.length === selectable.length;
+
+  const toggleRow = (code: string, checked: boolean) =>
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (checked) n.add(code);
+      else n.delete(code);
+      return n;
+    });
+
+  const runBulk = async () => {
+    if (!onReplicate) return;
+    const jobs: { row: (typeof rows)[number]; db: string }[] = [];
+    for (const row of selectedVisible) {
+      for (const c of companies) if (!row.presence.has(c.db)) jobs.push({ row, db: c.db });
+    }
+    if (jobs.length === 0) return;
+    setBulk({ done: 0, total: jobs.length });
+    for (let i = 0; i < jobs.length; i++) {
+      const { row, db } = jobs[i];
+      const sourceDb = Array.from(row.presence.keys())[0];
+      const name = Array.from(row.names).filter(Boolean)[0] || row.code;
+      try {
+        await onReplicate(row.code, name, db, sourceDb, row.presence.get(sourceDb)?.sourceCode);
+      } catch {
+        /* erro já notificado pelo handler */
+      }
+      setBulk({ done: i + 1, total: jobs.length });
+    }
+    setBulk(null);
+    setSelected(new Set());
+  };
 
   if (companies.length === 0) {
     return (
@@ -822,10 +867,42 @@ function ConsolidatedTable({
           </span>
         )}
       </div>
+      {onReplicate && selectedVisible.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+          <span>
+            {selectedVisible.length} selecionado{selectedVisible.length > 1 ? "s" : ""}
+          </span>
+          <Button size="sm" onClick={() => void runBulk()} disabled={!!bulk}>
+            {bulk ? (
+              <RefreshCw className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" />
+            ) : (
+              <RefreshCw className="w-4 h-4 mr-2" aria-hidden="true" />
+            )}
+            {bulk
+              ? `Replicando ${bulk.done}/${bulk.total}…`
+              : "Replicar nas empresas onde falta"}
+          </Button>
+          <Button size="sm" variant="ghost" disabled={!!bulk} onClick={() => setSelected(new Set())}>
+            Limpar seleção
+          </Button>
+        </div>
+      )}
       <div className="border rounded-md overflow-auto max-h-[65vh]">
         <table className="w-full caption-bottom text-sm">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
+            {onReplicate && (
+              <TableHead className="w-10 sticky top-0 z-20 bg-card border-b shadow-[0_1px_0_0_hsl(var(--border))]">
+                <Checkbox
+                  aria-label="Selecionar todos que faltam em alguma empresa"
+                  checked={allSelected}
+                  disabled={selectable.length === 0 || !!bulk}
+                  onCheckedChange={(v) =>
+                    setSelected(v === true ? new Set(selectable.map((r) => r.code)) : new Set())
+                  }
+                />
+              </TableHead>
+            )}
             <TableHead className="w-32 sticky top-0 z-20 bg-card border-b shadow-[0_1px_0_0_hsl(var(--border))]">
               {primaryLabel}
             </TableHead>
@@ -852,6 +929,18 @@ function ConsolidatedTable({
             const missing = presentCount < companies.length;
             return (
               <TableRow key={row.code}>
+                {onReplicate && (
+                  <TableCell className="w-10">
+                    {missing && presentCount > 0 ? (
+                      <Checkbox
+                        aria-label={`Selecionar ${row.code}`}
+                        checked={selected.has(row.code)}
+                        disabled={!!bulk}
+                        onCheckedChange={(v) => toggleRow(row.code, v === true)}
+                      />
+                    ) : null}
+                  </TableCell>
+                )}
                 <TableCell className={hideNameColumn ? "text-sm font-medium" : "font-mono text-xs"}>
                   <div className="flex items-center gap-2">
                     <span>{row.code}</span>
@@ -984,7 +1073,7 @@ function ConsolidatedTable({
           })}
           {filtered.length === 0 && (
             <TableRow>
-              <TableCell colSpan={companies.length + (hideNameColumn ? 1 : 2)} className="text-center text-muted-foreground py-8 text-sm">
+              <TableCell colSpan={companies.length + (hideNameColumn ? 1 : 2) + (onReplicate ? 1 : 0)} className="text-center text-muted-foreground py-8 text-sm">
                 Nenhum registro encontrado
               </TableCell>
             </TableRow>
