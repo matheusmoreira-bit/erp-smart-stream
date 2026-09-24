@@ -499,7 +499,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any, re
   if (!companyDb) return json(400, { error: "company_db é obrigatório" });
   // F11: a empresa informada precisa ser a da sessão SAP ou ter vínculo com o usuário.
   try {
-    await assertCompanyAccess(req, admin, companyDb, docType === "sales" ? "sales" : "expenses", "create");
+    await assertCompanyAccess(req, admin, companyDb, String(input.doc_type || "").toLowerCase() === "sales" ? "sales" : "expenses", "create");
   } catch (e) {
     const status = e instanceof AuthError ? e.status : 403;
     return json(status, { error: e instanceof Error ? e.message : "Acesso negado" });
