@@ -1,7 +1,7 @@
 // Mirror de anexos (Supabase Storage) para S3.
 // Executa por bucket, listando objetos e enviando os novos/alterados (compara etag).
 import { createClient } from "npm:@supabase/supabase-js@2.45.0";
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-scheduler-secret" };
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 import { s3Client, s3Put, s3Exists } from "../_shared/s3-put.ts";
 

@@ -5,7 +5,7 @@
 // - Grava com criptografia no S3 (SSE) e Object Lock quando BACKUP_OBJECT_LOCK_DAYS estiver definido.
 // Body opcional: { manual?: boolean, tables?: string[] } (tables permite rodar só algumas tabelas).
 import { createClient } from "npm:@supabase/supabase-js@2.45.0";
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-scheduler-secret" };
 import { s3Client, s3Put } from "../_shared/s3-put.ts";
 import { gzipSync } from "node:zlib";
 import { createHash } from "node:crypto";
