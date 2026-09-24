@@ -8,6 +8,7 @@ import { lovable } from "@/integrations/lovable/index";
 import { runtime } from "@/config/runtime";
 import { toast } from "sonner";
 import cactusLogo from "@/assets/cactus-logo.png.asset.json";
+import { AdminMfaGate } from "@/components/AdminMfaGate";
 
 const ALLOWED_DOMAINS = [
   "growth.gg",
@@ -194,7 +195,7 @@ function GoogleAuthProviderGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (allowed) return <>{children}</>;
+  if (allowed) return <AdminMfaGate>{children}</AdminMfaGate>;
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 relative">
