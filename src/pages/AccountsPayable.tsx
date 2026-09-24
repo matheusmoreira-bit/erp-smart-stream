@@ -138,10 +138,20 @@ interface Batch {
   total_amount: number;
   status: string;
   generated_at: string;
+  generated_by?: string | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
   content_sha256?: string | null;
   return_filename?: string | null;
   error_message?: string | null;
   accounts_payable_batch_items?: BatchItem[];
+}
+
+interface SupplierApproval {
+  status: "pending" | "approved" | string;
+  requested_by?: string | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
 }
 
 interface ReturnMatch {
@@ -190,7 +200,7 @@ const emptySupplierPaymentForm: SupplierPaymentForm = {
   pix_key: "",
 };
 
-const SAP_REQUIRED_ACTIONS = new Set(["list_open", "generate", "process_return", "get_supplier_payment_profile", "save_supplier_payment_profile"]);
+const SAP_REQUIRED_ACTIONS = new Set(["list_open", "generate", "process_return", "get_supplier_payment_profile", "save_supplier_payment_profile", "approve_supplier_payment_profile"]);
 
 function normalizeCurrency(currency?: string | null) {
   const value = String(currency || "BRL").trim().toUpperCase();
@@ -237,7 +247,8 @@ const defaultDueFrom = () => daysAgo(10);
 const defaultDueTo = today;
 
 const batchStatus: Record<string, string> = {
-  generated: "Remessa gerada",
+  generated: "Aguardando aprovação",
+  approved: "Aprovada",
   processing: "Processando retorno",
   processed: "Processado",
   partial: "Processado parcialmente",
@@ -339,6 +350,8 @@ export default function AccountsPayable() {
   const [supplierPaymentForm, setSupplierPaymentForm] = useState<SupplierPaymentForm>(emptySupplierPaymentForm);
   const [supplierPaymentLoading, setSupplierPaymentLoading] = useState(false);
   const [supplierPaymentSaving, setSupplierPaymentSaving] = useState(false);
+  const [supplierApproval, setSupplierApproval] = useState<SupplierApproval | null>(null);
+  const [approvingBatchId, setApprovingBatchId] = useState<string | null>(null);
   const [returnContent, setReturnContent] = useState("");
   const [returnFilename, setReturnFilename] = useState("");
   const [returnPreview, setReturnPreview] = useState<ReturnPreview | null>(null);
@@ -517,6 +530,7 @@ export default function AccountsPayable() {
 
   async function openSupplierPayment(title: OpenTitle) {
     setSupplierPaymentTitle(title);
+    setSupplierApproval(null);
     setSupplierPaymentForm({
       ...emptySupplierPaymentForm,
       supplier_code: title.supplier_code,
@@ -537,9 +551,10 @@ export default function AccountsPayable() {
     setSupplierPaymentOpen(true);
     setSupplierPaymentLoading(true);
     try {
-      const result = await call<{ profile: Partial<SupplierPaymentForm> }>("get_supplier_payment_profile", {
+      const result = await call<{ profile: Partial<SupplierPaymentForm>; approval?: SupplierApproval | null }>("get_supplier_payment_profile", {
         supplier_code: title.supplier_code,
       });
+      setSupplierApproval(result.approval ?? null);
       setSupplierPaymentForm((current) => ({
         ...current,
         ...result.profile,
@@ -573,12 +588,29 @@ export default function AccountsPayable() {
     if (!supplierPaymentTitle || !supplierPaymentValid) return;
     setSupplierPaymentSaving(true);
     try {
-      const result = await call<{ profile: Partial<SupplierPaymentForm>; sap_patch?: { patched?: boolean } }>("save_supplier_payment_profile", {
+      await call<{ profile: Partial<SupplierPaymentForm> }>("save_supplier_payment_profile", {
         supplier_code: supplierPaymentTitle.supplier_code,
         profile: supplierPaymentForm,
       });
       setSupplierPaymentOpen(false);
-      toast.success(result.sap_patch?.patched ? "Dados do fornecedor salvos e sincronizados com o SAP." : "Dados do fornecedor salvos com auditoria.");
+      toast.success("Dados salvos. Outra pessoa precisa aprovar antes de serem usados em remessas.");
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSupplierPaymentSaving(false);
+    }
+  }
+
+  async function approveSupplierPayment() {
+    if (!supplierPaymentTitle) return;
+    setSupplierPaymentSaving(true);
+    try {
+      const result = await call<{ sap_patch?: { patched?: boolean }; approval: SupplierApproval }>("approve_supplier_payment_profile", {
+        supplier_code: supplierPaymentTitle.supplier_code,
+      });
+      setSupplierApproval(result.approval);
+      toast.success(result.sap_patch?.patched ? "Dados bancários aprovados e sincronizados com o SAP." : "Dados bancários aprovados.");
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
@@ -591,7 +623,8 @@ export default function AccountsPayable() {
     if (!canGenerate) return;
     setGenerating(true);
     try {
-      const result = await call<{ filename: string; content: string; title_count: number }>("generate", {
+      // F05: dados bancários vêm só do cadastro aprovado no servidor.
+      const result = await call<{ filename: string; title_count: number }>("generate", {
         payment_date: paymentDate,
         titles: selectedTitles.map((title) => ({
           sap_doc_entry: title.sap_doc_entry,
@@ -599,27 +632,28 @@ export default function AccountsPayable() {
           amount: title.open_amount,
           barcode: boletoBarcodeFrom(barcodes[title.key] || title.boleto_barcode || title.boleto_digitable_line || ""),
           payment_method: methodOf(title),
-          beneficiary_name: title.beneficiary_name || title.supplier_name,
-          beneficiary_tax_id: title.beneficiary_tax_id || title.supplier_tax_id,
-          bank_code: title.bank_code,
-          branch: title.branch,
-          branch_digit: title.branch_digit,
-          account_number: title.account_number,
-          account_digit: title.account_digit,
-          account_type: title.account_type,
-          pix_key_type: title.pix_key_type,
-          pix_key: title.pix_key,
-          supplier_tax_id: title.supplier_tax_id,
         })),
       });
-      downloadTextFile(result.filename, result.content);
       setSelected(new Set());
-      toast.success(`${result.title_count} título(s) incluído(s) na remessa.`);
+      toast.success(`Remessa ${result.filename} gerada com ${result.title_count} título(s). Outra pessoa precisa aprovar para liberar o arquivo.`);
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function approveBatch(batch: Batch) {
+    setApprovingBatchId(batch.id);
+    try {
+      await call("approve_batch", { batch_id: batch.id });
+      toast.success("Remessa aprovada. O arquivo já pode ser baixado.");
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setApprovingBatchId(null);
     }
   }
 
@@ -630,7 +664,7 @@ export default function AccountsPayable() {
         batch_id: batch.id,
       });
       downloadTextFile(result.filename || batch.filename, result.content);
-      toast.success(result.regenerated ? "Arquivo reconstruído e baixado." : "Arquivo baixado.");
+      toast.success(result.regenerated ? "Arquivo reconstruído, integridade conferida e baixado." : "Integridade conferida. Arquivo baixado.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -1019,7 +1053,13 @@ export default function AccountsPayable() {
                             <Eye className="h-4 w-4" />
                             Detalhes
                           </Button>
-                          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void downloadBatch(batch)} disabled={downloadingBatchId === batch.id}>
+                          {batch.status === "generated" && !batch.approved_by && (
+                            <Button variant="secondary" size="sm" onClick={() => void approveBatch(batch)} disabled={approvingBatchId === batch.id} title={`Gerado por ${batch.generated_by || "-"}. Quem gerou não pode aprovar.`}>
+                              {approvingBatchId === batch.id && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                              Aprovar
+                            </Button>
+                          )}
+                          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void downloadBatch(batch)} disabled={downloadingBatchId === batch.id || !batch.approved_by} title={batch.approved_by ? `Aprovado por ${batch.approved_by}` : "Disponível após aprovação"}>
                             {downloadingBatchId === batch.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                             Arquivo
                           </Button>
@@ -1298,8 +1338,20 @@ export default function AccountsPayable() {
             </div>
           )}
 
+          {supplierApproval && (
+            <p className="text-sm text-muted-foreground" role="status">
+              {supplierApproval.status === "approved"
+                ? `Dados bancários aprovados por ${supplierApproval.approved_by || "-"}.`
+                : `Aguardando aprovação de outra pessoa (alterado por ${supplierApproval.requested_by || "-"}). Até lá, não são usados em remessas.`}
+            </p>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setSupplierPaymentOpen(false)}>Cancelar</Button>
+            {supplierApproval?.status === "pending" && (
+              <Button variant="secondary" onClick={() => void approveSupplierPayment()} disabled={supplierPaymentLoading || supplierPaymentSaving}>
+                Aprovar dados bancários
+              </Button>
+            )}
             <Button onClick={saveSupplierPayment} disabled={supplierPaymentLoading || supplierPaymentSaving || !supplierPaymentValid}>
               {supplierPaymentSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Salvar dados

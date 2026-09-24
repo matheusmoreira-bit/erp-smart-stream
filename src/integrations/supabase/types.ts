@@ -287,6 +287,8 @@ export type Database = {
       }
       accounts_payable_batches: {
         Row: {
+          approved_at: string | null
+          approved_by: string | null
           bank_account_id: string
           company_db: string
           content: string | null
@@ -310,6 +312,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
           bank_account_id: string
           company_db: string
           content?: string | null
@@ -333,6 +337,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          approved_at?: string | null
+          approved_by?: string | null
           bank_account_id?: string
           company_db?: string
           content?: string | null
@@ -427,6 +433,9 @@ export type Database = {
           account_digit: string | null
           account_number: string | null
           account_type: string | null
+          approval_status: string
+          approved_at: string | null
+          approved_by: string | null
           bank_code: string | null
           beneficiary_name: string
           beneficiary_tax_id: string
@@ -450,6 +459,9 @@ export type Database = {
           account_digit?: string | null
           account_number?: string | null
           account_type?: string | null
+          approval_status?: string
+          approved_at?: string | null
+          approved_by?: string | null
           bank_code?: string | null
           beneficiary_name: string
           beneficiary_tax_id: string
@@ -473,6 +485,9 @@ export type Database = {
           account_digit?: string | null
           account_number?: string | null
           account_type?: string | null
+          approval_status?: string
+          approved_at?: string | null
+          approved_by?: string | null
           bank_code?: string | null
           beneficiary_name?: string
           beneficiary_tax_id?: string
