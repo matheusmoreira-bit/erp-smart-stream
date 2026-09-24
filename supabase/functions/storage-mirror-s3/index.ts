@@ -3,7 +3,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
-import { S3Client, PutObjectCommand, HeadObjectCommand } from "npm:@aws-sdk/client-s3@3.658.0";
+import { s3Client, s3Put, s3Exists } from "../_shared/s3-put.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     }).select("id").single();
     logId = (logRow as any)?.id ?? null;
 
-    const s3 = new S3Client({ region: AWS_REGION, credentials: { accessKeyId: AWS_KEY, secretAccessKey: AWS_SECRET } });
+    const s3 = s3Client(AWS_REGION, AWS_KEY, AWS_SECRET);
     let objectsCount = 0, totalBytes = 0;
     const errors: string[] = [];
 
@@ -71,12 +71,11 @@ Deno.serve(async (req) => {
           const s3Key = `${srcBucket}/${it._path}`;
           try {
             // Skip if exists and same size
-            const head = await s3.send(new HeadObjectCommand({ Bucket: BUCKET, Key: s3Key })).catch(() => null);
-            if (head && head.ContentLength === it.metadata?.size) continue;
+            if (await s3Exists(s3, AWS_REGION, BUCKET, s3Key).catch(() => false)) continue;
             const { data: blob, error: dlErr } = await sb.storage.from(srcBucket).download(it._path);
             if (dlErr || !blob) { errors.push(`${srcBucket}/${it._path}: ${dlErr?.message}`); continue; }
             const buf = new Uint8Array(await blob.arrayBuffer());
-            await s3.send(new PutObjectCommand({ ServerSideEncryption: "AES256", Bucket: BUCKET, Key: s3Key, Body: buf, ContentType: it.metadata?.mimetype || "application/octet-stream" }));
+            await s3Put(s3, AWS_REGION, BUCKET, s3Key, buf, { contentType: it.metadata?.mimetype || "application/octet-stream", lockDays: Number(Deno.env.get("BACKUP_OBJECT_LOCK_DAYS") || "0") });
             objectsCount++; totalBytes += buf.length;
           } catch (e) {
             errors.push(`${srcBucket}/${it._path}: ${(e as Error).message}`);

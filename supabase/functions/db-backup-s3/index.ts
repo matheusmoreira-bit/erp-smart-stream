@@ -6,7 +6,7 @@
 // Body opcional: { manual?: boolean, tables?: string[] } (tables permite rodar só algumas tabelas).
 import { createClient } from "npm:@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { S3Client, PutObjectCommand, type PutObjectCommandInput } from "npm:@aws-sdk/client-s3@3.658.0";
+import { s3Client, s3Put } from "../_shared/s3-put.ts";
 import { gzipSync } from "node:zlib";
 import { createHash } from "node:crypto";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
@@ -43,29 +43,15 @@ async function listPublicTables(sb: Sb): Promise<string[]> {
   return rows.map((r) => r.table_name);
 }
 
-function putParams(key: string, body: Uint8Array, sha256: string): PutObjectCommandInput {
-  const p: PutObjectCommandInput = {
-    Bucket: BUCKET!, Key: key, Body: body,
-    ContentType: "application/octet-stream",
-    ServerSideEncryption: "AES256",
-    Metadata: { sha256, format: "erpbk1-gzip-jsonl" },
-  };
-  if (LOCK_DAYS > 0) {
-    p.ObjectLockMode = "COMPLIANCE";
-    p.ObjectLockRetainUntilDate = new Date(Date.now() + LOCK_DAYS * 86400_000);
-  }
-  return p;
-}
-
-async function uploadPart(s3: S3Client, key: string, jsonl: string) {
+async function uploadPart(s3: ReturnType<typeof s3Client>, key: string, jsonl: string) {
   const gz = gzipSync(new TextEncoder().encode(jsonl));
   const enc = await encryptBackup(new Uint8Array(gz));
   const sha = createHash("sha256").update(enc).digest("hex");
-  await s3.send(new PutObjectCommand(putParams(key, enc, sha)));
+  await s3Put(s3, AWS_REGION, BUCKET!, key, enc, { sha256: sha, lockDays: LOCK_DAYS });
   return { bytes: enc.length, sha256: sha };
 }
 
-async function dumpTable(sb: Sb, s3: S3Client, prefix: string, table: string): Promise<ManifestEntry> {
+async function dumpTable(sb: Sb, s3: ReturnType<typeof s3Client>, prefix: string, table: string): Promise<ManifestEntry> {
   const entry: ManifestEntry = { table, count: 0, parts: [] };
   let from = 0;
   let buf = "";
@@ -92,7 +78,7 @@ async function dumpTable(sb: Sb, s3: S3Client, prefix: string, table: string): P
   return entry;
 }
 
-async function dumpAuthUsers(sb: Sb, s3: S3Client, prefix: string): Promise<ManifestEntry> {
+async function dumpAuthUsers(sb: Sb, s3: ReturnType<typeof s3Client>, prefix: string): Promise<ManifestEntry> {
   const entry: ManifestEntry = { table: "auth.users", count: 0, parts: [] };
   let page = 1;
   let buf = "";
@@ -145,7 +131,7 @@ Deno.serve(async (req) => {
     }).select("id").single();
     logId = (logRow as { id?: string } | null)?.id ?? null;
 
-    const s3 = new S3Client({ region: AWS_REGION, credentials: { accessKeyId: AWS_KEY, secretAccessKey: AWS_SECRET } });
+    const s3 = s3Client(AWS_REGION, AWS_KEY, AWS_SECRET);
     const all = await listPublicTables(sb);
     const tables = only ? all.filter((t) => only.includes(t)) : all;
     const manifest: ManifestEntry[] = [];
@@ -178,7 +164,7 @@ Deno.serve(async (req) => {
     }, null, 2);
     const mBody = new TextEncoder().encode(manifestJson);
     const mSha = createHash("sha256").update(mBody).digest("hex");
-    await s3.send(new PutObjectCommand({ ...putParams(`${prefix}/manifest.json`, mBody, mSha), ContentType: "application/json" }));
+    await s3Put(s3, AWS_REGION, BUCKET, `${prefix}/manifest.json`, mBody, { sha256: mSha, lockDays: LOCK_DAYS, contentType: "application/json" });
 
     const status = errors.length === 0 ? "ok" : "partial";
     if (logId) await sb.from("infra_backup_log").update({
