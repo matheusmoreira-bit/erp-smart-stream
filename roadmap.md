@@ -10,3 +10,4 @@
 - [~] F08 — HANA em HTTP / Service Layer exposto — VISTO, PENDENTE DO FORNECEDOR (SAP/Wevy: TLS no HANA, allowlist de IP/túnel no Service Layer). Parte interna opcional: restringir leitura das URLs do SAP na tabela companies.
 - [ ] F09
 - [x] F10 — Copiloto IA: SQL em papel restrito (sem credenciais/URLs do ERP), escrita só com clique humano no servidor, histórico validado
+- [x] F11 — Auditoria com autor da sessão; empresa validada (sessão SAP/vínculo) em expense-mutation, supplier-sync; fornecedor-save com campos permitidos. Módulo em modo sombra (grupos não cobrem usuários).
