@@ -414,6 +414,13 @@
       "when": 1790265436607,
       "tag": "0058_f12_impersonation_server_readonly",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1790268970642,
+      "tag": "0059_user_company_access",
+      "breakpoints": true
     }
   ]
 }
