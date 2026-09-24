@@ -386,6 +386,13 @@
       "when": 1790262585760,
       "tag": "0054_system_credentials_encrypt_at_rest_f06",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1790263741368,
+      "tag": "0055_infra_backup_log_replica_kind_f07",
+      "breakpoints": true
     }
   ]
 }
