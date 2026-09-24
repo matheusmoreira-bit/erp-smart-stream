@@ -14,5 +14,3 @@ export async function getLocalOwnerId(): Promise<string | null> {
   }
 }
 
-/** Nomes dos bancos IndexedDB com dados do usuário. */
-export const USER_INDEXED_DBS = ["erpflow-offline", "createExpenseModalQueue"] as const;

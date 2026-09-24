@@ -14,6 +14,11 @@ installReadOnlyGuards(supabase as never);
 // encerra no servidor qualquer impersonação órfã desse usuário.
 let impersonationReconciled = false;
 supabase.auth.onAuthStateChange((event, session) => {
+  // F13: saiu da conta → nenhum dado local do usuário sobrevive.
+  if (event === "SIGNED_OUT") {
+    void import("./lib/clear-erp-local-state.ts").then((m) => m.clearErpLocalState());
+    return;
+  }
   if (impersonationReconciled || !session) return;
   if (event !== "INITIAL_SESSION" && event !== "SIGNED_IN") return;
   impersonationReconciled = true;

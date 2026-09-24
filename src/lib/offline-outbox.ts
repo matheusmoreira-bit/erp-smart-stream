@@ -59,7 +59,12 @@ function openDb(): Promise<IDBDatabase> {
           db.createObjectStore(STORE, { keyPath: "id" });
         }
       };
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        const db = req.result;
+        // Permite que o logout apague o banco (F13) sem ficar bloqueado.
+        db.onversionchange = () => { db.close(); dbPromise = null; };
+        resolve(db);
+      };
       req.onerror = () => reject(req.error ?? new Error("Falha ao abrir o banco local"));
     });
   }
