@@ -11,7 +11,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { BackofficePageHeader } from "@/components/BackofficePageHeader";
 
 type ToolStep = { name: string; label: string; status: "running" | "done" | "error" };
-type Msg = { role: "user" | "assistant"; content: string; steps?: ToolStep[] };
+type PendingAction = {
+  id: string;
+  summary: string;
+  tool: string;
+  state: "pending" | "running" | "done" | "cancelled" | "error";
+  message?: string;
+};
+type Msg = { role: "user" | "assistant"; content: string; steps?: ToolStep[]; actions?: PendingAction[] };
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/copilot-chat`;
 
@@ -47,6 +54,7 @@ export default function BackofficeCopilot() {
 
     let acc = "";
     let steps: ToolStep[] = [];
+    let actions: PendingAction[] = [];
     const patchLast = (patch: Partial<Msg>) => {
       setMessages((prev) => {
         const last = prev[prev.length - 1];
@@ -106,6 +114,11 @@ export default function BackofficeCopilot() {
           try {
             const parsed = JSON.parse(payload);
             if (parsed.tool) upsertTool(parsed.tool as ToolStep);
+            if (parsed.pending_action?.id) {
+              const pa = parsed.pending_action as { id: string; summary: string; tool: string };
+              actions = [...actions, { id: pa.id, summary: String(pa.summary), tool: String(pa.tool), state: "pending" }];
+              patchLast({ actions: [...actions] });
+            }
             const c = parsed.choices?.[0]?.delta?.content;
             if (c) upsert(c);
           } catch {
@@ -120,6 +133,42 @@ export default function BackofficeCopilot() {
       setLoading(false);
     }
   }, [input, loading, messages]);
+
+  const patchAction = (id: string, patch: Partial<PendingAction>) => {
+    setMessages((prev) => prev.map((m) => (m.actions?.some((a) => a.id === id)
+      ? { ...m, actions: m.actions.map((a) => (a.id === id ? { ...a, ...patch } : a)) }
+      : m)));
+  };
+
+  // Confirmação humana: vai direto ao servidor, sem passar pela IA.
+  const decideAction = async (id: string, confirm: boolean) => {
+    patchAction(id, { state: "running" });
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("Sessão expirada.");
+      const resp = await fetch(CHAT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
+        },
+        body: JSON.stringify(confirm ? { confirm_action_id: id } : { cancel_action_id: id }),
+      });
+      const out = await resp.json().catch(() => ({}));
+      if (!resp.ok || out.ok === false) {
+        const detail = out.error || out.result?.error || `Erro ${resp.status}`;
+        patchAction(id, { state: "error", message: String(detail) });
+        return;
+      }
+      patchAction(id, confirm
+        ? { state: "done", message: "Executado e registrado na auditoria." }
+        : { state: "cancelled", message: "Cancelado." });
+    } catch (e) {
+      patchAction(id, { state: "error", message: e instanceof Error ? e.message : "Erro" });
+    }
+  };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -140,7 +189,7 @@ export default function BackofficeCopilot() {
       <Card className="flex-1 flex flex-col overflow-hidden">
         <div className="px-4 py-2 border-b bg-amber-500/5 flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
           <ShieldAlert className="w-3.5 h-3.5" />
-          Ações de escrita exigem sua confirmação explícita antes de serem executadas. Todas ficam auditadas.
+          Nenhuma alteração é feita pela IA: ações só rodam quando você clica em Confirmar (vale por 10 min). Todas ficam auditadas.
         </div>
 
         <ScrollArea className="flex-1 px-4 py-4" ref={scrollRef}>
@@ -198,6 +247,36 @@ export default function BackofficeCopilot() {
                       <div className="prose prose-sm dark:prose-invert max-w-none [&>p]:m-0 [&>p+p]:mt-2 [&>ul]:mt-1 [&>ol]:mt-1 [&_table]:my-2 [&_code]:text-xs">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content || (m.steps?.length ? "" : "…")}</ReactMarkdown>
                       </div>
+                      {!!m.actions?.length && (
+                        <div className="mt-3 space-y-2">
+                          {m.actions.map((a) => (
+                            <div key={a.id} className="rounded-lg border bg-background p-3 space-y-2">
+                              <div className="flex items-start gap-2 text-xs">
+                                <ShieldAlert className="w-4 h-4 text-primary shrink-0 mt-0.5" aria-hidden="true" />
+                                <div>
+                                  <p className="font-medium">Ação aguardando sua confirmação</p>
+                                  <p className="text-muted-foreground">{a.summary}</p>
+                                </div>
+                              </div>
+                              {a.state === "pending" || a.state === "running" ? (
+                                <div className="flex gap-2 justify-end">
+                                  <Button size="sm" variant="outline" disabled={a.state === "running"} onClick={() => decideAction(a.id, false)}>
+                                    Cancelar
+                                  </Button>
+                                  <Button size="sm" disabled={a.state === "running"} onClick={() => decideAction(a.id, true)}>
+                                    {a.state === "running" && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
+                                    Confirmar
+                                  </Button>
+                                </div>
+                              ) : (
+                                <p role="status" className={`text-xs ${a.state === "error" ? "text-destructive" : "text-muted-foreground"}`}>
+                                  {a.message}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       </>
                     ) : (
                       <div className="whitespace-pre-wrap">{m.content}</div>
