@@ -12,6 +12,8 @@
  * inviabilizam anexos reais de nota fiscal.
  */
 
+import { getLocalOwnerId } from "@/lib/local-owner";
+
 const DB_NAME = "createExpenseModalQueue";
 const DB_VERSION = 1;
 const STORE = "state";
@@ -49,6 +51,14 @@ export interface PersistedQueueState<QueueEntry = any> {
   failedGroups: PersistedDocGroup[];
   cancelledGroups: PersistedDocGroup[];
   savedAt: number;
+  /** Usuário dono do snapshot (F13). */
+  ownerId?: string | null;
+}
+
+/** Chave particionada por usuário (F13). */
+async function ownerKey(scope: QueueScope): Promise<string | null> {
+  const owner = await getLocalOwnerId();
+  return owner ? `${owner}:${scope}` : null;
 }
 
 function openDb(): Promise<IDBDatabase> {
@@ -88,7 +98,9 @@ async function withStore<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore
 /** Salva o snapshot inteiro do escopo (substitui o anterior). */
 export async function saveQueueState<Q>(scope: QueueScope, state: PersistedQueueState<Q>): Promise<void> {
   try {
-    await withStore("readwrite", (store) => store.put(state, scope));
+    const key = await ownerKey(scope);
+    if (!key) return;
+    await withStore("readwrite", (store) => store.put({ ...state, ownerId: key.split(":")[0] }, key));
   } catch (err) {
     console.warn("[queue-persist] saveQueueState falhou:", err);
   }
@@ -97,11 +109,17 @@ export async function saveQueueState<Q>(scope: QueueScope, state: PersistedQueue
 /** Carrega o snapshot do escopo, ou null se não houver / falhar. */
 export async function loadQueueState<Q>(scope: QueueScope): Promise<PersistedQueueState<Q> | null> {
   try {
+    const key = await ownerKey(scope);
+    if (!key) return null;
+    const owner = key.split(":")[0];
     return await new Promise<PersistedQueueState<Q> | null>((resolve, reject) => {
       openDb().then((db) => {
         const tx = db.transaction(STORE, "readonly");
-        const req = tx.objectStore(STORE).get(scope);
-        req.onsuccess = () => resolve((req.result as PersistedQueueState<Q>) ?? null);
+        const req = tx.objectStore(STORE).get(key);
+        req.onsuccess = () => {
+          const r = (req.result as PersistedQueueState<Q> | undefined) ?? null;
+          resolve(r && r.ownerId === owner ? r : null);
+        };
         req.onerror = () => reject(req.error);
         tx.oncomplete = () => db.close();
       }).catch(reject);
@@ -115,7 +133,9 @@ export async function loadQueueState<Q>(scope: QueueScope): Promise<PersistedQue
 /** Remove o snapshot do escopo (usado quando o usuário fecha o resumo final). */
 export async function clearQueueState(scope: QueueScope): Promise<void> {
   try {
-    await withStore("readwrite", (store) => store.delete(scope));
+    const key = await ownerKey(scope);
+    if (!key) return;
+    await withStore("readwrite", (store) => store.delete(key));
   } catch (err) {
     console.warn("[queue-persist] clearQueueState falhou:", err);
   }
