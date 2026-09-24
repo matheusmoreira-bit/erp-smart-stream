@@ -5,6 +5,7 @@ import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 import { parse as parseXml } from "https://deno.land/x/xml@2.1.3/mod.ts";
 import { notifySalesMilestone } from "../_shared/sales-notify.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { callerHasMfa } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -135,10 +136,11 @@ Deno.serve(async (req) => {
     const { data: userData, error: userErr } = await admin.auth.getUser(token);
     if (userErr || !userData?.user) return json({ error: "unauthorized" }, 401);
     const actorEmail = (userData.user.email || "").toLowerCase();
-    const { data: isAdmin } = await admin.rpc("has_role", {
+    const { data: adminRole } = await admin.rpc("has_role", {
       _user_id: userData.user.id,
       _role: "admin",
     });
+    const isAdmin = adminRole === true && callerHasMfa(req);
 
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action || "send");

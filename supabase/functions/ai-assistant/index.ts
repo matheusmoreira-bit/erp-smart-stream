@@ -1,5 +1,6 @@
 // AI Assistant: chat with tools to query system data
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { callerHasMfa } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -156,7 +157,7 @@ async function isAdmin(sb: ReturnType<typeof createClient>, userId: string): Pro
   } catch { return false; }
 }
 
-async function runTool(name: string, args: Record<string, unknown>, sb: ReturnType<typeof createClient>, userId: string) {
+async function runTool(name: string, args: Record<string, unknown>, sb: ReturnType<typeof createClient>, userId: string, mfa = false) {
   switch (name) {
     case "list_companies": {
       const { data, error } = await sb.from("companies").select("company_db, display_name, erp_type, default_currency, is_active").eq("is_active", true);
@@ -252,7 +253,7 @@ async function runTool(name: string, args: Record<string, unknown>, sb: ReturnTy
       return data;
     }
     case "pagcorp_integration_stats": {
-      if (!(await isAdmin(sb, userId))) return { error: "Acesso restrito a administradores." };
+      if (!mfa || !(await isAdmin(sb, userId))) return { error: "Acesso restrito a administradores." };
       const days = Number(args.days || 7);
       const since = new Date(Date.now() - days * 86400000).toISOString();
       const { data, error } = await sb.from("pagcorp_integration_log")
@@ -266,7 +267,7 @@ async function runTool(name: string, args: Record<string, unknown>, sb: ReturnTy
       return { period_days: days, counts, total: data?.length || 0 };
     }
     case "audit_log_recent": {
-      if (!(await isAdmin(sb, userId))) return { error: "Acesso restrito a administradores." };
+      if (!mfa || !(await isAdmin(sb, userId))) return { error: "Acesso restrito a administradores." };
       const limit = Number(args.limit || 20);
       let q = sb.from("audit_log").select("created_at, actor_email, action, entity_type, entity_id, company_db, details")
         .order("created_at", { ascending: false }).limit(limit);
@@ -290,7 +291,7 @@ async function runTool(name: string, args: Record<string, unknown>, sb: ReturnTy
       return { unread, recent: data };
     }
     case "idle_license_alerts": {
-      if (!(await isAdmin(sb, userId))) return { error: "Acesso restrito a administradores." };
+      if (!mfa || !(await isAdmin(sb, userId))) return { error: "Acesso restrito a administradores." };
       const limit = Number(args.limit || 20);
       let q = sb.from("license_idle_alerts")
         .select("user_code, company_db, license_type, days_idle, alert_week, sent_at")
@@ -411,7 +412,7 @@ Deno.serve(async (req) => {
         try { args = JSON.parse(tc.function.arguments || "{}"); } catch { /* */ }
         let result: unknown;
         try {
-          result = await runTool(tc.function.name, args, sbAdmin, userId);
+          result = await runTool(tc.function.name, args, sbAdmin, userId, callerHasMfa(req));
         } catch (e) {
           result = { error: e instanceof Error ? e.message : String(e) };
         }
