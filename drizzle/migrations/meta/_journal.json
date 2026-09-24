@@ -428,6 +428,13 @@
       "when": 1790271224507,
       "tag": "0060_f09_admin_mfa_required",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1790278476055,
+      "tag": "0061_fix_has_module_action_canonical_identity",
+      "breakpoints": true
     }
   ]
 }
