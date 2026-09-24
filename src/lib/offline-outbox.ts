@@ -11,6 +11,7 @@
  */
 
 import { getCircuitState, SapCircuitOpenError } from "@/lib/sap-circuit-breaker";
+import { getLocalOwnerId } from "@/lib/local-owner";
 
 const DB_NAME = "erpflow-offline";
 const DB_VERSION = 1;
@@ -21,6 +22,8 @@ export type OutboxStatus = "pending" | "sending" | "failed";
 
 export interface OutboxEntry {
   id: string;
+  /** Usuário que criou (F13): só ele vê/reenvia. */
+  ownerId?: string | null;
   kind: OutboxKind;
   companyDB: string | null;
   docType: string;
@@ -56,7 +59,12 @@ function openDb(): Promise<IDBDatabase> {
           db.createObjectStore(STORE, { keyPath: "id" });
         }
       };
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        const db = req.result;
+        // Permite que o logout apague o banco (F13) sem ficar bloqueado.
+        db.onversionchange = () => { db.close(); dbPromise = null; };
+        resolve(db);
+      };
       req.onerror = () => reject(req.error ?? new Error("Falha ao abrir o banco local"));
     });
   }
@@ -96,17 +104,22 @@ export function subscribeOutbox(listener: Listener): () => void {
 export async function listOutbox(): Promise<OutboxEntry[]> {
   try {
     const all = await tx<OutboxEntry[]>("readonly", (s) => s.getAll() as IDBRequest<OutboxEntry[]>);
-    return (all || []).sort((a, b) => a.createdAt - b.createdAt);
+    const owner = await getLocalOwnerId();
+    if (!owner) return [];
+    return (all || []).filter((e) => e.ownerId === owner).sort((a, b) => a.createdAt - b.createdAt);
   } catch {
     return [];
   }
 }
 
 export async function enqueueOutbox(
-  entry: Omit<OutboxEntry, "id" | "createdAt" | "attempts" | "status">,
+  entry: Omit<OutboxEntry, "id" | "createdAt" | "attempts" | "status" | "ownerId">,
 ): Promise<OutboxEntry> {
+  const ownerId = await getLocalOwnerId();
+  if (!ownerId) throw new Error("Faça login para guardar o lançamento na fila offline.");
   const full: OutboxEntry = {
     ...entry,
+    ownerId,
     id: (crypto?.randomUUID?.() ?? `ob_${Date.now()}_${Math.random().toString(36).slice(2)}`),
     createdAt: Date.now(),
     attempts: 0,
@@ -120,7 +133,8 @@ export async function enqueueOutbox(
 export async function updateOutbox(id: string, patch: Partial<OutboxEntry>): Promise<void> {
   const current = await tx<OutboxEntry | undefined>("readonly", (s) => s.get(id) as IDBRequest<OutboxEntry | undefined>);
   if (!current) return;
-  await tx("readwrite", (s) => s.put({ ...current, ...patch, id }));
+  if (current.ownerId !== (await getLocalOwnerId())) return;
+  await tx("readwrite", (s) => s.put({ ...current, ...patch, id, ownerId: current.ownerId }));
   void notify();
 }
 

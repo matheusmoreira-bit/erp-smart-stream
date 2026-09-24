@@ -45,4 +45,19 @@ export function clearErpLocalState() {
     }
     toRemove.forEach((k) => window.localStorage.removeItem(k));
   } catch { /* ignore */ }
+
+  // F13: fila offline de despesas e anexos de NF guardados no IndexedDB.
+  clearUserIndexedDbs();
+}
+
+const USER_INDEXED_DBS = ["erpflow-offline", "createExpenseModalQueue"];
+
+/** Apaga os bancos locais com dados do usuário. Nunca lança. */
+export function clearUserIndexedDbs(): void {
+  try {
+    if (typeof indexedDB === "undefined") return;
+    for (const name of USER_INDEXED_DBS) {
+      try { indexedDB.deleteDatabase(name); } catch { /* ignore */ }
+    }
+  } catch { /* ignore */ }
 }
