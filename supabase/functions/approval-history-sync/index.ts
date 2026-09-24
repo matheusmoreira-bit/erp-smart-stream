@@ -341,7 +341,7 @@ async function fetchAndMergeHanaApprovals(
 ): Promise<{ merged: number; upserted: number; skipped?: string; error?: string }> {
   try {
     const { data: credRows } = await supabase
-      .from("system_credentials")
+      .from("system_credentials_v")
       .select("credential_key, credential_value")
       .eq("system_name", "sap")
       .eq("company_db", companyDb);

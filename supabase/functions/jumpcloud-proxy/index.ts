@@ -16,7 +16,7 @@ async function getJumpCloudCredentials(supabase: ReturnType<typeof createClient>
   // mais recente de cada chave, independente do company_db, para que a
   // última atualização feita pelo admin prevaleça.
   const { data, error } = await supabase
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value, updated_at, company_db")
     .eq("system_name", "jumpcloud")
     .order("updated_at", { ascending: false });

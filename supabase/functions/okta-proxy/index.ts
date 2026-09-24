@@ -11,7 +11,7 @@ const corsHeaders = {
 
 async function getCredentials(supabase: ReturnType<typeof createClient>): Promise<Record<string, string>> {
   const { data, error } = await supabase
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value, updated_at")
     .eq("system_name", "okta")
     .order("updated_at", { ascending: false });

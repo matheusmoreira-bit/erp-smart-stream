@@ -21,7 +21,7 @@ function parseCostCenterCode(raw: string | null | undefined): string | null {
 
 async function getOktaCredentials(supabase: ReturnType<typeof createClient>): Promise<OktaCredentials> {
   const { data, error } = await supabase
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value, updated_at")
     .eq("system_name", "okta")
     .order("updated_at", { ascending: false });

@@ -43,7 +43,7 @@ async function loadCredentials(
   companyDb: string,
 ): Promise<{ credentials: MasterTaxFileCredentials; empresaIds: string[] } | null> {
   const { data, error } = await supabase
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("company_db, credential_key, credential_value")
     .eq("system_name", "mastertax");
   if (error) throw error;

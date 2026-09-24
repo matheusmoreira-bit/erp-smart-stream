@@ -70,7 +70,7 @@ async function sapLogin(baseUrl: string, companyDB: string, u: string, p: string
 }
 
 async function loadSapCreds(sb: ReturnType<typeof createClient>, companyDb: string) {
-  const { data } = await sb.from("system_credentials").select("credential_key,credential_value")
+  const { data } = await sb.from("system_credentials_v").select("credential_key,credential_value")
     .eq("system_name", "sap").eq("company_db", companyDb);
   const kv: Record<string, string> = {};
   for (const r of (data || []) as Array<{ credential_key: string; credential_value: string }>) {

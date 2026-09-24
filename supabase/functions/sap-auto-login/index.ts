@@ -50,7 +50,7 @@ function sapLoginFailure(responseText: string, sapStatus: number) {
 async function getSapBaseUrl(admin: ReturnType<typeof createClient>, companyDB: string): Promise<string> {
   const fallback = Deno.env.get("SAP_DEFAULT_BASE_URL") || "";
   const { data } = await admin
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_value")
     .eq("company_db", companyDB)
     .eq("system_name", "sap")
@@ -67,7 +67,7 @@ async function getSapBaseUrl(admin: ReturnType<typeof createClient>, companyDB: 
 
 async function getEffectiveCompanyDb(admin: ReturnType<typeof createClient>, companyDB: string): Promise<string> {
   const { data } = await admin
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("company_db", companyDB)
     .eq("system_name", "sap")
@@ -87,7 +87,7 @@ async function getServiceCredentials(
   companyDB: string,
 ): Promise<{ username: string; password: string } | null> {
   const { data } = await admin
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("company_db", companyDB)
     .eq("system_name", "sap")

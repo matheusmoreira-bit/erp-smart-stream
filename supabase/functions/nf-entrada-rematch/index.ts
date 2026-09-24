@@ -42,7 +42,7 @@ async function loadSapCreds(
   companyDb: string,
 ): Promise<{ baseUrl: string; companyDB: string; username: string; password: string } | null> {
   const { data } = await supabase
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", "sap")
     .eq("company_db", companyDb);

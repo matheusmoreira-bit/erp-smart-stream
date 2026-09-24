@@ -148,7 +148,7 @@ function sb() {
 async function getCompanyConfig(companyDB: string) {
   const client = sb();
   const { data, error } = await client
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", "sap")
     .eq("company_db", companyDB);

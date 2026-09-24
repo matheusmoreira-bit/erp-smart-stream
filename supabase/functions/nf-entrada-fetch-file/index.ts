@@ -29,7 +29,7 @@ async function loadCredsForCompany(
   companyDb: string | null,
 ): Promise<MasterTaxCreds | null> {
   const { data } = await supabase
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("company_db, credential_key, credential_value")
     .eq("system_name", "mastertax");
   const rows = (data || []) as Array<{ company_db: string | null; credential_key: string; credential_value: string }>;

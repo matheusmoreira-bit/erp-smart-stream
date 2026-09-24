@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
 
     // Fetch OMIE credentials from system_credentials
     const { data: creds, error: credErr } = await supabase
-      .from("system_credentials")
+      .from("system_credentials_v")
       .select("credential_key, credential_value")
       .eq("system_name", "omie")
       .eq("company_db", company_db);

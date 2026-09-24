@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
 
   const companyDb = String((expense as any).company_db || "");
   const { data: credRows, error: credErr } = await admin
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", "sap")
     .eq("company_db", companyDb);

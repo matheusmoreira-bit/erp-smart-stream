@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
       const { data: userData } = await asCaller.auth.getUser();
       actorEmail = userData?.user?.email || "desconhecido";
       // Autorização: somente admin consegue ler system_credentials (RLS).
-      const { error: authzErr } = await asCaller.from("system_credentials").select("id").limit(1);
+      const { error: authzErr } = await asCaller.from("system_credentials_v").select("id").limit(1);
       if (authzErr) {
         return json({ error: "Apenas administradores podem sincronizar dados vindos do ERP." }, 403);
       }
@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
     if (!expense.sap_doc_entry) return json({ error: "Documento ainda não integrado ao ERP" }, 400);
 
     const { data: credRows, error: credErr } = await supabase
-      .from("system_credentials")
+      .from("system_credentials_v")
       .select("credential_key, credential_value")
       .eq("system_name", "sap")
       .eq("company_db", expense.company_db);

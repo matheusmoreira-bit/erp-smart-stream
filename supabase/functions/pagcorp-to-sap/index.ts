@@ -125,7 +125,7 @@ async function getSapCredentials(
   companyDb: string,
 ): Promise<Record<string, string>> {
   const { data, error } = await supabase
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", "sap")
     .eq("company_db", companyDb);

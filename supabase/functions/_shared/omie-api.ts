@@ -10,7 +10,7 @@ export async function loadOmieCredentials(
   companyDb: string,
 ): Promise<OmieCredentials> {
   const { data, error } = await supabase
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", "omie")
     .eq("company_db", companyDb);

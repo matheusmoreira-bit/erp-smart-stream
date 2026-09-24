@@ -43,7 +43,7 @@ function buildBaseUrl(raw: string): string {
 // deno-lint-ignore no-explicit-any
 async function loadCreds(sb: any, systemName: string, companyDb: string) {
   const { data, error } = await sb
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", systemName)
     .eq("company_db", companyDb);

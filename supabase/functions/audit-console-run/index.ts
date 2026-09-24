@@ -81,7 +81,7 @@ async function updateRun(runId: string, patch: Record<string, unknown>) {
 async function getSapCreds(companyDB: string) {
   const sb = admin();
   const { data } = await sb
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("company_db", companyDB)
     .eq("system_name", "sap");

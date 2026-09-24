@@ -20,7 +20,7 @@ function buildSapCookies(sessionId: string, routeId?: string) {
 }
 
 async function getSapCreds(supabase: ReturnType<typeof createClient>, companyDb?: string) {
-  let q = supabase.from("system_credentials").select("credential_key, credential_value").eq("system_name", "sap");
+  let q = supabase.from("system_credentials_v").select("credential_key, credential_value").eq("system_name", "sap");
   if (companyDb) q = q.eq("company_db", companyDb);
   const { data, error } = await q;
   if (error) throw new Error(`Erro credenciais SAP: ${error.message}`);

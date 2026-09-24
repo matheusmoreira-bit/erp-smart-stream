@@ -314,7 +314,7 @@ async function getSapBaseUrl(admin: any, companyDB: string): Promise<string> {
   if (cached && cached.expiresAt > Date.now()) return cached.url;
   const fallback = Deno.env.get("SAP_DEFAULT_BASE_URL") || "https://jyl32uqm9176-sl.s1p-zona-01-4fd9831d6a58.saas.wevy.cloud/b1s/v2";
   const { data } = await admin
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_value")
     .eq("company_db", companyDB)
     .eq("system_name", "sap")

@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
     );
 
     let q = admin
-      .from("system_credentials")
+      .from("system_credentials_v")
       .select("credential_key, credential_value")
       .eq("system_name", "mastertax");
     q = companyDb ? q.eq("company_db", companyDb) : q.is("company_db", null);

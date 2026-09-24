@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
     } catch { /* sem corpo: processa todas */ }
 
     const { data: credRows, error: credErr } = await sb
-      .from("system_credentials")
+      .from("system_credentials_v")
       .select("company_db,credential_key,credential_value")
       .eq("system_name", "sap");
     if (credErr) throw new Error(credErr.message);

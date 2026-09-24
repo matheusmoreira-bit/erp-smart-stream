@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
           global: { headers: { Authorization: `Bearer ${token}` } },
         });
         const { error: authzErr } = await asCaller
-          .from("system_credentials")
+          .from("system_credentials_v")
           .select("id")
           .limit(1);
         if (authzErr) return json({ error: "Apenas administradores podem alterar linhas já integradas." }, 403);
@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
     if (!expense.sap_doc_entry) return json({ error: "Documento ainda não integrado ao ERP" }, 400);
 
     const { data: credRows, error: credErr } = await supabase
-      .from("system_credentials")
+      .from("system_credentials_v")
       .select("credential_key, credential_value")
       .eq("system_name", "sap")
       .eq("company_db", expense.company_db);

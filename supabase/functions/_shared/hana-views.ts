@@ -34,7 +34,7 @@ export async function loadHanaCreds(
   companyDb: string,
 ): Promise<Record<string, string> | null> {
   const { data, error } = await sb
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", "sap")
     .eq("company_db", companyDb);

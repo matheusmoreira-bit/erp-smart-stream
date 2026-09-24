@@ -27,7 +27,7 @@ function adminClient() {
 async function getSapBaseUrl(companyDB: string): Promise<string> {
   const sb = adminClient();
   const { data } = await sb
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_value")
     .eq("company_db", companyDB)
     .eq("system_name", "sap")
@@ -62,7 +62,7 @@ function extractSapError(payload: unknown, fallback: string): string {
 async function resolveDefaultBranchId(companyDb: string): Promise<number> {
   const sb = adminClient();
   const { data } = await sb
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_value")
     .eq("company_db", companyDb)
     .eq("system_name", "sap")

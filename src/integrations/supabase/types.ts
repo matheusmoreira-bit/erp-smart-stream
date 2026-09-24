@@ -10242,6 +10242,36 @@ export type Database = {
         }
         Relationships: []
       }
+      system_credentials_v: {
+        Row: {
+          company_db: string | null
+          created_at: string | null
+          credential_key: string | null
+          credential_value: string | null
+          id: string | null
+          system_name: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_db?: string | null
+          created_at?: string | null
+          credential_key?: string | null
+          credential_value?: never
+          id?: string | null
+          system_name?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_db?: string | null
+          created_at?: string | null
+          credential_key?: string | null
+          credential_value?: never
+          id?: string | null
+          system_name?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       _audit_canonicalize: { Args: { _data: Json }; Returns: string }
@@ -10833,6 +10863,7 @@ export type Database = {
         Returns: boolean
       }
       is_sap_user_admin: { Args: { _sap_username: string }; Returns: boolean }
+      is_secret_credential_key: { Args: { _key: string }; Returns: boolean }
       join_registration_request: {
         Args: { p_author_name?: string; p_note?: string; p_request_id: string }
         Returns: string
@@ -10990,6 +11021,7 @@ export type Database = {
           recipient_phone: string
         }[]
       }
+      reveal_system_credential: { Args: { _stored: string }; Returns: string }
       sap_user_has_module: {
         Args: { _module_key: string; _sap_username: string }
         Returns: boolean

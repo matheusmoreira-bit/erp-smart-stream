@@ -86,7 +86,7 @@ function buildSapBaseUrl(raw: string): string {
 
 async function loadSapCreds(sb: Sb, companyDb: string) {
   const { data, error } = await sb
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", "sap")
     .eq("company_db", companyDb);
@@ -215,7 +215,7 @@ interface MtCreds {
 
 async function loadMasterTaxCreds(sb: Sb, companyDb: string): Promise<MtCreds | null> {
   const { data } = await sb
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("company_db, credential_key, credential_value")
     .eq("system_name", "mastertax");
   const rows = (data || []) as Array<{ company_db: string | null; credential_key: string; credential_value: string }>;
