@@ -77,12 +77,15 @@ function luhnOk(d: string): boolean {
 /** Mascara cartões, e-mails e telefones em texto antes de enviar à IA. */
 export function maskTextForAi(text: string): string {
   return text
-    .replace(/\b(?:\d[ -]?){13,19}\b/g, (m) => {
+    // Só 15/16 dígitos (Amex/Visa/Master) com Luhn válido — não pega CNPJ (14) nem CPF (11).
+    .replace(/(?<![\d.\/])(?:\d[ -]?){14,15}\d(?![\d.\/])/g, (m) => {
       const d = m.replace(/\D/g, "");
-      return d.length >= 13 && d.length <= 19 && luhnOk(d) ? `[cartão ****${d.slice(-4)}]` : m;
+      return (d.length === 15 || d.length === 16) && luhnOk(d) ? `[cartão ****${d.slice(-4)}]` : m;
     })
     .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[e-mail]")
-    .replace(/(?:\+?55\s?)?\(?\d{2}\)?\s?9?\d{4}-?\d{4}\b/g, (m) => (m.replace(/\D/g, "").length >= 10 ? "[telefone]" : m));
+    // Telefone só no formato com DDD entre parênteses ou com hífen — nunca sequência pura de dígitos.
+    .replace(/(?<!\d)(?:\+?55\s?)?\(\d{2}\)\s?9?\d{4}-?\d{4}(?!\d)/g, "[telefone]")
+    .replace(/(?<!\d)\+55\s?\d{2}\s?9?\d{4}-?\d{4}(?!\d)/g, "[telefone]");
 }
 
 /** Tamanho aproximado em bytes de um base64. */
