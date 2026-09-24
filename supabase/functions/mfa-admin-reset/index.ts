@@ -17,7 +17,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  const foreign = rejectForeignOrigin(req, corsHeaders);
+  const foreign = rejectForeignOrigin(req);
   if (foreign) return foreign;
   if (req.method !== "POST") return json({ error: "Método não permitido" }, 405);
 
