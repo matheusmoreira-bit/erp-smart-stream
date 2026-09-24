@@ -832,7 +832,7 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
           .from("sap_cache")
           .select("data, updated_at, expires_at")
           .eq("company_db", companyDB)
-          .eq("cache_key", APPROVALS_CACHE_KEY)
+          .eq("cache_key", `${APPROVALS_CACHE_KEY}:u:${caller.id}`)
           .maybeSingle();
         if (error) throw new Error(`Cache read failed: ${error.message}`);
         return new Response(JSON.stringify({ data: data?.data ?? null, updatedAt: data?.updated_at ?? null, expiresAt: data?.expires_at ?? null }), {
@@ -844,7 +844,8 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
       const ttlMs = Number.isFinite(Number(reqBody.ttlMs)) ? Math.min(Math.max(Number(reqBody.ttlMs), 60_000), 60 * 60_000) : CACHE_TTL;
       const expiresAt = new Date(Date.now() + ttlMs).toISOString();
       const { error } = await sb.from("sap_cache").upsert(
-        { company_db: companyDB, cache_key: APPROVALS_CACHE_KEY, data: docs, expires_at: expiresAt },
+        // F13: cache de aprovações particionado por usuário (nunca compartilhado).
+        { company_db: companyDB, cache_key: `${APPROVALS_CACHE_KEY}:u:${caller.id}`, data: docs, expires_at: expiresAt },
         { onConflict: "cache_key,company_db" },
       );
       if (error) throw new Error(`Cache write failed: ${error.message}`);
