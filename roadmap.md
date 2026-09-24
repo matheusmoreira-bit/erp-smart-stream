@@ -8,7 +8,7 @@
 - [x] F06 — Segredos em texto claro (cifrados; rotação pendente do usuário)
 - [ ] F07 — Backup na réplica: trilha de auditoria OK + carga diária; faltam demais tabelas, contas de login e teste de restauração
 - [~] F08 — HANA em HTTP / Service Layer exposto — VISTO, PENDENTE DO FORNECEDOR (SAP/Wevy: TLS no HANA, allowlist de IP/túnel no Service Layer). Parte interna opcional: restringir leitura das URLs do SAP na tabela companies.
-- [ ] F09
+- [~] F09 — MFA obrigatório para admin (servidor + banco exigem código), sessão admin 12h / usuário 30d nas funções, redefinição por outro admin. Faltam: os outros 3 admins cadastrarem; verificação em 2 etapas obrigatória no Google Workspace (TI).
 - [x] F10 — Copiloto IA: SQL em papel restrito (sem credenciais/URLs do ERP), escrita só com clique humano no servidor, histórico validado
 - [x] F11 — Auditoria com autor da sessão; empresa validada (sessão SAP/vínculo) em expense-mutation, supplier-sync; fornecedor-save com campos permitidos. Módulo em modo sombra (grupos não cobrem usuários).
 - [x] F12 — Impersonação registrada no servidor (impersonation_sessions, 4h); banco recusa escritas do admin impersonando; funções só de leitura liberadas; ERP e copiloto recusam gravação (423). Falta teste real pela tela.
