@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
+import { assertCompanyAccess } from "../_shared/company-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,6 +40,8 @@ Deno.serve(async (req) => {
       const taxId = String(body?.taxId ?? "").trim();
       const companyDb = String(body?.companyDb ?? "").trim();
       if (!taxId || !companyDb) return json({ ok: true, supplier: null });
+      try { await assertCompanyAccess(req, admin, companyDb, "suppliers", "view"); }
+      catch (err) { return authErrorResponse(err, corsHeaders); }
       const cleaned = taxId.replace(/\D/g, "");
       const orParts = [`federal_tax_id.eq.${taxId}`];
       if (cleaned && cleaned !== taxId) orParts.push(`federal_tax_id.eq.${cleaned}`);
@@ -55,10 +58,16 @@ Deno.serve(async (req) => {
 
     if (action === "insert") {
       const row = body?.row;
-      if (!row || typeof row !== "object") return json({ error: "row missing" }, 400);
+      if (!row || typeof row !== "object" || Array.isArray(row)) return json({ error: "row missing" }, 400);
+      const companyDb = String((row as Record<string, unknown>).company_db ?? "").trim();
+      if (!companyDb) return json({ error: "company_db é obrigatório" }, 400);
+      try { await assertCompanyAccess(req, admin, companyDb, "suppliers", "create"); }
+      catch (err) { return authErrorResponse(err, corsHeaders); }
+      // Campos controlados pelo servidor não vêm do cliente.
+      const { id: _id, created_at: _c, updated_at: _u, created_by: _cb, ...clean } = row as Record<string, unknown>;
       const { data, error } = await admin
         .from("suppliers")
-        .insert(row)
+        .insert({ ...clean, company_db: companyDb })
         .select("*")
         .single();
       if (error) return json({ error: error.message }, 400);

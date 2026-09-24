@@ -22,15 +22,28 @@ Deno.serve(async (req) => {
   if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  let actor = "";
   try {
-    await requireUserOrSapSession(req);
+    const who = await requireUserOrSapSession(req) as { email?: string | null; userName?: string };
+    actor = String(who.email || who.userName || "");
   } catch (err) {
     return authErrorResponse(err, corsHeaders);
   }
 
   try {
     const body = await req.json().catch(() => ({}));
-    const payload = body?.payload ?? {};
+    // F11: só campos do cadastro; id/created_by/datas são do servidor.
+    const ALLOWED = new Set([
+      "tipo_pessoa","cnpj","cpf","razao_social","nome_fantasia","tipo_estabelecimento","situacao_cadastral",
+      "data_inicio_atividade","natureza_juridica_id","natureza_juridica_descricao","porte","capital_social",
+      "cnae_principal_codigo","cnae_principal_descricao","cnaes_secundarios","logradouro","numero","complemento",
+      "bairro","cep","municipio","municipio_ibge","uf","pais","telefone1","telefone2","email","inscricao_estadual",
+      "simples_nacional","socios","api_payload",
+    ]);
+    const raw = (body?.payload && typeof body.payload === "object" && !Array.isArray(body.payload)) ? body.payload : {};
+    const payload: Record<string, any> = {};
+    for (const [k, v] of Object.entries(raw)) if (ALLOWED.has(k)) payload[k] = v;
+    payload.created_by = actor || null;
     const tipo = payload?.tipo_pessoa;
 
     if (tipo !== "pj" && tipo !== "pf") {
