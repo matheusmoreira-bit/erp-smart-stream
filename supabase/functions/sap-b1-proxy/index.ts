@@ -359,6 +359,24 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
         expiresAt,
       });
 
+      // F03: amarra a sessão ao usuário logado. Só ela será aceita depois.
+      const { error: bindErr } = await svcDb.from("erp_session_cache").upsert({
+        user_id: caller.id,
+        company_db: String(companyDB || credentials.CompanyDB),
+        sap_user: String(credentials.UserName).slice(0, 200),
+        is_service: false,
+        session_id: sessionId,
+        route_id: routeMatch?.[1] || "",
+        expires_at: new Date(expiresAt).toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id,company_db,is_service" });
+      if (bindErr) {
+        console.error("sap-b1-proxy: falha ao registrar sessão", bindErr.message);
+        return new Response(JSON.stringify({ error: "Não foi possível registrar a sessão do ERP. Tente novamente." }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       return new Response(JSON.stringify({
         sessionId,
         routeId: routeMatch?.[1] || "",
@@ -811,12 +829,14 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
 
     // LOGOUT
     if (action === "logout") {
-      if (sessionId) {
+      if (sessionId && !isServiceSession) {
         const cookies = `B1SESSION=${sessionId}${routeId ? `; ROUTEID=${routeId}` : ""}`;
         await fetch(`${SAP_BASE_URL}/Logout`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Cookie: cookies },
         }).catch(() => {});
+        await svcDb.from("erp_session_cache").delete()
+          .eq("user_id", caller.id).eq("session_id", sessionId).eq("is_service", false);
       }
       return new Response(JSON.stringify({ success: true }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -941,6 +961,11 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
+    const authResp = authErrorResponse(e, corsHeaders);
+    if (authResp) {
+      metricsCtx.errorCode = "UNAUTHORIZED";
+      return authResp;
+    }
     if (e instanceof Error && e.message === "UNAUTHORIZED") {
       metricsCtx.errorCode = "UNAUTHORIZED";
       return new Response(JSON.stringify({ error: "Não autenticado" }), {
