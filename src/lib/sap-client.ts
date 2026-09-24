@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { publicFunctionFetch } from "@/lib/auth-fetch";
+import { authFetch } from "@/lib/auth-fetch";
 import { toast } from "sonner";
 import { assertWriteAllowed } from "@/lib/read-only-guard";
 import {
@@ -132,7 +132,7 @@ async function doFetchWithTimeout(body: Record<string, unknown>, timeoutMs: numb
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await publicFunctionFetch(FUNCTION_URL, {
+    return await authFetch(FUNCTION_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -458,7 +458,7 @@ export async function sapKeepAlive(session: SapSession): Promise<boolean> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15_000);
   try {
-    const resp = await publicFunctionFetch(FUNCTION_URL, {
+    const resp = await authFetch(FUNCTION_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
