@@ -22,7 +22,7 @@ function json(body: unknown, status = 200) {
 
 async function getSapCreds(supabase: ReturnType<typeof createClient>, companyDb: string) {
   const { data, error } = await supabase
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", "sap")
     .eq("company_db", companyDb);

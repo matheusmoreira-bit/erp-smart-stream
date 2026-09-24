@@ -69,7 +69,7 @@ async function sapLogin(baseUrl: string, companyDB: string, u: string, p: string
 // deno-lint-ignore no-explicit-any
 async function loadCreds(sb: any, companyDb: string) {
   const { data } = await sb
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", "sap")
     .eq("company_db", companyDb);

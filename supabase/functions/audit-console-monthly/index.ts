@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
   let dbSecret = "";
   if (provided) {
     const { data: cred } = await sbAuth
-      .from("system_credentials")
+      .from("system_credentials_v")
       .select("credential_value")
       .eq("system_name", "cron")
       .eq("credential_key", "audit_monthly_token")

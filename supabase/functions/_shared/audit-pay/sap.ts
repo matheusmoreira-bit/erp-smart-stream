@@ -19,7 +19,7 @@ export interface SapCreds {
 
 export async function getSapCreds(companyDB: string): Promise<SapCreds> {
   const { data } = await admin()
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("company_db", companyDB)
     .eq("system_name", "sap");

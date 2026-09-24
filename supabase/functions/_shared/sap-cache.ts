@@ -140,7 +140,7 @@ export async function loadSapCreds(
   opts: LoadCredsOpts = {},
 ): Promise<Record<string, string> | null> {
   const { data, error } = await sb
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", "sap")
     .eq("company_db", companyDb);
@@ -240,7 +240,7 @@ export async function runSapCacheWatcher(
 
   try {
     const { data: creds, error } = await sb
-      .from("system_credentials")
+      .from("system_credentials_v")
       .select("company_db")
       .eq("system_name", "sap");
     if (error) throw new Error(error.message);

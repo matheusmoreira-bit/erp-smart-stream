@@ -161,7 +161,7 @@ async function getSapBaseUrl(companyDB?: string): Promise<string> {
 
     // 1) Primary source: ERP credential configured in Backoffice (system_credentials)
     const { data: credRow } = await sb
-      .from("system_credentials")
+      .from("system_credentials_v")
       .select("credential_value")
       .eq("company_db", companyDB)
       .eq("system_name", "sap")
@@ -196,7 +196,7 @@ async function getConfiguredSapCompanyDb(companyDB: string): Promise<string> {
   try {
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { data, error } = await sb
-      .from("system_credentials")
+      .from("system_credentials_v")
       .select("credential_value")
       .eq("company_db", companyDB)
       .eq("system_name", "sap")
@@ -301,7 +301,7 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
       // usuário final pelo navegador — só administradores.
       {
         const loginDb = String(companyDB || credentials.CompanyDB);
-        const { data: svcUser } = await svcDb.from("system_credentials").select("credential_value")
+        const { data: svcUser } = await svcDb.from("system_credentials_v").select("credential_value")
           .eq("company_db", loginDb).eq("system_name", "sap").eq("credential_key", "username").maybeSingle();
         const svcName = String(svcUser?.credential_value || "").trim().toLowerCase();
         if (svcName && String(credentials.UserName).trim().toLowerCase() === svcName) {
@@ -718,7 +718,7 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
       try {
         const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
         const { data: flags } = await sb
-          .from("system_credentials")
+          .from("system_credentials_v")
           .select("credential_key, credential_value")
           .eq("company_db", database)
           .eq("system_name", "sap")

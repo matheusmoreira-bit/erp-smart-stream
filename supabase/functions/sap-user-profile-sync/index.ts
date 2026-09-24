@@ -24,7 +24,7 @@ async function getBaseUrl(sb: ReturnType<typeof createClient>, db: string): Prom
   const fallback = Deno.env.get("SAP_DEFAULT_BASE_URL") ||
     "https://jyl32uqm9176-sl.s1p-zona-01-4fd9831d6a58.saas.wevy.cloud/b1s/v2";
   const { data } = await sb
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_value")
     .eq("company_db", db)
     .eq("system_name", "sap")
@@ -41,7 +41,7 @@ async function getBaseUrl(sb: ReturnType<typeof createClient>, db: string): Prom
 
 async function getCreds(sb: ReturnType<typeof createClient>, db: string) {
   const { data } = await sb
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", "sap")
     .eq("company_db", db)

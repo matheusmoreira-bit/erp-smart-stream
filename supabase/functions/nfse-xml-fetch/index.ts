@@ -60,7 +60,7 @@ async function sapLogout(baseUrl: string, s: { sessionId: string; routeId: strin
 // deno-lint-ignore no-explicit-any
 async function loadCreds(sb: any, companyDb: string): Promise<Record<string, string> | null> {
   const { data, error } = await sb
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", "sap")
     .eq("company_db", companyDb);

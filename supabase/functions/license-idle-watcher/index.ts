@@ -250,7 +250,7 @@ Deno.serve(async (req) => {
 
     const dbs = (companies || []).map((c) => c.company_db);
     const { data: credRows } = await sb
-      .from("system_credentials")
+      .from("system_credentials_v")
       .select("company_db, credential_key, credential_value")
       .eq("system_name", "sap")
       .in("company_db", dbs.length ? dbs : [""]);

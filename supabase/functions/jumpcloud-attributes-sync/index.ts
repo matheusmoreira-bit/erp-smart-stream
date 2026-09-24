@@ -72,7 +72,7 @@ async function fetchAllJumpCloudUsers(apiKey: string, orgId?: string): Promise<J
 
 async function getJumpCloudCredentials(supabase: ReturnType<typeof createClient>) {
   const { data, error } = await supabase
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", "jumpcloud");
   if (error) throw new Error(`Erro ao buscar credenciais JumpCloud: ${error.message}`);

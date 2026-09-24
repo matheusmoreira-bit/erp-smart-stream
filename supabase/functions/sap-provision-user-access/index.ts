@@ -75,7 +75,7 @@ function validatePasswordPolicy(password: string, userCode: string): string | nu
 async function getBaseUrl(admin: ReturnType<typeof createClient>, companyDB: string): Promise<string> {
   const fallback = Deno.env.get("SAP_DEFAULT_BASE_URL") || "";
   const { data } = await admin
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_value")
     .eq("company_db", companyDB)
     .eq("system_name", "sap")
@@ -94,7 +94,7 @@ interface AdminCreds { username: string; password: string; sapCompanyDb: string;
 
 async function getAdminCreds(admin: ReturnType<typeof createClient>, companyDB: string): Promise<AdminCreds | null> {
   const { data } = await admin
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", "sap")
     .eq("company_db", companyDB)

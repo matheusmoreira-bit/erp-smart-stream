@@ -84,7 +84,7 @@ function num(value: unknown): number | null {
 
 async function loadCreds(sb: Sb, companyDb: string): Promise<SapCreds> {
   const { data, error } = await sb
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", "sap")
     .eq("company_db", companyDb);
@@ -102,7 +102,7 @@ async function loadCreds(sb: Sb, companyDb: string): Promise<SapCreds> {
 async function listCompanies(sb: Sb, requested: string | null, includeTest: boolean): Promise<string[]> {
   if (requested) return [requested];
   const { data, error } = await sb
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("company_db")
     .eq("system_name", "sap")
     .eq("credential_key", "service_layer_url");

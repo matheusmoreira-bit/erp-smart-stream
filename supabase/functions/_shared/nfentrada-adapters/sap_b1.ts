@@ -32,7 +32,7 @@ async function getSession(ctx: AdapterContext): Promise<Session> {
   if (cached) return cached;
 
   const { data, error } = await ctx.supabase
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", "sap")
     .eq("company_db", ctx.company_db);

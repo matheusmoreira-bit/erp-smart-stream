@@ -54,7 +54,13 @@ Deno.serve(async (req) => {
       }
       const { data, error } = await query.order("system_name").order("credential_key");
       if (error) throw error;
-      return new Response(JSON.stringify({ credentials: data }), {
+      // F06: segredos nunca voltam ao navegador; só indicamos se estão definidos.
+      const SECRET_KEY = /(password|secret|token|private_key|api_key|app_key|aes_key|hmac_key|client_key)/i;
+      const safe = (data || []).map((row: Record<string, unknown>) =>
+        "credential_value" in row && SECRET_KEY.test(String(row.credential_key || ""))
+          ? { ...row, credential_value: "", is_set: !!row.credential_value }
+          : row);
+      return new Response(JSON.stringify({ credentials: safe }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -95,6 +101,8 @@ Deno.serve(async (req) => {
       }
 
       for (const cred of credentials) {
+        // F06: segredo em branco = manter o valor atual (a tela não recebe o segredo).
+        if (!cred.value && /(password|secret|token|private_key|api_key|app_key|aes_key|hmac_key|client_key)/i.test(cred.key)) continue;
         const { error } = await adminClient
           .from("system_credentials")
           .upsert(

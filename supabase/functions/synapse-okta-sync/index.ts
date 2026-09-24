@@ -10,7 +10,7 @@ const INTEGRATION_KEY = "okta_sap_sync";
 
 async function getOktaCredentials(supabase: ReturnType<typeof createClient>): Promise<OktaCredentials> {
   const { data, error } = await supabase
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value, updated_at")
     .eq("system_name", "okta")
     .order("updated_at", { ascending: false });
@@ -24,7 +24,7 @@ async function getOktaCredentials(supabase: ReturnType<typeof createClient>): Pr
 }
 
 async function getSapCredentials(supabase: ReturnType<typeof createClient>, companyDb?: string) {
-  let query = supabase.from("system_credentials").select("credential_key, credential_value").eq("system_name", "sap");
+  let query = supabase.from("system_credentials_v").select("credential_key, credential_value").eq("system_name", "sap");
   if (companyDb) query = query.eq("company_db", companyDb);
   const { data, error } = await query;
   if (error) throw new Error(`Erro ao buscar credenciais SAP: ${error.message}`);

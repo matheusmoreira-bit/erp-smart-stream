@@ -13,7 +13,7 @@ export async function loadBeComplianceCredentials(
 ): Promise<Record<string, string>> {
   const read = async (db: string | null) => {
     let q = sb
-      .from("system_credentials")
+      .from("system_credentials_v")
       .select("credential_key, credential_value")
       .eq("system_name", "becompliance");
     q = db ? q.eq("company_db", db) : q.is("company_db", null);

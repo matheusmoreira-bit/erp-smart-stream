@@ -174,7 +174,7 @@ Deno.serve(withEdgeMetrics("sap-approvals-hana", async (req, _mctx) => {
 
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { data: credsRows } = await sb
-      .from("system_credentials")
+      .from("system_credentials_v")
       .select("credential_key, credential_value")
       .eq("system_name", "sap")
       .eq("company_db", companyDb);

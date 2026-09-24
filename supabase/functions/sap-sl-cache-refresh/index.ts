@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
 
     // 1) Empresas SAP sem middleware HANA
     const { data: flags, error: flagErr } = await sb
-      .from("system_credentials")
+      .from("system_credentials_v")
       .select("company_db")
       .eq("system_name", "sap")
       .eq("credential_key", "use_hana_db")
@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
     for (const companyDb of companyDbs) {
       try {
         const { data: credRows, error: credErr } = await sb
-          .from("system_credentials")
+          .from("system_credentials_v")
           .select("credential_key,credential_value")
           .eq("system_name", "sap")
           .eq("company_db", companyDb);

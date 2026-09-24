@@ -141,7 +141,7 @@ async function getSapCredentials(
   companyDb?: string,
 ) {
   let query = supabase
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", "sap");
   if (companyDb) query = query.eq("company_db", companyDb);

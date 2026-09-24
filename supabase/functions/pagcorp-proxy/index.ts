@@ -81,7 +81,7 @@ async function getCredentials(companyDb?: string): Promise<PagCorpCreds> {
   if (companyDb) {
     // Strict: only use credentials for this specific company.
     const res = await supabase
-      .from("system_credentials")
+      .from("system_credentials_v")
       .select("credential_key, credential_value")
       .eq("system_name", "pagcorp")
       .eq("company_db", companyDb);
@@ -90,7 +90,7 @@ async function getCredentials(companyDb?: string): Promise<PagCorpCreds> {
   } else {
     // No company specified: use global credentials (company_db is null).
     const res = await supabase
-      .from("system_credentials")
+      .from("system_credentials_v")
       .select("credential_key, credential_value")
       .eq("system_name", "pagcorp")
       .is("company_db", null);

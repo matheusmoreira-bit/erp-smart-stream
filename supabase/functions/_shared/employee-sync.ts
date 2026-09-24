@@ -39,7 +39,7 @@ export async function loadCredentials(
   companyDb: string,
 ): Promise<Record<string, string>> {
   const { data, error } = await supabase
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", system)
     .eq("company_db", companyDb);

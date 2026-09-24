@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!exp) return json(404, { error: "expense não encontrada" });
     const { data: credRows2 } = await admin
-      .from("system_credentials")
+      .from("system_credentials_v")
       .select("credential_key, credential_value")
       .eq("system_name", "sap")
       .eq("company_db", (exp as any).company_db);
@@ -159,7 +159,7 @@ Deno.serve(async (req) => {
     if (rowsErr) return json(500, { error: rowsErr.message });
 
     const { data: credRows3 } = await admin
-      .from("system_credentials")
+      .from("system_credentials_v")
       .select("credential_key, credential_value")
       .eq("system_name", "sap")
       .eq("company_db", companyDb);
@@ -190,7 +190,7 @@ Deno.serve(async (req) => {
 
   // Empresas com credenciais SAP
   const { data: credRows, error: credErr } = await admin
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("company_db, credential_key, credential_value")
     .eq("system_name", "sap");
   if (credErr) return json(500, { error: credErr.message });

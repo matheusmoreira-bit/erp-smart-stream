@@ -28,7 +28,7 @@ interface SapSession { baseUrl: string; cookies: string }
 
 async function loginSap(supabase: any, companyDb: string): Promise<SapSession> {
   const { data, error } = await supabase
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", "sap")
     .eq("company_db", companyDb);

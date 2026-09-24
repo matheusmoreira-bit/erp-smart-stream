@@ -127,7 +127,7 @@ const OMIE_CLIENTES_URL = "https://app.omie.com.br/api/v1/geral/clientes/";
 
 export async function omieCreds(sb: Sb, companyDb: string) {
   const { data } = await sb
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("credential_key, credential_value")
     .eq("system_name", "omie")
     .eq("company_db", companyDb);

@@ -173,7 +173,7 @@ Deno.serve(withEdgeMetrics("hana-health-probe", async (req) => {
 
   // 1. Credenciais das empresas com HanaAPI habilitada.
   const { data: credRows, error: credErr } = await sb
-    .from("system_credentials")
+    .from("system_credentials_v")
     .select("company_db, credential_key, credential_value")
     .eq("system_name", "sap");
   if (credErr) {

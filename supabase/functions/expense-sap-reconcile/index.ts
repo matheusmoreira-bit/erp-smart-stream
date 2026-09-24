@@ -311,7 +311,7 @@ Deno.serve(async (req) => {
 
     // Credenciais + login SAP (uma sessão para todo o lote).
     const { data: credRows, error: credErr } = await supabase
-      .from("system_credentials")
+      .from("system_credentials_v")
       .select("credential_key, credential_value")
       .eq("system_name", "sap")
       .eq("company_db", db);
