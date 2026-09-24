@@ -343,7 +343,7 @@ async function audit(sb: SupabaseClient, actor: Actor, action: string, entity_ty
 // F10: confirmação humana decidida no SERVIDOR. O modelo nunca executa escrita:
 // cada chamada vira uma ação pendente, que só roda quando o próprio admin clica
 // "Confirmar" na tela (POST { confirm_action_id }), sem passar pelo modelo.
-export type ToolCtx = { confirmed: boolean; onPending?: (p: { id: string; summary: string; tool: string }) => void };
+type ToolCtx = { confirmed: boolean; onPending?: (p: { id: string; summary: string; tool: string }) => void };
 const WRITE_TOOL_NAMES = new Set([
   "redirect_approval", "reprocess_sap_integration", "reprocess_pagcorp_settlement",
   "revert_expense_to_pending", "send_notification", "toggle_approval_rule", "upsert_approval_rule",
@@ -808,10 +808,50 @@ Deno.serve(withEdgeMetrics("copilot-chat", async (req, _mctx) => {
     if (!rl.allowed) return rateLimitResponse(rl, { ...corsHeaders, "Content-Type": "application/json" });
 
     const actor: Actor = { userId: userData.user.id, email: userData.user.email || "" };
-    const { messages } = await req.json() as { messages: any[] };
+    pendingSb = sbAdmin;
+    pendingActor = actor;
+    const body = await req.json().catch(() => ({})) as Record<string, unknown>;
 
-    // Mantém a janela de contexto sob controle (últimas 24 mensagens do usuário/assistente).
-    const history = (messages || []).slice(-24);
+    // ===== F10: decisão humana sobre ação pendente (não passa pelo modelo) =====
+    const UUID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const decideId = typeof body.confirm_action_id === "string" ? body.confirm_action_id
+      : typeof body.cancel_action_id === "string" ? body.cancel_action_id : null;
+    if (decideId !== null) {
+      if (!UUID_RX.test(decideId)) return json({ error: "ID inválido." }, 400);
+      const confirming = typeof body.confirm_action_id === "string";
+      // Consome atomicamente: só o dono, só pendente, só dentro do prazo.
+      const { data: action } = await sbAdmin.from("copilot_pending_actions")
+        .update({ status: confirming ? "confirmed" : "cancelled", decided_at: new Date().toISOString() })
+        .eq("id", decideId).eq("user_id", actor.userId).eq("status", "pending")
+        .gt("expires_at", new Date().toISOString())
+        .select("id, tool_name, args, summary").maybeSingle();
+      if (!action) return json({ error: "Ação não encontrada, já decidida ou expirada (10 min)." }, 409);
+      if (!confirming) {
+        await audit(sbAdmin, actor, "copilot.action_cancelled", "copilot_action", action.id, { tool: action.tool_name });
+        return json({ ok: true, cancelled: true });
+      }
+      let result: unknown;
+      try {
+        result = await runTool(action.tool_name, action.args, sbAdmin, actor, sbUser, { confirmed: true });
+      } catch (e) {
+        result = { error: e instanceof Error ? e.message : String(e) };
+      }
+      const failed = !!(result && typeof result === "object" && "error" in (result as Record<string, unknown>));
+      await sbAdmin.from("copilot_pending_actions").update({ status: failed ? "failed" : "confirmed", result: result as any }).eq("id", action.id);
+      await audit(sbAdmin, actor, "copilot.action_confirmed", "copilot_action", action.id, { tool: action.tool_name, args: action.args, failed });
+      return json({ ok: !failed, summary: action.summary, result });
+    }
+
+    // ===== F10: histórico validado no servidor =====
+    // Aceita só mensagens user/assistant com texto; descarta system/tool/tool_calls forjados.
+    const rawMsgs = Array.isArray(body.messages) ? body.messages : [];
+    const history = rawMsgs
+      .filter((m: any) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim())
+      .slice(-24)
+      .map((m: any) => ({ role: m.role as "user" | "assistant", content: String(m.content).slice(0, 8000) }));
+    if (history.length === 0 || history[history.length - 1].role !== "user") {
+      return json({ error: "Histórico inválido." }, 400);
+    }
     const conv: any[] = [{ role: "system", content: buildSystemPrompt(actor.email) }, ...history];
 
     const encoder = new TextEncoder();
@@ -821,6 +861,10 @@ Deno.serve(withEdgeMetrics("copilot-chat", async (req, _mctx) => {
         const emitText = (t: string) => sse({ choices: [{ delta: { content: t } }] });
         const emitTool = (name: string, status: "running" | "done" | "error") =>
           sse({ tool: { name, label: TOOL_LABELS[name] || name, status } });
+        const toolCtx: ToolCtx = {
+          confirmed: false,
+          onPending: (p) => sse({ pending_action: p }),
+        };
 
         try {
           for (let step = 0; step < 20; step++) {
@@ -844,7 +888,7 @@ Deno.serve(withEdgeMetrics("copilot-chat", async (req, _mctx) => {
               let result: unknown;
               let ok = true;
               try {
-                result = await runTool(tc.function.name, args, sbAdmin, actor, sbUser);
+                result = await runTool(tc.function.name, args, sbAdmin, actor, sbUser, toolCtx);
               } catch (e) {
                 ok = false;
                 result = { error: e instanceof Error ? e.message : String(e) };
@@ -853,7 +897,8 @@ Deno.serve(withEdgeMetrics("copilot-chat", async (req, _mctx) => {
               conv.push({
                 role: "tool",
                 tool_call_id: tc.id,
-                content: JSON.stringify(result ?? null).slice(0, 30000),
+                // Marca o resultado como dado não confiável (mitigação de prompt injection).
+                content: `<tool_result untrusted="true">${JSON.stringify(result ?? null).slice(0, 30000)}</tool_result>`,
               });
             }
 
