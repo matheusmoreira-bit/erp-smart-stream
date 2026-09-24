@@ -681,14 +681,17 @@ async function loadStoredSupplierPaymentProfile(
   admin: AdminClient,
   companyDb: string,
   supplierCode: string,
+  opts: { includePending?: boolean } = {},
 ): Promise<SupplierPaymentProfileRow | null> {
   try {
-    const { data, error } = await admin
+    let query = admin
       .from("accounts_payable_supplier_payment_profiles")
       .select("*")
       .eq("company_db", companyDb)
-      .eq("supplier_code", supplierCode)
-      .maybeSingle();
+      .eq("supplier_code", supplierCode);
+    // F05: só o perfil bancário aprovado por uma segunda pessoa vale para pagamento.
+    if (!opts.includePending) query = query.eq("approval_status", "approved");
+    const { data, error } = await query.maybeSingle();
     if (error) {
       if (isMissingSupplierProfileStorage(error)) return null;
       throw error;
@@ -785,9 +788,18 @@ async function getSupplierPaymentProfile(admin: AdminClient, companyDb: string, 
   return await withSap(admin, companyDb, req, async (baseUrl, cookie) => {
     const [bp, stored] = await Promise.all([
       getBusinessPartner(baseUrl, cookie, supplierCode),
-      loadStoredSupplierPaymentProfile(admin, companyDb, supplierCode),
+      loadStoredSupplierPaymentProfile(admin, companyDb, supplierCode, { includePending: true }),
     ]);
-    return { profile: supplierPaymentResponse(supplierCode, bp, stored) };
+    const raw = stored as unknown as Record<string, unknown> | null;
+    return {
+      profile: supplierPaymentResponse(supplierCode, bp, stored),
+      approval: raw ? {
+        status: String(raw.approval_status || "pending"),
+        requested_by: raw.created_by || null,
+        approved_by: raw.approved_by || null,
+        approved_at: raw.approved_at || null,
+      } : null,
+    };
   });
 }
 
@@ -845,21 +857,24 @@ async function saveSupplierPaymentProfile(admin: AdminClient, companyDb: string,
   return await withSap(admin, companyDb, req, async (baseUrl, cookie) => {
     const bp = await getBusinessPartner(baseUrl, cookie, supplierCode);
     const bpRow = businessPartnerRow(bp);
-    const oldStored = await loadStoredSupplierPaymentProfile(admin, companyDb, supplierCode);
+    const oldStored = await loadStoredSupplierPaymentProfile(admin, companyDb, supplierCode, { includePending: true });
     const oldProfile = supplierPaymentResponse(supplierCode, bpRow, oldStored);
     payload.supplier_name = payload.supplier_name || firstText(bpRow?.CardName) || null;
     payload.supplier_tax_id = payload.supplier_tax_id || fiscalTaxIdFromBp(bpRow, payload.pix_key) || null;
 
-    let sapPatch: { patched: boolean; fields: string[] } = { patched: false, fields: [] };
-    try {
-      sapPatch = await patchSapSupplierPayment(baseUrl, cookie, supplierCode, method, payload, bpRow);
-    } catch (error) {
-      console.warn("[accounts-payable-cnab] supplier SAP payment patch failed", supplierCode, message(error));
-    }
-
+    // F05: alteração bancária fica pendente até outra pessoa aprovar; só então
+    // vai ao ERP e passa a valer nas remessas.
+    const sapPatch: { patched: boolean; fields: string[] } = { patched: false, fields: [] };
     const { data, error } = await admin
       .from("accounts_payable_supplier_payment_profiles")
-      .upsert({ ...payload, created_by: actor }, { onConflict: "company_db,supplier_code" })
+      .upsert({
+        ...payload,
+        created_by: actor,
+        updated_by: actor,
+        approval_status: "pending",
+        approved_by: null,
+        approved_at: null,
+      }, { onConflict: "company_db,supplier_code" })
       .select("*")
       .single();
     if (error) throw new Error(`Falha ao salvar dados do fornecedor: ${message(error)}`);
@@ -869,9 +884,65 @@ async function saveSupplierPaymentProfile(admin: AdminClient, companyDb: string,
       next: supplierPaymentResponse(supplierCode, bpRow, data as SupplierPaymentProfileRow),
       sap_patch: sapPatch,
       source: "accounts_payable_screen",
+      approval_status: "pending",
     });
 
-    return { profile: supplierPaymentResponse(supplierCode, bpRow, data as SupplierPaymentProfileRow), sap_patch: sapPatch };
+    return {
+      profile: supplierPaymentResponse(supplierCode, bpRow, data as SupplierPaymentProfileRow),
+      sap_patch: sapPatch,
+      approval: { status: "pending", requested_by: actor, approved_by: null, approved_at: null },
+    };
+  });
+}
+
+function sameActor(a: unknown, b: unknown): boolean {
+  const x = String(a ?? "").trim().toLowerCase();
+  const y = String(b ?? "").trim().toLowerCase();
+  return !!x && x === y;
+}
+
+async function approveSupplierPaymentProfile(admin: AdminClient, companyDb: string, body: Record<string, unknown>, actor: string, req: Request) {
+  const supplierCode = String(body.supplier_code || "").trim();
+  if (!supplierCode) throw new Error("Fornecedor não informado.");
+  const stored = await loadStoredSupplierPaymentProfile(admin, companyDb, supplierCode, { includePending: true });
+  const raw = stored as unknown as Record<string, unknown> | null;
+  if (!stored || !raw) throw new Error("Não há dados bancários cadastrados para este fornecedor.");
+  if (raw.approval_status === "approved") throw new Error("Estes dados bancários já estão aprovados.");
+  if (sameActor(raw.created_by, actor) || sameActor(raw.updated_by, actor)) {
+    throw new Error("Segregação de funções: quem alterou os dados bancários não pode aprová-los.");
+  }
+  return await withSap(admin, companyDb, req, async (baseUrl, cookie) => {
+    const bp = await getBusinessPartner(baseUrl, cookie, supplierCode);
+    const bpRow = businessPartnerRow(bp);
+    const method = normalizeSupplierPaymentMethod(stored.payment_method);
+    let sapPatch: { patched: boolean; fields: string[] } = { patched: false, fields: [] };
+    try {
+      sapPatch = await patchSapSupplierPayment(baseUrl, cookie, supplierCode, method, raw, bpRow);
+    } catch (error) {
+      console.warn("[accounts-payable-cnab] supplier SAP payment patch failed", supplierCode, message(error));
+    }
+    const { data, error } = await admin
+      .from("accounts_payable_supplier_payment_profiles")
+      .update({ approval_status: "approved", approved_by: actor, approved_at: new Date().toISOString() })
+      .eq("company_db", companyDb)
+      .eq("supplier_code", supplierCode)
+      .eq("approval_status", "pending")
+      .select("*")
+      .single();
+    if (error) throw new Error(`Falha ao aprovar dados bancários: ${message(error)}`);
+    await admin.rpc("insert_audit_log", {
+      p_action: "accounts_payable_supplier_payment_profile_approved",
+      p_entity_type: "business_partner",
+      p_entity_id: supplierCode,
+      p_company_db: companyDb,
+      p_actor_email: actor,
+      p_details: { requested_by: raw.created_by, sap_patch: sapPatch },
+    });
+    return {
+      profile: supplierPaymentResponse(supplierCode, bpRow, data as SupplierPaymentProfileRow),
+      sap_patch: sapPatch,
+      approval: { status: "approved", requested_by: raw.created_by, approved_by: actor, approved_at: (data as Record<string, unknown>).approved_at },
+    };
   });
 }
 
@@ -1064,60 +1135,70 @@ async function generateBatch(admin: AdminClient, companyDb: string, body: Record
   return await withSap(admin, companyDb, req, async (baseUrl, cookie) => {
     const validated: Array<Record<string, unknown> & { id: string; reference: string }> = [];
     for (const input of requested) {
+      // F05: dados bancários/PIX/favorecido NUNCA vêm do cliente. Somente
+      // documento, parcela, valor e (boleto sem cadastro) o código de barras.
       const docEntry = Number(input.sap_doc_entry);
       const installmentId = Number(input.installment_id || 0);
       const amount = roundMoney(input.amount);
-      const paymentMethod = normalizeRemittancePaymentMethod(input.payment_method || "boleto");
-      const barcode = digits(input.barcode);
-      const bankCode = digits(input.bank_code);
-      const branch = digits(input.branch);
-      const branchDigit = firstText(input.branch_digit);
-      const accountNumber = digits(input.account_number);
-      const accountDigit = firstText(input.account_digit);
-      const accountType = firstText(input.account_type);
-      const pixKeyType = firstText(input.pix_key_type);
-      const pixKey = firstText(input.pix_key);
-      const supplierTaxId = digits(input.supplier_tax_id);
-      const beneficiaryName = firstText(input.beneficiary_name);
-      const beneficiaryTaxId = digits(input.beneficiary_tax_id || input.supplier_tax_id);
-      if (!Number.isInteger(docEntry) || docEntry <= 0 || amount <= 0 || paymentMethod === "unknown") {
-        throw new Error("Título inválido: documento, valor e forma de pagamento são obrigatórios.");
-      }
-      if (paymentMethod === "boleto" && barcode.length !== 44) {
-        throw new Error("Título inválido: código de barras do boleto é obrigatório.");
-      }
-      if (paymentMethod === "ted" && (!bankCode || !branch || !accountNumber || !beneficiaryTaxId)) {
-        throw new Error("Título inválido: TED exige banco, agência, conta e CPF/CNPJ do favorecido.");
-      }
-      if (paymentMethod === "pix" && (!pixKeyType || !pixKey || !beneficiaryTaxId)) {
-        throw new Error("Título inválido: PIX exige tipo da chave, chave PIX e CPF/CNPJ do favorecido.");
+      if (!Number.isInteger(docEntry) || docEntry <= 0 || amount <= 0) {
+        throw new Error("Título inválido: documento e valor são obrigatórios.");
       }
       const invoice = await getInvoice(baseUrl, cookie, docEntry);
-      const current = installmentTitles(invoice).find((title) => title.installment_id === installmentId) || installmentTitles(invoice)[0];
+      const cardCode = String(invoice.CardCode || "");
+      const [bp, stored, hidden] = await Promise.all([
+        cardCode ? getBusinessPartner(baseUrl, cookie, cardCode) : Promise.resolve(null),
+        cardCode ? loadStoredSupplierPaymentProfile(admin, companyDb, cardCode) : Promise.resolve(null),
+        loadExpensePaymentProfile(admin, companyDb, invoice),
+      ]);
+      const serverProfile = inferPaymentProfile(bp, hidden, stored);
+      const titles = installmentTitles(invoice, serverProfile);
+      const current = titles.find((title) => title.installment_id === installmentId) || titles[0];
       if (!current || current.open_amount + 0.005 < amount) {
         throw new Error(`NF ${invoice.DocNum}: saldo atual insuficiente para a remessa.`);
       }
       const invoiceCurrency = normalizeCurrency(invoice.DocCurrency);
       if (invoiceCurrency !== "BRL") throw new Error(`NF ${invoice.DocNum}: CNAB disponível inicialmente apenas para títulos em BRL.`);
+
+      const requestedMethod = normalizeRemittancePaymentMethod(input.payment_method || current.payment_method);
+      let paymentMethod = normalizeRemittancePaymentMethod(current.payment_method);
+      const serverBarcode = digits(current.boleto_barcode);
+      const clientBarcode = digits(input.barcode);
+      let barcode = serverBarcode;
+      let barcodeSource = serverBarcode ? "server" : "none";
+      if (requestedMethod === "boleto") {
+        if (serverBarcode && clientBarcode && clientBarcode !== serverBarcode) {
+          throw new Error(`NF ${invoice.DocNum}: código de barras diferente do cadastrado no documento.`);
+        }
+        if (!serverBarcode && clientBarcode) { barcode = clientBarcode; barcodeSource = "manual_pending_batch_approval"; }
+        paymentMethod = "boleto";
+      } else if (requestedMethod !== paymentMethod) {
+        throw new Error(`NF ${invoice.DocNum}: forma de pagamento diferente da cadastrada e aprovada para o fornecedor.`);
+      }
+      const bankCode = digits(current.bank_code);
+      const beneficiaryTaxId = digits(current.beneficiary_tax_id || current.supplier_tax_id);
+      if (paymentMethod === "unknown") throw new Error(`NF ${invoice.DocNum}: fornecedor sem forma de pagamento aprovada.`);
+      if (paymentMethod === "boleto" && barcode.length !== 44) {
+        throw new Error(`NF ${invoice.DocNum}: código de barras do boleto é obrigatório.`);
+      }
+      if (paymentMethod === "ted" && (!bankCode || !digits(current.branch) || !digits(current.account_number) || !beneficiaryTaxId)) {
+        throw new Error(`NF ${invoice.DocNum}: fornecedor sem dados bancários aprovados para TED.`);
+      }
+      if (paymentMethod === "pix" && (!current.pix_key_type || !current.pix_key || !beneficiaryTaxId)) {
+        throw new Error(`NF ${invoice.DocNum}: fornecedor sem chave PIX aprovada.`);
+      }
       const id = crypto.randomUUID();
       validated.push({
         id,
         reference: stableReference(id),
         ...current,
         barcode,
+        barcode_source: barcodeSource,
         payment_method: paymentMethod,
-        beneficiary_name: beneficiaryName || current.beneficiary_name || current.supplier_name,
-        beneficiary_tax_id: beneficiaryTaxId || digits(current.beneficiary_tax_id || current.supplier_tax_id) || null,
-        bank_code: bankCode || current.bank_code || null,
-        branch: branch || current.branch || null,
-        branch_digit: branchDigit || current.branch_digit || null,
-        account_number: accountNumber || current.account_number || null,
-        account_digit: accountDigit || current.account_digit || null,
-        account_type: accountType || current.account_type || null,
-        pix_key_type: pixKeyType || current.pix_key_type || null,
-        pix_key: pixKey || current.pix_key || null,
+        beneficiary_name: current.beneficiary_name || current.supplier_name,
+        beneficiary_tax_id: beneficiaryTaxId || null,
+        bank_code: bankCode || null,
         amount,
-        supplier_tax_id: supplierTaxId || digits(current.supplier_tax_id) || null,
+        supplier_tax_id: digits(current.supplier_tax_id) || null,
       });
     }
 
@@ -1157,6 +1238,7 @@ async function generateBatch(admin: AdminClient, companyDb: string, body: Record
       content: remittance.content,
       content_sha256: contentHash,
       generated_by: actor,
+      status: "generated",
     };
     let { error: batchError } = await admin.from("accounts_payable_batches").insert(batchPayload);
     if (batchError && isMissingColumn(batchError)) {
@@ -1193,6 +1275,8 @@ async function generateBatch(admin: AdminClient, companyDb: string, body: Record
         account_type: title.account_type,
         pix_key_type: title.pix_key_type,
         pix_key: title.pix_key,
+        barcode_source: title.barcode_source,
+        payment_data_source: title.payment_data_source,
       },
       company_reference: title.reference,
       idempotency_key: `${companyDb}:${batchId}:${title.sap_doc_entry}:${title.installment_id}`,
@@ -1203,14 +1287,23 @@ async function generateBatch(admin: AdminClient, companyDb: string, body: Record
       await admin.from("accounts_payable_batches").delete().eq("id", batchId);
       throw new Error(`Falha ao registrar títulos: ${message(itemError)}`);
     }
-    return { batch_id: batchId, filename, content: remittance.content, sequence: reserved.sequence, title_count: validated.length, total_amount: remittance.totalAmount };
+    await admin.rpc("insert_audit_log", {
+      p_action: "accounts_payable_batch_generated",
+      p_entity_type: "accounts_payable_batch",
+      p_entity_id: batchId,
+      p_company_db: companyDb,
+      p_actor_email: actor,
+      p_details: { filename, title_count: validated.length, total_amount: remittance.totalAmount, content_sha256: contentHash },
+    });
+    // F05: o arquivo só é liberado após aprovação de outra pessoa (download_batch).
+    return { batch_id: batchId, filename, content: null, pending_approval: true, sequence: reserved.sequence, title_count: validated.length, total_amount: remittance.totalAmount };
   });
 }
 
 async function listBatches(admin: AdminClient, companyDb: string) {
   const { data: batches, error } = await admin
     .from("accounts_payable_batches")
-    .select("id, company_db, bank_account_id, file_sequence, filename, payment_date, title_count, total_amount, status, content_sha256, return_filename, return_sha256, generated_by, generated_at, processed_at, error_message, created_at, updated_at")
+    .select("id, company_db, bank_account_id, file_sequence, filename, payment_date, title_count, total_amount, status, content_sha256, return_filename, return_sha256, generated_by, generated_at, approved_by, approved_at, processed_at, error_message, created_at, updated_at")
     .eq("company_db", companyDb)
     .order("generated_at", { ascending: false })
     .limit(100);
@@ -1263,7 +1356,43 @@ function batchItemTitle(item: Record<string, unknown>, paymentDate: string): Sic
   };
 }
 
-async function downloadBatch(admin: AdminClient, companyDb: string, body: Record<string, unknown>) {
+async function approveBatch(admin: AdminClient, companyDb: string, body: Record<string, unknown>, actor: string) {
+  const batchId = String(body.batch_id || "").trim();
+  if (!batchId) throw new Error("batch_id é obrigatório.");
+  const { data: batch, error } = await admin
+    .from("accounts_payable_batches")
+    .select("id, status, generated_by, approved_by, content, content_sha256")
+    .eq("company_db", companyDb)
+    .eq("id", batchId)
+    .maybeSingle();
+  if (error) throw new Error(`Lote: ${message(error)}`);
+  if (!batch) throw new Error("Lote não encontrado.");
+  if (batch.status !== "generated" || batch.approved_by) throw new Error("Esta remessa não está aguardando aprovação.");
+  if (sameActor(batch.generated_by, actor)) {
+    throw new Error("Segregação de funções: quem gerou a remessa não pode aprová-la.");
+  }
+  if (batch.content && (await sha256(String(batch.content))) !== String(batch.content_sha256 || "")) {
+    throw new Error("Integridade da remessa violada: o arquivo foi alterado após a geração.");
+  }
+  const approvedAt = new Date().toISOString();
+  const { error: upErr } = await admin
+    .from("accounts_payable_batches")
+    .update({ status: "approved", approved_by: actor, approved_at: approvedAt })
+    .eq("id", batchId)
+    .eq("status", "generated");
+  if (upErr) throw new Error(`Falha ao aprovar remessa: ${message(upErr)}`);
+  await admin.rpc("insert_audit_log", {
+    p_action: "accounts_payable_batch_approved",
+    p_entity_type: "accounts_payable_batch",
+    p_entity_id: batchId,
+    p_company_db: companyDb,
+    p_actor_email: actor,
+    p_details: { generated_by: batch.generated_by, content_sha256: batch.content_sha256 },
+  });
+  return { batch_id: batchId, status: "approved", approved_by: actor, approved_at: approvedAt };
+}
+
+async function downloadBatch(admin: AdminClient, companyDb: string, body: Record<string, unknown>, actor: string) {
   const batchId = String(body.batch_id || "").trim();
   if (!batchId) throw new Error("batch_id é obrigatório.");
   const { data: batch, error } = await admin
@@ -1274,7 +1403,35 @@ async function downloadBatch(admin: AdminClient, companyDb: string, body: Record
     .maybeSingle();
   if (error) throw new Error(`Lote: ${message(error)}`);
   if (!batch) throw new Error("Lote não encontrado.");
-  if (String(batch.content || "")) return { filename: batch.filename, content: batch.content, regenerated: false };
+  if (!batch.approved_by || !batch.approved_at) {
+    throw new Error("Remessa aguardando aprovação de outra pessoa antes do download.");
+  }
+  if (batch.status === "cancelled") throw new Error("Remessa cancelada.");
+  const expectedHash = String(batch.content_sha256 || "");
+  if (!expectedHash) throw new Error("Remessa sem hash de integridade registrado; gere novamente.");
+  if (String(batch.content || "")) {
+    const actual = await sha256(String(batch.content));
+    if (actual !== expectedHash) {
+      await admin.rpc("insert_audit_log", {
+        p_action: "accounts_payable_batch_hash_mismatch",
+        p_entity_type: "accounts_payable_batch",
+        p_entity_id: batchId,
+        p_company_db: companyDb,
+        p_actor_email: actor,
+        p_details: { expected: expectedHash, actual },
+      });
+      throw new Error("Integridade da remessa violada: o arquivo foi alterado após a geração. Download bloqueado.");
+    }
+    await admin.rpc("insert_audit_log", {
+      p_action: "accounts_payable_batch_downloaded",
+      p_entity_type: "accounts_payable_batch",
+      p_entity_id: batchId,
+      p_company_db: companyDb,
+      p_actor_email: actor,
+      p_details: { content_sha256: expectedHash },
+    });
+    return { filename: batch.filename, content: batch.content, content_sha256: expectedHash, regenerated: false };
+  }
 
   const config = await loadBankConfig(admin, companyDb);
   if (!config || config.active === false) throw new Error("Configure uma conta Sicoob ativa antes de reconstruir a remessa.");
@@ -1293,7 +1450,11 @@ async function downloadBatch(admin: AdminClient, companyDb: string, body: Record
     generatedAt: new Date(String(batch.generated_at || Date.now())),
     titles,
   });
-  return { filename: batch.filename, content: remittance.content, regenerated: true };
+  const rebuiltHash = await sha256(remittance.content);
+  if (rebuiltHash !== expectedHash) {
+    throw new Error("Integridade da remessa: o arquivo reconstruído não confere com o aprovado. Download bloqueado.");
+  }
+  return { filename: batch.filename, content: remittance.content, content_sha256: expectedHash, regenerated: true };
 }
 
 async function matchReturn(admin: AdminClient, companyDb: string, parsedTitles: SicoobReturnTitle[]) {
@@ -1353,6 +1514,29 @@ async function processReturn(admin: AdminClient, companyDb: string, content: str
     .maybeSingle();
   if (batchError) throw new Error(`Lote do retorno: ${message(batchError)}`);
   if (!batch) throw new Error(`Não existe remessa ${parsed.fileSequence} para esta empresa.`);
+  // F05: retorno só para remessa aprovada, de origem conferida e por quem não gerou.
+  if (!batch.approved_by) throw new Error("Esta remessa não foi aprovada; o retorno não pode ser processado.");
+  if (sameActor(batch.generated_by, actor)) {
+    throw new Error("Segregação de funções: quem gerou a remessa não pode processar o retorno.");
+  }
+  const config = await loadBankConfig(admin, companyDb);
+  const header = content.replace(/^\uFEFF/, "").split(/\r?\n/)[0] || "";
+  const headerTaxId = digits(header.slice(18, 32));
+  const headerAccount = digits(header.slice(58, 70)).replace(/^0+/, "");
+  const cfg = (config || {}) as Record<string, unknown>;
+  const cfgTaxId = digits(cfg.tax_id ?? cfg.company_tax_id ?? cfg.taxId).padStart(14, "0");
+  const cfgAccount = digits(cfg.account_number ?? cfg.accountNumber).replace(/^0+/, "");
+  if (!cfgAccount || headerTaxId.padStart(14, "0") !== cfgTaxId || headerAccount !== cfgAccount) {
+    await admin.rpc("insert_audit_log", {
+      p_action: "accounts_payable_return_origin_rejected",
+      p_entity_type: "accounts_payable_batch",
+      p_entity_id: batch.id,
+      p_company_db: companyDb,
+      p_actor_email: actor,
+      p_details: { filename, return_sha256: returnHash },
+    });
+    throw new Error("Arquivo de retorno não pertence à conta Sicoob configurada desta empresa (CNPJ/conta divergentes).");
+  }
   if (batch.return_sha256 && batch.return_sha256 !== returnHash) throw new Error("Este lote já recebeu outro arquivo de retorno.");
   const matches = await matchReturn(admin, companyDb, parsed.titles);
   const accountRelation = Array.isArray(batch.accounts_payable_bank_accounts)
@@ -1491,7 +1675,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (action === "list_open") return json({ titles: await listAvailableTitles(admin, companyDb, req, body) });
     if (action === "generate") return json(await generateBatch(admin, companyDb, body, actor, req));
     if (action === "list_batches") return json({ batches: await listBatches(admin, companyDb) });
-    if (action === "download_batch") return json(await downloadBatch(admin, companyDb, body));
+    if (action === "approve_batch") return json(await approveBatch(admin, companyDb, body, actor));
+    if (action === "approve_supplier_payment_profile") return json(await approveSupplierPaymentProfile(admin, companyDb, body, actor, req));
+    if (action === "download_batch") return json(await downloadBatch(admin, companyDb, body, actor));
     if (action === "preview_return") return json(await previewReturn(admin, companyDb, String(body.content || "")));
     if (action === "process_return") return json(await processReturn(admin, companyDb, String(body.content || ""), String(body.filename || ""), actor, req));
     return json({ error: "Ação inválida." }, 400);
