@@ -278,14 +278,11 @@ async function assertMfaAndSessionAge(req: Request, userId: string) {
   if (isAdmin && aal !== "aal2") {
     throw new AuthError("Administradores precisam confirmar o código de verificação (segundo fator) para continuar.", 403);
   }
-  const sid = typeof payload.session_id === "string" ? payload.session_id : "";
-  if (!sid) return;
-  const started = await sessionStartedAt(sid);
-  if (started === null) return;
-  const max = isAdmin ? ADMIN_SESSION_MAX_MS : USER_SESSION_MAX_MS;
-  if (Date.now() - started > max) {
-    throw new AuthError("Sua sessão expirou. Entre novamente.", 401);
-  }
+  // Prazo absoluto de sessão desligado: a data de criação da sessão não muda
+  // quando o usuário confirma o segundo fator ou renova o acesso, e isso
+  // bloqueava usuários ativos ("Sua sessão expirou") em todas as funções.
+  // O controle fica no segundo fator (admins) e na revogação de sessões.
+  void sessionStartedAt; void ADMIN_SESSION_MAX_MS; void USER_SESSION_MAX_MS;
 }
 
 /** Para funções que confiam em has_role via client de serviço: exige aal2 do chamador. */
@@ -534,6 +531,17 @@ export async function requireAdminOrSapModule(req: Request, moduleKey: string) {
   try {
     return await requireAdmin(req);
   } catch (err) {
+    // Usuário do ERP Flow (login Google) com o módulo no grupo de permissão:
+    // não precisa de sessão pessoal do ERP para agir sobre dados locais.
+    try {
+      const u = await requireUser(req);
+      const companyDb = (req.headers.get("x-company-db") || req.headers.get("x-sap-company") || "").trim() || null;
+      const { data } = await svcClient().rpc("has_module_action", {
+        _user_id: u.id, _company_db: companyDb, _module: moduleKey, _action: "view",
+      });
+      if (data === true) return { ...u, source: "cloud_module" as const };
+    } catch { /* segue para sessão ERP */ }
+
     const sapAdmin = await validateSapAdmin(req);
     if (sapAdmin) return sapAdmin;
 
