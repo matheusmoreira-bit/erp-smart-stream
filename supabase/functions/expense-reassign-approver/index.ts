@@ -184,7 +184,6 @@ Deno.serve(async (req) => {
       });
       if (mappedAdmin === true) isAdminCaller = true;
     } catch { /* noop */ }
-    if (norm(sap.userName) === "manager") isAdminCaller = true;
   }
   if (!isAdminCaller) {
     return json(403, { error: "Apenas administradores podem reprocessar o roteamento de aprovação." });

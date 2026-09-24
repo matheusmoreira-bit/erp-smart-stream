@@ -339,6 +339,10 @@ async function validateSapAdmin(req: Request) {
   }
   const { sapSession, routeId, sapUser, companyDB } = headers;
 
+  // F02: a sessão precisa estar comprovadamente amarrada ao usuário.
+  const proven = await validateSapSession(req);
+  if (!proven || proven.userName !== sapUser || proven.companyDB !== companyDB) return null;
+
   const admin = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -347,7 +351,6 @@ async function validateSapAdmin(req: Request) {
   const { data: isAdminByMapping } = await admin.rpc("is_sap_user_admin", {
     _sap_username: sapUser.toLowerCase(),
   });
-  const isManager = sapUser.toLowerCase() === "manager";
 
   const escapedUser = sapUser.replace(/'/g, "''");
   const baseUrl = await getSapBaseUrl(admin, companyDB);
@@ -372,11 +375,10 @@ async function validateSapAdmin(req: Request) {
 
   const payload = await sapResp.json().catch(() => null) as { value?: { Superuser?: string }[] } | null;
   const isSapSuperUser = payload?.value?.some((row) => row.Superuser === "tYES") === true;
-  if (!isManager && !isSapSuperUser && isAdminByMapping !== true) {
+  if (!isSapSuperUser && isAdminByMapping !== true) {
     console.warn("[validateSapAdmin] user is not admin", {
       sapUser,
       companyDB,
-      isManager,
       isSapSuperUser,
       isAdminByMapping,
     });
@@ -518,58 +520,13 @@ export async function validateSapSession(req: Request) {
     });
   }
 
-  const admin = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
-  const baseUrl = await getSapBaseUrl(admin, companyDB);
-  // Cheap session-scoped check. We can't hit /Users because regular (non-super)
-  // B1 users get 403 "not permitted to query the object:Users" — which would
-  // wrongly look like an invalid session. Probe the caller's own record via
-  // /Users('<code>'), and if SAP still refuses (older SL versions), fall back
-  // to the service-document root which any valid B1SESSION can read.
-  const cookie = `B1SESSION=${sapSession}${routeId ? `; ROUTEID=${routeId}` : ""}`;
-  const escaped = sapUser.replace(/'/g, "''");
-  // SAP degradado não pode travar a requisição: o probe tem teto de tempo e,
-  // se estourar, a sessão fica "não comprovada" (o caller cai no JWT do Cloud).
-  const PROBE_TIMEOUT_MS = 6000;
-  const probe = (url: string) =>
-    fetch(url, { headers: { Cookie: cookie }, signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) })
-      .catch(() => null);
-
-  let resp = await probe(`${baseUrl}/Users('${encodeURIComponent(escaped)}')?$select=UserCode`);
-  if (!resp) return null;
-  // 401 = bad session. 403/404 = session is fine, permission/lookup issue.
-  if (resp.status === 401) {
-    sapSessionValidationCache.delete(cacheKey);
-    return null;
-  }
-  if (!resp.ok && resp.status !== 403 && resp.status !== 404) {
-    // Fallback: service-document root requires only a valid session.
-    await resp.body?.cancel().catch(() => {});
-    const fallback = await probe(`${baseUrl}/`);
-    if (!fallback) return null;
-    resp = fallback;
-    if (resp.status === 401) {
-      sapSessionValidationCache.delete(cacheKey);
-      return null;
-    }
-    if (!resp.ok) return null;
-  }
-  await resp.body?.cancel().catch(() => {});
-  const value: SapSessionValidation = {
-    id: `sap:${companyDB}:${sapUser}`,
-    email: sapUser,
-    companyDB,
-    userName: sapUser,
-    source: "sap_session",
-  };
-  sapSessionValidationCache.set(cacheKey, {
-    expiresAt: Date.now() + SAP_SESSION_VALIDATION_CACHE_TTL_MS,
-    value,
-  });
-  pruneSapSessionValidationCache();
-  return value;
+  // F02: sem token HMAC válido não há prova de que a sessão pertence ao
+  // usuário declarado em x-sap-user. Não aceitamos mais "probe" do SAP com
+  // 403/404 como sessão válida — o token só é emitido pelo sap-b1-proxy após
+  // o SAP confirmar o dono da sessão (UsersService_GetCurrentUser).
+  sapSessionValidationCache.delete(cacheKey);
+  console.warn("[validateSapSession] missing/invalid signed SAP token", { companyDB, sapUser });
+  return null;
 }
 
 export async function requireUserOrSapSession(req: Request) {

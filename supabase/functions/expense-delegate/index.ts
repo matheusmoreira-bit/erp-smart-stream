@@ -124,7 +124,6 @@ Deno.serve(async (req) => {
     } catch {
       /* noop */
     }
-    if (!isSapAdmin && (sap.userName || "").toLowerCase() === "manager") isSapAdmin = true;
   }
 
   if (!callerIdentity && !isCloudAdmin) {

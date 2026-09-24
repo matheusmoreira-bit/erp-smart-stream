@@ -98,7 +98,6 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
   if (sap) {
     userName = sap.userName;
     if (!identity) identity = sap.userName;
-    if (sap.userName.toLowerCase() === "manager") privileged = true;
   }
 
   const tWave = Date.now();

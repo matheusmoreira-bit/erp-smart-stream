@@ -72,7 +72,6 @@ async function identifyCaller(req: Request, admin: SupabaseClient) {
       });
       if (mapped === true) isSuperUser = true;
     } catch { /* ignore */ }
-    if (!isSuperUser && sap.userName.toLowerCase() === "manager") isSuperUser = true;
   }
 
   return { identity, email, isCloudAdmin, isSuperUser };

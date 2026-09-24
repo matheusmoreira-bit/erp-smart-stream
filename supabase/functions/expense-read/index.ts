@@ -93,6 +93,7 @@ function callerCacheKey(req: Request): string {
     req.headers.get("x-sap-session") || "",
     req.headers.get("x-sap-user") || "",
     req.headers.get("x-company-db") || "",
+    req.headers.get("x-sap-auth-token") || "",
   ].join("|");
 }
 
@@ -138,7 +139,6 @@ async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Call
         });
         if (mapped === true) privileged = true;
       } catch { /* ignore */ }
-      if (!privileged && sap.userName.toLowerCase() === "manager") privileged = true;
     }
   }
 
