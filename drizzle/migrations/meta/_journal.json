@@ -393,6 +393,13 @@
       "when": 1790263741368,
       "tag": "0055_infra_backup_log_replica_kind_f07",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1790264998299,
+      "tag": "0056_copilot_f10_hardening",
+      "breakpoints": true
     }
   ]
 }
