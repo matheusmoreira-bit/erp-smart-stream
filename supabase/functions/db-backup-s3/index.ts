@@ -1,10 +1,16 @@
-// Backup lógico do schema public para S3 (JSONL gzip por tabela + manifest.json)
-// Agendado diariamente via pg_cron; também aceita execução manual (POST { manual: true }).
+// Backup lógico do schema public + contas de login para S3 (F07).
+// - Acesso: somente agendador (segredo), service role ou administrador.
+// - Cada tabela vira partes JSONL gzip cifradas (AES-256-GCM, BACKUP_ENC_KEY).
+// - Inclui audit_trail/audit_trail_archive e auth.users (sem hashes de senha — não expostos pela API).
+// - Grava com criptografia no S3 (SSE) e Object Lock quando BACKUP_OBJECT_LOCK_DAYS estiver definido.
+// Body opcional: { manual?: boolean, tables?: string[] } (tables permite rodar só algumas tabelas).
 import { createClient } from "npm:@supabase/supabase-js@2.45.0";
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { S3Client, PutObjectCommand } from "npm:@aws-sdk/client-s3@3.658.0";
+const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-scheduler-secret" };
+import { s3Client, s3Put } from "../_shared/s3-put.ts";
 import { gzipSync } from "node:zlib";
 import { createHash } from "node:crypto";
+import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
+import { encryptBackup } from "../_shared/backup-crypto.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -12,45 +18,93 @@ const AWS_REGION = Deno.env.get("AWS_REGION") ?? "us-east-1";
 const AWS_KEY = Deno.env.get("AWS_ACCESS_KEY_ID");
 const AWS_SECRET = Deno.env.get("AWS_SECRET_ACCESS_KEY");
 const BUCKET = Deno.env.get("AWS_S3_BACKUP_BUCKET");
+const LOCK_DAYS = Number(Deno.env.get("BACKUP_OBJECT_LOCK_DAYS") || "0");
 const CHUNK = 5000;
+const ROWS_PER_PART = 50000;
 
-// Tabelas grandes / com PII sensível — não incluir integralmente ou fazer sample:
-const SKIP_TABLES = new Set<string>([
-  "audit_trail", // muito grande, tem tabela archive separada
-  "audit_trail_archive",
-  "permission_shadow_log",
-  "integration_log",
-  "sap_cache",
-]);
+// Apenas caches reconstruíveis a partir do SAP ficam de fora.
+const SKIP_TABLES = new Set<string>(["sap_cache"]);
+const TABLE_RE = /^[a-z_][a-z0-9_]{0,62}$/;
 
-async function listPublicTables(sb: ReturnType<typeof createClient>): Promise<string[]> {
+type Sb = ReturnType<typeof createClient>;
+type ManifestEntry = { table: string; count: number; parts: { key: string; rows: number; bytes: number; sha256: string }[] };
+
+function json(status: number, body: unknown) {
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}
+
+async function listPublicTables(sb: Sb): Promise<string[]> {
   const { data, error } = await sb.rpc("copilot_read_query", {
     p_sql: `SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' ORDER BY table_name`,
   });
   if (error) throw new Error(`list tables: ${error.message}`);
-  const rows = (data as any)?.rows ?? (Array.isArray(data) ? data : []);
-  return rows.map((r: any) => r.table_name);
+  const d = data as { rows?: { table_name: string }[] } | { table_name: string }[] | null;
+  const rows = Array.isArray(d) ? d : d?.rows ?? [];
+  return rows.map((r) => r.table_name);
 }
 
-async function dumpTable(sb: ReturnType<typeof createClient>, table: string): Promise<{ jsonl: string; count: number }> {
+async function uploadPart(s3: ReturnType<typeof s3Client>, key: string, jsonl: string) {
+  const gz = gzipSync(new TextEncoder().encode(jsonl));
+  const enc = await encryptBackup(new Uint8Array(gz));
+  const sha = createHash("sha256").update(enc).digest("hex");
+  await s3Put(s3, AWS_REGION, BUCKET!, key, enc, { sha256: sha, lockDays: LOCK_DAYS });
+  return { bytes: enc.length, sha256: sha };
+}
+
+async function dumpTable(sb: Sb, s3: ReturnType<typeof s3Client>, prefix: string, table: string): Promise<ManifestEntry> {
+  const entry: ManifestEntry = { table, count: 0, parts: [] };
   let from = 0;
-  let out = "";
-  let total = 0;
+  let buf = "";
+  let bufRows = 0;
+  const flush = async () => {
+    if (bufRows === 0) return;
+    const key = `${prefix}/${table}.part${String(entry.parts.length).padStart(4, "0")}.jsonl.gz.enc`;
+    const r = await uploadPart(s3, key, buf);
+    entry.parts.push({ key, rows: bufRows, ...r });
+    buf = ""; bufRows = 0;
+  };
   while (true) {
     const { data, error } = await sb.from(table).select("*").range(from, from + CHUNK - 1);
     if (error) throw new Error(`dump ${table}: ${error.message}`);
     if (!data || data.length === 0) break;
-    for (const row of data) out += JSON.stringify(row) + "\n";
-    total += data.length;
+    for (const row of data) buf += JSON.stringify(row) + "\n";
+    bufRows += data.length;
+    entry.count += data.length;
+    if (bufRows >= ROWS_PER_PART) await flush();
     if (data.length < CHUNK) break;
     from += CHUNK;
-    if (total > 500000) break; // safety cap
   }
-  return { jsonl: out, count: total };
+  await flush();
+  return entry;
+}
+
+async function dumpAuthUsers(sb: Sb, s3: ReturnType<typeof s3Client>, prefix: string): Promise<ManifestEntry> {
+  const entry: ManifestEntry = { table: "auth.users", count: 0, parts: [] };
+  let page = 1;
+  let buf = "";
+  while (true) {
+    const { data, error } = await sb.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw new Error(`auth.users: ${error.message}`);
+    const users = data?.users ?? [];
+    for (const u of users) buf += JSON.stringify(u) + "\n";
+    entry.count += users.length;
+    if (users.length < 1000) break;
+    page++;
+  }
+  if (entry.count > 0) {
+    const key = `${prefix}/auth.users.part0000.jsonl.gz.enc`;
+    const r = await uploadPart(s3, key, buf);
+    entry.parts.push({ key, rows: entry.count, ...r });
+  }
+  return entry;
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return json(405, { error: "Use POST" });
+
+  const auth = await requireSchedulerOrAdmin(req, corsHeaders);
+  if (!auth.ok) return auth.response;
 
   const started = Date.now();
   const sb = createClient(SUPABASE_URL, SERVICE_KEY);
@@ -58,70 +112,79 @@ Deno.serve(async (req) => {
 
   try {
     if (!AWS_KEY || !AWS_SECRET || !BUCKET) {
-      return new Response(JSON.stringify({ error: "AWS S3 secrets missing (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_S3_BACKUP_BUCKET)" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json(400, { error: "Backup S3 não configurado (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_S3_BACKUP_BUCKET)" });
     }
+    if (!Deno.env.get("BACKUP_ENC_KEY")) return json(400, { error: "BACKUP_ENC_KEY ausente" });
 
-    const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
-    const manual = Boolean(body.manual);
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const prefix = `daily/${dateStr}`;
+    const body = (await req.json().catch(() => ({}))) as { manual?: unknown; tables?: unknown };
+    const manual = body.manual === true;
+    const only = Array.isArray(body.tables)
+      ? body.tables.filter((t): t is string => typeof t === "string" && TABLE_RE.test(t)).slice(0, 50)
+      : null;
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const prefix = `daily/${stamp.slice(0, 10)}/${stamp}`;
 
     const { data: logRow } = await sb.from("infra_backup_log").insert({
-      kind: "db", status: "running", trigger: manual ? "manual" : "cron",
+      kind: "db", status: "running", trigger: manual ? "manual" : auth.source,
       bucket: BUCKET, s3_prefix: prefix,
     }).select("id").single();
-    logId = (logRow as any)?.id ?? null;
+    logId = (logRow as { id?: string } | null)?.id ?? null;
 
-    const s3 = new S3Client({ region: AWS_REGION, credentials: { accessKeyId: AWS_KEY, secretAccessKey: AWS_SECRET } });
-    const tables = await listPublicTables(sb);
-    const manifest: any[] = [];
-    let totalBytes = 0;
-    let okCount = 0;
+    const s3 = s3Client(AWS_REGION, AWS_KEY, AWS_SECRET);
+    const all = await listPublicTables(sb);
+    const tables = only ? all.filter((t) => only.includes(t)) : all;
+    const manifest: ManifestEntry[] = [];
     const errors: string[] = [];
+    let totalBytes = 0;
 
     for (const t of tables) {
       if (SKIP_TABLES.has(t)) continue;
       try {
-        const { jsonl, count } = await dumpTable(sb, t);
-        if (count === 0) { manifest.push({ table: t, count: 0, skipped: true }); continue; }
-        const gz = gzipSync(new TextEncoder().encode(jsonl));
-        const sha = createHash("sha256").update(gz).digest("hex");
-        const key = `${prefix}/${t}.jsonl.gz`;
-        await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: gz, ContentType: "application/gzip", ContentEncoding: "gzip" }));
-        manifest.push({ table: t, count, bytes: gz.length, sha256: sha, key });
-        totalBytes += gz.length;
-        okCount++;
+        const e = await dumpTable(sb, s3, prefix, t);
+        manifest.push(e);
+        totalBytes += e.parts.reduce((s, p) => s + p.bytes, 0);
       } catch (e) {
         errors.push(`${t}: ${(e as Error).message}`);
       }
     }
+    if (!only) {
+      try {
+        const e = await dumpAuthUsers(sb, s3, prefix);
+        manifest.push(e);
+        totalBytes += e.parts.reduce((s, p) => s + p.bytes, 0);
+      } catch (e) {
+        errors.push(`auth.users: ${(e as Error).message}`);
+      }
+    }
 
-    const manifestBody = new TextEncoder().encode(JSON.stringify({
-      generated_at: new Date().toISOString(), tables: manifest, errors,
-    }, null, 2));
-    await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: `${prefix}/manifest.json`, Body: manifestBody, ContentType: "application/json" }));
+    const manifestJson = JSON.stringify({
+      format: "erpbk1", generated_at: new Date().toISOString(), partial_selection: Boolean(only),
+      object_lock_days: LOCK_DAYS, tables: manifest, errors,
+    }, null, 2);
+    const mBody = new TextEncoder().encode(manifestJson);
+    const mSha = createHash("sha256").update(mBody).digest("hex");
+    await s3Put(s3, AWS_REGION, BUCKET, `${prefix}/manifest.json`, mBody, { sha256: mSha, lockDays: LOCK_DAYS, contentType: "application/json" });
 
     const status = errors.length === 0 ? "ok" : "partial";
     if (logId) await sb.from("infra_backup_log").update({
       status, finished_at: new Date().toISOString(), duration_ms: Date.now() - started,
-      tables_count: okCount, total_bytes: totalBytes,
-      manifest: { tables: manifest.length, errors: errors.length },
+      tables_count: manifest.length, total_bytes: totalBytes,
+      manifest: { tables: manifest.length, errors: errors.length, manifest_sha256: mSha },
       error_message: errors.length ? errors.slice(0, 5).join(" | ") : null,
     }).eq("id", logId);
 
-    return new Response(JSON.stringify({ ok: true, status, tables: okCount, total_bytes: totalBytes, errors }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    await sb.rpc("insert_audit_log", {
+      p_action: "db_backup_s3", p_entity_type: "backup", p_entity_id: prefix,
+      p_details: { status, tables: manifest.length, total_bytes: totalBytes, source: auth.source },
+    }).then(() => undefined, () => undefined);
+
+    return json(200, { ok: true, status, prefix, tables: manifest.length, total_bytes: totalBytes, errors });
   } catch (e) {
     const msg = (e as Error).message;
     if (logId) await sb.from("infra_backup_log").update({
-      status: "error", finished_at: new Date().toISOString(),
-      duration_ms: Date.now() - started, error_message: msg,
+      status: "error", finished_at: new Date().toISOString(), duration_ms: Date.now() - started, error_message: msg,
     }).eq("id", logId);
-    return new Response(JSON.stringify({ error: msg }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json(500, { error: msg });
   }
 });
