@@ -211,13 +211,86 @@ export function isCorporateEmail(email: string | null | undefined): boolean {
 }
 
 export async function requireUser(req: Request) {
-  const user = await requireUserUnchecked(req);
+  const verified = await requireUserUnchecked(req);
+  const user = { id: verified.id, email: verified.email };
   if (!isCorporateEmail(user.email)) {
     console.warn("[requireUser] domínio não corporativo bloqueado", { id: user.id });
     throw new AuthError("Domínio de e-mail não autorizado", 403);
   }
+  await assertMfaAndSessionAge(req, user.id);
   await assertNotImpersonatingWrite(req, user.id);
   return user;
+}
+
+// ============================================================
+// F09: administradores só agem com segundo fator (aal2) e sessões têm prazo.
+// ============================================================
+const ADMIN_SESSION_MAX_MS = 12 * 60 * 60 * 1000; // 12h
+const USER_SESSION_MAX_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
+const adminRoleCache = new Map<string, { until: number; admin: boolean }>();
+const sessionStartCache = new Map<string, { until: number; startedAt: number | null }>();
+
+function tokenPayload(req: Request): Record<string, unknown> {
+  try {
+    const token = (req.headers.get("Authorization") || "").slice(7).trim();
+    const raw = token.split(".")[1] || "";
+    const b64 = raw.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(raw.length / 4) * 4, "=");
+    return JSON.parse(atob(b64)) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function svcClient() {
+  return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+    auth: { persistSession: false },
+  });
+}
+
+async function hasAdminRole(userId: string): Promise<boolean> {
+  const hit = adminRoleCache.get(userId);
+  if (hit && hit.until > Date.now()) return hit.admin;
+  // Sem JWT no client de serviço: has_role devolve só o papel cadastrado.
+  const { data, error } = await svcClient().rpc("has_role", { _user_id: userId, _role: "admin" });
+  const admin = !error && data === true;
+  if (adminRoleCache.size > 1000) adminRoleCache.clear();
+  adminRoleCache.set(userId, { until: Date.now() + 60_000, admin });
+  return admin;
+}
+
+async function sessionStartedAt(sessionId: string): Promise<number | null> {
+  const hit = sessionStartCache.get(sessionId);
+  if (hit && hit.until > Date.now()) return hit.startedAt;
+  let startedAt: number | null = null;
+  try {
+    const { data } = await svcClient().rpc("session_started_at", { _session_id: sessionId });
+    startedAt = data ? new Date(String(data)).getTime() : null;
+  } catch { /* falha aberta: não derruba o app por indisponibilidade */ }
+  if (sessionStartCache.size > 2000) sessionStartCache.clear();
+  sessionStartCache.set(sessionId, { until: Date.now() + 5 * 60_000, startedAt });
+  return startedAt;
+}
+
+async function assertMfaAndSessionAge(req: Request, userId: string) {
+  const payload = tokenPayload(req);
+  const aal = String(payload.aal || "aal1");
+  const isAdmin = await hasAdminRole(userId);
+  if (isAdmin && aal !== "aal2") {
+    throw new AuthError("Administradores precisam confirmar o código de verificação (segundo fator) para continuar.", 403);
+  }
+  const sid = typeof payload.session_id === "string" ? payload.session_id : "";
+  if (!sid) return;
+  const started = await sessionStartedAt(sid);
+  if (started === null) return;
+  const max = isAdmin ? ADMIN_SESSION_MAX_MS : USER_SESSION_MAX_MS;
+  if (Date.now() - started > max) {
+    throw new AuthError("Sua sessão expirou. Entre novamente.", 401);
+  }
+}
+
+/** Para funções que confiam em has_role via client de serviço: exige aal2 do chamador. */
+export function callerHasMfa(req: Request): boolean {
+  return String(tokenPayload(req).aal || "") === "aal2";
 }
 
 // ============================================================

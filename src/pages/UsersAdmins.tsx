@@ -5,6 +5,7 @@ import AdminUsersManager from "@/components/AdminUsersManager";
 import { IdpBindingFlagCard } from "@/components/IdpBindingFlagCard";
 import { DuplicateIdentitiesCard } from "@/components/DuplicateIdentitiesCard";
 import { PageTitle } from "@/components/PageTitle";
+import { AdminMfaCard } from "@/components/AdminMfaCard";
 
 /**
  * Administradores do backoffice + política de vínculo de identidade (IdP),
@@ -37,6 +38,7 @@ export default function UsersAdmins() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-8">
       <PageTitle title="Administradores" />
+      {isAdmin && <AdminMfaCard />}
       <IdpBindingFlagCard />
       <DuplicateIdentitiesCard />
       <AdminUsersManager />

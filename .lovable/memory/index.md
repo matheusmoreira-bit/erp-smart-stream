@@ -12,6 +12,7 @@
 
 
 ## Memories
+- [Admin MFA](mem://features/admin-mfa.md) — F09: admin exige segundo fator no banco e nas funções; sessões com prazo; reset por outro admin.
 - [Auto-aprovação](mem://features/auto-aprovacao.md) — Regra de escalonamento quando o solicitante também é aprovador.
 - [Debug discipline](skill://lovable-debug-discipline) — Checklist root-cause / reuse / trace-before-fix para evitar loops de fix em sintoma.
 - [Users screen actions](mem://preferences/users-screen-actions.md) — Keep the Users screen action buttons minimal and icon-based instead of large filled buttons.

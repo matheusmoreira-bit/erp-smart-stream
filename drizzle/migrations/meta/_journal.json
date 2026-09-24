@@ -421,6 +421,13 @@
       "when": 1790268970642,
       "tag": "0059_user_company_access",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1790271224507,
+      "tag": "0060_f09_admin_mfa_required",
+      "breakpoints": true
     }
   ]
 }
