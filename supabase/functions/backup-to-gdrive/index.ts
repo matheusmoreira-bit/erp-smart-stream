@@ -1,6 +1,7 @@
 // Backup automático de aprovações, pedidos de compra e anexos para o Google Drive.
 // Executa a cada 6h via cron. Retenção de 90 dias para os snapshots de dados.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 import { tryWatcherLock, releaseWatcherLock } from "../_shared/watcher-lock.ts";
 
 const corsHeaders = {
@@ -348,6 +349,10 @@ const json = (body: unknown, status = 200) =>
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  // F07: nenhuma ação (inclusive "run") sem agendador/service role/admin.
+  const gate = await requireSchedulerOrAdmin(req, corsHeaders);
+  if (!gate.ok) return gate.response;
 
   const supabase = svc();
 

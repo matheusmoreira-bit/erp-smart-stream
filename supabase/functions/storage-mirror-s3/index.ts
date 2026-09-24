@@ -2,6 +2,7 @@
 // Executa por bucket, listando objetos e enviando os novos/alterados (compara etag).
 import { createClient } from "npm:@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 import { S3Client, PutObjectCommand, HeadObjectCommand } from "npm:@aws-sdk/client-s3@3.658.0";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -37,6 +38,8 @@ async function listAll(sb: ReturnType<typeof createClient>, bucket: string, pref
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const auth = await requireSchedulerOrAdmin(req, corsHeaders);
+  if (!auth.ok) return auth.response;
   const started = Date.now();
   const sb = createClient(SUPABASE_URL, SERVICE_KEY);
   let logId: string | null = null;
@@ -73,7 +76,7 @@ Deno.serve(async (req) => {
             const { data: blob, error: dlErr } = await sb.storage.from(srcBucket).download(it._path);
             if (dlErr || !blob) { errors.push(`${srcBucket}/${it._path}: ${dlErr?.message}`); continue; }
             const buf = new Uint8Array(await blob.arrayBuffer());
-            await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: s3Key, Body: buf, ContentType: it.metadata?.mimetype || "application/octet-stream" }));
+            await s3.send(new PutObjectCommand({ ServerSideEncryption: "AES256", Bucket: BUCKET, Key: s3Key, Body: buf, ContentType: it.metadata?.mimetype || "application/octet-stream" }));
             objectsCount++; totalBytes += buf.length;
           } catch (e) {
             errors.push(`${srcBucket}/${it._path}: ${(e as Error).message}`);
