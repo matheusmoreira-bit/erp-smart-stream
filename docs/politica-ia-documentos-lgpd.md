@@ -29,9 +29,9 @@ Execução de contrato e cumprimento de obrigação legal/fiscal (LGPD art. 7º,
 | Dado | Onde | Prazo |
 |---|---|---|
 | Documento original | Anexo da despesa (armazenamento do sistema) | Prazo fiscal: 5 anos após o exercício. |
-| Resultado da leitura (campos extraídos) | Cache de análises | 180 dias, depois apagado. |
+| Resultado da leitura (campos extraídos) | Cache de análises | 180 dias sem uso, depois apagado automaticamente (limpeza diária). |
 | Documento no provedor de IA | — | Não retido. |
-| Registros técnicos (logs) | Sem conteúdo do documento | 90 dias. |
+| Registros técnicos (logs) | Sem conteúdo do documento | Prazo padrão da plataforma. |
 
 ## 7. Direitos do titular
 Pedidos de acesso/eliminação vão ao DPO; a eliminação respeita o prazo fiscal obrigatório.
