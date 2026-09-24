@@ -9895,6 +9895,30 @@ export type Database = {
         }
         Relationships: []
       }
+      user_company_access: {
+        Row: {
+          company_db: string
+          created_at: string
+          created_by: string | null
+          email: string
+          id: string
+        }
+        Insert: {
+          company_db: string
+          created_at?: string
+          created_by?: string | null
+          email: string
+          id?: string
+        }
+        Update: {
+          company_db?: string
+          created_at?: string
+          created_by?: string | null
+          email?: string
+          id?: string
+        }
+        Relationships: []
+      }
       user_group_assignments: {
         Row: {
           company_db: string | null
