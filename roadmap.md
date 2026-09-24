@@ -9,4 +9,4 @@
 - [ ] F07 — Backup na réplica: trilha de auditoria OK + carga diária; faltam demais tabelas, contas de login e teste de restauração
 - [~] F08 — HANA em HTTP / Service Layer exposto — VISTO, PENDENTE DO FORNECEDOR (SAP/Wevy: TLS no HANA, allowlist de IP/túnel no Service Layer). Parte interna opcional: restringir leitura das URLs do SAP na tabela companies.
 - [ ] F09
-- [ ] F10
+- [x] F10 — Copiloto IA: SQL em papel restrito (sem credenciais/URLs do ERP), escrita só com clique humano no servidor, histórico validado

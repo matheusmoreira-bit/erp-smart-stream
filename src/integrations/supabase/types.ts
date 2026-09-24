@@ -2827,6 +2827,45 @@ export type Database = {
         }
         Relationships: []
       }
+      copilot_pending_actions: {
+        Row: {
+          args: Json
+          created_at: string
+          decided_at: string | null
+          expires_at: string
+          id: string
+          result: Json | null
+          status: string
+          summary: string
+          tool_name: string
+          user_id: string
+        }
+        Insert: {
+          args: Json
+          created_at?: string
+          decided_at?: string | null
+          expires_at?: string
+          id?: string
+          result?: Json | null
+          status?: string
+          summary: string
+          tool_name: string
+          user_id: string
+        }
+        Update: {
+          args?: Json
+          created_at?: string
+          decided_at?: string | null
+          expires_at?: string
+          id?: string
+          result?: Json | null
+          status?: string
+          summary?: string
+          tool_name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       cost_center_redirects: {
         Row: {
           company_db: string
