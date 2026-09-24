@@ -1,6 +1,9 @@
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { hashInput, getCachedAnalysis, saveAnalysis } from "../_shared/ai-doc-cache.ts";
+import { requireUser, authErrorResponse } from "../_shared/auth.ts";
+import { enforceRateLimit, rateLimitResponse } from "../_shared/rate-limit.ts";
+import { stripImageMetadata } from "../_shared/ai-minimize.ts";
 
 /**
  * OCR de captura rápida (mobile): recebe a foto de uma nota/boleto e
@@ -61,9 +64,14 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  // Exige sessão autenticada (o gateway key nunca vai ao cliente).
-  const authHeader = req.headers.get("Authorization") || "";
-  if (!authHeader.toLowerCase().startsWith("bearer ")) {
+  // F14: o token é validado de verdade (assinatura, expiração, domínio
+  // corporativo). Só conferir o prefixo "Bearer" deixava qualquer um gastar IA.
+  let caller: { id: string; email?: string | null };
+  try {
+    caller = await requireUser(req);
+  } catch (err) {
+    const resp = authErrorResponse(err, corsHeaders);
+    if (resp) return resp;
     return json({ error: "unauthorized" }, 401);
   }
 
@@ -87,6 +95,23 @@ Deno.serve(async (req) => {
     return json({ error: "image_too_large", message: "Imagem maior que 8MB. Reduza a resolução." }, 400);
   }
 
+  // F14: limite de leituras por pessoa (protege créditos de IA).
+  const rlDb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const rl = await enforceRateLimit(rlDb, { scope: "expense-ocr-capture", identifier: caller.id, max: 30, windowSeconds: 300 });
+  if (!rl.allowed) return rateLimitResponse(rl, { ...corsHeaders, "Content-Type": "application/json" });
+
+  // F14: minimização — tira metadados da foto (GPS, aparelho, comentários).
+  let aiImage = image;
+  if (parsed.mime === "image/jpeg" || parsed.mime === "image/png") {
+    try {
+      const bin = Uint8Array.from(atob(parsed.base64), (c) => c.charCodeAt(0));
+      const clean = stripImageMetadata(bin, parsed.mime);
+      let b = "";
+      for (let i = 0; i < clean.length; i += 8192) b += String.fromCharCode(...clean.subarray(i, i + 8192));
+      aiImage = `data:${parsed.mime};base64,${btoa(b)}`;
+    } catch { /* mantém original */ }
+  }
+
   const instruction = [
     "Você extrai dados de documentos fiscais brasileiros (NF-e, NFS-e, boleto, recibo, cupom).",
     "Responda APENAS com um objeto JSON, sem markdown, com as chaves:",
@@ -97,6 +122,8 @@ Deno.serve(async (req) => {
     "confidence (0 a 1).",
     "Use null quando o campo não estiver legível. Nunca invente valores.",
     "Se houver várias parcelas, use o vencimento mais próximo e o valor total do documento.",
+    "Não transcreva dados bancários, chave PIX, linha digitável, dados de cartão, e-mails, telefones",
+    "nem dados de pessoas físicas que não sejam o emitente — eles não fazem parte da resposta.",
   ].join(" ");
 
   // Cache: a mesma imagem nunca é reavaliada pela IA.
@@ -127,7 +154,7 @@ Deno.serve(async (req) => {
             role: "user",
             content: [
               { type: "text", text: "Extraia os campos deste documento." },
-              { type: "image_url", image_url: { url: image } },
+              { type: "image_url", image_url: { url: aiImage } },
             ],
           },
         ],

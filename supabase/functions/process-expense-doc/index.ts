@@ -3,6 +3,8 @@ import { normalizeText as baseNormalizeText } from "../_shared/text-normalize.ts
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { hashInput, getCachedAnalysis, saveAnalysis } from "../_shared/ai-doc-cache.ts";
 import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
+import { enforceRateLimit, rateLimitResponse } from "../_shared/rate-limit.ts";
+import { stripImageMetadata, maskTextForAi } from "../_shared/ai-minimize.ts";
 import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 // Static fallback aliases (used only if DB lookup fails)
@@ -32,12 +34,10 @@ const PAGCORP_CACHE_PROMPT_VERSION = "pagcorp-expense-v2";
 
 type AiProvider = "lovable" | "openai";
 
+// F14: documentos só vão ao gateway Lovable AI (sem retenção de dados no
+// provedor). O envio direto a outro provedor fica desligado.
 function getAiProvider(): AiProvider {
-  const configured = String(Deno.env.get("AI_PROVIDER") || "").trim().toLowerCase();
-  if (configured === "openai" || configured === "lovable") return configured;
-  return Deno.env.get("OPENAI_API_KEY") && !Deno.env.get("LOVABLE_API_KEY")
-    ? "openai"
-    : "lovable";
+  return "lovable";
 }
 
 function getAiModel(provider: AiProvider): string {
@@ -291,12 +291,21 @@ serve(async (req) => {
 
   try {
     // Exige sessão real (Lovable Cloud ou SAP). A chave anon pública não basta.
+    let callerKey = "anon";
     try {
-      await requireUserOrSapSession(req);
+      const who = await requireUserOrSapSession(req) as { id?: string };
+      callerKey = String(who?.id || "anon");
     } catch (err) {
       const resp = authErrorResponse(err, corsHeaders);
       if (resp) return resp;
       throw err;
+    }
+
+    // F14: limite por pessoa (protege créditos de IA).
+    {
+      const rlDb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      const rl = await enforceRateLimit(rlDb, { scope: "process-expense-doc", identifier: callerKey, max: 60, windowSeconds: 300 });
+      if (!rl.allowed) return rateLimitResponse(rl, { ...corsHeaders, "Content-Type": "application/json" });
     }
 
     const formData = await req.formData();
@@ -349,8 +358,9 @@ serve(async (req) => {
       const isImage = /\.(jpg|jpeg|png|webp|gif)$/i.test(file.name);
 
       if (isPdf || isImage) {
-        const base64 = bytesToBase64(bytes);
         const mimeType = isPdf ? "application/pdf" : file.type || "image/jpeg";
+        // F14: minimização — remove metadados de imagem (GPS, aparelho, comentários).
+        const base64 = bytesToBase64(isPdf ? bytes : stripImageMetadata(bytes, mimeType));
         lovableContentParts.push({
           type: "image_url",
           image_url: { url: `data:${mimeType};base64,${base64}` },
@@ -368,7 +378,7 @@ serve(async (req) => {
             });
       } else {
         const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-        const fileText = `[Arquivo: ${file.name}]\n${text.substring(0, 15000)}`;
+        const fileText = `[Arquivo: ${file.name}]\n${maskTextForAi(text.substring(0, 15000))}`;
         lovableContentParts.push({
           type: "text",
           text: fileText,
