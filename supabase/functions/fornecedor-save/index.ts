@@ -24,8 +24,8 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   let actor = "";
   try {
-    const who = await requireUserOrSapSession(req) as { email?: string | null; userName?: string };
-    actor = String(who.email || who.userName || "");
+    const who = await requireUserOrSapSession(req) as { id?: string; email?: string | null };
+    actor = typeof who.id === "string" ? who.id : "";
   } catch (err) {
     return authErrorResponse(err, corsHeaders);
   }
@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
     const raw = (body?.payload && typeof body.payload === "object" && !Array.isArray(body.payload)) ? body.payload : {};
     const payload: Record<string, any> = {};
     for (const [k, v] of Object.entries(raw)) if (ALLOWED.has(k)) payload[k] = v;
-    payload.created_by = actor || null;
+    payload.created_by = actor || null; // uuid do usuário logado; nulo p/ sessão só SAP
     const tipo = payload?.tipo_pessoa;
 
     if (tipo !== "pj" && tipo !== "pf") {
