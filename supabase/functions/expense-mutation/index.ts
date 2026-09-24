@@ -40,6 +40,7 @@ import {
 } from "../_shared/rateio-segments.ts";
 import { classifyExpenseEdit, normalizeExpenseItems } from "../_shared/expense-items.ts";
 import { isPagCorpExpense } from "../_shared/pagcorp-expense.ts";
+import { assertCompanyAccess } from "../_shared/company-access.ts";
 import { isNativeErpExpenseOrigin } from "../_shared/expense-origin.ts";
 import { CACTUS_TECNOLOGIA_DB, notifyCactusExpenseCreated } from "../_shared/expense-created-notify.ts";
 
@@ -496,6 +497,13 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any, re
   const requesterEmail = caller.identity.includes("@") ? caller.identity : caller.identity;
   const companyDb = String(input.company_db || caller.companyDB || "").trim();
   if (!companyDb) return json(400, { error: "company_db é obrigatório" });
+  // F11: a empresa informada precisa ser a da sessão SAP ou ter vínculo com o usuário.
+  try {
+    await assertCompanyAccess(req, admin, companyDb, String(input.doc_type || "").toLowerCase() === "sales" ? "sales" : "expenses", "create");
+  } catch (e) {
+    const status = e instanceof AuthError ? e.status : 403;
+    return json(status, { error: e instanceof Error ? e.message : "Acesso negado" });
+  }
 
   // Data de vencimento é obrigatória para todo pedido criado via ERP Flow.
   const dueDate = input.due_date ? String(input.due_date).trim() : "";

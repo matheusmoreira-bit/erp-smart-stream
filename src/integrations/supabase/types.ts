@@ -11087,6 +11087,10 @@ export type Database = {
         Args: { _expense_id: string; _items: Json; _updates: Json }
         Returns: undefined
       }
+      user_can_access_company: {
+        Args: { _company_db: string; _email: string }
+        Returns: boolean
+      }
       verify_audit_chain: {
         Args: { _limit?: number }
         Returns: {
