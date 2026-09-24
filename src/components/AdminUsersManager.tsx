@@ -36,6 +36,7 @@ export default function AdminUsersManager() {
   const [inviteDialog, setInviteDialog] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviting, setInviting] = useState(false);
+  const [makeAdmin, setMakeAdmin] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
   const fetchUsers = useCallback(async () => {
@@ -63,12 +64,13 @@ export default function AdminUsersManager() {
     setInviting(true);
     const { data, error } = await supabase.functions.invoke("admin-users", {
       method: "POST",
-      body: { email: inviteEmail.trim().toLowerCase() },
+      body: { email: inviteEmail.trim().toLowerCase(), assignAdmin: makeAdmin },
     });
     if (error || data?.error) {
       toast.error(data?.error || "Erro ao convidar usuário");
     } else {
-      toast.success("Convite enviado por email");
+      toast.success(makeAdmin ? "Convite enviado por email" : "Acesso liberado — o usuário já pode entrar com Google");
+      setMakeAdmin(false);
       setInviteEmail("");
       setInviteDialog(false);
       fetchUsers();
@@ -217,25 +219,36 @@ export default function AdminUsersManager() {
       <Dialog open={inviteDialog} onOpenChange={setInviteDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Convidar Administrador</DialogTitle>
+            <DialogTitle>Liberar acesso</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
+              <label htmlFor="invite-email" className="text-sm font-medium text-foreground">
                 Email
               </label>
               <Input
+                id="invite-email"
                 type="email"
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="admin@empresa.com"
+                placeholder="nome@empresa.com"
                 onKeyDown={(e) => e.key === "Enter" && handleInvite()}
               />
-              <p className="text-xs text-muted-foreground">
-                O usuário receberá um email com link para definir a senha e
-                acessar o painel de administração.
-              </p>
             </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={makeAdmin}
+                onChange={(e) => setMakeAdmin(e.target.checked)}
+                className="h-4 w-4 accent-primary"
+              />
+              Tornar administrador
+            </label>
+            <p className="text-xs text-muted-foreground">
+              {makeAdmin
+                ? "O usuário receberá um email com link e terá acesso de administrador."
+                : "Cria a conta de usuário comum. Ele entra direto com o Google corporativo."}
+            </p>
           </div>
           <DialogFooter>
             <Button
