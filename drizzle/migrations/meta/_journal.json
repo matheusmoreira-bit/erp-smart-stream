@@ -407,6 +407,13 @@
       "when": 1790265232673,
       "tag": "0057_f11_audit_actor_company_access",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1790265436607,
+      "tag": "0058_f12_impersonation_server_readonly",
+      "breakpoints": true
     }
   ]
 }

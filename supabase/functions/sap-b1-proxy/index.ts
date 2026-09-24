@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
 import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
-import { requireUser, authErrorResponse } from "../_shared/auth.ts";
+import { requireUser, authErrorResponse, isUserImpersonating } from "../_shared/auth.ts";
 
 /** Identificador opaco da sessão da conta de serviço (a sessão real fica no servidor). */
 const SERVICE_HANDLE_PREFIX = "svc.";
@@ -237,6 +237,15 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
     // ERP só é usada se pertencer ao próprio usuário (erp_session_cache).
     const caller = await requireUser(req);
     const svcDb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    // F12: durante impersonação, gravações no ERP são recusadas pelo servidor.
+    if ((action === "sapAction" && String(reqBody.method || "POST").toUpperCase() !== "GET") || action === "writeApprovalsCache") {
+      if (await isUserImpersonating(caller.id)) {
+        return new Response(JSON.stringify({ error: "Modo somente leitura: você está atuando como outro usuário." }), {
+          status: 423, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
 
     let sessionCompanyDb: string | null = null;
     let isServiceSession = false;

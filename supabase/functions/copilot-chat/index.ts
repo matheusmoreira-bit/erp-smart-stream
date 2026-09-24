@@ -3,6 +3,7 @@ import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 // Baseado no padrão ai-assistant + report-ai-chat (SSE streaming da resposta final).
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { enforceRateLimit, rateLimitResponse } from "../_shared/rate-limit.ts";
+import { isUserImpersonating } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -818,6 +819,9 @@ Deno.serve(withEdgeMetrics("copilot-chat", async (req, _mctx) => {
       : typeof body.cancel_action_id === "string" ? body.cancel_action_id : null;
     if (decideId !== null) {
       if (!UUID_RX.test(decideId)) return json({ error: "ID inválido." }, 400);
+      if (typeof body.confirm_action_id === "string" && await isUserImpersonating(actor.userId)) {
+        return json({ error: "Modo somente leitura: encerre a impersonação para executar ações." }, 423);
+      }
       const confirming = typeof body.confirm_action_id === "string";
       // Consome atomicamente: só o dono, só pendente, só dentro do prazo.
       const { data: action } = await sbAdmin.from("copilot_pending_actions")

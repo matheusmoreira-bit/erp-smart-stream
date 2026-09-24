@@ -4701,6 +4701,42 @@ export type Database = {
         }
         Relationships: []
       }
+      impersonation_sessions: {
+        Row: {
+          admin_email: string | null
+          admin_user_id: string
+          company_db: string | null
+          end_reason: string | null
+          ended_at: string | null
+          expires_at: string
+          id: string
+          started_at: string
+          target_user: string
+        }
+        Insert: {
+          admin_email?: string | null
+          admin_user_id: string
+          company_db?: string | null
+          end_reason?: string | null
+          ended_at?: string | null
+          expires_at?: string
+          id?: string
+          started_at?: string
+          target_user: string
+        }
+        Update: {
+          admin_email?: string | null
+          admin_user_id?: string
+          company_db?: string | null
+          end_reason?: string | null
+          ended_at?: string | null
+          expires_at?: string
+          id?: string
+          started_at?: string
+          target_user?: string
+        }
+        Relationships: []
+      }
       infra_backup_log: {
         Row: {
           bucket: string | null
@@ -10896,6 +10932,7 @@ export type Database = {
         Returns: boolean
       }
       is_idp_linked: { Args: { _email: string }; Returns: boolean }
+      is_impersonating: { Args: { _user_id?: string }; Returns: boolean }
       is_registration_agent: { Args: never; Returns: boolean }
       is_sap_code_idp_linked: {
         Args: { _sap_user_code: string }

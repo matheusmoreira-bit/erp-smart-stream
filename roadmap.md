@@ -11,3 +11,4 @@
 - [ ] F09
 - [x] F10 — Copiloto IA: SQL em papel restrito (sem credenciais/URLs do ERP), escrita só com clique humano no servidor, histórico validado
 - [x] F11 — Auditoria com autor da sessão; empresa validada (sessão SAP/vínculo) em expense-mutation, supplier-sync; fornecedor-save com campos permitidos. Módulo em modo sombra (grupos não cobrem usuários).
+- [x] F12 — Impersonação registrada no servidor (impersonation_sessions, 4h); banco recusa escritas do admin impersonando; funções só de leitura liberadas; ERP e copiloto recusam gravação (423). Falta teste real pela tela.

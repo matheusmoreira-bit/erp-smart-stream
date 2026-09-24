@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json(405, { error: "Method not allowed" });
 
   let body: {
-    event?: "start" | "stop";
+    event?: "start" | "stop" | "reconcile";
     target_user?: string;
     target_name?: string | null;
     target_email?: string | null;
@@ -45,9 +45,10 @@ Deno.serve(async (req) => {
     return json(400, { error: "Corpo inválido (JSON malformado)." });
   }
 
-  const event = body.event === "stop" ? "stop" : body.event === "start" ? "start" : null;
-  if (!event) return json(400, { error: "event deve ser 'start' ou 'stop'." });
-  const targetUser = str(body.target_user, 120);
+  const event = body.event === "stop" ? "stop" : body.event === "start" ? "start"
+    : body.event === "reconcile" ? "reconcile" : null;
+  if (!event) return json(400, { error: "event deve ser 'start', 'stop' ou 'reconcile'." });
+  const targetUser = event === "reconcile" ? "*" : str(body.target_user, 120);
   if (!targetUser) return json(400, { error: "target_user é obrigatório." });
 
   let caller: { id: string; email?: string | null };
@@ -72,6 +73,40 @@ Deno.serve(async (req) => {
   }
 
   const occurredAt = new Date().toISOString();
+
+  // F12: estado da impersonação fica no servidor. Enquanto houver sessão
+  // ativa, o banco e as funções recusam escritas desse admin (somente leitura).
+  const closeActive = async (reason: string) => {
+    const { data } = await admin.from("impersonation_sessions")
+      .update({ ended_at: occurredAt, end_reason: reason })
+      .eq("admin_user_id", caller.id).is("ended_at", null)
+      .select("id");
+    return (data || []).length;
+  };
+  if (event === "reconcile") {
+    // O navegador não está mais em impersonação: encerra sessões órfãs.
+    const closed = await closeActive("reconcile");
+    if (closed > 0) {
+      await admin.from("audit_log").insert({
+        actor_id: caller.id, actor_email: caller.email || null,
+        action: "impersonation_stop", entity_type: "erp_session", entity_id: "*",
+        details: { reason: "reconcile", closed, occurred_at: occurredAt },
+      });
+    }
+    return json(200, { ok: true, closed });
+  }
+  if (event === "start") {
+    await closeActive("replaced");
+    const { error: insErr } = await admin.from("impersonation_sessions").insert({
+      admin_user_id: caller.id,
+      admin_email: caller.email || null,
+      target_user: targetUser,
+      company_db: str(body.company_db, 80) || null,
+    });
+    if (insErr) return json(500, { error: "Falha ao registrar a impersonação no servidor." });
+  } else {
+    await closeActive("stop");
+  }
   const { error } = await admin.from("audit_log").insert({
     actor_id: caller.id,
     // Identidade sempre do token — o cliente não escolhe quem "assina" o log.

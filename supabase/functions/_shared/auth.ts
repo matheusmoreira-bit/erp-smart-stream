@@ -216,7 +216,65 @@ export async function requireUser(req: Request) {
     console.warn("[requireUser] domínio não corporativo bloqueado", { id: user.id });
     throw new AuthError("Domínio de e-mail não autorizado", 403);
   }
+  await assertNotImpersonatingWrite(req, user.id);
   return user;
+}
+
+// ============================================================
+// F12: impersonação somente leitura garantida no servidor.
+// Enquanto o admin tiver uma impersonação ativa (tabela impersonation_sessions),
+// só as funções de leitura abaixo aceitam a sessão dele. Espelha a lista do
+// navegador (src/lib/read-only-guard.ts), mas quem decide é o servidor.
+// ============================================================
+export const READ_ONLY_IMPERSONATION_FUNCTIONS = new Set<string>([
+  "sap-b1-proxy", "impersonation-audit", "security-csrf-token", "expense-read", "approvals-feed",
+  "approval-rule-manage-read", "sap-approvals-hana", "sap-purchase-orders-hana", "sap-suppliers-hana",
+  "sap-list-service", "sap-nfse-lookup", "sap-user-credentials", "sap-auto-login", "sap-user-profile-sync",
+  "nfse-xml-fetch", "nf-entrada-fetch-file", "pagcorp-integration-status", "pagcorp-status-api",
+  "pagcorp-relations-resolver", "hana-health-probe", "cnpj-lookup", "supplier-ai-extract", "license-analysis",
+  "cashflow-forecast", "expense-sap-reconcile", "report-ai-chat",
+]);
+const impersonationCache = new Map<string, { until: number; active: boolean }>();
+
+export function edgeFunctionName(req: Request): string {
+  try {
+    const parts = new URL(req.url).pathname.split("/").filter(Boolean);
+    const i = parts.indexOf("v1");
+    return (i >= 0 && parts[i - 1] === "functions" ? parts[i + 1] : parts[0]) || "";
+  } catch {
+    return "";
+  }
+}
+
+export async function isUserImpersonating(userId: string): Promise<boolean> {
+  const hit = impersonationCache.get(userId);
+  if (hit && hit.until > Date.now()) return hit.active;
+  let active = false;
+  try {
+    const svc = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+      auth: { persistSession: false },
+    });
+    const { data, error } = await svc.rpc("is_impersonating", { _user_id: userId });
+    if (error) throw error;
+    active = data === true;
+  } catch (e) {
+    // Falha fechada só se já sabíamos que estava ativo; senão não derruba o app.
+    active = hit?.active ?? false;
+    console.warn("[auth] is_impersonating falhou", e instanceof Error ? e.message : e);
+  }
+  if (impersonationCache.size > 1000) impersonationCache.clear();
+  impersonationCache.set(userId, { until: Date.now() + 10_000, active });
+  return active;
+}
+
+async function assertNotImpersonatingWrite(req: Request, userId: string) {
+  const fn = edgeFunctionName(req);
+  if (READ_ONLY_IMPERSONATION_FUNCTIONS.has(fn)) return;
+  if (!(await isUserImpersonating(userId))) return;
+  throw new AuthError(
+    "Modo somente leitura: você está atuando como outro usuário. Encerre a impersonação para executar ações.",
+    423,
+  );
 }
 
 async function requireUserUnchecked(req: Request) {
