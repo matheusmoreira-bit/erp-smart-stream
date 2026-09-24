@@ -10419,6 +10419,14 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      admin_mfa_overview: {
+        Args: never
+        Returns: {
+          email: string
+          user_id: string
+          verified_factors: number
+        }[]
+      }
       api_key_register_use: { Args: { _id: string }; Returns: undefined }
       approvals_feed_bundle: { Args: { _company_db: string }; Returns: Json }
       archive_audit_trail: {
@@ -11026,6 +11034,7 @@ export type Database = {
         }
         Returns: number
       }
+      my_mfa_status: { Args: never; Returns: Json }
       notification_conditions_match: {
         Args: { p_conditions: Json; p_payload: Json }
         Returns: boolean
@@ -11126,6 +11135,7 @@ export type Database = {
         Args: { _module_key: string; _sap_username: string }
         Returns: boolean
       }
+      session_started_at: { Args: { _session_id: string }; Returns: string }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       substitute_grants_for_me: {
