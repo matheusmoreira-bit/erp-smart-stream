@@ -130,23 +130,23 @@ Deno.serve(async (req) => {
       return json({ ok: true, invalidated: true });
     }
 
-    // ── 0) Registro de sessão criada fora daqui (login interativo) ──────
-    const store = body.store;
-    if (store && typeof store.session_id === "string" && store.session_id.trim()) {
-      const timeout = Math.min(Math.max(Number(store.session_timeout) || 30, 1), 30);
-      const { error: storeErr } = await admin.from("erp_session_cache").upsert({
-        user_id: user.id,
-        company_db: companyDb,
-        sap_user: String(store.sap_user || user.email || "").slice(0, 200),
-        is_service: false,
-        session_id: store.session_id.trim(),
-        route_id: typeof store.route_id === "string" ? store.route_id : "",
-        expires_at: new Date(Date.now() + timeout * 60 * 1000).toISOString(),
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "user_id,company_db,is_service" });
-      if (storeErr) return json({ error: storeErr.message }, 500);
-      return json({ ok: true, stored: true });
+    // ── 0) Registro vindo do navegador: desativado (F03) ────────────────
+    // O login interativo já registra a sessão no servidor (sap-b1-proxy).
+    // Aceitar um session_id enviado pelo cliente permitiria amarrar à conta
+    // uma sessão de outra pessoa.
+    if (body.store) return json({ ok: true, stored: false });
+
+    // F03: a conta de serviço (ApiUser) só é usada para quem tem vínculo com
+    // a empresa (ou é administrador), e a sessão nunca vai para o navegador.
+    let serviceAllowed = false;
+    if (allowService) {
+      const [{ data: linked }, { data: isAdm }] = await Promise.all([
+        admin.rpc("is_email_allowed_for_company", { _email: user.email ?? "", _company_db: companyDb }),
+        admin.rpc("has_role", { _user_id: user.id, _role: "admin" }),
+      ]);
+      serviceAllowed = linked === true || isAdm === true;
     }
+    const svcHandle = `svc.${companyDb}`;
 
     // ── 1) Sessão em cache ainda válida? ────────────────────────────────
     // Evita um /Login novo a cada integração (ex.: PagCorp em lote).
