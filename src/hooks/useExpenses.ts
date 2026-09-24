@@ -713,7 +713,7 @@ export function useExpenses(
       // por processo de aprovação — vão direto para integração no ERP. Vale
       // tanto para a origem "pagcorp" quanto para documentos digitados
       // manualmente pelo time de cartões (observação com "PagCorp").
-      const isCardExpense = origin === "pagcorp" || /pag\s*corp/i.test(String(input.remarks || ""));
+      const isCardExpense = origin === "pagcorp";
       const pagcorpDefaultStatus: ExpenseStatus | undefined =
         isCardExpense ? "aprovado" : undefined;
       let status: ExpenseStatus =
