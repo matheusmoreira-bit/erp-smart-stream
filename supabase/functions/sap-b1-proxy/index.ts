@@ -217,13 +217,11 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
 
   try {
     const reqBody = await req.json();
-    const { action, credentials, endpoint, params, sessionId, routeId, table, database, companyDB } = reqBody;
+    const { action, credentials, endpoint, params, table, database, companyDB } = reqBody;
+    let sessionId: string = typeof reqBody.sessionId === "string" ? reqBody.sessionId.trim() : "";
+    let routeId: string = typeof reqBody.routeId === "string" ? reqBody.routeId : "";
     metricsCtx.companyDb = companyDB || credentials?.CompanyDB || null;
     metricsCtx.meta = { action };
-
-    // Authentication is handled by SAP session (B1SESSION cookie).
-    // Each action validates its own required params (sessionId, etc.).
-    // Supabase auth is not required since users authenticate via SAP credentials.
 
     if (!action || typeof action !== "string") {
       return new Response(JSON.stringify({ error: "action é obrigatória" }), {
@@ -231,7 +229,59 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
       });
     }
 
-    const SAP_BASE_URL = await getSapBaseUrl(companyDB || credentials?.CompanyDB);
+    // F03: login no sistema (JWT) é obrigatório em TODAS as ações. A sessão do
+    // ERP só é usada se pertencer ao próprio usuário (erp_session_cache).
+    const caller = await requireUser(req);
+    const svcDb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    let sessionCompanyDb: string | null = null;
+    let isServiceSession = false;
+    const SESSION_ACTIONS = new Set(["query", "queryAll", "queryView", "sapAction", "downloadAttachment", "issueSapAuthToken", "logout"]);
+    const expired = () => new Response(JSON.stringify({ error: "Sessão SAP expirada", sapStatus: 401, data: null }), {
+      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+
+    if (SESSION_ACTIONS.has(action) && sessionId) {
+      if (sessionId.startsWith(SERVICE_HANDLE_PREFIX)) {
+        // Sessão da conta de serviço (ApiUser): nunca sai do servidor e é
+        // somente leitura. O cliente só conhece um identificador opaco.
+        if (action === "sapAction" || action === "issueSapAuthToken") {
+          return new Response(JSON.stringify({ error: "A conta de serviço do ERP é somente leitura. Entre com o seu usuário do ERP para gravar." }), {
+            status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const handleDb = sessionId.slice(SERVICE_HANDLE_PREFIX.length);
+        const { data: row } = await svcDb.from("erp_session_cache")
+          .select("session_id, route_id, company_db, expires_at")
+          .eq("user_id", caller.id).eq("company_db", handleDb).eq("is_service", true)
+          .maybeSingle();
+        if (action === "logout") {
+          return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        if (!row?.session_id || !row.expires_at || Date.parse(row.expires_at) <= Date.now()) return expired();
+        sessionId = row.session_id;
+        routeId = row.route_id || "";
+        sessionCompanyDb = row.company_db;
+        isServiceSession = true;
+      } else {
+        const { data: row } = await svcDb.from("erp_session_cache")
+          .select("session_id, route_id, company_db, expires_at")
+          .eq("user_id", caller.id).eq("session_id", sessionId).eq("is_service", false)
+          .maybeSingle();
+        if (!row) {
+          if (action === "logout") {
+            return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+          console.warn("sap-b1-proxy: sessão não pertence ao usuário", { action, companyDB });
+          return expired();
+        }
+        routeId = row.route_id || routeId;
+        sessionCompanyDb = row.company_db;
+      }
+    }
+    metricsCtx.meta = { action, service: isServiceSession };
+
+    const SAP_BASE_URL = await getSapBaseUrl(sessionCompanyDb || companyDB || credentials?.CompanyDB);
 
     // LOGIN
     if (action === "login") {
