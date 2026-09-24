@@ -83,8 +83,9 @@ Deno.serve(async (req) => {
     // CREATE (invite) user
     if (method === "POST") {
       const body = await req.json();
-      const { email, assignAdmin = true } = body ?? {};
-      if (!email || typeof email !== "string" || !email.includes("@")) {
+      const { email: rawEmail, assignAdmin = true } = body ?? {};
+      const email = typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : "";
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
         return new Response(JSON.stringify({ error: "Email inválido" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -93,6 +94,29 @@ Deno.serve(async (req) => {
       if (!isCorporateEmail(email)) {
         return new Response(JSON.stringify({ error: "Domínio de e-mail não autorizado" }), {
           status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Usuário comum: cria a conta já confirmada para entrar com Google
+      // (cadastro público fechado). Sem papel de admin, sem e-mail de convite.
+      if (assignAdmin === false) {
+        const { data: created, error: createErr } = await adminClient.auth.admin.createUser({
+          email,
+          email_confirm: true,
+        });
+        if (createErr || !created?.user) {
+          return new Response(JSON.stringify({ error: createErr?.message || "Falha ao criar usuário" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        await adminClient.from("audit_log").insert({
+          action: "admin_user_created",
+          actor_email: caller.email,
+          details: { target_email: email, target_user_id: created.user.id, admin: false },
+        }).then(() => undefined, () => undefined);
+        return new Response(JSON.stringify({ success: true, user: { id: created.user.id, email } }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
