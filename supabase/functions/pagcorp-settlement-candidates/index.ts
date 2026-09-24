@@ -16,7 +16,7 @@ import { sendWhatsApp } from "../_shared/pagcorp-settlement-notify.ts";
 import { logSend } from "../_shared/send-log.ts";
 
 const RECIPIENTS: Array<{ user: string; email: string; whatsapp?: string }> = [
-  { user: "ronaldo.silva", email: "ronaldo.silva@anagaming.com.br" },
+  { user: "ronaldo.silva", email: "ronaldo.silva@anagaming.com.br", whatsapp: "5531998110774" },
   { user: "matheus.moreira", email: "matheus.moreira@anagaming.com.br", whatsapp: "5531972665309" },
 ];
 const SOURCE = "pagcorp-settlement-candidates";
