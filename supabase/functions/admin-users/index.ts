@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { isCorporateEmail } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -85,6 +86,12 @@ Deno.serve(async (req) => {
       const { email, assignAdmin = true } = body ?? {};
       if (!email || typeof email !== "string" || !email.includes("@")) {
         return new Response(JSON.stringify({ error: "Email inválido" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!isCorporateEmail(email)) {
+        return new Response(JSON.stringify({ error: "Domínio de e-mail não autorizado" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });

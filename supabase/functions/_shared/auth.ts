@@ -186,7 +186,40 @@ async function verifySapAuthToken(
  * 401s caused by network/rate-limit issues calling /auth/v1/user. Falls back
  * to getUser() when getClaims() is unavailable.
  */
+const DEFAULT_ALLOWED_LOGIN_DOMAINS = [
+  "growth.gg",
+  "cactuscorporation.com",
+  "anagaming.com.br",
+  "cactusgaming.net",
+  "institutoconectacactus.org.br",
+  "opengaming.com.br",
+  "banana.games",
+  "lotusblanca.net",
+];
+
+/** Domínios corporativos aceitos no servidor. `ALLOWED_LOGIN_DOMAINS` (CSV) sobrescreve. */
+export function allowedLoginDomains(): string[] {
+  const env = (Deno.env.get("ALLOWED_LOGIN_DOMAINS") || "").trim();
+  if (!env) return DEFAULT_ALLOWED_LOGIN_DOMAINS;
+  return env.split(",").map((d) => d.trim().toLowerCase()).filter(Boolean);
+}
+
+export function isCorporateEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const domain = email.split("@")[1]?.toLowerCase().trim();
+  return !!domain && allowedLoginDomains().includes(domain);
+}
+
 export async function requireUser(req: Request) {
+  const user = await requireUserUnchecked(req);
+  if (!isCorporateEmail(user.email)) {
+    console.warn("[requireUser] domínio não corporativo bloqueado", { id: user.id });
+    throw new AuthError("Domínio de e-mail não autorizado", 403);
+  }
+  return user;
+}
+
+async function requireUserUnchecked(req: Request) {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader || !authHeader.toLowerCase().startsWith("bearer ")) {
     throw new AuthError("Não autenticado", 401);
