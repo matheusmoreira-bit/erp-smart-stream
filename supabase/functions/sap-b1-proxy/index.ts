@@ -297,6 +297,23 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
 
       const effectiveCompanyDB = await getConfiguredSapCompanyDb(companyDB || credentials.CompanyDB);
 
+      // F03: o usuário da conta de serviço (ApiUser) não abre sessão para o
+      // usuário final pelo navegador — só administradores.
+      {
+        const loginDb = String(companyDB || credentials.CompanyDB);
+        const { data: svcUser } = await svcDb.from("system_credentials").select("credential_value")
+          .eq("company_db", loginDb).eq("system_name", "sap").eq("credential_key", "username").maybeSingle();
+        const svcName = String(svcUser?.credential_value || "").trim().toLowerCase();
+        if (svcName && String(credentials.UserName).trim().toLowerCase() === svcName) {
+          const { data: isAdm } = await svcDb.rpc("has_role", { _user_id: caller.id, _role: "admin" });
+          if (isAdm !== true) {
+            return new Response(JSON.stringify({ error: "Use o seu próprio usuário do ERP. A conta de serviço não pode ser usada aqui." }), {
+              status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+        }
+      }
+
       const loginResp = await fetch(`${SAP_BASE_URL}/Login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

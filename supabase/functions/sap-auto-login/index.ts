@@ -193,11 +193,21 @@ Deno.serve(async (req) => {
     // conta como senha incorreta e acaba bloqueando o usuário no ERP.
     const cred = credRow?.invalid_at ? null : credRow;
 
+    // F03: senha pessoal cadastrada com o usuário da conta de serviço não
+    // vira acesso de gravação — é tratada como conta de serviço.
+    const svcForCheck = cred ? await getServiceCredentials(admin, companyDb) : null;
+    const credIsServiceAccount = !!(cred && svcForCheck &&
+      cred.sap_user.trim().toLowerCase() === svcForCheck.username.toLowerCase());
+
     let sapUserName = cred?.sap_user || "";
     let password = "";
     let usingService = false;
 
-    if (cred) {
+    if (cred && credIsServiceAccount) {
+      if (!serviceAllowed) return json({ error: "no_credentials" }, 404);
+      password = await decryptSecret(cred.sap_password_encrypted);
+      usingService = true;
+    } else if (cred) {
       password = await decryptSecret(cred.sap_password_encrypted);
     } else if (serviceAllowed) {
       // Sem senha provisionada: usa a credencial de serviço (ApiUser) da empresa.
