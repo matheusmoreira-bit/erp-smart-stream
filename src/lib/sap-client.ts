@@ -384,6 +384,8 @@ export async function sapLogin(userName: string, password: string, companyDB: st
 export async function ensureSapAuthToken(session: SapSession): Promise<string | null> {
   if (session.sapAuthToken) return session.sapAuthToken;
   if (!session.sessionId || !session.companyDB || !session.userName) return null;
+  // Conta de serviço (ApiUser) é somente leitura: o servidor nunca assina token para ela.
+  if (session.sessionId.startsWith("svc.")) return null;
   try {
     const result = await callProxy({
       action: "issueSapAuthToken",
