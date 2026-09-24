@@ -455,15 +455,32 @@ const ALLOWED_LOG_DECISIONS = new Set([
   "created", "submitted", "cancelled", "reactivated", "integrated", "integration_failed",
 ]);
 
-async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
+async function actionCreate(admin: SupabaseClient, caller: Caller, body: any, req: Request) {
   if (!caller.identity) return json(401, { error: "Não autenticado" });
   const input = body?.input ?? {};
 
-  const origin = String(input.origin || "manual");
+  const origin = String(input.origin || "manual").trim().toLowerCase();
+  // F04: a origem PagCorp (que dispensa aprovação) nunca é inferida de texto
+  // livre e só é aceita de quem tem acesso ao módulo de cartões no servidor.
+  if (origin === "pagcorp") {
+    try {
+      await requireAdminOrSapModule(req, "pagcorp");
+    } catch (e) {
+      await admin.rpc("insert_audit_log", {
+        p_action: "expense_pagcorp_origin_denied",
+        p_entity_type: "expense",
+        p_entity_id: null,
+        p_actor_email: caller.identity,
+        p_company_db: String(input.company_db || caller.companyDB || "") || null,
+        p_details: { reason: e instanceof Error ? e.message : String(e) } as any,
+      });
+      return json(403, { error: "Somente o time de cartões pode criar despesas de cartão corporativo (PagCorp)." });
+    }
+  }
   let status = String(input.status || "rascunho");
   // Cartão corporativo (PagCorp): nunca passa por aprovação, mesmo quando o
   // documento é digitado manualmente pelo time de cartões.
-  const isCardExpense = isPagCorpExpense(origin, input.remarks);
+  const isCardExpense = isPagCorpExpense(origin);
   if (isCardExpense && status !== "rascunho") status = "aprovado";
   const isAutoApproved = status === "aprovado" && (isCardExpense || AUTO_APPROVED_ORIGINS.has(origin));
   if (!ALLOWED_CREATE_STATUS.has(status) && !isAutoApproved) {
@@ -658,7 +675,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any) {
     created_by_email: requesterEmail,
     current_approver: resolvedApprover,
     approval_rule_id: ruleId,
-    origin: input.origin || "manual",
+    origin,
     company_db: companyDb,
     branch_id: input.branch_id ?? 1,
     doc_type: docType,
@@ -1558,7 +1575,7 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
   }
 
   // Cartão corporativo (PagCorp) nunca entra em fluxo de aprovação.
-  const autoApprovedByRule = isPagCorpExpense(current.origin, current.remarks)
+  const autoApprovedByRule = isPagCorpExpense(current.origin)
     || await isAutomaticApprovalRule(admin, current.approval_rule_id);
   if (autoApprovedByRule) {
     const { error } = await admin
@@ -2011,7 +2028,7 @@ async function runCreateOnce(admin: SupabaseClient, caller: Caller, body: any, r
 
   let res: Response;
   try {
-    res = await actionCreate(admin, caller, body);
+    res = await actionCreate(admin, caller, body, req);
   } catch (e) {
     await admin.from("expense_create_idempotency").delete().eq("idempotency_key", key);
     throw e;
