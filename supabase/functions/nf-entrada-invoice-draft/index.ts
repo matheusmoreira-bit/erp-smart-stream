@@ -8,6 +8,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
+import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 
 interface NfRow {
   id: string;
@@ -71,6 +72,16 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   { const _pause = await getIntegrationPause("sap_b1"); if (_pause) return pauseResponse(_pause, corsHeaders); }
 
+  // F02: identidade comprovada (JWT ou sessão SAP assinada), nunca só o header.
+  let caller: { email?: string | null; userName?: string };
+  try {
+    caller = await requireUserOrSapSession(req) as { email?: string | null; userName?: string };
+  } catch (e) {
+    const r = authErrorResponse(e, corsHeaders);
+    if (r) return r;
+    throw e;
+  }
+
   const sb = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -80,7 +91,7 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { /* ignore */ }
   if (!body.import_id) return json(400, { error: "import_id é obrigatório" });
 
-  const actor = req.headers.get("x-sap-user") || "nf-entrada-invoice-draft";
+  const actor = caller.userName || caller.email || "nf-entrada-invoice-draft";
 
   const { data, error } = await sb
     .from("nf_entrada_imports")
