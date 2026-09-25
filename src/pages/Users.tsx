@@ -212,7 +212,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
         };
       }
     }));
-    await loadBackofficeUsers();
+    await loadBackofficeUsers(true);
     return { created: false, replicationResults: results };
   }, [loadBackofficeUsers]);
 
@@ -470,7 +470,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
   const scopedCompanyDb = session?.companyDB || (backofficeMode && companyFilter !== "all" ? companyFilter : undefined);
   const refreshPage = () => {
     void refreshGlobalProfiles();
-    if (backofficeMode) void loadBackofficeUsers();
+    if (backofficeMode) void loadBackofficeUsers(true);
     else {
       refresh();
       directory.refresh();
