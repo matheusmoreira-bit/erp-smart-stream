@@ -1241,8 +1241,38 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     // ERP Flow e reaprovado) e ainda não tem NF de entrada lançada, fazemos o
     // PATCH completo do documento — itens, valores, centros de custo, projeto,
     // datas e observação — para não gerar divergência entre Flow e ERP.
-    const isPatchMode = !!expense.sap_doc_entry
+    let isPatchMode = !!expense.sap_doc_entry
       && (body.patch_document === true || String((expense as any).status || "") === "aprovado");
+
+    // Fornecedor é travado no SAP: se foi trocado no ERP Flow, não dá para
+    // fazer PATCH. Cria-se um NOVO pedido e o antigo é cancelado no SAP.
+    let replacedDocEntry = 0;
+    let replacedDocNum: number | null = null;
+    let replacedCardCode = "";
+    if (isPatchMode && sapEndpoint === "PurchaseOrders" && expense.supplier_code) {
+      const oldEntry = Number(expense.sap_doc_entry);
+      const r = await fetch(
+        `${sap.baseUrl}/${sapEndpoint}(${oldEntry})?$select=CardCode,DocNum,DocumentStatus,Cancelled`,
+        { headers: { Cookie: sap.cookies } },
+      );
+      const doc = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(`Não foi possível ler o pedido ${oldEntry} no SAP para conferir o fornecedor [${r.status}].`);
+      }
+      const oldCard = String(doc?.CardCode || "");
+      if (oldCard && oldCard !== String(expense.supplier_code)) {
+        if (String(doc?.Cancelled || "") !== "tYES" && String(doc?.DocumentStatus || "") !== "bost_Open") {
+          throw new Error(
+            `Fornecedor alterado, mas o PC ${doc?.DocNum ?? oldEntry} já tem documento de destino no SAP — não é possível substituí-lo.`,
+          );
+        }
+        replacedDocEntry = oldEntry;
+        replacedDocNum = doc?.DocNum ?? null;
+        replacedCardCode = oldCard;
+        isPatchMode = false;
+        console.log(`[expense-to-sap] fornecedor ${oldCard} → ${expense.supplier_code}: novo PC será criado e o ${oldEntry} cancelado`);
+      }
+    }
 
     // Contingência 09/09/2026 — documento integrado sem anexo por falha no ERP.
     let emergencyWithoutAttachment = false;
@@ -1369,7 +1399,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       }
     };
 
-    if (expense.sap_doc_entry && !isPatchMode) {
+    if (expense.sap_doc_entry && !isPatchMode && !replacedDocEntry) {
       let existingAttachmentEntry = 0;
       try {
         existingAttachmentEntry = await ensureAttachmentEntryUploaded();
@@ -1871,6 +1901,54 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         .eq("id", expenseId);
     }
 
+
+    // 5.2 Fornecedor trocado: cancela o PC antigo no SAP (o novo já existe).
+    if (replacedDocEntry && replacedDocEntry !== Number(sapResult.docEntry)) {
+      let cancelError: string | null = null;
+      try {
+        const cr = await fetch(`${sap.baseUrl}/${sapEndpoint}(${replacedDocEntry})/Cancel`, {
+          method: "POST",
+          headers: { Cookie: sap.cookies },
+        });
+        if (!cr.ok && cr.status !== 204) {
+          const cb = await cr.json().catch(() => ({}));
+          const m = cb?.error?.message?.value || `HTTP ${cr.status}`;
+          if (!/cancel/i.test(m)) cancelError = m;
+        }
+      } catch (e) {
+        cancelError = (e as Error).message;
+      }
+      if (cancelError) {
+        await supabase.from("expenses").update({
+          sap_integration_error:
+            `Novo PC ${sapResult.docNum} criado, mas o PC antigo ${replacedDocNum ?? replacedDocEntry} não pôde ser cancelado no SAP: ${cancelError}. Cancele-o manualmente.`,
+        }).eq("id", expenseId);
+      }
+      await supabase.rpc("insert_audit_log", {
+        p_action: "sap_document_replaced_supplier_change",
+        p_entity_type: "expense",
+        p_entity_id: expenseId,
+        p_company_db: expense.company_db || null,
+        p_details: {
+          old_doc_entry: replacedDocEntry,
+          old_doc_num: replacedDocNum,
+          old_card_code: replacedCardCode,
+          new_doc_entry: sapResult.docEntry,
+          new_doc_num: sapResult.docNum,
+          new_card_code: expense.supplier_code,
+          old_cancelled: !cancelError,
+          cancel_error: cancelError,
+        },
+      });
+      await supabase.from("expense_approval_log").insert({
+        expense_id: expenseId,
+        decision: "edited",
+        approver_name: "Sistema",
+        level_order: null,
+        remarks: `Fornecedor alterado (${replacedCardCode} → ${expense.supplier_code}): criado novo PC ${sapResult.docNum}` +
+          (cancelError ? `; PC antigo ${replacedDocNum ?? replacedDocEntry} NÃO foi cancelado (${cancelError}).` : `; PC antigo ${replacedDocNum ?? replacedDocEntry} cancelado no SAP.`),
+      } as any);
+    }
 
     // 6. Audit
     await supabase.rpc("insert_audit_log", {
