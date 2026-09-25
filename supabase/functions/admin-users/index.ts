@@ -58,8 +58,7 @@ Deno.serve(async (req) => {
 
     // LIST users
     if (method === "GET") {
-      const { data: { users }, error } = await adminClient.auth.admin.listUsers();
-      if (error) throw error;
+      const users = await listAllAuthUsers(adminClient);
 
       // Get admin roles
       const { data: roles } = await adminClient
@@ -149,7 +148,18 @@ Deno.serve(async (req) => {
     // UPDATE email
     if (method === "PATCH") {
       const body = await req.json().catch(() => null);
-      const userId = typeof body?.userId === "string" ? body.userId : "";
+      let userId = typeof body?.userId === "string" ? body.userId : "";
+      const currentEmail = typeof body?.currentEmail === "string" ? body.currentEmail.trim().toLowerCase() : "";
+      if (!userId && currentEmail) {
+        const all = await listAllAuthUsers(adminClient);
+        const found = all.find((u) => (u.email || "").toLowerCase() === currentEmail);
+        if (!found) {
+          return new Response(JSON.stringify({ error: `Nenhuma conta de login encontrada para ${currentEmail}` }), {
+            status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        userId = found.id;
+      }
       const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
       if (!/^[0-9a-f-]{36}$/i.test(userId) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
         return new Response(JSON.stringify({ error: "Dados inválidos" }), {
@@ -220,3 +230,16 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+// deno-lint-ignore no-explicit-any
+async function listAllAuthUsers(client: any): Promise<Array<{ id: string; email?: string; created_at: string; last_sign_in_at?: string | null; email_confirmed_at?: string | null }>> {
+  const out: Array<{ id: string; email?: string; created_at: string; last_sign_in_at?: string | null; email_confirmed_at?: string | null }> = [];
+  for (let page = 1; page <= 20; page++) {
+    const { data, error } = await client.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw error;
+    const batch = data?.users || [];
+    out.push(...batch);
+    if (batch.length < 1000) break;
+  }
+  return out;
+}
