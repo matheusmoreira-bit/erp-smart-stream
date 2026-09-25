@@ -105,6 +105,30 @@ export default function UserDetailDrawer({
   }, [data?.hasLicense]);
 
   const email = data?.user.eMail ?? null;
+  const [emailSaving, setEmailSaving] = useState(false);
+
+  const handleEditLoginEmail = async () => {
+    const current = (data?.user.eMail || "").trim().toLowerCase();
+    if (!current) return;
+    const next = window.prompt(`Novo e-mail de login para ${current}:`, current)?.trim().toLowerCase();
+    if (!next || next === current) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next)) {
+      toast.error("E-mail inválido");
+      return;
+    }
+    setEmailSaving(true);
+    const { data: res, error } = await supabase.functions.invoke("admin-users", {
+      method: "PATCH",
+      body: { currentEmail: current, email: next },
+    });
+    setEmailSaving(false);
+    if (error || res?.error) {
+      toast.error(res?.error || "Erro ao alterar e-mail");
+      return;
+    }
+    toast.success("E-mail de login alterado. O usuário entra com o Google do novo e-mail.");
+    onChanged();
+  };
 
   useEffect(() => {
     if (!data) return;
@@ -256,9 +280,15 @@ export default function UserDetailDrawer({
               <Field label="E-mail" value={data.user.eMail || "—"} />
               <Field label="Telefone" value={data.phone || "Sem telefone"} />
               <Field label="Chave canônica" value={canonicalUserKey(data.user.UserCode || data.user.eMail) || "—"} />
-              <Button variant="outline" size="sm" onClick={() => onEditPhone(data.user)}>
-                Editar telefone
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => onEditPhone(data.user)}>
+                  Editar telefone
+                </Button>
+                <Button variant="outline" size="sm" disabled={!data.user.eMail || emailSaving} onClick={handleEditLoginEmail}>
+                  {emailSaving && <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />}
+                  Editar e-mail de login
+                </Button>
+              </div>
             </TabsContent>
 
             <TabsContent value="acesso" className="space-y-5 pt-4">

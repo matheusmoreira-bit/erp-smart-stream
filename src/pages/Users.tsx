@@ -92,6 +92,11 @@ function fmtDateTime(value: string | null): string {
     : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+// Cache em memória (por usuário) da lista agregada do backoffice: evita
+// consultar o SAP de todas as empresas a cada abertura da tela.
+const BACKOFFICE_CACHE_TTL_MS = 10 * 60 * 1000;
+let backofficeUsersCache: { owner: string; at: number; users: SapUser[]; byCompany: Record<string, string[]> } | null = null;
+
 export default function UsersPage({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -109,9 +114,19 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminError, setAdminError] = useState<string | null>(null);
 
-  const loadBackofficeUsers = useCallback(async () => {
+  const loadBackofficeUsers = useCallback(async (force = false) => {
     if (!backofficeMode) return;
-    setAdminLoading(true);
+    const { data: authData } = await supabase.auth.getUser();
+    const cacheOwner = authData.user?.id ?? "anon";
+    const cached = backofficeUsersCache;
+    const fresh = cached && cached.owner === cacheOwner && Date.now() - cached.at < BACKOFFICE_CACHE_TTL_MS;
+    if (cached && cached.owner === cacheOwner) {
+      setAdminUsers(cached.users);
+      setAdminUserCompanies(cached.byCompany);
+      if (fresh && !force) return;
+    } else {
+      setAdminLoading(true);
+    }
     setAdminError(null);
     try {
       const { data: companiesPayload, error: companiesError } = await supabase.functions.invoke("sap-users-admin", {
@@ -121,11 +136,12 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
       const companies = ((companiesPayload?.companies || []) as { company_db: string; display_name: string }[]);
       const merged = new Map<string, SapUser>();
       const byCompany: Record<string, Set<string>> = {};
+      const failed: string[] = [];
       await Promise.all(companies.map(async (company) => {
         const { data, error: listError } = await supabase.functions.invoke("sap-users-admin", {
           body: { action: "list_users", company_db: company.company_db },
         });
-        if (listError) throw listError;
+        if (listError) { failed.push(company.display_name || company.company_db); return; }
         for (const raw of ((data?.users || []) as Record<string, unknown>[])) {
           const user: SapUser = {
             InternalKey: Number(raw.InternalKey || 0),
@@ -152,8 +168,12 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
           (byCompany[key] ||= new Set()).add(company.company_db);
         }
       }));
-      setAdminUsers(Array.from(merged.values()));
-      setAdminUserCompanies(Object.fromEntries(Object.entries(byCompany).map(([key, set]) => [key, Array.from(set)])));
+      const usersList = Array.from(merged.values());
+      const byCompanyList = Object.fromEntries(Object.entries(byCompany).map(([key, set]) => [key, Array.from(set)]));
+      setAdminUsers(usersList);
+      setAdminUserCompanies(byCompanyList);
+      if (failed.length === 0) backofficeUsersCache = { owner: cacheOwner, at: Date.now(), users: usersList, byCompany: byCompanyList };
+      if (failed.length > 0) setAdminError(`Não foi possível carregar: ${failed.join(", ")}`);
     } catch (e) {
       setAdminError(e instanceof Error ? e.message : "Erro ao carregar usuários agregados");
     } finally {
@@ -192,7 +212,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
         };
       }
     }));
-    await loadBackofficeUsers();
+    await loadBackofficeUsers(true);
     return { created: false, replicationResults: results };
   }, [loadBackofficeUsers]);
 
@@ -450,7 +470,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
   const scopedCompanyDb = session?.companyDB || (backofficeMode && companyFilter !== "all" ? companyFilter : undefined);
   const refreshPage = () => {
     void refreshGlobalProfiles();
-    if (backofficeMode) void loadBackofficeUsers();
+    if (backofficeMode) void loadBackofficeUsers(true);
     else {
       refresh();
       directory.refresh();
