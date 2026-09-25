@@ -78,11 +78,17 @@ Deno.serve(async (req) => {
       const asCaller = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
         global: { headers: { Authorization: `Bearer ${token}` } },
       });
-      const { data: userData } = await asCaller.auth.getUser();
-      actorEmail = userData?.user?.email || "desconhecido";
-      // Autorização: somente admin consegue ler system_credentials (RLS).
-      const { error: authzErr } = await asCaller.from("system_credentials_v").select("id").limit(1);
-      if (authzErr) {
+      const { data: userData, error: userErr } = await asCaller.auth.getUser();
+      if (userErr || !userData?.user) return json({ error: "UNAUTHORIZED" }, 401);
+      actorEmail = userData.user.email || "desconhecido";
+      // Autorização: papel admin validado no servidor (tabela user_roles).
+      const { data: roleRow, error: roleErr } = await supabase
+        .from("user_roles")
+        .select("id")
+        .eq("user_id", userData.user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+      if (roleErr || !roleRow) {
         return json({ error: "Apenas administradores podem sincronizar dados vindos do ERP." }, 403);
       }
     }
