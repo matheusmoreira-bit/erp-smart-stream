@@ -62,7 +62,6 @@ export interface OmieApPayload {
   data_vencimento: string;
   data_previsao: string;
   data_emissao: string;
-  data_registro: string;
   valor_documento: number;
   codigo_categoria: string;
   id_conta_corrente: number;
@@ -94,11 +93,6 @@ function toOmieDate(value: unknown, label: string, fallback?: string): string {
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) return raw;
   if (fallback) return fallback;
   throw new Error(`${label} inválida para a Conta a Pagar do Omie.`);
-}
-
-function todayBr(): string {
-  const now = new Date(Date.now() - 3 * 60 * 60 * 1000); // horário de Brasília
-  return toOmieDate(now.toISOString().slice(0, 10), "Data de registro");
 }
 
 function omieSupplierId(value: unknown): number {
@@ -171,7 +165,6 @@ export function buildOmieAccountsPayablePayload(
     data_vencimento: dueDate,
     data_previsao: forecast,
     data_emissao: issueDate,
-    data_registro: todayBr(),
     valor_documento: amount,
     codigo_categoria: category,
     id_conta_corrente: currentAccount,

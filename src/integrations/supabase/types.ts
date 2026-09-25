@@ -10583,10 +10583,6 @@ export type Database = {
         }
       }
       current_auth_email: { Args: never; Returns: string }
-      delete_email: {
-        Args: { message_id: number; queue_name: string }
-        Returns: boolean
-      }
       detect_duplicate_sap_purchase_orders: {
         Args: { _days?: number }
         Returns: {
@@ -10599,12 +10595,7 @@ export type Database = {
           expense_code: string
         }[]
       }
-      email_queue_dispatch: { Args: never; Returns: undefined }
       enable_audit_on: { Args: { _table: string }; Returns: undefined }
-      enqueue_email: {
-        Args: { payload: Json; queue_name: string }
-        Returns: number
-      }
       enqueue_notification_event: {
         Args: {
           p_company_db?: string
@@ -11025,15 +11016,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      move_to_dlq: {
-        Args: {
-          dlq_name: string
-          message_id: number
-          payload: Json
-          source_queue: string
-        }
-        Returns: number
-      }
       my_mfa_status: { Args: never; Returns: Json }
       notification_conditions_match: {
         Args: { p_conditions: Json; p_payload: Json }
@@ -11072,14 +11054,6 @@ export type Database = {
         Returns: {
           completed_removed: number
           stale_removed: number
-        }[]
-      }
-      read_email_batch: {
-        Args: { batch_size: number; queue_name: string; vt: number }
-        Returns: {
-          message: Json
-          msg_id: number
-          read_ct: number
         }[]
       }
       reassign_approval_rule_safe: {
