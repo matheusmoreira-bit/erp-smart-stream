@@ -36,9 +36,20 @@ Deno.serve(async (req) => {
     }
 
     if (action === "reset") {
-      const target = String(body.user_id ?? "");
+      let target = String(body.user_id ?? "");
+      const email = String((body as { email?: unknown }).email ?? "").trim().toLowerCase();
+      if (!target && email) {
+        if (!/^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(email)) return json({ error: "E-mail inválido" }, 400);
+        for (let page = 1; page <= 20 && !target; page++) {
+          const { data: pg, error: perr } = await svc.auth.admin.listUsers({ page, perPage: 1000 });
+          if (perr) throw perr;
+          const hit = pg.users.find((u) => (u.email ?? "").toLowerCase() === email);
+          if (hit) target = hit.id;
+          if (pg.users.length < 1000) break;
+        }
+        if (!target) return json({ error: "Nenhuma conta encontrada com esse e-mail" }, 404);
+      }
       if (!UUID_RE.test(target)) return json({ error: "Usuário inválido" }, 400);
-      if (target === actor.id) return json({ error: "Peça a outro administrador para redefinir o seu." }, 400);
 
       const { data: list, error: lerr } = await svc.auth.admin.mfa.listFactors({ userId: target });
       if (lerr) throw lerr;
@@ -53,9 +64,9 @@ Deno.serve(async (req) => {
         p_entity_id: target,
         p_actor_email: actor.email,
         p_company_db: null,
-        p_details: { removed_factors: factors.length },
+        p_details: { removed_factors: factors.length, self_reset: target === actor.id },
       });
-      return json({ ok: true, removed: factors.length });
+      return json({ ok: true, removed: factors.length, self: target === actor.id });
     }
 
     return json({ error: "Ação inválida" }, 400);
