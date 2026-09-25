@@ -1,4 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { EmailAPIError, sendLovableEmail } from "npm:@lovable.dev/email-js@0.1.0";
+
+const EMAIL_SENDER_DOMAIN = "notify.cactuscorporation.com";
+const EMAIL_FROM_DOMAIN = "notify.cactuscorporation.com";
 import { ensureCopyToTargetDocument } from "../_shared/sap-attach-copy.ts";
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 
@@ -586,24 +590,47 @@ async function sendValidationNotificationEmail(
     </div>
   `;
 
-  // Try sending via send-transactional-email if available, otherwise log
-  try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    await supabase.functions.invoke("send-transactional-email", {
-      body: {
-        templateName: "__raw_html",
-        recipientEmail: notificationEmail,
-        subject: `⚠️ PagCorp: ${issues.length} despesa(s) não integrada(s) — ${companyDB}`,
-        rawHtml: html,
-        idempotencyKey: `pagcorp-validation-${companyDB}-${new Date().toISOString().slice(0, 10)}`,
-      },
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const LABEL = "pagcorp-validation-issues";
+  const logSend = async (status: "sent" | "suppressed" | "failed", errorMessage?: string) => {
+    const { error } = await supabase.from("email_send_log").insert({
+      template_name: LABEL,
+      recipient_email: notificationEmail,
+      status,
+      error_message: errorMessage ?? null,
     });
-    console.log(`Notification email sent to ${notificationEmail}`);
+    if (error) console.error("email_send_log insert failed", { code: error.code, message: error.message });
+  };
+
+  try {
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    await sendLovableEmail(
+      {
+        to: notificationEmail,
+        from: `ERP Flow <noreply@${EMAIL_FROM_DOMAIN}>`,
+        sender_domain: EMAIL_SENDER_DOMAIN,
+        subject: `⚠️ PagCorp: ${issues.length} despesa(s) não integrada(s) — ${companyDB}`,
+        html,
+        text,
+        purpose: "transactional",
+        label: LABEL,
+        idempotency_key: `pagcorp-validation-${companyDB}-${new Date().toISOString().slice(0, 10)}`,
+      },
+      { apiKey: LOVABLE_API_KEY, sendUrl: Deno.env.get("LOVABLE_SEND_URL") },
+    );
+    await logSend("sent");
+    console.log("PagCorp validation notification email sent");
   } catch (emailErr) {
-    console.warn("Failed to send notification email via transactional, trying direct:", emailErr);
+    if (emailErr instanceof EmailAPIError && emailErr.code === "recipient_suppressed") {
+      await logSend("suppressed");
+      return;
+    }
+    const msg = emailErr instanceof Error ? emailErr.message : String(emailErr);
+    await logSend("failed", msg.slice(0, 1000));
+    console.warn("Failed to send PagCorp validation notification email:", msg);
     // Fallback: log to audit_log for visibility
     try {
-      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
       await supabase.from("audit_log").insert({
         action: "pagcorp_validation_issues",
         entity_type: "synapse_integration",
