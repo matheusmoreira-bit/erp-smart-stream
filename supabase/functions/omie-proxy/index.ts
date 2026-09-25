@@ -113,7 +113,13 @@ Deno.serve(async (req) => {
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const { data: allowed, error: allowErr } = await supabase.rpc(
+      // A RPC usa auth.uid()/current_auth_email(); precisa rodar com o JWT do
+      // próprio usuário (o client service_role deixa auth.uid() nulo → sempre false).
+      const userClient = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
+        global: { headers: { Authorization: req.headers.get("Authorization") || "" } },
+        auth: { persistSession: false },
+      });
+      const { data: allowed, error: allowErr } = await userClient.rpc(
         "is_email_allowed_for_omie_company",
         { _email: callerEmail, _company_db: company_db }
       );
