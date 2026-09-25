@@ -1241,8 +1241,38 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     // ERP Flow e reaprovado) e ainda não tem NF de entrada lançada, fazemos o
     // PATCH completo do documento — itens, valores, centros de custo, projeto,
     // datas e observação — para não gerar divergência entre Flow e ERP.
-    const isPatchMode = !!expense.sap_doc_entry
+    let isPatchMode = !!expense.sap_doc_entry
       && (body.patch_document === true || String((expense as any).status || "") === "aprovado");
+
+    // Fornecedor é travado no SAP: se foi trocado no ERP Flow, não dá para
+    // fazer PATCH. Cria-se um NOVO pedido e o antigo é cancelado no SAP.
+    let replacedDocEntry = 0;
+    let replacedDocNum: number | null = null;
+    let replacedCardCode = "";
+    if (isPatchMode && sapEndpoint === "PurchaseOrders" && expense.supplier_code) {
+      const oldEntry = Number(expense.sap_doc_entry);
+      const r = await fetch(
+        `${sap.baseUrl}/${sapEndpoint}(${oldEntry})?$select=CardCode,DocNum,DocumentStatus,Cancelled`,
+        { headers: { Cookie: sap.cookies } },
+      );
+      const doc = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(`Não foi possível ler o pedido ${oldEntry} no SAP para conferir o fornecedor [${r.status}].`);
+      }
+      const oldCard = String(doc?.CardCode || "");
+      if (oldCard && oldCard !== String(expense.supplier_code)) {
+        if (String(doc?.Cancelled || "") !== "tYES" && String(doc?.DocumentStatus || "") !== "bost_Open") {
+          throw new Error(
+            `Fornecedor alterado, mas o PC ${doc?.DocNum ?? oldEntry} já tem documento de destino no SAP — não é possível substituí-lo.`,
+          );
+        }
+        replacedDocEntry = oldEntry;
+        replacedDocNum = doc?.DocNum ?? null;
+        replacedCardCode = oldCard;
+        isPatchMode = false;
+        console.log(`[expense-to-sap] fornecedor ${oldCard} → ${expense.supplier_code}: novo PC será criado e o ${oldEntry} cancelado`);
+      }
+    }
 
     // Contingência 09/09/2026 — documento integrado sem anexo por falha no ERP.
     let emergencyWithoutAttachment = false;
@@ -1369,7 +1399,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       }
     };
 
-    if (expense.sap_doc_entry && !isPatchMode) {
+    if (expense.sap_doc_entry && !isPatchMode && !replacedDocEntry) {
       let existingAttachmentEntry = 0;
       try {
         existingAttachmentEntry = await ensureAttachmentEntryUploaded();
