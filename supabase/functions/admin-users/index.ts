@@ -146,6 +146,40 @@ Deno.serve(async (req) => {
       });
     }
 
+    // UPDATE email
+    if (method === "PATCH") {
+      const body = await req.json().catch(() => null);
+      const userId = typeof body?.userId === "string" ? body.userId : "";
+      const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+      if (!/^[0-9a-f-]{36}$/i.test(userId) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+        return new Response(JSON.stringify({ error: "Dados inválidos" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!isCorporateEmail(email)) {
+        return new Response(JSON.stringify({ error: "Domínio de e-mail não autorizado" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data: before } = await adminClient.auth.admin.getUserById(userId);
+      const { error: updErr } = await adminClient.auth.admin.updateUserById(userId, {
+        email, email_confirm: true,
+      });
+      if (updErr) {
+        return new Response(JSON.stringify({ error: updErr.message }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      await adminClient.from("audit_log").insert({
+        action: "admin_user_email_changed",
+        actor_email: caller.email,
+        details: { target_user_id: userId, old_email: before?.user?.email ?? null, new_email: email },
+      }).then(() => undefined, () => undefined);
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // DELETE user
     if (method === "DELETE") {
       const { userId } = await req.json();

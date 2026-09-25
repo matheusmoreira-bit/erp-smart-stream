@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   Clock,
   CheckCircle2,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,6 +77,21 @@ export default function AdminUsersManager() {
       fetchUsers();
     }
     setInviting(false);
+  };
+
+  const handleEditEmail = async (user: AdminUser) => {
+    const next = window.prompt(`Novo e-mail para ${user.email}:`, user.email)?.trim().toLowerCase();
+    if (!next || next === user.email) return;
+    const { data, error } = await supabase.functions.invoke("admin-users", {
+      method: "PATCH",
+      body: { userId: user.id, email: next },
+    });
+    if (error || data?.error) {
+      toast.error(data?.error || "Erro ao alterar e-mail");
+    } else {
+      toast.success("E-mail alterado");
+      fetchUsers();
+    }
   };
 
   const handleDelete = async (user: AdminUser) => {
@@ -195,6 +211,16 @@ export default function AdminUsersManager() {
               </div>
 
               <div className="w-16 flex justify-end">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => handleEditEmail(u)}
+                  title="Editar e-mail"
+                  aria-label="Editar e-mail"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
