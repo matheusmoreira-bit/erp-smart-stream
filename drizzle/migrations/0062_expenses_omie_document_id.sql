@@ -1,0 +1,2 @@
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS omie_document_id bigint;
+COMMENT ON COLUMN public.expenses.omie_document_id IS 'Código interno Omie (codigo_lancamento_omie / codigo_pedido); pode exceder integer.';
