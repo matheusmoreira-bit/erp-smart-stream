@@ -1068,8 +1068,9 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         .from("expenses")
         .update({
           status: "pc_lancado",
-          sap_doc_entry: omieDocumentId,
-          sap_doc_num: omieDocumentNumber,
+          omie_document_id: omieDocumentId,
+          sap_doc_entry: omieDocumentId <= 2147483647 ? omieDocumentId : null,
+          sap_doc_num: omieDocumentNumber !== null && omieDocumentNumber <= 2147483647 ? omieDocumentNumber : null,
           sap_attachment_status: attachmentStatus,
           sap_purchase_order_status: purchaseOrderStatus,
           sap_attachment_link_status: attachmentLinkStatus,
