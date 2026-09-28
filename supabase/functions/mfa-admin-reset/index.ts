@@ -4,6 +4,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { AuthError, requireAdmin } from "../_shared/auth.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
+import { enforceRateLimit, rateLimitResponse } from "../_shared/rate-limit.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -36,6 +38,8 @@ Deno.serve(async (req) => {
     }
 
     if (action === "reset") {
+      const limit = await enforceRateLimit(svc, { scope: "mfa-admin-reset", identifier: actor.id, max: 10, windowSeconds: 900, failClosed: true });
+      if (!limit.allowed) return rateLimitResponse(limit, corsHeaders);
       let target = String(body.user_id ?? "");
       const email = String((body as { email?: unknown }).email ?? "").trim().toLowerCase();
       if (!target && email) {
@@ -51,6 +55,12 @@ Deno.serve(async (req) => {
       }
       if (!UUID_RE.test(target)) return json({ error: "Usuário inválido" }, 400);
 
+      if (target === actor.id) return json({ error: "Solicite a redefinição a outro administrador." }, 403);
+      const { error: auditStartError } = await svc.rpc("insert_audit_log", {
+        p_action: "mfa_factor_reset_requested", p_entity_type: "user", p_entity_id: target,
+        p_actor_email: actor.email, p_company_db: null, p_details: { self_reset: false },
+      });
+      if (auditStartError) return json({ error: "Auditoria indisponível; nenhum fator foi removido." }, 503);
       const { data: list, error: lerr } = await svc.auth.admin.mfa.listFactors({ userId: target });
       if (lerr) throw lerr;
       const factors = list?.factors ?? [];
@@ -58,7 +68,7 @@ Deno.serve(async (req) => {
         const { error } = await svc.auth.admin.mfa.deleteFactor({ userId: target, id: f.id });
         if (error) throw error;
       }
-      await svc.rpc("insert_audit_log", {
+      const { error: auditError } = await svc.rpc("insert_audit_log", {
         p_action: "mfa_factor_reset",
         p_entity_type: "user",
         p_entity_id: target,
@@ -66,6 +76,7 @@ Deno.serve(async (req) => {
         p_company_db: null,
         p_details: { removed_factors: factors.length, self_reset: target === actor.id },
       });
+      if (auditError) return json({ error: "Fatores removidos, mas a confirmação de auditoria falhou. Verifique o evento de solicitação.", code: "audit_confirmation_failed" }, 503);
       return json({ ok: true, removed: factors.length, self: target === actor.id });
     }
 

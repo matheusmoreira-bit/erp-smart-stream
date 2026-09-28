@@ -3,6 +3,27 @@
 # ============================================================================
 .PHONY: qa-up qa-down qa-nuke qa-logs qa-seed qa-jwt qa-migrate qa-shell qa-status
 
+# Perfil isolado: usa a configuração local gerada durante o setup.
+# Não inicia Edge Functions, cron, Storage ou integrações externas.
+DOCKER_LOCAL := $(shell command -v docker 2>/dev/null || echo /Applications/Docker.app/Contents/Resources/bin/docker)
+QA_LOCAL_COMPOSE = "$(DOCKER_LOCAL)" compose -f docker/docker-compose.yml -f docker/docker-compose.local.yml --env-file docker/.env
+.PHONY: qa-isolated-up qa-isolated-status qa-local-shell dev-local
+
+qa-isolated-up: ## Sobe DB/Auth/REST e gateway isolados (requer setup local)
+	@test -f docker/docker-compose.local.yml && test -f docker/.env
+	PATH="$(dir $(DOCKER_LOCAL)):$$PATH" $(QA_LOCAL_COMPOSE) up -d db auth rest
+	PATH="$(dir $(DOCKER_LOCAL)):$$PATH" $(QA_LOCAL_COMPOSE) up -d --no-deps kong
+
+qa-isolated-status: ## Estado do perfil local isolado
+	$(QA_LOCAL_COMPOSE) ps
+
+qa-local-shell: ## Abre psql no PostgreSQL local isolado, sem conexão remota
+	"$(DOCKER_LOCAL)" exec -it erp-qa-db psql -U postgres -d postgres
+
+dev-local: ## Frontend somente em loopback, apontando ao backend local
+	@test -f .env.development.local
+	node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 8080 --strictPort
+
 qa-up: ## Sobe o stack QA local (Supabase self-hosted)
 	@test -f docker/.env || (echo "ERRO: copie docker/.env.example para docker/.env"; exit 1)
 	docker compose -f docker/docker-compose.yml --env-file docker/.env up -d

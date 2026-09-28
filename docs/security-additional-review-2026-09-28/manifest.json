@@ -1,0 +1,15 @@
+{
+  "date": "2026-09-28",
+  "head": "410a28c9081c44a2feefba450736025b61bf75c7",
+  "state": "working tree after local rounds 1 and 2; not deployed",
+  "files": {
+    "supabase/functions/nf-entrada-to-sap/index.ts": "98b7fc144146004cace29fcf8a8658db16bb3175c73a3ce813524bec83a2a7db",
+    "supabase/functions/audit-cross-fiscal-run/index.ts": "c9ea144e93459984253fa3c1aa65631c3d35575036ec72d2d177f89908db6936",
+    "supabase/functions/employees-sync-run/index.ts": "582bc37c94dbc3378f8fab5879acb2226b05a0375d2d3e129584b787d57b88c2",
+    "supabase/functions/_shared/employee-sync.ts": "c95ae42888def45f44b936f618a0822f98015960662f3899f4fcf4807ab8d930",
+    "supabase/config.toml": "3413481d6dcb69ac4b7aabf9f2603d4b1eed56e85303f8fdb66beeb7c5ae786d",
+    "src/hooks/useNfEntrada.ts": "db41c9b723e65bf84ff7fa75601fac9d51987bc633bc8076fb3340069240480a",
+    "supabase/migrations/20260716164856_1e1e0dfc-82d4-4a7d-bef5-f352d2630c72.sql": "2a12acdcbbd1719d07d8cf6256fa404ac67da5beccc778106fc8daeafd5a5a23",
+    "scripts/security-review/additional-findings.mjs": "0360f1bfc6fe641e587fceee118024b5b17c35f233a8624009b662532e84e87d"
+  }
+}

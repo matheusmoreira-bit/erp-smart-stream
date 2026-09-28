@@ -1,0 +1,152 @@
+[
+  {
+    "group": "dependencies",
+    "package": "@streamdown/cjk",
+    "package_json": "^1.0.3",
+    "lock_root": null
+  },
+  {
+    "group": "dependencies",
+    "package": "@streamdown/code",
+    "package_json": "^1.1.1",
+    "lock_root": null
+  },
+  {
+    "group": "dependencies",
+    "package": "@streamdown/math",
+    "package_json": "^1.0.2",
+    "lock_root": null
+  },
+  {
+    "group": "dependencies",
+    "package": "@streamdown/mermaid",
+    "package_json": "^1.0.2",
+    "lock_root": null
+  },
+  {
+    "group": "dependencies",
+    "package": "@xyflow/react",
+    "package_json": "^12.11.2",
+    "lock_root": null
+  },
+  {
+    "group": "dependencies",
+    "package": "ai",
+    "package_json": "^7.0.35",
+    "lock_root": null
+  },
+  {
+    "group": "dependencies",
+    "package": "jspdf",
+    "package_json": "^4.2.1",
+    "lock_root": null
+  },
+  {
+    "group": "dependencies",
+    "package": "jspdf-autotable",
+    "package_json": "^5.0.8",
+    "lock_root": null
+  },
+  {
+    "group": "dependencies",
+    "package": "motion",
+    "package_json": "^12.42.2",
+    "lock_root": null
+  },
+  {
+    "group": "dependencies",
+    "package": "nanoid",
+    "package_json": "^6.0.0",
+    "lock_root": null
+  },
+  {
+    "group": "dependencies",
+    "package": "pptxgenjs",
+    "package_json": "^4.0.1",
+    "lock_root": null
+  },
+  {
+    "group": "dependencies",
+    "package": "react-helmet-async",
+    "package_json": "^3.0.0",
+    "lock_root": null
+  },
+  {
+    "group": "dependencies",
+    "package": "react-router-dom",
+    "package_json": "^7.9.4",
+    "lock_root": "^6.30.1"
+  },
+  {
+    "group": "dependencies",
+    "package": "react-window",
+    "package_json": "^2.2.7",
+    "lock_root": null
+  },
+  {
+    "group": "dependencies",
+    "package": "recharts",
+    "package_json": "^3.9.2",
+    "lock_root": "^2.15.4"
+  },
+  {
+    "group": "dependencies",
+    "package": "remark-gfm",
+    "package_json": "^4.0.1",
+    "lock_root": null
+  },
+  {
+    "group": "dependencies",
+    "package": "shiki",
+    "package_json": "^4.3.1",
+    "lock_root": null
+  },
+  {
+    "group": "dependencies",
+    "package": "streamdown",
+    "package_json": "^2.5.0",
+    "lock_root": null
+  },
+  {
+    "group": "dependencies",
+    "package": "use-stick-to-bottom",
+    "package_json": "^1.1.6",
+    "lock_root": null
+  },
+  {
+    "group": "dependencies",
+    "package": "xlsx",
+    "package_json": "^0.18.5",
+    "lock_root": null
+  },
+  {
+    "group": "devDependencies",
+    "package": "@testing-library/dom",
+    "package_json": "^10.4.1",
+    "lock_root": null
+  },
+  {
+    "group": "devDependencies",
+    "package": "@types/react-window",
+    "package_json": "^2.0.0",
+    "lock_root": null
+  },
+  {
+    "group": "devDependencies",
+    "package": "drizzle-kit",
+    "package_json": "^0.31.10",
+    "lock_root": null
+  },
+  {
+    "group": "devDependencies",
+    "package": "drizzle-orm",
+    "package_json": "^0.45.2",
+    "lock_root": null
+  },
+  {
+    "group": "devDependencies",
+    "package": "postgres",
+    "package_json": "^3.4.9",
+    "lock_root": null
+  }
+]

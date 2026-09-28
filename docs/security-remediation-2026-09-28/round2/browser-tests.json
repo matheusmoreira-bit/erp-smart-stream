@@ -1,0 +1,26 @@
+{
+  "browser": "154.0.8037.58",
+  "environment": "isolated loopback, real IndexedDB, mocked identity and ERP circuit",
+  "tests": [
+    {
+      "name": "owner isolation: list/update/delete preserve another user’s queued item",
+      "status": "passed"
+    },
+    {
+      "name": "identity changes during flush: no send; original owner can resume",
+      "status": "passed"
+    },
+    {
+      "name": "cleanup waits for a blocked connection; other tab releases on versionchange",
+      "status": "passed"
+    },
+    {
+      "name": "blocked deletion reports failure instead of successful cleanup",
+      "status": "passed"
+    },
+    {
+      "name": "logout removes scoped storage, keeps theme, queue still works after reload",
+      "status": "passed"
+    }
+  ]
+}

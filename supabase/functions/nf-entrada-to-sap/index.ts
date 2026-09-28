@@ -1,3 +1,6 @@
+import { requireIntegrationCaller, authorizeIntegrationCompany } from "../_shared/integration-auth.ts";
+import { AuthError, authErrorResponse } from "../_shared/auth.ts";
+import { createNfDraftOnce, assertNfDraftEligible } from "../_shared/nf-draft-once.ts";
 // Edge function: nf-entrada-to-sap
 // Quando uma NF de entrada já foi aprovada no ERP Flow, cria um esboço (Draft)
 // de Pedido de Compra (ObjectCode 22) no SAP Business One.
@@ -74,6 +77,7 @@ async function createPoDraft(baseUrl: string, cookie: string, body: Record<strin
 class StandalonePausedError extends Error {}
 
 async function process(sb: ReturnType<typeof createClient>, row: NfRow): Promise<string> {
+  assertNfDraftEligible(row);
   if (row.sap_po_draft_id) return row.sap_po_draft_id;
   if (!row.sap_company_db) throw new Error("sap_company_db não definido");
   {
@@ -102,19 +106,29 @@ async function process(sb: ReturnType<typeof createClient>, row: NfRow): Promise
       Price: (it as Record<string, unknown>).Price || (it as Record<string, unknown>).preco_unitario || 0,
     }));
 
-    const draftId = await createPoDraft(baseUrl, cookie, {
+    const correlation = `ERPFlow NF ${row.id}`;
+    const draftId = await createNfDraftOnce(sb, row.id, () => createPoDraft(baseUrl, cookie, {
       CardCode: cardCode,
-      Comments: `NF Entrada chave ${row.chave_acesso}`,
+      Comments: correlation,
       DocumentLines: docLines,
+    }), async () => {
+      const filter = `DocObjectCode eq 'oPurchaseOrders' and Comments eq '${correlation.replace(/'/g, "''")}'`;
+      const response = await fetch(`${baseUrl}/Drafts?$select=DocEntry&$filter=${encodeURIComponent(filter)}&$top=2`, { headers: { Cookie: cookie } });
+      if (!response.ok) throw new Error("Não foi possível reconciliar o Draft no SAP");
+      const data = await response.json();
+      if (!Array.isArray(data.value)) throw new Error("Resposta inválida na reconciliação do SAP");
+      if (data.value.length > 1) throw new Error("Mais de um Draft encontrado; revisão manual necessária");
+      return data.value.length ? String(data.value[0].DocEntry) : null;
     });
 
-    await sb.from("nf_entrada_imports").update({
+    const { data: saved, error: saveError } = await sb.from("nf_entrada_imports").update({
       sap_po_draft_id: draftId,
       status: "awaiting_sap",
       last_error: null,
-    }).eq("id", row.id);
+    }).eq("id", row.id).eq("status", row.status).select("id").maybeSingle();
+    if (saveError || !saved) throw new Error("Draft confirmado, mas vínculo local falhou; tente reconciliar novamente");
 
-    await sb.from("nf_entrada_logs").insert({
+    const { error: logError } = await sb.from("nf_entrada_logs").insert({
       import_id: row.id,
       step: "create_po_draft",
       status_to: "awaiting_sap",
@@ -122,6 +136,7 @@ async function process(sb: ReturnType<typeof createClient>, row: NfRow): Promise
       actor: "nf-entrada-to-sap",
     });
 
+    if (logError) throw new Error("Draft confirmado, mas auditoria local falhou");
     return draftId;
   } finally {
     await fetch(`${baseUrl}/Logout`, { method: "POST", headers: { Cookie: cookie } }).catch(() => {});
@@ -130,6 +145,9 @@ async function process(sb: ReturnType<typeof createClient>, row: NfRow): Promise
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  let caller;
+  try { caller = await requireIntegrationCaller(req); }
+  catch (error) { return authErrorResponse(error, corsHeaders) ?? new Response("Falha de autenticação", { status: 503 }); }
   { const _pause = await getIntegrationPause("sap_b1"); if (_pause) return pauseResponse(_pause, corsHeaders); }
 
   const sb = createClient(
@@ -138,8 +156,9 @@ Deno.serve(async (req) => {
   );
 
   let body: { import_id?: string } = {};
-  try { body = await req.json(); } catch { /* ignore */ }
+  try { body = (await req.json()) ?? {}; } catch { /* ignore */ }
 
+  if (!body?.import_id && !caller.technical) return new Response(JSON.stringify({ error: "Lote exige identidade técnica" }), { status: 403, headers: corsHeaders });
   let rows: NfRow[];
   if (body.import_id) {
     const { data, error } = await sb.from("nf_entrada_imports").select("*").eq("id", body.import_id).limit(1);
@@ -158,9 +177,15 @@ Deno.serve(async (req) => {
   const results: Array<{ id: string; ok: boolean; draft?: string; error?: string; skipped?: boolean }> = [];
   for (const row of rows) {
     try {
+      await authorizeIntegrationCompany(req, caller, "nf_entrada", row.sap_company_db);
       const draftId = await process(sb, row);
       results.push({ id: row.id, ok: true, draft: draftId });
     } catch (e) {
+      if (e instanceof AuthError) {
+        if (body.import_id) return authErrorResponse(e, corsHeaders)!;
+        results.push({ id: row.id, ok: false, error: e.message, skipped: true });
+        continue;
+      }
       const msg = (e as Error).message;
       if (e instanceof StandalonePausedError) {
         // Mantém o documento na fila (status inalterado) para reenvio automático
@@ -172,7 +197,7 @@ Deno.serve(async (req) => {
       await sb.from("nf_entrada_imports").update({
         status: "integration_error",
         last_error: msg,
-      }).eq("id", row.id);
+      }).eq("id", row.id).eq("status", row.status);
       await sb.from("nf_entrada_logs").insert({
         import_id: row.id,
         step: "create_po_draft",
@@ -184,7 +209,8 @@ Deno.serve(async (req) => {
     }
   }
 
-  return new Response(JSON.stringify({ ok: true, results }), {
+  return new Response(JSON.stringify({ ok: results.every(r => r.ok), results }), {
+    status: body.import_id && results.some(r => !r.ok) ? 502 : 200,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });

@@ -1,0 +1,151 @@
+{
+  "date": "2026-09-28",
+  "environment": "local VM, real handlers, mocked database/ERP, no remote I/O",
+  "results": [
+    {
+      "id": "N01/N02",
+      "scenario": "request without identity and invoice status cancelled reaches SAP Drafts and local update",
+      "drafts": 1,
+      "writes": [
+        {
+          "table": "nf_entrada_imports",
+          "operation": "update",
+          "value": {
+            "sap_po_draft_id": "1",
+            "status": "awaiting_sap",
+            "last_error": null
+          }
+        },
+        {
+          "table": "nf_entrada_logs",
+          "operation": "insert",
+          "value": {
+            "import_id": "synthetic-invoice",
+            "step": "create_po_draft",
+            "status_to": "awaiting_sap",
+            "message": "Draft PO criado: 1",
+            "actor": "nf-entrada-to-sap"
+          }
+        }
+      ],
+      "statuses": [
+        200
+      ]
+    },
+    {
+      "id": "N02",
+      "scenario": "invoice rejected in ERP Flow also creates draft",
+      "drafts": 1,
+      "writes": [
+        {
+          "table": "nf_entrada_imports",
+          "operation": "update",
+          "value": {
+            "sap_po_draft_id": "1",
+            "status": "awaiting_sap",
+            "last_error": null
+          }
+        },
+        {
+          "table": "nf_entrada_logs",
+          "operation": "insert",
+          "value": {
+            "import_id": "synthetic-invoice",
+            "step": "create_po_draft",
+            "status_to": "awaiting_sap",
+            "message": "Draft PO criado: 1",
+            "actor": "nf-entrada-to-sap"
+          }
+        }
+      ],
+      "statuses": [
+        200
+      ]
+    },
+    {
+      "id": "N03",
+      "scenario": "two concurrent requests on same unprocessed invoice create two drafts",
+      "drafts": 2,
+      "writes": [
+        {
+          "table": "nf_entrada_imports",
+          "operation": "update",
+          "value": {
+            "sap_po_draft_id": "1",
+            "status": "awaiting_sap",
+            "last_error": null
+          }
+        },
+        {
+          "table": "nf_entrada_imports",
+          "operation": "update",
+          "value": {
+            "sap_po_draft_id": "2",
+            "status": "awaiting_sap",
+            "last_error": null
+          }
+        },
+        {
+          "table": "nf_entrada_logs",
+          "operation": "insert",
+          "value": {
+            "import_id": "synthetic-invoice",
+            "step": "create_po_draft",
+            "status_to": "awaiting_sap",
+            "message": "Draft PO criado: 1",
+            "actor": "nf-entrada-to-sap"
+          }
+        },
+        {
+          "table": "nf_entrada_logs",
+          "operation": "insert",
+          "value": {
+            "import_id": "synthetic-invoice",
+            "step": "create_po_draft",
+            "status_to": "awaiting_sap",
+            "message": "Draft PO criado: 2",
+            "actor": "nf-entrada-to-sap"
+          }
+        }
+      ],
+      "statuses": [
+        200,
+        200
+      ]
+    },
+    {
+      "id": "N01",
+      "scenario": "fiscal audit without identity invokes ERP adapter and deletes prior automatic results",
+      "status": 200,
+      "adapterCalls": 1,
+      "writes": [
+        {
+          "table": "auditoria_cruzamento_fiscal",
+          "operation": "delete"
+        }
+      ]
+    },
+    {
+      "id": "N01/N04",
+      "scenario": "unauthenticated request persists execution with caller-supplied actor before synthetic downstream failure",
+      "status": 500,
+      "record": {
+        "table": "employee_sync_execution",
+        "operation": "insert",
+        "value": {
+          "integration_config_id": "config",
+          "company_db": "TST_FIXTURE",
+          "execution_type": "manual",
+          "status": "running",
+          "triggered_by": null,
+          "triggered_by_email": "claimed-admin@example.invalid"
+        }
+      }
+    },
+    {
+      "id": "control",
+      "scenario": "employee sync retains TST-only restriction",
+      "passed": true
+    }
+  ]
+}

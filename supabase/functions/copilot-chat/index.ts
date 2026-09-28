@@ -344,14 +344,13 @@ async function audit(sb: SupabaseClient, actor: Actor, action: string, entity_ty
 // F10: confirmação humana decidida no SERVIDOR. O modelo nunca executa escrita:
 // cada chamada vira uma ação pendente, que só roda quando o próprio admin clica
 // "Confirmar" na tela (POST { confirm_action_id }), sem passar pelo modelo.
-type ToolCtx = { confirmed: boolean; onPending?: (p: { id: string; summary: string; tool: string }) => void };
+type ToolCtx = { pendingSb?: SupabaseClient; pendingActor?: Actor; confirmed: boolean; onPending?: (p: { id: string; summary: string; tool: string }) => void };
 const WRITE_TOOL_NAMES = new Set([
   "redirect_approval", "reprocess_sap_integration", "reprocess_pagcorp_settlement",
   "revert_expense_to_pending", "send_notification", "toggle_approval_rule", "upsert_approval_rule",
 ]);
-let pendingSb: SupabaseClient | null = null;
-let pendingActor: Actor | null = null;
 async function requireConfirmation(ctx: ToolCtx, name: string, args: any, summary: string) {
+  const { pendingSb, pendingActor } = ctx;
   if (!pendingSb || !pendingActor) return { error: "Confirmação indisponível." };
   const { confirmed: _ignored, ...cleanArgs } = args || {};
   const { data, error } = await pendingSb.from("copilot_pending_actions").insert({
@@ -393,6 +392,7 @@ async function runTool(
   scopedSb: SupabaseClient = sb,
   ctx: ToolCtx = { confirmed: false },
 ): Promise<unknown> {
+  ctx = { ...ctx, pendingSb: sb, pendingActor: actor };
   if (!WRITE_TOOL_NAMES.has(name)) ctx = { ...ctx, confirmed: false };
   switch (name) {
     // ============ READ ============
@@ -810,8 +810,6 @@ Deno.serve(withEdgeMetrics("copilot-chat", async (req, _mctx) => {
     if (!rl.allowed) return rateLimitResponse(rl, { ...corsHeaders, "Content-Type": "application/json" });
 
     const actor: Actor = { userId: userData.user.id, email: userData.user.email || "" };
-    pendingSb = sbAdmin;
-    pendingActor = actor;
     const body = await req.json().catch(() => ({})) as Record<string, unknown>;
 
     // ===== F10: decisão humana sobre ação pendente (não passa pelo modelo) =====

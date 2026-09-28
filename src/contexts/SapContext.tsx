@@ -534,7 +534,12 @@ export function SapProvider({ children }: { children: ReactNode }) {
     // Zera o cache do React Query e todo o estado local persistido para que um
     // reload em "/" não reaproveite dados do usuário/empresa anterior.
     try { queryClient.clear(); } catch { /* ignore */ }
-    clearErpLocalState();
+    try {
+      await clearErpLocalState();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao limpar dados locais");
+      return;
+    }
     // A sessão do Google (Lovable Cloud) NÃO é encerrada aqui: o "Sair" apenas
     // desconecta da empresa/ERP. Validade e renovação ficam a cargo do Supabase;
     // somente o logout explícito da conta Google encerra essa sessão.

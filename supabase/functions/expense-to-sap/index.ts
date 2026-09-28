@@ -12,7 +12,7 @@ import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause
 import { getStandaloneMode, standaloneResponse } from "../_shared/standalone-mode.ts";
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 import { enforceSapLinePrices } from "../_shared/sap-line-prices.ts";
-import { buildFullPatchLines } from "../_shared/sap-line-merge.ts";
+import { buildFullDocumentPatch } from "../_shared/sap-line-merge.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { normalizeExpenseItems } from "../_shared/expense-items.ts";
 import { callOmieApi, loadOmieCredentials } from "../_shared/omie-api.ts";
@@ -272,7 +272,7 @@ async function validatePurchaseItemsActive(
 /**
  * Atualiza (patch completo) um documento já existente no SAP.
  * O Service Layer substitui a coleção DocumentLines inteira quando ela é
- * enviada no corpo, então mandamos todas as linhas com LineNum sequencial —
+ * enviada com o header de substituição, então mandamos todas as linhas —
  * garantindo que itens, valores, centros de custo e projetos fiquem idênticos
  * ao que foi aprovado no ERP Flow (sem divergência).
  */
@@ -332,6 +332,9 @@ async function verifySapDocumentLines(
       text(saved.ItemCode) !== text(wanted.ItemCode) ||
       !close(saved.Quantity, wanted.Quantity) ||
       !close(savedUnitPrice, wanted.UnitPrice) ||
+      !close(saved.DiscountPercent ?? 0, wanted.DiscountPercent ?? 0) ||
+      (wanted.FreeOfChargeBP != null && text(saved.FreeOfChargeBP) !== text(wanted.FreeOfChargeBP)) ||
+      (wanted.FreeOfChargeBP !== "tYES" && saved.LineTotal != null && Number(saved.LineTotal) <= 0) ||
       text(saved.CostingCode) !== text(wanted.CostingCode) ||
       text(saved.ProjectCode) !== text(wanted.ProjectCode)
     ) {
@@ -1619,7 +1622,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
           ...(/^[A-Z]{3}$/.test(lineCurrency) && lineCurrency !== "BRL" && lineCurrency !== "R$" ? { Currency: lineCurrency } : {}),
           ...usageLine,
           // "Gratuito" (localização Brasil): marcado na linha do ERP Flow.
-          ...(it.free_of_charge === true ? { FreeOfChargeBP: "tYES" } : {}),
+          FreeOfChargeBP: it.free_of_charge === true ? "tYES" : "tNO",
         };
 
         if (hasItem) {
@@ -1646,7 +1649,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         // fallback para não travar a integração.
         const salesCcFallback = isSales ? "1.1.1.1" : "";
         const resolvedCc = String(it.cost_center || expense.cost_center || salesCcFallback).trim();
-        if (resolvedCc) line.CostingCode = resolvedCc;
+        line.CostingCode = resolvedCc;
         // Open Gaming: se o projeto não vier preenchido na linha nem no cabeçalho,
         // aplica fallback fixo "OPEN GAMING" (política interna da empresa).
         const projectFallback = expense.company_db === "open_gaming_sa" ? "OPEN GAMING" : "";
@@ -1655,7 +1658,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         const resolvedProject = companiesWithoutProjects.has(expense.company_db)
           ? ""
           : String(it.project || expense.project || projectFallback).trim();
-        if (resolvedProject) line.ProjectCode = resolvedProject;
+        line.ProjectCode = resolvedProject;
         for (const k of Object.keys(line)) if (line[k] === undefined) delete line[k];
         return line;
       }),
@@ -1735,24 +1738,8 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         }
       }
 
-      const patchPayload: Record<string, unknown> = { ...sapPayload };
-      delete patchPayload.BPL_IDAssignedToInvoice;
-      delete patchPayload.DocDate;
-      // TaxDate = data de lançamento contábil. Reenviá-la em um PATCH faz o
-      // add-on FGR recusar com "PERÍODO BLOQUEADO" quando o mês do documento
-      // já foi fechado — a data original permanece no SAP de qualquer forma.
-      delete patchPayload.TaxDate;
-      delete patchPayload.DocCurrency;
-
-      // A coleção é substituída inteira no PATCH: enviamos cada linha completa
-      // (campos atuais do SAP + campos personalizados) com os valores aprovados
-      // por cima, para o SAP não recriar a linha zerando o preço.
-      patchPayload.DocumentLines = await buildFullPatchLines(
-        sap.baseUrl,
-        sap.cookies,
-        sapEndpoint,
-        patchDocEntry,
-        (sapPayload as any).DocumentLines as Array<Record<string, unknown>>,
+      const patchPayload = await buildFullDocumentPatch(
+        sap.baseUrl, sap.cookies, sapEndpoint, patchDocEntry, sapPayload,
       );
       lastSapPayload = patchPayload;
       const resp = await patchSapDocument(sap.baseUrl, sap.cookies, sapEndpoint, patchDocEntry, patchPayload);
@@ -1765,8 +1752,9 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         sapEndpoint,
         patchDocEntry,
         (patchPayload.DocumentLines as Array<Record<string, unknown>>).map((l, i) => ({
-          lineNum: Number(l.LineNum ?? i),
-          unitPrice: Number(l.UnitPrice ?? 0),
+          lineNum: l.LineNum == null ? undefined : Number(l.LineNum),
+          position: i,
+          unitPrice: Number(l.UnitPrice),
         })),
       );
       await verifySapDocumentLines(

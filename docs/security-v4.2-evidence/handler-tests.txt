@@ -1,0 +1,22 @@
+(node:15688) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ N01: anonymous cannot reach DB or ERP in three handlers and their two scheduler entrypoints (53.468875ms)
+✔ Integration identity: public/fake service tokens denied; real technical key and Cloud actor supported (1.909417ms)
+✔ N01/N02: wrong company, cancelled/rejected/completed notes and unprivileged batch cause no write (13.612209ms)
+✔ N01/N03: authorized NF integrates, replays reuse it, concurrent calls create one Draft (4.999083ms)
+✔ N03: ambiguous POST reconciles an existing Draft without issuing a second POST (2.074459ms)
+✔ N03: uncertainty with no remote match fails closed until reconciliation finds the Draft (2.043375ms)
+✔ N01: fiscal audit scopes actual company before adapter or deletion; permitted flow retained (3.659084ms)
+✔ N04: employees derive actor and execution type from identity; spoofed body never becomes audit author (4.890375ms)
+✔ Expense reapproval: real payload builder and PATCH pipeline preserve complete approved content and repair zero SAP prices (3.6265ms)
+✔ N03: SAP success followed by local completion failure reconciles without duplicate creation (3.093542ms)
+✔ N01: employees from another company are denied before audit/lock/ERP writes (3.074291ms)
+✔ Scheduler entrypoints retain authenticated technical execution (2.678667ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 149.6455

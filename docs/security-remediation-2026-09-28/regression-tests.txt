@@ -1,0 +1,25 @@
+(node:13372) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ SAP: valid proof works, missing/expired proof is denied after a successful call (36.287917ms)
+✔ SAP: changed user/company and invalid signature are rejected (4.060916ms)
+✔ Cloud MFA rejection cannot fall back to SAP; authorized AAL2 still works (3.613875ms)
+✔ Impersonation rejection cannot fall back to SAP (2.832458ms)
+✔ Security RPC errors fail closed instead of reusing an earlier permission (10.32875ms)
+✔ Revoked or deprovisioned SAP sessions are denied immediately after success (5.163083ms)
+✔ Credential write authorizes edit against the body company, never view against header (4.176ms)
+✔ Unauthorized credential write and non-admin global write have no side effects (6.569292ms)
+✔ Admin with MFA retains global credential management (4.307458ms)
+✔ Fiscal document: reject anonymous before DB, cross-company before signing; authorized reads work (10.330166ms)
+✔ Copilot pending confirmation remains owned by its request during interleaving (1.133584ms)
+✔ MFA reset: self denied, audit failure blocks deletion, successful reset is audited (3.570791ms)
+✔ Strict rate limiter denies missing/error counters while preserving legacy callers (0.722334ms)
+✔ CNAB dispatcher requires the matching action on the body company for every operation (12.732542ms)
+✔ Revocation helper does not cache negative results and denies malformed lookup responses (1.195209ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 163.461208

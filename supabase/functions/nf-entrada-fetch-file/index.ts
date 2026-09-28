@@ -16,6 +16,8 @@ import {
   masterTaxAuthHeader,
 } from "../_shared/mastertax-files.ts";
 
+import { requireUserOrSapSession, requireAdminOrSapModule, authErrorResponse } from "../_shared/auth.ts";
+
 const DEFAULT_BASE_URL = "https://api.mastertax.app";
 
 interface MasterTaxCreds {
@@ -40,7 +42,7 @@ async function loadCredsForCompany(
     bucket[r.credential_key] = r.credential_value ?? "";
     grouped.set(key, bucket);
   }
-  const tryKeys = [companyDb || "", "_global", ...Array.from(grouped.keys())];
+  const tryKeys = [companyDb || "", "_global"];
   for (const k of tryKeys) {
     const kv = grouped.get(k);
     if (!kv) continue;
@@ -93,6 +95,7 @@ Deno.serve(async (req) => {
   );
 
   try {
+    await requireUserOrSapSession(req);
     const body = await req.json().catch(() => ({}));
     const importId = String(body?.import_id || "");
     const kind = String(body?.kind || "").toLowerCase();
@@ -112,6 +115,7 @@ Deno.serve(async (req) => {
       });
     }
 
+    await requireAdminOrSapModule(req, "nf_entrada", { companyDb: row.sap_company_db, action: "view" });
     const existingPath = kind === "xml" ? row.xml_storage_path : row.pdf_storage_path;
     if (existingPath) {
       const { data: signed, error: signErr } = await supabase.storage
@@ -179,7 +183,10 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: (e as Error).message }), {
+    const authResponse = authErrorResponse(e, corsHeaders);
+    if (authResponse) return authResponse;
+    console.error("[nf-entrada-fetch-file]", e instanceof Error ? e.message : "unexpected error");
+    return new Response(JSON.stringify({ error: "Falha ao obter documento fiscal" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

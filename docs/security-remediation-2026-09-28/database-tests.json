@@ -1,0 +1,6 @@
+{
+  "database": "local/erp_security_regression",
+  "checks": 14,
+  "result": "passed",
+  "fixtures": "rolled back"
+}

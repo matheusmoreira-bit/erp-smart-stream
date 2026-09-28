@@ -1652,17 +1652,27 @@ async function processReturn(admin: AdminClient, companyDb: string, content: str
 
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const parsed = await req.json().catch(() => null);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return json({ error: "Corpo JSON inválido." }, 400);
+  const body = parsed as Record<string, unknown>;
+  const action = String(body.action || "");
+  const companyDb = String(body.company_db || "").trim();
+  if (!companyDb) return json({ error: "company_db é obrigatório." }, 400);
+  const actions = {
+    get_config: "view", get_supplier_payment_profile: "view", list_open: "view", list_batches: "view",
+    preview_return: "view", save_config: "edit", save_supplier_payment_profile: "edit",
+    generate: "create", approve_batch: "approve", approve_supplier_payment_profile: "approve",
+    download_batch: "export", process_return: "integrate",
+  } as const;
+  if (!Object.hasOwn(actions, action)) return json({ error: "Ação inválida." }, 400);
   let auth: Record<string, unknown>;
   try {
-    auth = await requireAdminOrSapModule(req, "financial_review") as Record<string, unknown>;
+    auth = await requireAdminOrSapModule(req, "financial_review", { companyDb, action: actions[action as keyof typeof actions] }) as Record<string, unknown>;
   } catch (error) {
     return authErrorResponse(error, corsHeaders) ?? json({ error: "Acesso negado." }, 403);
   }
 
   try {
-    const body = await req.json().catch(() => ({})) as Record<string, unknown>;
-    const action = String(body.action || "");
-    const companyDb = String(body.company_db || "").trim();
     if (!companyDb) return json({ error: "company_db é obrigatório." }, 400);
     if (auth.companyDB && String(auth.companyDB) !== companyDb) return json({ error: "Empresa divergente da sessão autenticada." }, 403);
     const actor = String(auth.email || auth.userName || auth.id || "unknown");

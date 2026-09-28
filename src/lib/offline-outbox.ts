@@ -76,7 +76,9 @@ async function tx<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => ID
   return new Promise<T>((resolve, reject) => {
     const t = db.transaction(STORE, mode);
     const req = fn(t.objectStore(STORE));
-    req.onsuccess = () => resolve(req.result as T);
+    t.oncomplete = () => resolve(req.result as T);
+    t.onabort = () => reject(t.error ?? new Error("Transação da fila cancelada"));
+    t.onerror = () => reject(t.error ?? new Error("Falha na fila offline"));
     req.onerror = () => reject(req.error ?? new Error("Falha na fila offline"));
   });
 }
@@ -130,16 +132,37 @@ export async function enqueueOutbox(
   return full;
 }
 
+async function mutateOwnedEntry(
+  id: string, owner: string, change: (entry: OutboxEntry) => OutboxEntry | null,
+): Promise<void> {
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const t = db.transaction(STORE, "readwrite");
+    const store = t.objectStore(STORE);
+    const get = store.get(id);
+    get.onsuccess = () => {
+      const current = get.result as OutboxEntry | undefined;
+      if (!current || current.ownerId !== owner) return;
+      const next = change(current);
+      if (next) store.put({ ...next, id, ownerId: owner });
+      else store.delete(id);
+    };
+    t.oncomplete = () => resolve();
+    t.onabort = t.onerror = () => reject(t.error ?? new Error("Falha ao alterar item da fila"));
+  });
+}
+
 export async function updateOutbox(id: string, patch: Partial<OutboxEntry>): Promise<void> {
-  const current = await tx<OutboxEntry | undefined>("readonly", (s) => s.get(id) as IDBRequest<OutboxEntry | undefined>);
-  if (!current) return;
-  if (current.ownerId !== (await getLocalOwnerId())) return;
-  await tx("readwrite", (s) => s.put({ ...current, ...patch, id, ownerId: current.ownerId }));
+  const owner = await getLocalOwnerId();
+  if (!owner) return;
+  await mutateOwnedEntry(id, owner, (current) => ({ ...current, ...patch }));
   void notify();
 }
 
 export async function removeOutbox(id: string): Promise<void> {
-  await tx("readwrite", (s) => s.delete(id) as unknown as IDBRequest<undefined>);
+  const owner = await getLocalOwnerId();
+  if (!owner) return;
+  await mutateOwnedEntry(id, owner, () => null);
   void notify();
 }
 
@@ -212,6 +235,10 @@ export async function flushOutbox(opts?: { force?: boolean }): Promise<FlushResu
   try {
     const entries = await listOutbox();
     for (const entry of entries) {
+      if (!entry.ownerId || entry.ownerId !== await getLocalOwnerId()) {
+        result.skipped += 1;
+        continue;
+      }
       if (entry.status === "sending") continue;
       if (!opts?.force && isErpUnavailable(entry.companyDB)) {
         result.skipped += 1;
@@ -223,6 +250,14 @@ export async function flushOutbox(opts?: { force?: boolean }): Promise<FlushResu
 
       await updateOutbox(entry.id, { status: "sending" });
       try {
+        // updateOutbox e a consulta do dono são assíncronos; a conta pode mudar
+        // enquanto aguardamos. Nunca envie o snapshot anterior sob outra conta.
+        if (entry.ownerId !== await getLocalOwnerId()) {
+          // Libera apenas o item reservado por este flush, sem enviá-lo.
+          await mutateOwnedEntry(entry.id, entry.ownerId, (current) => ({ ...current, status: "pending" }));
+          result.skipped += 1;
+          continue;
+        }
         await sender(entry);
         await removeOutbox(entry.id);
         result.sent += 1;

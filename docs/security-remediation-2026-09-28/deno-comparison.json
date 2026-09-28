@@ -1,0 +1,111 @@
+{
+  "method": "Deno check --no-config; compare diagnostic first line + relative file, ignoring shifted line numbers",
+  "endpoints": [
+    "credentials",
+    "accounts-payable-cnab",
+    "nf-entrada-fetch-file",
+    "mfa-admin-reset",
+    "expense-mutation",
+    "copilot-chat"
+  ],
+  "baseline_count": 55,
+  "current_count": 54,
+  "new": [],
+  "remaining": [
+    {
+      "message": "TS2345 [ERROR]: Argument of type 'SupabaseClient<any, \"public\", any>' is not assignable to parameter of type 'SupabaseClient<unknown, never, GenericSchema>'.",
+      "file": "_shared/sap-cache.ts",
+      "count": 1
+    },
+    {
+      "message": "TS2769 [ERROR]: No overload matches this call.",
+      "file": "_shared/sap-cache.ts",
+      "count": 1
+    },
+    {
+      "message": "TS2208 [ERROR]:     This type parameter might need an `extends Record<string, unknown>` constraint.",
+      "file": "_shared/sap-cache.ts",
+      "count": 1
+    },
+    {
+      "message": "TS2769 [ERROR]: No overload matches this call.",
+      "file": "_shared/web-push.ts",
+      "count": 4
+    },
+    {
+      "message": "TS2345 [ERROR]: Argument of type 'Uint8Array<ArrayBufferLike>' is not assignable to parameter of type 'BufferSource'.",
+      "file": "_shared/web-push.ts",
+      "count": 1
+    },
+    {
+      "message": "TS2322 [ERROR]: Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BufferSource'.",
+      "file": "_shared/web-push.ts",
+      "count": 1
+    },
+    {
+      "message": "TS2352 [ERROR]: Conversion of type '{ [x: string]: unknown; }' to type 'SupplierPaymentProfileRow' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.",
+      "file": "accounts-payable-cnab/index.ts",
+      "count": 3
+    },
+    {
+      "message": "TS2322 [ERROR]: Type 'unknown' is not assignable to type 'string | null | undefined'.",
+      "file": "accounts-payable-cnab/index.ts",
+      "count": 2
+    },
+    {
+      "message": "TS7053 [ERROR]: Element implicitly has an 'any' type because expression of type '0' can't be used to index type '{}'.",
+      "file": "accounts-payable-cnab/index.ts",
+      "count": 4
+    },
+    {
+      "message": "TS2345 [ERROR]: Argument of type '(batch: { id: string; }) => string' is not assignable to parameter of type '(value: { id: unknown; company_db: unknown; bank_account_id: unknown; file_sequence: unknown; filename: unknown; payment_date: unknown; title_count: unknown; total_amount: unknown; status: unknown; content_sha256: unknown; return_filename: unknown; return_sha256: unknown; generated_by: unknown; generated_at: unknown...'.",
+      "file": "accounts-payable-cnab/index.ts",
+      "count": 1
+    },
+    {
+      "message": "TS2345 [ERROR]: Argument of type '(batch: { id: string; }) => { accounts_payable_batch_items: unknown[]; id: string; }' is not assignable to parameter of type '(value: { id: unknown; company_db: unknown; bank_account_id: unknown; file_sequence: unknown; filename: unknown; payment_date: unknown; title_count: unknown; total_amount: unknown; status: unknown; content_sha256: unknown; return_filename: unknown; return_sha256: unknown; generated_by: unknown; generated_at: unknown...'.",
+      "file": "accounts-payable-cnab/index.ts",
+      "count": 1
+    },
+    {
+      "message": "TS2769 [ERROR]: No overload matches this call.",
+      "file": "accounts-payable-cnab/index.ts",
+      "count": 8
+    },
+    {
+      "message": "TS2345 [ERROR]: Argument of type 'SupabaseClient<any, \"public\", any>' is not assignable to parameter of type 'SupabaseClient<unknown, never, GenericSchema>'.",
+      "file": "accounts-payable-cnab/index.ts",
+      "count": 12
+    },
+    {
+      "message": "TS2352 [ERROR]: Conversion of type '{ id: string; email: string | null; }' to type '{ companyDB: string; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.",
+      "file": "credentials/index.ts",
+      "count": 1
+    },
+    {
+      "message": "TS2345 [ERROR]: Argument of type '(row: Record<string, unknown>) => Record<string, unknown>' is not assignable to parameter of type '(value: ParserError<\"Unexpected input: \" | \"Unexpected input: , company_db\">, index: number, array: ParserError<\"Unexpected input: \" | \"Unexpected input: , company_db\">[]) => Record<...>'.",
+      "file": "credentials/index.ts",
+      "count": 1
+    },
+    {
+      "message": "TS2345 [ERROR]: Argument of type 'import(\"https://esm.sh/@supabase/supabase-js@2.49.1/dist/module/SupabaseClient.d.ts\", { with: { \"resolution-mode\": \"import\" } }).default<unknown, never, import(\"https://esm.sh/@supabase/supabase-js@2.49.1/dist/module/lib/types.d.ts\", { with: { \"resolution-mode\": \"import\" } }).GenericSchema>' is not assignable to parameter of type 'import(\"https://esm.sh/@supabase/supabase-js@2.45.0/dist/module/SupabaseClient.d.ts\", { with: { \"resolution-mode\": \"import\" } }).default<unknown, never, import(\"https://esm.sh/@supabase/supabase-js@2.45.0/dist/module/lib/types.d.ts\", { with: { \"resolution-mode\": \"import\" } }).GenericSchema>'.",
+      "file": "expense-mutation/index.ts",
+      "count": 1
+    },
+    {
+      "message": "TS2345 [ERROR]: Argument of type 'import(\"https://esm.sh/@supabase/supabase-js@2.49.1/dist/module/SupabaseClient.d.ts\", { with: { \"resolution-mode\": \"import\" } }).default<any, \"public\", any>' is not assignable to parameter of type 'import(\"https://esm.sh/@supabase/supabase-js@2.45.0/dist/module/SupabaseClient.d.ts\", { with: { \"resolution-mode\": \"import\" } }).default<any, \"public\", any>'.",
+      "file": "expense-mutation/index.ts",
+      "count": 9
+    },
+    {
+      "message": "TS7023 [ERROR]: 'runCreateOnce' implicitly has return type 'any' because it does not have a return type annotation and is referenced directly or indirectly in one of its return expressions.",
+      "file": "expense-mutation/index.ts",
+      "count": 1
+    },
+    {
+      "message": "TS7023 [ERROR]: 'releaseAndRetry' implicitly has return type 'any' because it does not have a return type annotation and is referenced directly or indirectly in one of its return expressions.",
+      "file": "expense-mutation/index.ts",
+      "count": 1
+    }
+  ]
+}

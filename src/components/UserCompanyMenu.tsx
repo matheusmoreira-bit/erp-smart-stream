@@ -85,16 +85,16 @@ export function UserCompanyMenu({ className = "" }: { className?: string }) {
     setSigningOut(true);
     try {
       const { clearErpLocalState } = await import("@/lib/clear-erp-local-state");
-      clearErpLocalState();
+      await clearErpLocalState();
       await supabase.auth.signOut();
       toast.success("Você saiu da conta Google");
+      window.setTimeout(() => window.location.replace("/"), 300);
     } catch (e) {
       toast.error("Falha ao encerrar a sessão Google", {
         description: e instanceof Error ? e.message : String(e),
       });
     } finally {
       setSigningOut(false);
-      window.setTimeout(() => window.location.replace("/"), 300);
     }
   };
 

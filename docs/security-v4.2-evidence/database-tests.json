@@ -1,0 +1,29 @@
+{
+  "environment": "local PostgreSQL; synthetic database removed after test",
+  "tests": [
+    {
+      "name": "concurrent reservations: exactly one succeeds",
+      "passed": true
+    },
+    {
+      "name": "current cancelled status rejected by database trigger",
+      "passed": true
+    },
+    {
+      "name": "cancellation during remote processing is blocked until reconciliation",
+      "passed": true
+    },
+    {
+      "name": "concurrent reconciliation: exactly one claims uncertain result",
+      "passed": true
+    },
+    {
+      "name": "job table inaccessible to anonymous/authenticated; service allowed",
+      "passed": true
+    },
+    {
+      "name": "RLS enabled",
+      "passed": true
+    }
+  ]
+}

@@ -465,7 +465,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any, re
   // livre e só é aceita de quem tem acesso ao módulo de cartões no servidor.
   if (origin === "pagcorp") {
     try {
-      await requireAdminOrSapModule(req, "pagcorp");
+      await requireAdminOrSapModule(req, "pagcorp", { companyDb: String(input.company_db || caller.companyDB || "").trim() || null, action: "create" });
     } catch (e) {
       await admin.rpc("insert_audit_log", {
         p_action: "expense_pagcorp_origin_denied",

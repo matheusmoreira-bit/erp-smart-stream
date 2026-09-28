@@ -10,7 +10,8 @@
  */
 
 export type ExpectedLinePrice = {
-  lineNum: number;
+  lineNum?: number;
+  position?: number;
   unitPrice: number;
 };
 
@@ -46,17 +47,23 @@ export async function enforceSapLinePrices(
   docEntry: number,
   expected: ExpectedLinePrice[],
 ): Promise<{ corrected: boolean }> {
-  const wanted = expected.filter((e) => num(e.unitPrice) > 0);
+  if (expected.some(e => !Number.isFinite(e.unitPrice) || e.unitPrice < 0)) throw new Error("Preço aprovado inválido");
+  let wanted = expected;
   if (!wanted.length) return { corrected: false };
 
   const lines = await readLines(baseUrl, cookies, endpoint, docEntry);
+  wanted = wanted.map(e => {
+    const actual = e.lineNum == null ? lines[e.position ?? -1] : lines.find(l => Number(l.LineNum) === e.lineNum);
+    if (!actual) throw new Error("SAP não retornou uma das linhas aprovadas");
+    return { ...e, lineNum: Number(actual.LineNum) };
+  });
   const priceOf = (l: Record<string, unknown>) => num(l.UnitPrice ?? (l as any).Price);
   const byLineNum = new Map<number, Record<string, unknown>>();
   lines.forEach((l, idx) => byLineNum.set(num(l.LineNum ?? idx), l));
 
   const wrong = wanted.filter((e) => {
-    const line = byLineNum.get(e.lineNum);
-    if (!line) return false;
+    const line = byLineNum.get(Number(e.lineNum));
+    if (!line) return true;
     return !close(priceOf(line), e.unitPrice);
   });
   if (!wrong.length) return { corrected: false };
@@ -82,13 +89,13 @@ export async function enforceSapLinePrices(
   const afterByLineNum = new Map<number, Record<string, unknown>>();
   after.forEach((l, idx) => afterByLineNum.set(num(l.LineNum ?? idx), l));
   const stillWrong = wanted.filter((e) => {
-    const line = afterByLineNum.get(e.lineNum);
-    if (!line) return false;
+    const line = afterByLineNum.get(Number(e.lineNum));
+    if (!line) return true;
     return !close(priceOf(line), e.unitPrice);
   });
   if (stillWrong.length) {
     throw new Error(
-      `O ERP não gravou o valor das linhas ${stillWrong.map((e) => e.lineNum + 1).join(", ")}. ` +
+      `O ERP não gravou o valor das linhas ${stillWrong.map((e) => Number(e.lineNum) + 1).join(", ")}. ` +
         `Nenhum valor foi confirmado — revise o documento no ERP.`,
     );
   }

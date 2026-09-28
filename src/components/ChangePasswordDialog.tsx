@@ -184,9 +184,13 @@ export function ChangePasswordDialog({ open: openProp, onOpenChange, hideTrigger
       // encerramos o estado local e pedimos novo login.
       if (successes > 0) {
         toast.info("Por segurança, sua sessão foi encerrada. Faça login novamente com a nova senha.");
-        setTimeout(() => {
-          clearErpLocalState();
-          window.location.replace("/");
+        setTimeout(async () => {
+          try {
+            await clearErpLocalState();
+            window.location.replace("/");
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Falha ao limpar dados locais");
+          }
         }, 2500);
       }
 

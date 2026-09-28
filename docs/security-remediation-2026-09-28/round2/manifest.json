@@ -1,0 +1,15 @@
+{
+  "date": "2026-09-28",
+  "deployment": "none",
+  "files": {
+    "src/lib/clear-erp-local-state.ts": "bf55a24922c0ccdd8d10deda0d7436557560542109211f431daaa0ce8a4496e2",
+    "src/lib/offline-outbox.ts": "a0b3ae7fa508e3437b3bd9a334917f44ad06c368edb53dad9d9481dcc4ad334c",
+    "src/lib/expense-queue-persist.ts": "9d2dfadc0096e6fa6cd259c52b153bb3db1c1595a57b8c7dbf88d0c6d39017bf",
+    "src/main.tsx": "38beac25b508049247ee967d6069a16fe0e818b57f82231adac46e45ed41bc90",
+    "src/components/UserCompanyMenu.tsx": "462e1d354f99baef97682e336e24bc2bbefa801a5bf776575290bcba26a7b130",
+    "src/components/ImpersonationBanner.tsx": "c295b750ff33d9cba855fa4cbc040947e85bc57a0c0eb1b1cf928a69fb0fc27f",
+    "src/components/ChangePasswordDialog.tsx": "5bcc3fecb05a0e44387fe96e3444338ced8264b37a087278d06e5bb9351c912a",
+    "src/contexts/SapContext.tsx": "f32c1a3dda7465ae8475bb42f9d95c8a0ff508c63fe0398b6ef1b85e981e0448",
+    "scripts/security-review/browser-local-state.mjs": "30294420f90aaa1203b476825e38b68c631c2a06fe0cf12803aa5c947449da9d"
+  }
+}

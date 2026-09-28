@@ -1,0 +1,10 @@
+
+ RUN  v3.2.4 /Users/matheus.moreira/Documents/Dev/erp-smart-stream
+
+ ✓ src/lib/sap-document-patch.test.ts (6 tests) 5ms
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  14:47:59
+   Duration  478ms (transform 22ms, setup 42ms, collect 17ms, tests 5ms, environment 231ms, prepare 53ms)
+

@@ -72,15 +72,17 @@ export function ImpersonationBanner() {
 
     // Fallback: houve login real no ERP com a senha do alvo, então é preciso
     // reidratar a sessão do admin do zero.
-    clearImpersonation();
-    clearAuthCache();
     try {
       const { clearErpLocalState } = await import("@/lib/clear-erp-local-state");
-      clearErpLocalState();
+      await clearErpLocalState();
       sessionStorage.removeItem("erp_session_v1");
     } catch {
-      /* ignore */
+      setBusy(false);
+      toast.error("Feche as outras abas do ERP e tente sair novamente para limpar os dados locais.");
+      return;
     }
+    clearImpersonation();
+    clearAuthCache();
     window.location.replace("/");
   };
 

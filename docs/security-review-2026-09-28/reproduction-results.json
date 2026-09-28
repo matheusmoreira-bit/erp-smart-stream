@@ -1,0 +1,25 @@
+{
+  "scope": "Local isolated harness; external services mocked; not a production pentest",
+  "results": [
+    {
+      "id": "R01",
+      "observed": "Cold cache rejects missing HMAC; warm cache accepts the same session without HMAC."
+    },
+    {
+      "id": "R02",
+      "observed": "Warm cache accepts HMAC after payload expiration (clock advanced 3 seconds)."
+    },
+    {
+      "id": "R03",
+      "observed": "With mocked verified admin identity at aal1, requireUser denies 403; SAP fallback accepts."
+    },
+    {
+      "id": "R04",
+      "observed": "NF handler returns a signed URL without any authentication headers for a mocked existing import. Gateway not simulated."
+    },
+    {
+      "id": "R05",
+      "observed": "Real auth helper + credentials handler check view in ALLOWED_A then write OTHER_B. RPC permission result and database write mocked."
+    }
+  ]
+}

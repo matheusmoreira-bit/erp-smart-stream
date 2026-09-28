@@ -35,9 +35,8 @@ export async function revokeErpSession(admin: SupabaseClient, params: RevokePara
 }
 
 const revokedCache = new Map<string, { until: number; revoked: boolean }>();
-const CACHE_TTL_MS = 30_000;
 
-/** Falha aberta em erro de infraestrutura: o objetivo é revogar, não derrubar o app. */
+/** Erros são propagados: o chamador não deve aceitar sessão sem verificar revogação. */
 export async function isErpSessionRevoked(admin: SupabaseClient, sapSession: string): Promise<boolean> {
   const sid = (sapSession || "").trim();
   if (!sid) return false;
@@ -46,17 +45,17 @@ export async function isErpSessionRevoked(admin: SupabaseClient, sapSession: str
   if (cached && cached.until > Date.now()) return cached.revoked;
   try {
     const { data, error } = await admin.rpc("is_erp_session_revoked", { _sid_hash: hash });
-    if (error) {
-      console.error("[session-revocation] check error", error.message);
-      return false;
+    if (error || typeof data !== "boolean") {
+      console.error("[session-revocation] check error", error?.message || "invalid response");
+      throw new Error("Falha ao verificar revogação da sessão");
     }
     const revoked = data === true;
-    revokedCache.set(hash, { until: Date.now() + (revoked ? 300_000 : CACHE_TTL_MS), revoked });
+    if (revoked) revokedCache.set(hash, { until: Date.now() + 300_000, revoked });
     if (revokedCache.size > 500) {
       for (const [k, v] of revokedCache) if (v.until <= Date.now()) revokedCache.delete(k);
     }
     return revoked;
   } catch {
-    return false;
+    throw new Error("Falha ao verificar revogação da sessão");
   }
 }

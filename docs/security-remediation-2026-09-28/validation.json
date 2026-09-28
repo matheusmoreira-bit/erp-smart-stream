@@ -1,0 +1,47 @@
+{
+  "date": "2026-09-28",
+  "baseline_commit": "410a28c9081c44a2feefba450736025b61bf75c7",
+  "deployment": "none; local working tree",
+  "remote_database_access": false,
+  "files": {
+    "drizzle/migrations/meta/_journal.json": "66fc5e3282c02aabec9fa8eef478c93ebfcc02c913f3b2ffcb1a7eddc6477b68",
+    "supabase/functions/_shared/auth.ts": "5b7fc5248b4ccb37f13dbf876d160b51b80ff6dd7847fe4f67bec138e9cd1d09",
+    "supabase/functions/_shared/company-access.ts": "3aeabf1749b1ba50db31d920a06e4283dd0cfe33a18d0bc229237b4e6ef3cc24",
+    "supabase/functions/_shared/rate-limit.ts": "bddf4f5e7bd61e1771be4cd4343e4a8d58c3ab14cd3acb7e51e7b7fab5c9df85",
+    "supabase/functions/_shared/session-revocation.ts": "56084df522a32e070ef563c5d39ccf135d8b173c2bec8915aff9a8999396fee8",
+    "supabase/functions/accounts-payable-cnab/index.ts": "99f4a487a4a53c5633dd52dc0ffafa6750ff68934302f4a0877ef0f0119b1895",
+    "supabase/functions/copilot-chat/index.ts": "57506831a38a96a7aea7a57e918485f548afde1a936b71166d97867620898185",
+    "supabase/functions/credentials/index.ts": "f3877ecc023544dd543b58a4b450fb22e75cecc0695176ceb2c1da2f97c2a0f0",
+    "supabase/functions/expense-mutation/index.ts": "de253d7a9595c5b3a9bf39fba0f258467b7c0b6b451cc3e41b2a684986c8f854",
+    "supabase/functions/mfa-admin-reset/index.ts": "dc8cf5be52fc6b0c578f115436a32b6ec0a6ee5a8f88823b21b6a8b975bda007",
+    "supabase/functions/nf-entrada-fetch-file/index.ts": "2bcc81be2159f9b6c474a882c94ee67d3abaedeb9b87ce18cbf787fc79711a89",
+    "drizzle/migrations/0063_security_company_action_scope.sql": "81e9054b0796e442aac683c987947b21e46c920b9bc3347568ec884f652bd2ef",
+    "scripts/security-review/regression.test.mjs": "d7943e68af264f42d62fb43ba80d2989b297901d86da004de076b9df626ac4d9",
+    "scripts/security-review/database-regression.mjs": "1dc7dd6936d4e494ddaad21d1f5de5336b998af4c30a2f140e720112bb78c5fe"
+  },
+  "validation": {
+    "security_tests": {
+      "passed": 15,
+      "failed": 0
+    },
+    "postgres_checks": {
+      "passed": 14,
+      "failed": 0,
+      "database": "local/erp_security_regression",
+      "fixtures": "rolled back"
+    },
+    "frontend_build": "passed; chunk size warning",
+    "vitest_before_and_after": {
+      "passed": 241,
+      "failed": 1,
+      "skipped": 49,
+      "failure": "src/lib/report-pdf.test.ts:179"
+    },
+    "deno_check": {
+      "before_errors": 55,
+      "after_errors": 54,
+      "new_diagnostics_by_message_and_file": 0,
+      "passed": false
+    }
+  }
+}

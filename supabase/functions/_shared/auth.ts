@@ -18,15 +18,6 @@ type SapSessionValidation = {
   source: "sap_session";
 };
 
-// A validação em si (token assinado / probe no Service Layer) é cara: cada
-// tela dispara várias requisições e todas pagavam esse custo. O resultado é
-// cacheado por 5 min; as checagens de segurança (revogação/desligamento) são
-// revalidadas em janela curta e separada — ver SAP_SESSION_SECURITY_TTL_MS.
-const SAP_SESSION_VALIDATION_CACHE_TTL_MS = 300_000;
-const SAP_SESSION_SECURITY_TTL_MS = 60_000;
-const sapSessionValidationCache = new Map<string, { expiresAt: number; value: SapSessionValidation }>();
-/** key → timestamp até o qual as checagens de revogação/IdP são consideradas frescas. */
-const sapSessionSecurityCache = new Map<string, number>();
 const encoder = new TextEncoder();
 
 /* ─────────── Strict header validation ───────────
@@ -89,18 +80,6 @@ export function parseSapHeaders(req: Request): SapHeaderBundle | null {
   return { sapSession, routeId, sapUser, companyDB, sapAuthToken };
 }
 
-
-function getSapSessionValidationCacheKey(companyDB: string, sapUser: string, sapSession: string, routeId: string) {
-  return `${companyDB}:${sapUser}:${sapSession}:${routeId}`;
-}
-
-function pruneSapSessionValidationCache() {
-  if (sapSessionValidationCache.size <= 500) return;
-  const now = Date.now();
-  for (const [key, entry] of sapSessionValidationCache) {
-    if (entry.expiresAt <= now) sapSessionValidationCache.delete(key);
-  }
-}
 
 function tokenPayloadHasSub(token: string): boolean {
   try {
@@ -227,7 +206,6 @@ export async function requireUser(req: Request) {
 // ============================================================
 const ADMIN_SESSION_MAX_MS = 12 * 60 * 60 * 1000; // 12h
 const USER_SESSION_MAX_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
-const adminRoleCache = new Map<string, { until: number; admin: boolean }>();
 const sessionStartCache = new Map<string, { until: number; startedAt: number | null }>();
 
 function tokenPayload(req: Request): Record<string, unknown> {
@@ -248,14 +226,9 @@ function svcClient() {
 }
 
 async function hasAdminRole(userId: string): Promise<boolean> {
-  const hit = adminRoleCache.get(userId);
-  if (hit && hit.until > Date.now()) return hit.admin;
-  // Sem JWT no client de serviço: has_role devolve só o papel cadastrado.
   const { data, error } = await svcClient().rpc("has_role", { _user_id: userId, _role: "admin" });
-  const admin = !error && data === true;
-  if (adminRoleCache.size > 1000) adminRoleCache.clear();
-  adminRoleCache.set(userId, { until: Date.now() + 60_000, admin });
-  return admin;
+  if (error || typeof data !== "boolean") throw new AuthError("Não foi possível verificar as permissões. Tente novamente.", 503);
+  return data;
 }
 
 async function sessionStartedAt(sessionId: string): Promise<number | null> {
@@ -304,8 +277,6 @@ export const READ_ONLY_IMPERSONATION_FUNCTIONS = new Set<string>([
   "pagcorp-relations-resolver", "hana-health-probe", "cnpj-lookup", "supplier-ai-extract", "license-analysis",
   "cashflow-forecast", "expense-sap-reconcile", "report-ai-chat",
 ]);
-const impersonationCache = new Map<string, { until: number; active: boolean }>();
-
 export function edgeFunctionName(req: Request): string {
   try {
     const parts = new URL(req.url).pathname.split("/").filter(Boolean);
@@ -317,24 +288,9 @@ export function edgeFunctionName(req: Request): string {
 }
 
 export async function isUserImpersonating(userId: string): Promise<boolean> {
-  const hit = impersonationCache.get(userId);
-  if (hit && hit.until > Date.now()) return hit.active;
-  let active = false;
-  try {
-    const svc = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
-      auth: { persistSession: false },
-    });
-    const { data, error } = await svc.rpc("is_impersonating", { _user_id: userId });
-    if (error) throw error;
-    active = data === true;
-  } catch (e) {
-    // Falha fechada só se já sabíamos que estava ativo; senão não derruba o app.
-    active = hit?.active ?? false;
-    console.warn("[auth] is_impersonating falhou", e instanceof Error ? e.message : e);
-  }
-  if (impersonationCache.size > 1000) impersonationCache.clear();
-  impersonationCache.set(userId, { until: Date.now() + 10_000, active });
-  return active;
+  const { data, error } = await svcClient().rpc("is_impersonating", { _user_id: userId });
+  if (error || typeof data !== "boolean") throw new AuthError("Não foi possível verificar a impersonação. Tente novamente.", 503);
+  return data;
 }
 
 async function assertNotImpersonatingWrite(req: Request, userId: string) {
@@ -527,7 +483,10 @@ export async function requireAdminOrSapAdmin(req: Request) {
   }
 }
 
-export async function requireAdminOrSapModule(req: Request, moduleKey: string) {
+export type ModuleAction = "view" | "create" | "edit" | "delete" | "approve" | "integrate" | "export";
+export type ModuleScope = { companyDb: string | null; action: ModuleAction };
+
+export async function requireAdminOrSapModule(req: Request, moduleKey: string, scope?: ModuleScope) {
   try {
     return await requireAdmin(req);
   } catch (err) {
@@ -535,27 +494,34 @@ export async function requireAdminOrSapModule(req: Request, moduleKey: string) {
     // não precisa de sessão pessoal do ERP para agir sobre dados locais.
     try {
       const u = await requireUser(req);
-      const companyDb = (req.headers.get("x-company-db") || req.headers.get("x-sap-company") || "").trim() || null;
+      const companyDb = scope ? scope.companyDb : (req.headers.get("x-company-db") || req.headers.get("x-sap-company") || "").trim() || null;
+      if (scope && !companyDb) throw new AuthError("Configuração global exige administrador", 403);
       const { data } = await svcClient().rpc("has_module_action", {
-        _user_id: u.id, _company_db: companyDb, _module: moduleKey, _action: "view",
+        _user_id: u.id, _company_db: companyDb, _module: moduleKey, _action: scope?.action ?? "view",
       });
-      if (data === true) return { ...u, source: "cloud_module" as const };
+      if (data === true) return { ...u, ...(scope ? { companyDB: companyDb! } : {}), source: "cloud_module" as const };
     } catch { /* segue para sessão ERP */ }
 
     const sapAdmin = await validateSapAdmin(req);
-    if (sapAdmin) return sapAdmin;
+    if (sapAdmin) {
+      if (scope && sapAdmin.companyDB !== scope.companyDb) throw new AuthError("Empresa divergente da sessão", 403);
+      return sapAdmin;
+    }
 
     const sap = await validateSapSession(req);
     if (!sap?.userName) throw err;
+    if (scope && sap.companyDB !== scope.companyDb) throw new AuthError("Empresa divergente da sessão", 403);
 
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
-    const { data, error } = await admin.rpc("sap_user_has_module", {
-      _sap_username: sap.userName,
-      _module_key: moduleKey,
-    });
+    const { data, error } = scope
+      ? await admin.rpc("sap_user_has_module_action", {
+          _sap_username: sap.userName, _company_db: scope.companyDb,
+          _module_key: moduleKey, _action: scope.action,
+        })
+      : await admin.rpc("sap_user_has_module", { _sap_username: sap.userName, _module_key: moduleKey });
     if (error || data !== true) {
       throw new AuthError("Acesso negado — módulo sem permissão", 403);
     }
@@ -598,74 +564,31 @@ export async function requireAdminOrSapSessionHeaders(req: Request) {
  * account at all (e.g. PagCorp listing).
  */
 export async function validateSapSession(req: Request) {
+  // Uma identidade Cloud apresentada não pode escapar de MFA, domínio ou
+  // impersonação usando a alternativa SAP. Chaves públicas continuam suportadas.
+  const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+  if (tokenPayloadHasSub(bearer)) await requireUser(req);
   const headers = parseSapHeaders(req);
   if (!headers) return null;
-  const { sapSession, routeId, sapUser, companyDB, sapAuthToken } = headers;
-
-  const cacheKey = getSapSessionValidationCacheKey(companyDB, sapUser, sapSession, routeId);
-
-  // Checagens de segurança (sessão revogada por troca de senha / usuário
-  // desligado no IdP). São 2 idas ao banco: rodam em paralelo e no máximo uma
-  // vez por minuto por sessão, em vez de a cada requisição.
-  const securityFreshUntil = sapSessionSecurityCache.get(cacheKey) ?? 0;
-  if (securityFreshUntil <= Date.now()) {
-    try {
-      const securityAdmin = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-        { auth: { persistSession: false } },
-      );
-      const [revoked, deprovisioned] = await Promise.all([
-        isErpSessionRevoked(securityAdmin, sapSession).catch(() => false),
-        (async () => {
-          try {
-            const { data, error } = await securityAdmin.rpc(
-              "is_erp_user_deprovisioned",
-              { _user_key: sapUser, _company_db: companyDB },
-            );
-            return !error && data === true;
-          } catch {
-            return false;
-          }
-        })(),
-      ]);
-      if (revoked || deprovisioned) {
-        sapSessionValidationCache.delete(cacheKey);
-        sapSessionSecurityCache.delete(cacheKey);
-        return null;
-      }
-      if (sapSessionSecurityCache.size > 500) sapSessionSecurityCache.clear();
-      sapSessionSecurityCache.set(cacheKey, Date.now() + SAP_SESSION_SECURITY_TTL_MS);
-    } catch { /* falha aberta: não derruba o app por indisponibilidade */ }
-  }
-
-  const cached = sapSessionValidationCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) return cached.value;
-
+  const { sapSession, sapUser, companyDB, sapAuthToken } = headers;
+  let signed: SapSessionValidation | null;
   try {
-    const signed = await verifySapAuthToken(sapAuthToken, sapSession, sapUser, companyDB);
-
-    if (signed) {
-      sapSessionValidationCache.set(cacheKey, {
-        expiresAt: Date.now() + SAP_SESSION_VALIDATION_CACHE_TTL_MS,
-        value: signed,
-      });
-      pruneSapSessionValidationCache();
-      return signed;
-    }
-  } catch (e) {
-    console.warn("[validateSapSession] signed token validation failed; falling back to SAP probe", {
-      error: e instanceof Error ? e.message : String(e),
-    });
+    signed = await verifySapAuthToken(sapAuthToken, sapSession, sapUser, companyDB);
+  } catch { return null; }
+  // HMAC e expiração são baratos e obrigatórios em TODAS as chamadas.
+  if (!signed) return null;
+  const admin = svcClient();
+  try {
+    const [revoked, deprovision] = await Promise.all([
+      isErpSessionRevoked(admin, sapSession),
+      admin.rpc("is_erp_user_deprovisioned", { _user_key: sapUser, _company_db: companyDB }),
+    ]);
+    if (deprovision.error || typeof deprovision.data !== "boolean") throw new Error("security lookup failed");
+    if (revoked || deprovision.data) return null;
+  } catch {
+    throw new AuthError("Não foi possível verificar a sessão ERP. Tente novamente.", 503);
   }
-
-  // F02: sem token HMAC válido não há prova de que a sessão pertence ao
-  // usuário declarado em x-sap-user. Não aceitamos mais "probe" do SAP com
-  // 403/404 como sessão válida — o token só é emitido pelo sap-b1-proxy após
-  // o SAP confirmar o dono da sessão (UsersService_GetCurrentUser).
-  sapSessionValidationCache.delete(cacheKey);
-  console.warn("[validateSapSession] missing/invalid signed SAP token", { companyDB, sapUser });
-  return null;
+  return signed;
 }
 
 export async function requireUserOrSapSession(req: Request) {

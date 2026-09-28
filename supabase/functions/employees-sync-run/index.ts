@@ -1,3 +1,5 @@
+import { requireIntegrationCaller, authorizeIntegrationCompany } from "../_shared/integration-auth.ts";
+import { authErrorResponse } from "../_shared/auth.ts";
 // Executa a sincronização JumpCloud -> SAP EmployeesInfo para uma configuração.
 // Suporta modos "execute" e "simulate". Apenas bases TST%.
 import { logIntegrationCall } from "../_shared/integration-log.ts";
@@ -20,6 +22,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
 
   const started = Date.now();
+  let caller;
+  try { caller = await requireIntegrationCaller(req); } catch (error) { return authErrorResponse(error, CORS_HEADERS) ?? jsonResponse({ error: "Falha ao verificar identidade" }, 503); }
   const supabase = admin();
   let executionId: string | null = null;
   let lockAcquired = false;
@@ -30,8 +34,9 @@ Deno.serve(async (req) => {
     const body = (await req.json()) as RunBody;
     if (!body?.integration_config_id) throw new Error("integration_config_id ausente.");
     const mode = body.mode ?? "execute";
+    if (!["execute", "simulate"].includes(mode)) return jsonResponse({ error: "Modo inválido" }, 400);
     const executionType: "manual" | "scheduled" | "simulate" =
-      body.execution_type ?? (mode === "simulate" ? "simulate" : "manual");
+      mode === "simulate" ? "simulate" : caller.technical ? "scheduled" : "manual";
 
     const { data: config, error: cfgErr } = await supabase
       .from("employee_integration_config")
@@ -41,6 +46,7 @@ Deno.serve(async (req) => {
     if (cfgErr || !config) throw new Error(`Configuração não encontrada: ${cfgErr?.message}`);
     companyDb = config.company_db;
     assertTstCompany(companyDb);
+    await authorizeIntegrationCompany(req, caller, "employee_integration", companyDb);
     if (!config.is_active && executionType === "scheduled") {
       return jsonResponse({ ok: false, skipped: "integration_inactive" });
     }
@@ -68,8 +74,8 @@ Deno.serve(async (req) => {
         company_db: companyDb,
         execution_type: executionType,
         status: "running",
-        triggered_by: body.triggered_by ?? null,
-        triggered_by_email: body.triggered_by_email ?? null,
+        triggered_by: caller.userId,
+        triggered_by_email: caller.actor,
       })
       .select("id")
       .single();
@@ -326,6 +332,8 @@ Deno.serve(async (req) => {
 
     return jsonResponse({ ok: true, execution_id: executionId, status, ...counters });
   } catch (e) {
+    const authFailure = authErrorResponse(e, CORS_HEADERS);
+    if (authFailure) return authFailure;
     const msg = (e as Error).message;
     if (executionId) {
       await supabase.from("employee_sync_execution").update({

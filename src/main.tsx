@@ -27,7 +27,7 @@ let impersonationReconciled = false;
 supabase.auth.onAuthStateChange((event, session) => {
   // F13: saiu da conta → nenhum dado local do usuário sobrevive.
   if (event === "SIGNED_OUT") {
-    void import("./lib/clear-erp-local-state.ts").then((m) => m.clearErpLocalState());
+    void import("./lib/clear-erp-local-state.ts").then((m) => m.clearErpLocalState()).catch((error) => console.error("[logout] limpeza local incompleta", error));
     return;
   }
   if (impersonationReconciled || !session) return;

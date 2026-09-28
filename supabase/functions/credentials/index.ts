@@ -26,10 +26,13 @@ Deno.serve(async (req) => {
     const systemName = url.searchParams.get("system");
     let companyDb = url.searchParams.get("company_db");
     const includeKeys = url.searchParams.get("keys");
+    if (!["GET", "POST", "DELETE"].includes(req.method)) return new Response(null, { status: 405, headers: corsHeaders });
+    const payload = req.method === "GET" ? null : await req.json();
+    const targetCompany = req.method === "GET" ? companyDb : (payload?.company_db || companyDb || null);
     const metadataOnlyGet = req.method === "GET" && !includeKeys;
     const caller = metadataOnlyGet
       ? await requireAdminOrSapSessionHeaders(req)
-      : await requireAdminOrSapModule(req, "credentials");
+      : await requireAdminOrSapModule(req, "credentials", { companyDb: targetCompany, action: req.method === "DELETE" ? "delete" : req.method === "POST" ? "edit" : "view" });
     const callerCompanyDb = typeof (caller as { companyDB?: unknown }).companyDB === "string"
       ? (caller as { companyDB: string }).companyDB
       : null;
@@ -66,7 +69,7 @@ Deno.serve(async (req) => {
     }
 
     if (req.method === "POST") {
-      const body = await req.json();
+      const body = payload;
       const { system_name, credentials, company_db } = body as {
         system_name: string;
         credentials: { key: string; value: string }[];
@@ -118,7 +121,7 @@ Deno.serve(async (req) => {
     }
 
     if (req.method === "DELETE") {
-      const body = await req.json();
+      const body = payload;
       const { system_name, company_db } = body as { system_name: string; company_db?: string };
       const targetCompanyDb = company_db || companyDb || null;
       if (callerCompanyDb && targetCompanyDb !== callerCompanyDb) {
@@ -145,7 +148,7 @@ Deno.serve(async (req) => {
     console.error("[credentials] error:", err instanceof Error ? err.message : String(err));
     const authResp = authErrorResponse(err, corsHeaders);
     if (authResp) return authResp;
-    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : "Internal error" }), {
+    return new Response(JSON.stringify({ error: "Falha ao processar credenciais" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

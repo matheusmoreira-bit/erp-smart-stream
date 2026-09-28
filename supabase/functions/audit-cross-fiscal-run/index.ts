@@ -1,3 +1,5 @@
+import { requireIntegrationCaller, authorizeIntegrationCompany } from "../_shared/integration-auth.ts";
+import { authErrorResponse } from "../_shared/auth.ts";
 // Edge function: audit-cross-fiscal-run
 // Motor de cruzamento MasterTax × ERP (agnóstico de ERP).
 // Recebe { empresa_id, periodo_inicio, periodo_fim } e:
@@ -37,6 +39,8 @@ interface NotaRow {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  let caller;
+  try { caller = await requireIntegrationCaller(req); } catch (error) { return authErrorResponse(error, corsHeaders) ?? new Response("Falha ao verificar identidade", { status: 503 }); }
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -57,6 +61,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (empErr || !emp) throw new Error("Empresa não encontrada");
 
+    await authorizeIntegrationCompany(req, caller, "fiscal_audit", emp.company_db);
     const adapter = getAdapter(emp.erp_type);
     if (!adapter) {
       return new Response(JSON.stringify({ error: `ERP '${emp.erp_type}' sem adapter registrado` }),
@@ -264,6 +269,8 @@ Deno.serve(async (req) => {
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (e) {
+    const authFailure = authErrorResponse(e, corsHeaders);
+    if (authFailure) return authFailure;
     console.error("[audit-cross-fiscal-run]", e);
     return new Response(JSON.stringify({ error: (e as Error).message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });

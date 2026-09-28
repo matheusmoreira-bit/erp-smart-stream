@@ -20,6 +20,7 @@ const EDITABLE_LINE_FIELDS = [
   "Currency",
   "Rate",
   "DiscountPercent",
+  "FreeOfChargeBP",
   "LineType",
   "WarehouseCode",
   "CostingCode",
@@ -96,10 +97,13 @@ export function mergeSapDocumentLines(
     for (const [key, value] of Object.entries(desired)) {
       if (value !== undefined) merged[key] = value;
     }
-    merged.LineNum = index;
+    // IDs de linha existentes podem ter lacunas após exclusões. Novas linhas
+    // não têm LineNum: o SAP atribui o identificador.
+    if (current && Number.isInteger(Number(current.LineNum))) merged.LineNum = Number(current.LineNum);
+    else delete merged.LineNum;
     // Preço aprovado sempre nos dois campos — o SAP lê ora um, ora outro.
     const price = Number(desired.UnitPrice ?? desired.Price ?? merged.UnitPrice ?? merged.Price);
-    if (Number.isFinite(price) && price > 0) {
+    if (Number.isFinite(price) && price >= 0) {
       merged.UnitPrice = price;
       merged.Price = price;
     }
@@ -122,11 +126,30 @@ export async function buildFullPatchLines(
   docEntry: number,
   desiredLines: Record<string, unknown>[],
 ): Promise<Record<string, unknown>[]> {
-  let current: Record<string, unknown>[] = [];
-  try {
-    current = await readSapDocumentLines(baseUrl, cookies, endpoint, docEntry);
-  } catch {
-    current = [];
-  }
+  const current = await readSapDocumentLines(baseUrl, cookies, endpoint, docEntry);
   return mergeSapDocumentLines(current, desiredLines);
+}
+
+/** Snapshot completo dos campos graváveis, com o aprovado no Flow prevalecendo.
+ * Não reenviar totais calculados, chaves nem datas contábeis bloqueadas.
+ */
+export async function buildFullDocumentPatch(
+  baseUrl: string, cookies: string, endpoint: string, docEntry: number,
+  desired: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const res = await fetch(`${baseUrl}/${endpoint}(${docEntry})`, { headers: { Cookie: cookies } });
+  if (!res.ok) throw new Error(`Não foi possível ler o documento completo antes do PATCH [${res.status}]`);
+  const current = await res.json();
+  if (!Array.isArray(current.DocumentLines) || !Array.isArray(desired.DocumentLines) || !desired.DocumentLines.length) {
+    throw new Error("Documento sem coleção completa de linhas; PATCH cancelado");
+  }
+  const payload: Record<string, unknown> = {};
+  for (const key of ["Comments", "DocDueDate", "PaymentGroupCode", "DiscountPercent", "SalesPersonCode", "DocumentsOwner", "ContactPersonCode", "NumAtCard", "PayToCode", "ShipToCode", "TransportationCode", "JournalMemo", "OpeningRemarks", "ClosingRemarks", "AttachmentEntry"]) {
+    if (current[key] !== undefined) payload[key] = current[key];
+  }
+  for (const key of Object.keys(current)) if (key.startsWith("U_")) payload[key] = current[key];
+  Object.assign(payload, desired);
+  for (const key of ["DocEntry", "DocNum", "DocTotal", "BPL_IDAssignedToInvoice", "DocDate", "TaxDate", "DocCurrency"]) delete payload[key];
+  payload.DocumentLines = mergeSapDocumentLines(current.DocumentLines, desired.DocumentLines);
+  return payload;
 }

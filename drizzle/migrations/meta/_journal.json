@@ -442,6 +442,20 @@
       "when": 1790357245827,
       "tag": "0062_expenses_omie_document_id",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1790615842434,
+      "tag": "0063_security_company_action_scope",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1790617540373,
+      "tag": "0064_nf_po_draft_idempotency",
+      "breakpoints": true
     }
   ]
 }

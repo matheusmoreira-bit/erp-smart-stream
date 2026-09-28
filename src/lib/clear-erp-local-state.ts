@@ -26,7 +26,7 @@ const USER_SCOPED_LOCAL_PREFIXES = [
   "sales.",
 ];
 
-export function clearErpLocalState() {
+export async function clearErpLocalState(): Promise<void> {
   if (typeof window === "undefined") return;
 
   // sessionStorage é inteiramente escopado à sessão do ERP — pode ir todo.
@@ -47,17 +47,21 @@ export function clearErpLocalState() {
   } catch { /* ignore */ }
 
   // F13: fila offline de despesas e anexos de NF guardados no IndexedDB.
-  clearUserIndexedDbs();
+  await clearUserIndexedDbs();
 }
 
 const USER_INDEXED_DBS = ["erpflow-offline", "createExpenseModalQueue"];
 
-/** Apaga os bancos locais com dados do usuário. Nunca lança. */
-export function clearUserIndexedDbs(): void {
-  try {
-    if (typeof indexedDB === "undefined") return;
-    for (const name of USER_INDEXED_DBS) {
-      try { indexedDB.deleteDatabase(name); } catch { /* ignore */ }
-    }
-  } catch { /* ignore */ }
+/** Aguarda a exclusão efetiva. Bloqueio/erro não é sucesso de limpeza. */
+export async function clearUserIndexedDbs(): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
+  const results = await Promise.allSettled(USER_INDEXED_DBS.map((name) => new Promise<void>((resolve, reject) => {
+    const req = indexedDB.deleteDatabase(name);
+    const timer = setTimeout(() => reject(new Error("Não foi possível limpar os dados locais. Feche as outras abas do ERP e tente novamente.")), 5000);
+    req.onsuccess = () => { clearTimeout(timer); resolve(); };
+    req.onerror = () => { clearTimeout(timer); reject(req.error ?? new Error("Falha ao limpar os dados locais")); };
+    // onblocked não conclui a operação: aguarda as outras conexões fecharem.
+  })));
+  const failed = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+  if (failed) throw failed.reason;
 }

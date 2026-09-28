@@ -1,3 +1,5 @@
+import { requireIntegrationService } from "../_shared/integration-auth.ts";
+import { authErrorResponse } from "../_shared/auth.ts";
 // Edge function: audit-cross-fiscal-auto
 // Executa a conciliação fiscal automática (NFS-e × pagamento × lançamento no ERP)
 // para todas as empresas com auto_conciliar = true. Pensado para rodar via cron diário.
@@ -20,6 +22,7 @@ function isoDate(d: Date) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  try { requireIntegrationService(req); } catch (error) { return authErrorResponse(error, corsHeaders) ?? new Response("Falha ao verificar identidade", { status: 503 }); }
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, serviceKey);

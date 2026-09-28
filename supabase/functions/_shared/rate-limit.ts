@@ -11,13 +11,18 @@
 //   if (!rl.allowed) return rateLimitResponse(rl, corsHeaders);
 //
 // Estado guardado em `public.edge_rate_limits` via RPC atômica
-// `check_and_increment_rate_limit` (service_role only). Falha silenciosa:
-// se o Postgres retornar erro, liberamos a requisição para não derrubar
-// o fluxo — o objetivo é conter abuso, não introduzir novo ponto de falha.
+// `check_and_increment_rate_limit` (service_role only). Consumidores legados
+// permitem falhas do contador; ações sensíveis usam failClosed para bloquear.
 
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+type RateLimitClient = {
+  rpc(name: string, args: Record<string, unknown>): PromiseLike<{
+    data: unknown;
+    error: { message: string } | null;
+  }>;
+};
 
 export interface RateLimitParams {
+  failClosed?: boolean;      // ações de segurança bloqueiam se o contador estiver indisponível
   scope: string;              // ex.: "sap-change-password"
   identifier: string;         // user id, email, ip — o que estiver disponível
   max: number;                // requisições permitidas por janela
@@ -25,6 +30,7 @@ export interface RateLimitParams {
 }
 
 export interface RateLimitResult {
+  unavailable?: boolean;
   allowed: boolean;
   retryAfter: number;
   count: number;
@@ -32,7 +38,7 @@ export interface RateLimitResult {
 }
 
 export async function enforceRateLimit(
-  admin: SupabaseClient,
+  admin: RateLimitClient,
   params: RateLimitParams,
 ): Promise<RateLimitResult> {
   const key = `${params.scope}:${(params.identifier || "anon").toLowerCase()}`;
@@ -44,9 +50,12 @@ export async function enforceRateLimit(
     });
     if (error) {
       console.error("rate-limit rpc error", key, error.message);
-      return { allowed: true, retryAfter: 0, count: 0, scope: params.scope };
+      return { allowed: !params.failClosed, unavailable: !!params.failClosed, retryAfter: 1, count: 0, scope: params.scope };
     }
-    const row = Array.isArray(data) ? data[0] : data;
+    const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
+    if (params.failClosed && typeof row?.allowed !== "boolean") {
+      return { allowed: false, unavailable: true, retryAfter: 1, count: 0, scope: params.scope };
+    }
     return {
       allowed: Boolean(row?.allowed ?? true),
       retryAfter: Number(row?.retry_after ?? 0),
@@ -55,7 +64,7 @@ export async function enforceRateLimit(
     };
   } catch (e) {
     console.error("rate-limit exception", key, e);
-    return { allowed: true, retryAfter: 0, count: 0, scope: params.scope };
+    return { allowed: !params.failClosed, unavailable: !!params.failClosed, retryAfter: 1, count: 0, scope: params.scope };
   }
 }
 
@@ -65,12 +74,12 @@ export function rateLimitResponse(
 ): Response {
   return new Response(
     JSON.stringify({
-      error: "Muitas requisições. Aguarde alguns instantes antes de tentar novamente.",
+      error: result.unavailable ? "Verificação de limite indisponível. Tente novamente." : "Muitas requisições. Aguarde alguns instantes antes de tentar novamente.",
       retry_after: result.retryAfter,
       scope: result.scope,
     }),
     {
-      status: 429,
+      status: result.unavailable ? 503 : 429,
       headers: {
         ...corsHeaders,
         "Content-Type": "application/json",

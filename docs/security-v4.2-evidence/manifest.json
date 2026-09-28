@@ -1,0 +1,22 @@
+{
+  "date": "2026-09-28",
+  "head": "410a28c9081c44a2feefba450736025b61bf75c7",
+  "state": "local uncommitted candidate, not deployed",
+  "files": {
+    "supabase/functions/_shared/integration-auth.ts": "c5e5f0970ac9eff847597280a365f7d6b2ca826fbb11d759c244ce2f34c02953",
+    "supabase/functions/_shared/nf-draft-once.ts": "23fe92f8dbaa7f640faea5a041504f5aa35b1f0960c4495a6b3156a0c2a0d117",
+    "supabase/functions/_shared/sap-line-merge.ts": "d2deb38b9366aa698323a2280eead4e3a905dfc7afdb2199315f3db2fade55ff",
+    "supabase/functions/_shared/sap-line-prices.ts": "108318a960a4186152102f1c2912849c243cb88a016e730ddc450fb88f6a4d4f",
+    "supabase/functions/nf-entrada-to-sap/index.ts": "53dfa3bceab374e3ec40cd79e1bcbddbec253654336e7252f774b8fb835062e7",
+    "supabase/functions/employees-sync-run/index.ts": "cfe4410fae268f00e69f112e8a254839a537c9862b96bb0058638ba137c6903a",
+    "supabase/functions/audit-cross-fiscal-run/index.ts": "b06c44024f42796facfda5a25365eb8834c47eceabbcf5e5e51e2f9ea138ba8f",
+    "supabase/functions/employees-sync-cron/index.ts": "5548d447e1228b33b1c7f67829fe21ce53220ecab97ef6760e51a4e290ae0269",
+    "supabase/functions/audit-cross-fiscal-auto/index.ts": "5675edfa0c33f7e650e927669a3a7657857f0accb1b0f30b57038deb9a42935e",
+    "supabase/functions/expense-to-sap/index.ts": "b99d527aeadb9101324c5ca84edc4d75bb12cb317d6b740058dd4172a7083b7b",
+    "drizzle/migrations/0064_nf_po_draft_idempotency.sql": "ada2e743b961f69ab4ec1c86b017d009950f834d4646363fbbed636600286766",
+    "drizzle/migrations/meta/_journal.json": "daa8f78fcbc512f77829d70489b05050b09e09448c8293fc7b460499be21c78e",
+    "scripts/security-review/v42.test.mjs": "5bd379de117f3a42b0b9ff250ba4c1341f1a2e3a2c6fd0b15b232ac00db660c8",
+    "scripts/security-review/v42-database.mjs": "c77e86996a239ef62689b276700091294442236dc983f725bc18ab98549eea17",
+    "src/lib/sap-document-patch.test.ts": "d5c0f343013759e7eff932c178ebf11eab1aafc7796451940e4801ba188bdfa0"
+  }
+}
