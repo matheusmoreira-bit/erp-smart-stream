@@ -101,6 +101,9 @@ export function useSapUsers() {
 
     const companyDB = session.companyDB;
     const cacheKey = `users:${companyDB}`;
+    // Quando já há lista exibida (cache), a atualização ao vivo roda em
+    // segundo plano, sem trocar a lista pelo esqueleto de carregamento.
+    let showingCached = false;
 
     if (!forceRefresh) {
       const cached = sapUsersCache.get(cacheKey);
@@ -132,6 +135,7 @@ export function useSapUsers() {
           if (userList.some(hasDisplayData)) {
             sapUsersCache.set(cacheKey, userList);
             setUsers(userList);
+            showingCached = true;
             // If not expired, skip live fetch
             if (!expired) return;
           }
@@ -139,9 +143,11 @@ export function useSapUsers() {
       } catch {
         // ignore
       }
+    } else {
+      showingCached = users.some(hasDisplayData);
     }
 
-    setIsLoading(true);
+    if (!showingCached) setIsLoading(true);
     setError(null);
     try {
       if (forceRefresh) {
