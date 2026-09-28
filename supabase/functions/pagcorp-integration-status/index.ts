@@ -54,11 +54,22 @@ async function selectInChunks<T = Record<string, unknown>>(
   run: (slice: (number | string)[]) => Promise<{ data: T[] | null; error: unknown }>,
 ): Promise<T[]> {
   const rows: T[] = [];
-  for (const slice of chunk(ids)) {
+  let failed = 0;
+  let firstError: unknown = null;
+  const slices = chunk(ids);
+  for (const slice of slices) {
     const { data, error } = await run(slice);
-    if (error) throw error;
+    if (error) {
+      // Um bloco lento (ex.: statement timeout) não derruba o painel inteiro:
+      // devolve o que foi possível e registra o bloco perdido.
+      failed++;
+      firstError ??= error;
+      console.warn("[pagcorp-integration-status] chunk failed", errorMessage(error));
+      continue;
+    }
     if (data) rows.push(...data);
   }
+  if (failed > 0 && failed === slices.length) throw firstError;
   return rows;
 }
 
