@@ -123,7 +123,12 @@ export default function UserDetailDrawer({
     });
     setEmailSaving(false);
     if (error || res?.error) {
-      toast.error(res?.error || "Erro ao alterar e-mail");
+      let msg: string | undefined = res?.error;
+      const ctx = (error as { context?: Response } | null)?.context;
+      if (!msg && ctx && typeof ctx.json === "function") {
+        try { msg = ((await ctx.json()) as { error?: string })?.error; } catch { /* ignore */ }
+      }
+      toast.error(msg || "Erro ao alterar e-mail");
       return;
     }
     toast.success("E-mail de login alterado. O usuário entra com o Google do novo e-mail.");

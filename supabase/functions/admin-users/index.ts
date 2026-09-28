@@ -150,17 +150,41 @@ Deno.serve(async (req) => {
       const body = await req.json().catch(() => null);
       let userId = typeof body?.userId === "string" ? body.userId : "";
       const currentEmail = typeof body?.currentEmail === "string" ? body.currentEmail.trim().toLowerCase() : "";
+      const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
       if (!userId && currentEmail) {
         const all = await listAllAuthUsers(adminClient);
         const found = all.find((u) => (u.email || "").toLowerCase() === currentEmail);
         if (!found) {
-          return new Response(JSON.stringify({ error: `Nenhuma conta de login encontrada para ${currentEmail}` }), {
-            status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          // Usuário ainda sem conta de login (ex.: recém-criado no SAP):
+          // cria a conta já no novo e-mail, confirmada, sem papel de admin.
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254 || !isCorporateEmail(email)) {
+            return new Response(JSON.stringify({ error: "E-mail inválido ou domínio não autorizado" }), {
+              status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          const existing = all.find((u) => (u.email || "").toLowerCase() === email);
+          if (existing) {
+            return new Response(JSON.stringify({ success: true, created: false, note: "Conta de login já existe com o novo e-mail" }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          const { data: created, error: createErr } = await adminClient.auth.admin.createUser({ email, email_confirm: true });
+          if (createErr || !created?.user) {
+            return new Response(JSON.stringify({ error: createErr?.message || "Falha ao criar conta de login" }), {
+              status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          await adminClient.from("audit_log").insert({
+            action: "admin_user_created",
+            actor_email: caller.email,
+            details: { target_email: email, target_user_id: created.user.id, previous_email: currentEmail, via: "email_edit" },
+          }).then(() => undefined, () => undefined);
+          return new Response(JSON.stringify({ success: true, created: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
         userId = found.id;
       }
-      const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
       if (!/^[0-9a-f-]{36}$/i.test(userId) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
         return new Response(JSON.stringify({ error: "Dados inválidos" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
