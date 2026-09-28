@@ -5716,6 +5716,38 @@ export type Database = {
           },
         ]
       }
+      nf_po_draft_jobs: {
+        Row: {
+          draft_id: string | null
+          import_id: string
+          state: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          draft_id?: string | null
+          import_id: string
+          state: string
+          token: string
+          updated_at?: string
+        }
+        Update: {
+          draft_id?: string | null
+          import_id?: string
+          state?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nf_po_draft_jobs_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: true
+            referencedRelation: "nf_entrada_imports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nfse_email_log: {
         Row: {
           attachment_path: string | null
@@ -11110,6 +11142,15 @@ export type Database = {
       reveal_system_credential: { Args: { _stored: string }; Returns: string }
       sap_user_has_module: {
         Args: { _module_key: string; _sap_username: string }
+        Returns: boolean
+      }
+      sap_user_has_module_action: {
+        Args: {
+          _action: string
+          _company_db: string
+          _module_key: string
+          _sap_username: string
+        }
         Returns: boolean
       }
       session_started_at: { Args: { _session_id: string }; Returns: string }
