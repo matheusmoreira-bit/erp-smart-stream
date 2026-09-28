@@ -926,7 +926,9 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     }
 
     if (expenseErpType === "omie") {
-      if (expense.sap_doc_entry) {
+      // Códigos Omie > int32 ficam só em omie_document_id (sap_doc_entry = null).
+      const omieExistingId = expense.sap_doc_entry ?? (expense as { omie_document_id?: number | string | null }).omie_document_id ?? null;
+      if (omieExistingId) {
         if (body.patch_document === true) {
           throw new Error(
             isSales
@@ -938,7 +940,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
           JSON.stringify({
             success: true,
             alreadyIntegrated: true,
-            docEntry: expense.sap_doc_entry,
+            docEntry: omieExistingId,
             docNum: expense.sap_doc_num,
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } },
