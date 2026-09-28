@@ -11,10 +11,9 @@
 
 | Situação | Qtde | Achados |
 | --- | --- | --- |
-| Fechado | 10 | F01, F02, F03, F04, F05, F06, F07, F09, F10, F12, F13* |
+| Fechado | 10 | F01, F02, F03, F04, F05, F06, F07, F10, F12, F13 |
+| Fechado para admins (ver observação) | 1 | F09 |
 | Parcial / depende de outro time | 4 | F08 (fornecedor), F11 (checagem de módulo em modo registro), F14 (política LGPD), F15 (inventário) |
-
-\* Contagem conforme reteste por item; ver observação em F09.
 
 Testes gerais aprovados em 28/09/2026:
 - **208 de 208** tabelas do schema público com RLS ativo (`pg_tables.rowsecurity`).
