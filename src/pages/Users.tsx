@@ -189,7 +189,11 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
     userData: { UserCode: string; UserName: string; eMail: string; Password: string },
     targetCompanyDbs?: string[],
   ) => {
-    const results = await Promise.all((targetCompanyDbs || []).map(async (db) => {
+    // Sem lista explícita (tela da empresa), cria na base ativa.
+    const dbs = targetCompanyDbs && targetCompanyDbs.length > 0
+      ? targetCompanyDbs
+      : (session?.companyDB ? [session.companyDB] : []);
+    const results = await Promise.all(dbs.map(async (db) => {
       try {
         const { data, error: createError } = await supabase.functions.invoke("sap-users-admin", {
           body: {
@@ -214,7 +218,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
     }));
     await loadBackofficeUsers(true);
     return { created: false, replicationResults: results };
-  }, [loadBackofficeUsers]);
+  }, [loadBackofficeUsers, session?.companyDB]);
 
   const segment = (params.get("seg") as SegmentKey) || "all";
   const setSegmentKey = (key: SegmentKey) => {
@@ -501,7 +505,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
           <div className="flex items-center gap-2 flex-wrap">
             {!embedded && <ThemeToggle />}
             <CreateUserDialog
-              onCreateUser={backofficeMode ? createUserForBackoffice : createUser}
+              onCreateUser={backofficeMode || (isCloudAdmin && (session?.erpType || "sap") === "sap") ? createUserForBackoffice : createUser}
               isLoading={pageLoading}
               adminMode={backofficeMode}
             />
