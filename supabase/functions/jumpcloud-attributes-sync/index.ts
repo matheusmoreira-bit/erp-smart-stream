@@ -37,6 +37,20 @@ function parseCostCenterCode(raw: string | null | undefined): string | null {
 }
 
 async function fetchAllJumpCloudUsers(apiKey: string, orgId?: string): Promise<JcUser[]> {
+  try {
+    return await fetchAllJumpCloudUsersOnce(apiKey, orgId);
+  } catch (e) {
+    // org_id salvo inválido ("selected organization not found"): a API key de
+    // organização única já identifica o tenant, então tenta sem x-org-id.
+    if (orgId && /JumpCloud API 404/.test(e instanceof Error ? e.message : "")) {
+      console.warn("[jumpcloud-attributes-sync] org_id inválido; tentando sem x-org-id");
+      return await fetchAllJumpCloudUsersOnce(apiKey, undefined);
+    }
+    throw e;
+  }
+}
+
+async function fetchAllJumpCloudUsersOnce(apiKey: string, orgId?: string): Promise<JcUser[]> {
   const headers: Record<string, string> = {
     "x-api-key": apiKey,
     "Content-Type": "application/json",
