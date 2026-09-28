@@ -135,7 +135,7 @@ export default function AdminUsersManager() {
         </div>
         <Button size="sm" onClick={() => setInviteDialog(true)}>
           <UserPlus className="w-4 h-4 mr-1" />
-          Convidar
+          Liberar acesso
         </Button>
       </div>
 

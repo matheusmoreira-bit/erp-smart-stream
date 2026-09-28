@@ -517,7 +517,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
             />
             <Button variant="outline" size="sm" onClick={() => setInviteOpen(true)}>
               <UserPlus className="w-4 h-4 mr-2" />
-              Convidar admin
+              Liberar acesso
             </Button>
             <Button
               variant="outline"
