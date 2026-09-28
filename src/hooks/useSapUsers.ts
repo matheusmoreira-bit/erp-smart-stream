@@ -86,6 +86,8 @@ export function useSapUsers() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const usersRef = useRef<SapUser[]>([]);
+  usersRef.current = users;
 
   const fetchUsers = useCallback(async (forceRefresh = false, signal?: AbortSignal) => {
     if (!session || session.erpType !== "sap") {
@@ -144,7 +146,7 @@ export function useSapUsers() {
         // ignore
       }
     } else {
-      showingCached = users.some(hasDisplayData);
+      showingCached = usersRef.current.some(hasDisplayData);
     }
 
     if (!showingCached) setIsLoading(true);
