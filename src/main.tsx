@@ -12,6 +12,17 @@ installReadOnlyGuards(supabase as never);
 
 // F12: se o navegador não está mais em impersonação (aba fechada, logout),
 // encerra no servidor qualquer impersonação órfã desse usuário.
+const IMPERSONATION_HEARTBEAT_KEY = "erp_impersonation_heartbeat";
+const beatImpersonation = () => {
+  void import("./lib/impersonation.ts").then(({ isImpersonating }) => {
+    try {
+      if (isImpersonating()) localStorage.setItem(IMPERSONATION_HEARTBEAT_KEY, String(Date.now()));
+    } catch { /* ignore */ }
+  });
+};
+beatImpersonation();
+setInterval(beatImpersonation, 30_000);
+window.addEventListener("erp:impersonation-changed", beatImpersonation);
 let impersonationReconciled = false;
 supabase.auth.onAuthStateChange((event, session) => {
   // F13: saiu da conta → nenhum dado local do usuário sobrevive.
@@ -25,6 +36,10 @@ supabase.auth.onAuthStateChange((event, session) => {
   void (async () => {
     const { isImpersonating } = await import("./lib/impersonation.ts");
     if (isImpersonating()) return;
+    // sessionStorage é por aba: se outra aba ainda está impersonando
+    // (heartbeat recente), não encerra a sessão dela no servidor.
+    const hb = Number(localStorage.getItem(IMPERSONATION_HEARTBEAT_KEY) || 0);
+    if (Date.now() - hb < 90_000) return;
     const { data } = await supabase.from("impersonation_sessions").select("id").is("ended_at", null).limit(1);
     if (!data || data.length === 0) return;
     const { authFetch } = await import("./lib/auth-fetch.ts");
