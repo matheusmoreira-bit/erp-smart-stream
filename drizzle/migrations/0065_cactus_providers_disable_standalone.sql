@@ -1,0 +1,1 @@
+UPDATE public.standalone_mode SET enabled = false, reason = coalesce(reason,'') || ' | Desligado em 28/09/2026 para validar novo ambiente SAP', updated_at = now() WHERE company_db = 'cactus_providers';

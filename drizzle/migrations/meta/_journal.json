@@ -456,6 +456,13 @@
       "when": 1790617540373,
       "tag": "0064_nf_po_draft_idempotency",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1790625861896,
+      "tag": "0065_cactus_providers_disable_standalone",
+      "breakpoints": true
     }
   ]
 }
