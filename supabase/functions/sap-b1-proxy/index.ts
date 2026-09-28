@@ -434,7 +434,7 @@ Deno.serve(withEdgeMetrics("sap-b1-proxy", async (req, metricsCtx) => {
         const who = await fetchWithTimeout(
           `${SAP_BASE_URL}/UsersService_GetCurrentUser`,
           { method: "POST", headers: { Cookie: cookies, "Content-Type": "application/json" }, body: "{}" },
-          8_000,
+          15_000,
         );
         if (who.status === 401) {
           await who.body?.cancel().catch(() => {});
