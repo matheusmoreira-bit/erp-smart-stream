@@ -38,6 +38,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useSapUsers } from "@/hooks/useSapUsers";
+import { sapUsersCache } from "@/lib/cache-repository";
 import type { SapUser } from "@/lib/cache-repository";
 import CreateUserDialog from "@/components/CreateUserDialog";
 import AdminUsersManager from "@/components/AdminUsersManager";
@@ -217,8 +218,13 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
       }
     }));
     await loadBackofficeUsers(true);
+    // Tela da empresa: a lista vem do cache do SAP; força nova leitura.
+    if (session) {
+      sapUsersCache.clear();
+      refresh();
+    }
     return { created: false, replicationResults: results };
-  }, [loadBackofficeUsers, session?.companyDB]);
+  }, [loadBackofficeUsers, session, refresh]);
 
   const segment = (params.get("seg") as SegmentKey) || "all";
   const setSegmentKey = (key: SegmentKey) => {
