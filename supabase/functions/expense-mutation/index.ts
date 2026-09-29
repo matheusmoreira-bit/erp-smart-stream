@@ -504,6 +504,20 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any, re
     const status = e instanceof AuthError ? e.status : 403;
     return json(status, { error: e instanceof Error ? e.message : "Acesso negado" });
   }
+  if (String(input.doc_type || "").toLowerCase() !== "sales") {
+    try {
+      const policyError = await checkItemProjectPolicy(admin, {
+        privileged: !!(caller.isCloudAdmin || caller.isSuperUser),
+        email: caller.email,
+        identity: caller.identity,
+        items,
+        headerProject: input.project,
+      });
+      if (policyError) return json(403, { error: policyError });
+    } catch (e) {
+      return json(503, { error: e instanceof Error ? e.message : String(e) });
+    }
+  }
 
   // Data de vencimento é obrigatória para todo pedido criado via ERP Flow.
   const dueDate = input.due_date ? String(input.due_date).trim() : "";
@@ -1002,6 +1016,20 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
       items = normalizeExpenseItems(input.items);
     } catch (error) {
       return json(400, { error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  if (String(current.doc_type || "").toLowerCase() !== "sales" && (items !== undefined || input.project !== undefined)) {
+    try {
+      const policyError = await checkItemProjectPolicy(admin, {
+        privileged: !!(caller.isCloudAdmin || caller.isSuperUser),
+        email: caller.email,
+        identity: caller.identity,
+        items: items ?? [],
+        headerProject: input.project !== undefined ? input.project : current.project,
+      });
+      if (policyError) return json(403, { error: policyError });
+    } catch (e) {
+      return json(503, { error: e instanceof Error ? e.message : String(e) });
     }
   }
   if (items && items.length > 0) {
