@@ -32,7 +32,7 @@ interface SapSearchComboboxProps {
   onChange: (val: SapSearchOption | null) => void;
   placeholder?: string;
   label?: string;
-  /** Minimum characters before searching (default 2) */
+  /** Minimum characters before searching (default 3) */
   minChars?: number;
   /** Max results returned by SAP (default 15) */
   topResults?: number;
@@ -50,7 +50,7 @@ export function SapSearchCombobox({
   onChange,
   placeholder = "Buscar...",
   label,
-  minChars = 2,
+  minChars = SEARCH_MIN_CHARS,
   topResults = 15,
   suggestedQuery,
 }: SapSearchComboboxProps) {
