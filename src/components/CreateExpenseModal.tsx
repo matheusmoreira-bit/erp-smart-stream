@@ -4141,7 +4141,7 @@ export function CreateExpenseModal({
             </div>
             <div className="mt-3 flex min-w-0 justify-end">
               {(() => {
-                const freightValue = !isSales ? Math.max(0, Number(freight) || 0) : 0;
+                const freightValue = !isSales && !isOmie ? Math.max(0, Number(freight) || 0) : 0;
                 return (
                   <div className="min-w-0 text-right text-sm font-medium text-foreground">
                     {freightValue > 0 && (
