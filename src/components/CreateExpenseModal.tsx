@@ -4140,9 +4140,21 @@ export function CreateExpenseModal({
               ))}
             </div>
             <div className="mt-3 flex min-w-0 justify-end">
-              <p className="min-w-0 text-right text-sm font-medium text-foreground">
-                Total: <span className="font-mono text-base font-bold sm:text-lg">{formatCurrency(total, currency || "BRL")}</span>
-              </p>
+              {(() => {
+                const freightValue = !isSales && !isOmie ? Math.max(0, Number(freight) || 0) : 0;
+                return (
+                  <div className="min-w-0 text-right text-sm font-medium text-foreground">
+                    {freightValue > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Itens: {formatCurrency(total, currency || "BRL")} · Frete: {formatCurrency(freightValue, currency || "BRL")}
+                      </p>
+                    )}
+                    <p>
+                      Total: <span className="font-mono text-base font-bold sm:text-lg">{formatCurrency(total + freightValue, currency || "BRL")}</span>
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
           </section>
 
