@@ -129,6 +129,7 @@ import {
   isAttachmentRequiredForDocument,
 } from "@/lib/attachment-validation";
 import { useCurrentUserCostCenter, isItemAllowedForCostCenter, isCostCenterAllowedForUser, costCenterBranch, isRateioTypeAllowedForCostCenter, isSalesOnlyItemCode } from "@/hooks/useCurrentUserCostCenter";
+import { filterProjectsForLotus, useAuthEmail } from "@/lib/item-project-policy";
 import { useCanSeeAllCostCenters } from "@/hooks/useCanSeeAllCostCenters";
 import { useCustomerBrandMap, filterProjectsForCustomer } from "@/hooks/useCustomerBrandMap";
 import { CurrencyField, normalizeCurrencyCode } from "@/components/CurrencyField";
@@ -459,6 +460,7 @@ export function CreateExpenseModal({
   // projeto homônimo ao cliente. Sem mapeamento, mantém a lista integral.
   const { brandsForCustomer } = useCustomerBrandMap();
   const { segment: myManagementSegment } = useMyManagementSegment();
+  const authEmail = useAuthEmail();
   const projectOptions = useMemo(() => {
     const base = isSales
       ? filterProjectsForCustomer(
@@ -466,7 +468,7 @@ export function CreateExpenseModal({
           supplier ? { code: supplier.code, name: supplier.name } : null,
           brandsForCustomer(supplier?.code),
         )
-      : rawProjectOptions;
+      : filterProjectsForLotus(rawProjectOptions, authEmail, isPrivilegedUser);
     // Recorte por segmento de gestão (capacidade do grupo; admins não são travados).
     if (isPrivilegedUser || !hasCapability("projects_scope_by_segment")) return base;
     return filterProjectsBySegment(base, myManagementSegment, sapSession?.companyDB ?? null);
@@ -479,6 +481,7 @@ export function CreateExpenseModal({
     hasCapability,
     myManagementSegment,
     sapSession?.companyDB,
+    authEmail,
   ]);
 
   // CC operacional (1.8/1.9/1.10/1.11): esconde projetos institucionais para
@@ -2619,7 +2622,7 @@ export function CreateExpenseModal({
       if (!isOmie && !isSales && !isItemAllowedForCostCenter(it.item_code, userCostCenter, bypassCcItemRules)) {
         const codeUp = String(it.item_code).toUpperCase();
         if (codeUp.startsWith("IMP")) {
-          toast.error(`Item ${n}: itens IMP% são restritos a usuários do CC 1.2.2.%`);
+          toast.error(`Item ${n}: itens IMP% são restritos ao FISCAL/TRIBUTÁRIO (CC 1.2.2.4)`);
         } else if (codeUp.startsWith("FOL")) {
           toast.error(`Item ${n}: itens FOL% são restritos a usuários de Pessoas e Cultura (CC 1.5.1.3)`);
         } else {

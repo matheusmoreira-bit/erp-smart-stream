@@ -66,9 +66,10 @@ export function isItemAllowedForCostCenter(
   if (bypass) return true;
   const code = String(itemCode || "").toUpperCase().trim();
   const cc = String(costCenter || "").trim();
-  // CC vazio (usuário sem vínculo no IdP) → não bloqueia (evita falso negativo).
+  // IMP% é exclusivo do FISCAL/TRIBUTÁRIO (1.2.2.4). CC desconhecido bloqueia.
+  if (code.startsWith("IMP")) return cc === "1.2.2.4" || cc.startsWith("1.2.2.4.");
+  // CC vazio (usuário sem vínculo no IdP) → não bloqueia FOL (evita falso negativo).
   if (!cc) return true;
-  if (code.startsWith("IMP")) return cc.startsWith("1.2.2.");
   if (code.startsWith("FOL")) return cc === "1.5.1.3" || cc.startsWith("1.5.1.3.");
   return true;
 }

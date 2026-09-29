@@ -28,6 +28,7 @@ import { notifyApprovalPending } from "../_shared/approval-notify.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { enforceRateLimit } from "../_shared/rate-limit.ts";
 import { findMatchingRule, pickHierarchicalFallbackRule, type RuleRow } from "../_shared/rule-match.ts";
+import { checkItemProjectPolicy } from "../_shared/item-project-policy.ts";
 import { applyCcRedirect, loadCcRedirects } from "../_shared/cc-redirect.ts";
 import { buildSapBaseUrl, loadSapCreds, sapCookieLogin, sapLogout } from "../_shared/sap-cache.ts";
 import { sapFetch } from "../_shared/sap-fetch.ts";
@@ -503,6 +504,20 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any, re
   } catch (e) {
     const status = e instanceof AuthError ? e.status : 403;
     return json(status, { error: e instanceof Error ? e.message : "Acesso negado" });
+  }
+  if (String(input.doc_type || "").toLowerCase() !== "sales") {
+    try {
+      const policyError = await checkItemProjectPolicy(admin, {
+        privileged: !!(caller.isCloudAdmin || caller.isSuperUser),
+        email: caller.email,
+        identity: caller.identity,
+        items,
+        headerProject: input.project,
+      });
+      if (policyError) return json(403, { error: policyError });
+    } catch (e) {
+      return json(503, { error: e instanceof Error ? e.message : String(e) });
+    }
   }
 
   // Data de vencimento é obrigatória para todo pedido criado via ERP Flow.
@@ -1002,6 +1017,20 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
       items = normalizeExpenseItems(input.items);
     } catch (error) {
       return json(400, { error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  if (String(current.doc_type || "").toLowerCase() !== "sales" && (items !== undefined || input.project !== undefined)) {
+    try {
+      const policyError = await checkItemProjectPolicy(admin, {
+        privileged: !!(caller.isCloudAdmin || caller.isSuperUser),
+        email: caller.email,
+        identity: caller.identity,
+        items: items ?? [],
+        headerProject: input.project !== undefined ? input.project : current.project,
+      });
+      if (policyError) return json(403, { error: policyError });
+    } catch (e) {
+      return json(503, { error: e instanceof Error ? e.message : String(e) });
     }
   }
   if (items && items.length > 0) {
