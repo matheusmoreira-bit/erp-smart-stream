@@ -239,6 +239,7 @@ export default function CreateUserDialog({ onCreateUser, isLoading, adminMode = 
       if (res.replicationResults.length > 0 || (createdInCurrent && res.replicationResults.length === 0 && selectedDbs.size > 1)) {
         // Show report dialog (include current row synthesized if relevant)
         const currentRow: ReplicationResult[] = currentDb && selectedDbs.has(currentDb)
+          && !res.replicationResults.some((r) => r.companyDB === currentDb)
           ? [{
               companyDB: currentDb,
               displayName: companies.find((c) => c.company_db === currentDb)?.display_name || currentDb,

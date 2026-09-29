@@ -1104,7 +1104,29 @@ Deno.serve(async (req) => {
     // o SAP assumir a moeda local — enviar "BRL" causa erro -5002 quando o
     // código da moeda local no SAP é diferente (ex.: "R$").
     if (headerCurrency && headerCurrency !== "BRL" && /^[A-Z]{3}$/.test(headerCurrency)) {
-      baseDoc.DocCurrency = headerCurrency;
+      // O código da moeda no SAP (OCRN) nem sempre é o ISO (ex.: "US$" para
+      // USD). Resolve pelo cadastro de moedas; se não achar, erro claro.
+      let sapCurrency: string | null = null;
+      try {
+        const cr = await sapFetch(`${sap.baseUrl}/Currencies?$select=Code,InternationalDescription,DocumentsCode`, {
+          method: "GET",
+          headers: { Cookie: sap.cookies },
+        });
+        if (cr.ok) {
+          const list = ((await cr.json())?.value || []) as Array<Record<string, unknown>>;
+          const hit = list.find((c) => String(c.Code || "").toUpperCase() === headerCurrency)
+            || list.find((c) => String(c.InternationalDescription || "").toUpperCase() === headerCurrency)
+            || list.find((c) => String(c.DocumentsCode || "").toUpperCase() === headerCurrency)
+            || (headerCurrency === "USD" ? list.find((c) => /^US\$?$/i.test(String(c.Code || ""))) : undefined);
+          sapCurrency = hit ? String(hit.Code) : null;
+          if (!hit) {
+            throw new Error(`A moeda ${headerCurrency} não está cadastrada no SAP desta empresa. Cadastre-a no SAP (Moedas) e tente novamente.`);
+          }
+        }
+      } catch (e) {
+        if (e instanceof Error && e.message.startsWith("A moeda")) throw e;
+      }
+      baseDoc.DocCurrency = sapCurrency || headerCurrency;
     }
 
     // 6. Create Purchase Order
