@@ -190,8 +190,16 @@ Deno.serve(async (req) => {
     }
   } catch (e) {
     console.error("[nf-entrada-rematch]", e);
-    return new Response(JSON.stringify({ error: (e as Error).message }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const msg = (e as Error)?.message || "";
+    const isSap = /SAP|B1SESSION|timed out|aborted|fetch|network/i.test(msg);
+    return new Response(JSON.stringify({
+      error: isSap
+        ? "O SAP não respondeu para refazer o vínculo. Tente novamente em alguns minutos."
+        : "Não foi possível refazer o vínculo desta nota.",
+      detail: msg.slice(0, 300),
+      retryable: isSap,
+    }), {
+      status: isSap ? 503 : 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

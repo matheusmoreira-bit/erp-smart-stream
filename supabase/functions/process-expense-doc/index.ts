@@ -360,7 +360,14 @@ serve(async (req) => {
       if (isPdf || isImage) {
         const mimeType = isPdf ? "application/pdf" : file.type || "image/jpeg";
         // F14: minimização — remove metadados de imagem (GPS, aparelho, comentários).
-        const base64 = bytesToBase64(isPdf ? bytes : stripImageMetadata(bytes, mimeType));
+        // Imagem com contêiner inválido: ignora só este arquivo (não envia
+        // bytes com metadados), sem derrubar o lote inteiro.
+        let cleanBytes = bytes;
+        if (!isPdf) {
+          try { cleanBytes = stripImageMetadata(bytes, mimeType); }
+          catch (e) { console.warn("[process-expense-doc] imagem ignorada:", file.name, (e as Error).message); continue; }
+        }
+        const base64 = bytesToBase64(cleanBytes);
         lovableContentParts.push({
           type: "image_url",
           image_url: { url: `data:${mimeType};base64,${base64}` },
