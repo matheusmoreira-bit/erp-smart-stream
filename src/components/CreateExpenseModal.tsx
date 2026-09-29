@@ -129,6 +129,7 @@ import {
   isAttachmentRequiredForDocument,
 } from "@/lib/attachment-validation";
 import { useCurrentUserCostCenter, isItemAllowedForCostCenter, isCostCenterAllowedForUser, costCenterBranch, isRateioTypeAllowedForCostCenter, isSalesOnlyItemCode } from "@/hooks/useCurrentUserCostCenter";
+import { filterProjectsForLotus, useAuthEmail } from "@/lib/item-project-policy";
 import { useCanSeeAllCostCenters } from "@/hooks/useCanSeeAllCostCenters";
 import { useCustomerBrandMap, filterProjectsForCustomer } from "@/hooks/useCustomerBrandMap";
 import { CurrencyField, normalizeCurrencyCode } from "@/components/CurrencyField";
@@ -459,6 +460,7 @@ export function CreateExpenseModal({
   // projeto homônimo ao cliente. Sem mapeamento, mantém a lista integral.
   const { brandsForCustomer } = useCustomerBrandMap();
   const { segment: myManagementSegment } = useMyManagementSegment();
+  const authEmail = useAuthEmail();
   const projectOptions = useMemo(() => {
     const base = isSales
       ? filterProjectsForCustomer(
@@ -479,6 +481,7 @@ export function CreateExpenseModal({
     hasCapability,
     myManagementSegment,
     sapSession?.companyDB,
+    authEmail,
   ]);
 
   // CC operacional (1.8/1.9/1.10/1.11): esconde projetos institucionais para
