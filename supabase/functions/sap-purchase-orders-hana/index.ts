@@ -346,7 +346,20 @@ Deno.serve(async (req) => {
     const dbName = creds.company_db || companyDb;
     const HANA_SCHEMA_OVERRIDES: Record<string, string> = { open_gaming_sa: "SBO_OPENGAMING" };
     const schema = HANA_SCHEMA_OVERRIDES[companyDb] || dbName;
-    const session = await sapLogin(baseUrl, creds.username, creds.password, dbName);
+    let session: Awaited<ReturnType<typeof sapLogin>>;
+    try {
+      session = await sapLogin(baseUrl, creds.username, creds.password, dbName);
+    } catch (e) {
+      const msg = String((e as Error)?.message || e);
+      // Login lento/indisponível no SAP não pode deixar a tela de compras em branco.
+      if (!isTransientUpstreamError(msg) && !/login sap falhou 5\d\d/i.test(msg)) throw e;
+      console.log(`[sap-purchase-orders-hana] login SAP indisponível em ${dbName}: ${msg}`);
+      return new Response(JSON.stringify({
+        rows: [], total: 0, offset, limit, has_more: false,
+        source: "unavailable",
+        notice: "O ERP não respondeu a tempo. A tela seguirá com dados do Flow/cache.",
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
 
     // Filtros HanaAPI V2 (Campo__op=valor) — aceita via body.filters
