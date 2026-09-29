@@ -1,3 +1,4 @@
+import { SEARCH_DEBOUNCE_MS, SEARCH_MIN_CHARS } from "@/hooks/useSearchState";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
@@ -201,7 +202,7 @@ export function SapSearchCombobox({
     if (value) onChange(null); // clear selection when user types
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (val.length >= minChars) {
-      debounceRef.current = setTimeout(() => search(val), 350);
+      debounceRef.current = setTimeout(() => search(val), SEARCH_DEBOUNCE_MS);
       setIsOpen(true);
     } else {
       setOptions([]);

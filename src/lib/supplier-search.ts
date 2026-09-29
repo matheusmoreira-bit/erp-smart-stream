@@ -98,7 +98,7 @@ export function scoreMatch(item: Searchable, rawQuery: string): number {
   const extraDigits = onlyDigits(item.extra);
   const taxDigits = onlyDigits(item.details?.taxId);
 
-  if (qDigits.length >= 2) {
+  if (qDigits.length >= 3) {
     if (taxDigits && taxDigits === qDigits) return 90;
     if (codeDigits && codeDigits === qDigits) return 105;
     if (
@@ -143,11 +143,6 @@ export function scoreMatch(item: Searchable, rawQuery: string): number {
     const haystack = `${nameCore} ${fantasyCore} ${name} ${fantasy} ${code} ${extra} ${taxId}`;
     const allHit = tokens.every((t) => haystack.includes(t));
     if (allHit) return tokens.length > 1 ? 28 : 22;
-    // Fuzzy por prefixo (mínimo 4 chars) — cobre "figma" ↔ "figmahq".
-    const anyPrefix = tokens.every((t) =>
-      t.length >= 4 && haystack.split(/\s+/).some((h) => h.startsWith(t.slice(0, 4))),
-    );
-    if (anyPrefix) return 15;
   }
 
   return 0;

@@ -1,3 +1,4 @@
+import { useEffectiveSearch } from "@/hooks/useSearchState";
 import { useState, useRef, useEffect, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
@@ -129,7 +130,8 @@ export function CachedSearchCombobox({
     };
   }, [isOpen, query, value, options.length, portalContainer]);
 
-  const filtered = filterAndRank(options, query, 50);
+  const effectiveQuery = useEffectiveSearch(query);
+  const filtered = filterAndRank(options, effectiveQuery, 50);
 
   const handleInputChange = (val: string) => {
     setQuery(val);
