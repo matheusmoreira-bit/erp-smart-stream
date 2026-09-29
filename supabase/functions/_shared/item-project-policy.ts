@@ -6,7 +6,8 @@
 //    da Lotus: VERA e CASSINO.
 // Administradores / super-usuários ficam fora das duas regras.
 // Espelho no navegador: src/lib/item-project-policy.ts (mantenha em sincronia).
-import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+// deno-lint-ignore no-explicit-any
+type SupabaseClient = any;
 
 export const TAX_ITEM_PREFIX = "IMP";
 export const TAX_COST_CENTER = "1.2.2.4";

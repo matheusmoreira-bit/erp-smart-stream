@@ -28,6 +28,7 @@ import { notifyApprovalPending } from "../_shared/approval-notify.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { enforceRateLimit } from "../_shared/rate-limit.ts";
 import { findMatchingRule, pickHierarchicalFallbackRule, type RuleRow } from "../_shared/rule-match.ts";
+import { checkItemProjectPolicy } from "../_shared/item-project-policy.ts";
 import { applyCcRedirect, loadCcRedirects } from "../_shared/cc-redirect.ts";
 import { buildSapBaseUrl, loadSapCreds, sapCookieLogin, sapLogout } from "../_shared/sap-cache.ts";
 import { sapFetch } from "../_shared/sap-fetch.ts";
