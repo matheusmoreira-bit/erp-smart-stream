@@ -2077,9 +2077,9 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     }
     if (f.only_sap_error && !e.sap_integration_error) return false;
 
-    if (!search) return true;
-    const q = search.toLowerCase();
-    const docQ = normalizeDocQuery(search);
+    if (!searchDebounced) return true;
+    const q = searchDebounced.toLowerCase();
+    const docQ = normalizeDocQuery(searchDebounced);
     const internalId = String(e.id || "").replace(/-/g, "").toLowerCase();
     if (docQ && internalId && (internalId.startsWith(docQ) || internalDocCode(internalId).toLowerCase().includes(docQ))) {
       return true;
