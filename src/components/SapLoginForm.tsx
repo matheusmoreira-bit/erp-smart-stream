@@ -260,7 +260,7 @@ export function SapLoginForm() {
         toast.success("Conectado ao OMIE!");
 
       } catch (err) {
-        toast.error("Falha ao completar login OMIE", {
+        toast.error("Não foi possível conectar ao OMIE", {
           description: err instanceof Error ? err.message : String(err),
         });
         sessionStorage.removeItem(OMIE_PENDING_KEY);
@@ -322,7 +322,7 @@ export function SapLoginForm() {
     } catch (err) {
       sessionStorage.removeItem(OMIE_PENDING_KEY);
       setGoogleLoading(false);
-      toast.error("Falha no login com Google", {
+      toast.error("Não foi possível conectar ao OMIE", {
         description: err instanceof Error ? err.message : String(err),
       });
     }
