@@ -1299,7 +1299,15 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       // Pedidos de venda não exigem anexo (regra válida para todas as empresas):
       // quando não há anexo, ou a base tem anexos desativados, seguimos a
       // integração sem AttachmentEntry em vez de bloquear o documento.
-      const attachmentsEnabled = (sapCreds.integrate_attachments || "").toLowerCase() === "true";
+      const attachmentsMode = (sapCreds.integrate_attachments || "").toLowerCase().trim();
+      // Pausa temporária por empresa (ex.: novo ambiente SAP sem pasta de
+      // anexos configurada): integra o documento sem anexo, sem falhar.
+      if (attachmentsMode === "paused") {
+        attachmentStatus = "not_applicable";
+        console.warn(`[expense-to-sap] Anexos pausados para ${expense.company_db}; integrando sem anexo.`);
+        return 0;
+      }
+      const attachmentsEnabled = attachmentsMode === "true";
       if (skipAttachments) {
         if (isSales) {
           attachmentStatus = "not_applicable";
