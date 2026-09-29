@@ -4128,6 +4128,7 @@ export type Database = {
           doc_date: string | null
           doc_type: string
           due_date: string | null
+          freight_amount: number
           id: string
           nfse_split_mode: string
           omie_ap_data: Json | null
@@ -4180,6 +4181,7 @@ export type Database = {
           doc_date?: string | null
           doc_type?: string
           due_date?: string | null
+          freight_amount?: number
           id?: string
           nfse_split_mode?: string
           omie_ap_data?: Json | null
@@ -4232,6 +4234,7 @@ export type Database = {
           doc_date?: string | null
           doc_type?: string
           due_date?: string | null
+          freight_amount?: number
           id?: string
           nfse_split_mode?: string
           omie_ap_data?: Json | null

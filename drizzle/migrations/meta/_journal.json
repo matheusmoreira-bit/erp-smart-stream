@@ -470,6 +470,13 @@
       "when": 1790625861897,
       "tag": "0066_cnab_return_safety",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1790689096313,
+      "tag": "0067_expenses_freight_amount",
+      "breakpoints": true
     }
   ]
 }

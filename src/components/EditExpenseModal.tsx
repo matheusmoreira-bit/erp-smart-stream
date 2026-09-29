@@ -117,6 +117,7 @@ interface Props {
     supplier_name?: string;
     supplier_code?: string | null;
     remarks?: string | null;
+    freight_amount?: number;
     doc_date?: string | null;
     due_date?: string | null;
     rateio_type?: RateioType | null;
@@ -137,6 +138,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
   const [supplier, setSupplier] = useState<SapSearchOption | null>(null);
   const [supplierName, setSupplierName] = useState("");
   const [remarks, setRemarks] = useState("");
+  const [freight, setFreight] = useState("");
   const [docDate, setDocDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [items, setItems] = useState<EditItem[]>([]);
@@ -255,6 +257,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
 
       setSupplierName(expense.supplier_name || "");
       setRemarks(expense.remarks || "");
+      setFreight(Number(expense.freight_amount || 0) > 0 ? String(expense.freight_amount) : "");
       setDocDate(expense.doc_date ? expense.doc_date.slice(0, 10) : "");
       setDueDate(expense.due_date ? expense.due_date.slice(0, 10) : "");
       setItems(
@@ -432,6 +435,7 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
         supplier_name: supplierName.trim(),
         supplier_code: supplier?.code || expense.supplier_code || null,
         remarks: remarks || null,
+        freight_amount: !isSales && !isOmie ? Math.max(0, Math.round((Number(freight) || 0) * 100) / 100) : undefined,
         doc_date: docDate || null,
         due_date: dueDate || null,
         rateio_type: !isSales ? rateioType : undefined,
@@ -550,6 +554,15 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
               />
             </div>
           </div>
+
+          {!isSales && !isOmie && (
+            <div>
+              <label htmlFor="freight-amount" className="text-xs text-muted-foreground mb-1 block">Frete (R$)</label>
+              <Input id="freight-amount" type="number" inputMode="decimal" min={0} step="0.01" value={freight}
+                onChange={(e) => setFreight(e.target.value)} placeholder="0,00" className="max-w-[200px]" />
+              <p className="text-[11px] text-muted-foreground mt-1">Enviado ao SAP como despesa adicional de frete.</p>
+            </div>
+          )}
 
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Observações</label>

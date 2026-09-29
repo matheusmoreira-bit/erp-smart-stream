@@ -252,6 +252,7 @@ export function CreateExpenseModal({
   const [overdueBlockDays, setOverdueBlockDays] = useState(0);
   const [paymentTerms, setPaymentTerms] = useState<SapSearchOption | null>(null);
   const [remarks, setRemarks] = useState("");
+  const [freight, setFreight] = useState("");
   // Omie — campos da Conta a Pagar (compras no Omie não geram Pedido de Compra).
   const [omieAccounts, setOmieAccounts] = useState<SapSearchOption[]>([]);
   const [omieAccountsLoading, setOmieAccountsLoading] = useState(false);
@@ -2721,6 +2722,7 @@ export function CreateExpenseModal({
         cost_center: headerCostCenter?.code || undefined,
         project: headerProject?.code || undefined,
         remarks: remarks || undefined,
+        freight_amount: !isSales && Number(freight) > 0 ? Math.round(Number(freight) * 100) / 100 : undefined,
         origin,
         skipRules,
         doc_type: mode,
@@ -3820,6 +3822,15 @@ export function CreateExpenseModal({
 
 
 
+
+          {!isSales && !isOmie && (
+            <div>
+              <label htmlFor="freight-amount" className="text-xs font-medium text-muted-foreground mb-1 block">Frete (R$)</label>
+              <Input id="freight-amount" type="number" inputMode="decimal" min={0} step="0.01" value={freight}
+                onChange={(e) => setFreight(e.target.value)} placeholder="0,00" className="max-w-[200px]" />
+              <p className="text-[11px] text-muted-foreground mt-1">Enviado ao SAP como despesa adicional de frete.</p>
+            </div>
+          )}
 
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Observações</label>

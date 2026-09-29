@@ -185,6 +185,7 @@ export interface Expense {
   cost_center?: string;
   project?: string;
   remarks?: string;
+  freight_amount?: number | null;
   status: ExpenseStatus;
   requester_name: string;
   requester_email?: string;
@@ -227,6 +228,7 @@ export interface CreateExpenseInput {
   cost_center?: string;
   project?: string;
   remarks?: string;
+  freight_amount?: number;
   origin?: ExpenseOrigin;
   initialStatus?: ExpenseStatus;
   skipRules?: boolean;
@@ -905,6 +907,7 @@ export function useExpenses(
           cost_center: input.cost_center || null,
           project: input.project || null,
           remarks: input.remarks || null,
+          freight_amount: input.freight_amount ?? 0,
           status,
           current_approver: currentApprover,
           approval_rule_id: matchedRuleId,
@@ -1115,6 +1118,7 @@ export function useExpenses(
         supplier_name?: string;
         supplier_code?: string | null;
         remarks?: string | null;
+        freight_amount?: number;
         doc_date?: string | null;
         due_date?: string | null;
         rateio_type?: RateioType | null;
@@ -1225,6 +1229,7 @@ export function useExpenses(
           supplier_name: input.supplier_name,
           supplier_code: input.supplier_code,
           remarks: input.remarks,
+          freight_amount: input.freight_amount,
           doc_date: input.doc_date,
           due_date: input.due_date,
           items: enrichedItems,
