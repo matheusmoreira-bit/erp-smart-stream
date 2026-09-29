@@ -193,9 +193,16 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
     mapRow: itemMapRow,
   });
   // Itens SV% são exclusivos de venda — bloqueados em pedidos de compra.
+  const { costCenter: userCostCenter } = useCurrentUserCostCenter();
+  const { isPrivileged: isPrivilegedForItems } = useMyPermissionGroups();
   const itemOptions = useMemo(
-    () => (isOmie || isSales ? rawItemOptions : rawItemOptions.filter((o) => !isSalesOnlyItemCode(o.code))),
-    [rawItemOptions, isSales, isOmie],
+    () =>
+      isOmie || isSales
+        ? rawItemOptions
+        : rawItemOptions.filter(
+            (o) => !isSalesOnlyItemCode(o.code) && isItemAllowedForCostCenter(o.code, userCostCenter, isPrivilegedForItems),
+          ),
+    [rawItemOptions, isSales, isOmie, userCostCenter, isPrivilegedForItems],
   );
 
   const costCenterMapRow = useCallback(
@@ -234,12 +241,18 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
   );
 
   const projectMapRow = useCallback((row: any) => ({ code: row.Code, name: row.Name }), []);
-  const { options: projectOptions, isLoading: projectsLoading } = useSapCachedList({
+  const { options: rawProjectOptions, isLoading: projectsLoading } = useSapCachedList({
     cacheKey: "projects",
     endpoint: "Projects",
     params: { $filter: "Active eq 'tYES'", $select: "Code,Name" },
     mapRow: projectMapRow,
   });
+  // BU Lotus só vê os projetos da Lotus (VERA e CASSINO). O servidor também bloqueia.
+  const authEmail = useAuthEmail();
+  const projectOptions = useMemo(
+    () => (isSales ? rawProjectOptions : filterProjectsForLotus(rawProjectOptions, authEmail, isPrivilegedUser)),
+    [rawProjectOptions, authEmail, isPrivilegedUser, isSales],
+  );
 
   // Popula estado inicial ao abrir / trocar despesa.
   // Importante: só re-hidrata quando o modal abre ou o documento muda de id.

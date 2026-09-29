@@ -2622,7 +2622,7 @@ export function CreateExpenseModal({
       if (!isOmie && !isSales && !isItemAllowedForCostCenter(it.item_code, userCostCenter, bypassCcItemRules)) {
         const codeUp = String(it.item_code).toUpperCase();
         if (codeUp.startsWith("IMP")) {
-          toast.error(`Item ${n}: itens IMP% são restritos a usuários do CC 1.2.2.%`);
+          toast.error(`Item ${n}: itens IMP% são restritos ao FISCAL/TRIBUTÁRIO (CC 1.2.2.4)`);
         } else if (codeUp.startsWith("FOL")) {
           toast.error(`Item ${n}: itens FOL% são restritos a usuários de Pessoas e Cultura (CC 1.5.1.3)`);
         } else {
