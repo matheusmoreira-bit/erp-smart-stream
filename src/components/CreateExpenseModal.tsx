@@ -466,7 +466,7 @@ export function CreateExpenseModal({
           supplier ? { code: supplier.code, name: supplier.name } : null,
           brandsForCustomer(supplier?.code),
         )
-      : rawProjectOptions;
+      : filterProjectsForLotus(rawProjectOptions, authEmail, isPrivilegedUser);
     // Recorte por segmento de gestão (capacidade do grupo; admins não são travados).
     if (isPrivilegedUser || !hasCapability("projects_scope_by_segment")) return base;
     return filterProjectsBySegment(base, myManagementSegment, sapSession?.companyDB ?? null);
