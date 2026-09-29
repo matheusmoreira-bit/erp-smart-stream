@@ -676,6 +676,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any, re
     cost_center: input.cost_center || null,
     project: input.project || null,
     remarks: input.remarks || null,
+    freight_amount: parseFreight((input as { freight_amount?: unknown }).freight_amount) ?? 0,
     status: deferSubmitForAttachment ? "rascunho" : status,
 
     requester_name: requesterName,
@@ -986,6 +987,11 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
   if (input.supplier_name !== undefined) updates.supplier_name = input.supplier_name;
   if (input.supplier_code !== undefined) updates.supplier_code = input.supplier_code;
   if (input.remarks !== undefined) updates.remarks = input.remarks;
+  if (input.freight_amount !== undefined) {
+    const f = parseFreight(input.freight_amount);
+    if (f === null) return json(400, { error: "Frete inválido: informe um valor entre 0 e 100.000.000." });
+    updates.freight_amount = f;
+  }
   if (input.doc_date !== undefined) updates.doc_date = input.doc_date || null;
   if (input.due_date !== undefined) updates.due_date = input.due_date || null;
   if (input.rateio_type !== undefined) updates.rateio_type = input.rateio_type || null;
@@ -1358,6 +1364,7 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
       supplier_name: "Fornecedor",
       supplier_code: "Código do fornecedor",
       remarks: "Observação",
+      freight_amount: "Frete",
       doc_date: "Data do documento",
       due_date: "Vencimento",
       rateio_type: "Tipo de rateio",
@@ -2124,3 +2131,11 @@ Deno.serve(async (req) => {
 });
 
 // build: 1789675354
+
+/** Frete: número >= 0, 2 casas, até 100 milhões. null = inválido. */
+function parseFreight(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return 0;
+  const n = typeof v === "number" ? v : Number(String(v).replace(",", "."));
+  if (!Number.isFinite(n) || n < 0 || n > 100_000_000) return null;
+  return Math.round(n * 100) / 100;
+}
