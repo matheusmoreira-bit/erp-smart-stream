@@ -904,9 +904,21 @@ export function EditExpenseModal({ expense, open, onClose, onSave, mode = "purch
               })}
             </div>
             <div className="flex justify-end mt-3">
-              <p className="text-sm font-medium text-foreground">
-                Total: <span className="text-lg font-bold font-mono">{formatCurrency(total, expense.currency)}</span>
-              </p>
+              {(() => {
+                const freightValue = !isSales && !isOmie ? Math.max(0, Number(freight) || 0) : 0;
+                return (
+                  <div className="text-right text-sm font-medium text-foreground">
+                    {freightValue > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Itens: {formatCurrency(total, expense.currency)} · Frete: {formatCurrency(freightValue, expense.currency)}
+                      </p>
+                    )}
+                    <p>
+                      Total: <span className="text-lg font-bold font-mono">{formatCurrency(total + freightValue, expense.currency)}</span>
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
