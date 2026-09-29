@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
@@ -197,7 +198,7 @@ function SalesPageInner() {
   const [loading, setLoading] = useState(false);
   const [erroMsg, setErroMsg] = useState<string | null>(null);
   const [onlyOpen, setOnlyOpen] = useState(true);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set()); // set de row keys (docType:docEntry:docLine)
   const [baixaOpen, setBaixaOpen] = useState(false);
@@ -612,7 +613,7 @@ function SalesPageInner() {
           <div className="relative flex-1 min-w-[220px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
             <Input
-              value={search}
+              value={searchInput}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por cliente, código ou nº da NF"
               className="pl-8 h-9 text-sm"

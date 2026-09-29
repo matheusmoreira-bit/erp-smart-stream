@@ -1,3 +1,4 @@
+import { useEffectiveSearch } from "@/hooks/useSearchState";
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
 import { internalDocCode, normalizeDocQuery, exportDocLabel } from "@/lib/doc-number";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
@@ -1248,11 +1249,7 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     return () => clearTimeout(t);
   }, [search]);
   // Busca com debounce — cada digitação não dispara uma consulta ao servidor.
-  const [searchDebounced, setSearchDebounced] = useState(search);
-  useEffect(() => {
-    const t = setTimeout(() => setSearchDebounced(search), 350);
-    return () => clearTimeout(t);
-  }, [search]);
+  const searchDebounced = useEffectiveSearch(search);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [selectedOrigin, setSelectedOrigin] = useState<"erp_flow" | "erp" | undefined>(undefined);
@@ -2080,9 +2077,9 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     }
     if (f.only_sap_error && !e.sap_integration_error) return false;
 
-    if (!search) return true;
-    const q = search.toLowerCase();
-    const docQ = normalizeDocQuery(search);
+    if (!searchDebounced) return true;
+    const q = searchDebounced.toLowerCase();
+    const docQ = normalizeDocQuery(searchDebounced);
     const internalId = String(e.id || "").replace(/-/g, "").toLowerCase();
     if (docQ && internalId && (internalId.startsWith(docQ) || internalDocCode(internalId).toLowerCase().includes(docQ))) {
       return true;

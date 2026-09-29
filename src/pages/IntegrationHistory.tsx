@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -105,7 +106,7 @@ export default function IntegrationHistory() {
   const { integrateDirect } = usePagCorp();
   const [logs, setLogs] = useState<IntegrationLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [selectedLog, setSelectedLog] = useState<IntegrationLog | null>(null);
@@ -367,7 +368,7 @@ export default function IntegrationHistory() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 placeholder="ID, descrição, portador, usuário..."
-                value={search}
+                value={searchInput}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 bg-card"
               />

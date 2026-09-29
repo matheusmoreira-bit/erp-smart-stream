@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
@@ -102,7 +103,7 @@ export default function AuditTrailPage({ embedded = false }: { embedded?: boolea
   const [actorFilter, setActorFilter] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -368,7 +369,7 @@ export default function AuditTrailPage({ embedded = false }: { embedded?: boolea
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   placeholder="Usuário, tabela, chave..."
-                  value={search}
+                  value={searchInput}
                   onChange={e => setSearch(e.target.value)}
                   className="pl-9"
                 />

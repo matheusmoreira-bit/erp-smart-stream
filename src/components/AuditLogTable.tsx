@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useState, useMemo } from "react";
 import { Search, FileText, Clock, User, Filter, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -42,7 +43,7 @@ interface AuditLogTableProps {
 }
 
 export default function AuditLogTable({ entries, isLoading, showCompanyColumn = false }: AuditLogTableProps) {
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [entityFilter, setEntityFilter] = useState("all");
   const [actionFilter, setActionFilter] = useState("all");
   const [daysFilter, setDaysFilter] = useState("7");
@@ -88,7 +89,7 @@ export default function AuditLogTable({ entries, isLoading, showCompanyColumn = 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="Buscar por email, ação, entidade..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10 bg-card border-border" />
+          <Input placeholder="Buscar por email, ação, entidade..." value={searchInput} onChange={(e) => setSearch(e.target.value)} className="pl-10 bg-card border-border" />
         </div>
         <Select value={actionFilter} onValueChange={setActionFilter}>
           <SelectTrigger className="w-[160px] bg-card"><SelectValue placeholder="Ação" /></SelectTrigger>

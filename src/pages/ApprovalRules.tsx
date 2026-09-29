@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { normalizeText as baseNormalizeText } from "@/lib/text-normalize";
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
@@ -126,7 +127,7 @@ function UserSelect({
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
 
   const filtered = useMemo(() => {
     if (!search) return users;
@@ -163,7 +164,7 @@ function UserSelect({
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Buscar usuário..."
-                value={search}
+                value={searchInput}
                 onChange={(e) => setSearch(e.target.value)}
                 className="h-8 text-xs pl-8"
                 autoFocus
@@ -240,7 +241,7 @@ function CatalogValueSelect({
   operator: CriterionOperator;
 }) {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const filtered = useMemo(() => {
     const q = normalizeSearch(search);
     if (!q) return options.slice(0, 200);
@@ -276,7 +277,7 @@ function CatalogValueSelect({
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Buscar..."
-              value={search}
+              value={searchInput}
               onChange={(e) => setSearch(e.target.value)}
               className="h-8 text-xs pl-8"
               autoFocus
@@ -1586,7 +1587,7 @@ export default function ApprovalRulesPage() {
   const [editingRule, setEditingRule] = useState<ApprovalRule | null>(null);
   const [showSimulator, setShowSimulator] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [docTypeFilter, setDocTypeFilter] = useState<"all" | RuleDocType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [activeTab, setActiveTab] = useState<"standard" | "custom" | "substitutes" | "health">("standard");
@@ -1863,7 +1864,7 @@ export default function ApprovalRulesPage() {
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Buscar por nome, critério, aprovador ou e-mail..."
-              value={search}
+              value={searchInput}
               onChange={(e) => setSearch(e.target.value)}
               className="h-9 pl-9 text-sm"
             />

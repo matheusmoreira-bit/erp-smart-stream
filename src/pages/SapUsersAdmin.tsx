@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2, RefreshCw, Lock, Unlock, KeyRound, Pencil, Search, Users, Copy } from "lucide-react";
@@ -21,7 +22,7 @@ export default function SapUsersAdmin() {
     refresh, updateUser,
   } = useSapUsersAdmin();
 
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [editing, setEditing] = useState<SapAdminUser | null>(null);
   const [editForm, setEditForm] = useState({ UserName: "", eMail: "", UserPermission: "", UserPassword: "" });
   const [savingId, setSavingId] = useState<number | null>(null);
@@ -129,7 +130,7 @@ export default function SapUsersAdmin() {
             <Label className="text-xs text-muted-foreground">Buscar</Label>
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 bg-card" placeholder="Código, nome ou e-mail" />
+              <Input value={searchInput} onChange={(e) => setSearch(e.target.value)} className="pl-9 bg-card" placeholder="Código, nome ou e-mail" />
             </div>
           </div>
           <Button variant="outline" onClick={refresh} disabled={loadingUsers}>

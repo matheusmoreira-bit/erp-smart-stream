@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -1132,7 +1133,7 @@ export default function Intercompany() {
 
   type IntercompanyTab = "accounts" | "centers" | "projects" | "payment-terms" | "bps" | "items" | "users";
   const [tab, setTab] = useState<IntercompanyTab>("accounts");
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [selectedDbs, setSelectedDbs] = useState<string[]>([]);
   const [conflict, setConflict] = useState<{
     open: boolean;
@@ -1319,7 +1320,7 @@ export default function Intercompany() {
                 <div className="relative min-w-56 flex-1 sm:flex-none">
                   <Search className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    value={search}
+                    value={searchInput}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Buscar código ou nome"
                     className="w-full pl-8 sm:w-64"

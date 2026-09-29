@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useState, useMemo, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { UserCheck, DollarSign, PieChart as PieIcon, Building2, Loader2, RefreshCw, Search } from "lucide-react";
@@ -56,7 +57,7 @@ export function PendingApprovalsReport() {
 
   const [origem, setOrigem] = useState<Origem>("all");
   const [period, setPeriod] = useState<PeriodFilterValue>(DEFAULT_PERIOD);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
 
   // Load system pending (expenses + advance_payments)
   const loadSystem = async () => {
@@ -233,7 +234,7 @@ export function PendingApprovalsReport() {
         <div className="relative flex-1 min-w-[200px]">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
-            value={search}
+            value={searchInput}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar fornecedor, solicitante ou aprovador…"
             className="pl-9"

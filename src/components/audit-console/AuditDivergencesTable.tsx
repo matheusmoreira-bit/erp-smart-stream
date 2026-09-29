@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useState } from "react";
 import { Search, ShieldAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -21,7 +22,7 @@ const SEVERITIES: DivergenceFilters["severity"][] = ["critical", "high", "medium
 
 export function AuditDivergencesTable({ runId, embedded = false }: Props) {
   const [filters, setFilters] = useState<DivergenceFilters>({});
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const { data, isLoading } = useAuditDivergences({ ...filters, runId, cardCode: search || undefined });
 
   return (
@@ -39,7 +40,7 @@ export function AuditDivergencesTable({ runId, embedded = false }: Props) {
         <div className="relative w-full max-w-xs">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            value={search}
+            value={searchInput}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Filtrar por código de fornecedor…"
             className="pl-8"

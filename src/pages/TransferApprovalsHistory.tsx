@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -48,7 +49,7 @@ export default function TransferApprovalsHistory() {
   const [rows, setRows] = useState<TransferRow[]>([]);
   const [companies, setCompanies] = useState<CompanyOpt[]>([]);
   const [companyDb, setCompanyDb] = useState<string>("all");
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -137,7 +138,7 @@ export default function TransferApprovalsHistory() {
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                value={search}
+                value={searchInput}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Filtrar resultados..."
                 className="pl-8"

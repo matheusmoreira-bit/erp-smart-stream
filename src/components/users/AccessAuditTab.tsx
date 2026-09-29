@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Search, ShieldCheck } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -63,7 +64,7 @@ const ACTION_LABEL: Record<string, string> = {
 export default function AccessAuditTab() {
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -102,7 +103,7 @@ export default function AccessAuditTab() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
           placeholder="Buscar por autor, ação ou usuário afetado..."
-          value={search}
+          value={searchInput}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-10 bg-card border-border"
         />

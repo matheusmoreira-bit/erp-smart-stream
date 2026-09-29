@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link, Navigate } from "react-router-dom";
@@ -145,7 +146,7 @@ function BaixasHistoryInner() {
   const [rows, setRows] = useState<BaixaRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<StatusFilter>("todos");
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const { sort, toggleSort } = useTableSort<BaixaSortKey>("data", "desc");
@@ -317,7 +318,7 @@ function BaixasHistoryInner() {
           <div className="relative flex-1 min-w-[220px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
             <Input
-              value={search}
+              value={searchInput}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Cliente, código ou nº IncomingPayment"
               className="pl-8 h-9 text-sm"

@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -41,7 +42,7 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
   const queryClient = useQueryClient();
   const { getLabel } = useCompanies(true);
   const { users, isLoading } = useSapUsers();
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [target, setTarget] = useState<string>("");
   const [busy, setBusy] = useState(false);
 
@@ -178,7 +179,7 @@ export function ImpersonationDialog({ open, onOpenChange }: Props) {
                 id="imp-search"
                 className="pl-9"
                 placeholder="Buscar por nome, código ou e-mail"
-                value={search}
+                value={searchInput}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>

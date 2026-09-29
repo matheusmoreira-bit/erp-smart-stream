@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Loader2, Plus, Save, Trash2, Search, X, Store } from "lucide-react";
@@ -45,7 +46,7 @@ export function PagcorpSupplierRulesTab({ companyDb }: { companyDb: string }) {
   const { options: supplierOptions, isLoading: isLoadingSuppliers } = useMergedSupplierOptions({ companyDb });
   const [draft, setDraft] = useState<EditableRule[] | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [testText, setTestText] = useState("");
 
   const rows: EditableRule[] = useMemo(() => {
@@ -198,7 +199,7 @@ export function PagcorpSupplierRulesTab({ companyDb }: { companyDb: string }) {
         <div className="relative w-full max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            value={search}
+            value={searchInput}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por trecho ou fornecedor…"
             aria-label="Buscar regras de fornecedor"

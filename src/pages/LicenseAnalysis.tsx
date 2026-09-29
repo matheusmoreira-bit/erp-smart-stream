@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, RefreshCw, Loader2, Search, Award, TrendingDown, TrendingUp, DollarSign, Users, AlertCircle, Pencil, Upload, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
@@ -26,7 +27,7 @@ export default function LicenseAnalysisPage() {
   const navigate = useNavigate();
   const { session } = useSap();
   const [period, setPeriod] = useState(90);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [statusFilter, setStatusFilter] = useState<string>("with_license");
   const [pricingOpen, setPricingOpen] = useState(false);
   const [sortKey, setSortKey] = useState<string>("default");
@@ -149,7 +150,7 @@ export default function LicenseAnalysisPage() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Buscar usuário..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10 bg-card" />
+            <Input placeholder="Buscar usuário..." value={searchInput} onChange={(e) => setSearch(e.target.value)} className="pl-10 bg-card" />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-[200px] bg-card"><SelectValue /></SelectTrigger>

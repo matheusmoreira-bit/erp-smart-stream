@@ -4,6 +4,7 @@ import { Command as CommandPrimitive } from "cmdk";
 import { Search } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { SEARCH_MIN_CHARS, useEffectiveSearch } from "@/hooks/useSearchState";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 const normalizeSearch = (s: string) =>
@@ -16,7 +17,7 @@ const normalizeSearch = (s: string) =>
 export const literalCommandFilter = (value: string, search: string, keywords?: string[]): number => {
   const hay = normalizeSearch(`${value} ${(keywords ?? []).join(" ")}`);
   const terms = normalizeSearch(search).split(/\s+/).filter(Boolean);
-  if (terms.length === 0) return 1;
+  if (terms.length === 0 || normalizeSearch(search).trim().length < SEARCH_MIN_CHARS) return 1;
   if (!terms.every((t) => hay.includes(t))) return 0;
   const first = terms[0];
   if (hay.startsWith(first)) return 1;
@@ -54,22 +55,64 @@ const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
   );
 };
 
+const inputClass =
+  "flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50";
+
+/**
+ * Campo de busca das listas. Quando não controlado pelo chamador, aplica a
+ * regra padrão: filtra só com 3+ caracteres e 400 ms após parar de digitar.
+ */
 const CommandInput = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Input>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
->(({ className, ...props }, ref) => (
-  <div className="flex items-center border-b px-3" cmdk-input-wrapper="">
-    <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-    <CommandPrimitive.Input
-      ref={ref}
-      className={cn(
-        "flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
-        className,
+>(({ className, value, onValueChange, ...props }, ref) => {
+  const controlled = value !== undefined;
+  const [text, setText] = React.useState("");
+  const effective = useEffectiveSearch(text);
+  return (
+    <div className="flex items-center border-b px-3" cmdk-input-wrapper="">
+      <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+      {controlled ? (
+        <CommandPrimitive.Input
+          ref={ref}
+          value={value}
+          onValueChange={onValueChange}
+          className={cn(inputClass, className)}
+          {...props}
+        />
+      ) : (
+        <>
+          <input
+            type="text"
+            role="combobox"
+            aria-expanded
+            aria-autocomplete="list"
+            autoComplete="off"
+            spellCheck={false}
+            value={text}
+            placeholder={props.placeholder}
+            disabled={props.disabled}
+            autoFocus={props.autoFocus}
+            aria-label={props["aria-label"] ?? props.placeholder}
+            onChange={(e) => {
+              setText(e.target.value);
+              onValueChange?.(e.target.value);
+            }}
+            className={cn(inputClass, className)}
+          />
+          <CommandPrimitive.Input
+            ref={ref}
+            value={effective}
+            tabIndex={-1}
+            aria-hidden
+            readOnly
+            className="sr-only"
+          />
+        </>
       )}
-      {...props}
-    />
-  </div>
-));
+    </div>
+  );
+});
 
 CommandInput.displayName = CommandPrimitive.Input.displayName;
 

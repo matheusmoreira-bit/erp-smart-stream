@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useMemo, useRef, useState, useEffect } from "react";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -81,7 +82,7 @@ export default function ApprovalHistory() {
 
   const initialSubSearch = searchParams.get("subq") || "";
 
-  const [query, setQuery] = useState("");
+  const [queryInput, setQuery, query] = useSearchState();
   const [decision, setDecision] = useState<"all" | "Y" | "N">(initialDecision);
   const [substituteFilter, setSubstituteFilter] = useState<string[]>(initialSubstitute);
   // Busca livre por substituído (partial match em nome/email).
@@ -273,7 +274,7 @@ export default function ApprovalHistory() {
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Buscar por fornecedor, solicitante, nº do documento..."
-              value={query}
+              value={queryInput}
               onChange={(e) => setQuery(e.target.value)}
               className="pl-9"
             />

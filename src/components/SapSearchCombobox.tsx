@@ -1,3 +1,4 @@
+import { SEARCH_DEBOUNCE_MS, SEARCH_MIN_CHARS } from "@/hooks/useSearchState";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
@@ -31,7 +32,7 @@ interface SapSearchComboboxProps {
   onChange: (val: SapSearchOption | null) => void;
   placeholder?: string;
   label?: string;
-  /** Minimum characters before searching (default 2) */
+  /** Minimum characters before searching (default 3) */
   minChars?: number;
   /** Max results returned by SAP (default 15) */
   topResults?: number;
@@ -49,7 +50,7 @@ export function SapSearchCombobox({
   onChange,
   placeholder = "Buscar...",
   label,
-  minChars = 2,
+  minChars = SEARCH_MIN_CHARS,
   topResults = 15,
   suggestedQuery,
 }: SapSearchComboboxProps) {
@@ -201,7 +202,7 @@ export function SapSearchCombobox({
     if (value) onChange(null); // clear selection when user types
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (val.length >= minChars) {
-      debounceRef.current = setTimeout(() => search(val), 350);
+      debounceRef.current = setTimeout(() => search(val), SEARCH_DEBOUNCE_MS);
       setIsOpen(true);
     } else {
       setOptions([]);

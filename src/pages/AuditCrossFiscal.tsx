@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useMemo, useState } from "react";
 import { Loader2, PlayCircle, Download, Search, RefreshCw, Sparkles } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
@@ -69,7 +70,7 @@ export default function AuditCrossFiscal() {
   const [inicio, setInicio] = useState<string>(firstOfMonth);
   const [fim, setFim] = useState<string>(lastOfMonth);
   const [running, setRunning] = useState(false);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [statusFilter, setStatusFilter] = useState<StatusMatch | "all">("all");
   const [detailRow, setDetailRow] = useState<CruzamentoRow | null>(null);
   const [onlyExceptions, setOnlyExceptions] = useState(true);
@@ -233,7 +234,7 @@ export default function AuditCrossFiscal() {
           <Search className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Buscar por CNPJ, fornecedor, NF ou ID no ERP..."
-            value={search}
+            value={searchInput}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-8"
           />

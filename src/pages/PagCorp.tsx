@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { pagcorpDisplayDescription } from "@/lib/pagcorp-accountability";
 import { Fragment, useState, useEffect, useMemo, useRef } from "react";
 import { UserCompanyMenu } from "@/components/UserCompanyMenu";
@@ -377,7 +378,7 @@ export default function PagCorp() {
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   const [startDate, setStartDate] = useState(firstOfMonth.toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState(today.toISOString().slice(0, 10));
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "review" | "done">("all");
   const [settlementFilter, setSettlementFilter] = useState<"all" | SettleStage>("all");
   const [balanceFilter, setBalanceFilter] = useState<"all" | "brl" | "usd">("all");
@@ -1766,7 +1767,7 @@ export default function PagCorp() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 placeholder="Descrição, portador..."
-                value={search}
+                value={searchInput}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 bg-card"
               />

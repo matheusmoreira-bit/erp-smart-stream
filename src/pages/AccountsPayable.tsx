@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -327,7 +328,7 @@ export default function AccountsPayable() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [barcodes, setBarcodes] = useState<Record<string, string>>({});
   const [titlePaymentMethods, setTitlePaymentMethods] = useState<Record<string, RemittancePaymentMethod>>({});
-  const [query, setQuery] = useState("");
+  const [queryInput, setQuery, query] = useSearchState();
   const [supplierFilter, setSupplierFilter] = useState("");
   const [dueFrom, setDueFrom] = useState(defaultDueFrom);
   const [dueTo, setDueTo] = useState(defaultDueTo);
@@ -816,7 +817,7 @@ export default function AccountsPayable() {
                     <Label htmlFor="ap-search">Busca geral</Label>
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input id="ap-search" value={query} onChange={(event) => setQuery(event.target.value)} className="pl-9" placeholder="Fornecedor, NF, CC ou projeto" />
+                      <Input id="ap-search" value={queryInput} onChange={(event) => setQuery(event.target.value)} className="pl-9" placeholder="Fornecedor, NF, CC ou projeto" />
                     </div>
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
