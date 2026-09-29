@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -57,7 +58,7 @@ export function DocumentTimeline({ expenseId }: { expenseId: string }) {
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
+  const [queryInput, setQuery, query] = useSearchState();
   const [sources, setSources] = useState<string[]>([]);
 
   const load = useCallback(async () => {
@@ -100,7 +101,7 @@ export function DocumentTimeline({ expenseId }: { expenseId: string }) {
         <div className="relative flex-1 min-w-[220px]">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            value={query}
+            value={queryInput}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Pesquisar em toda a trilha (ator, erro, status, campo…)"
             className="pl-8"
