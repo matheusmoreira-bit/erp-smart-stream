@@ -252,10 +252,11 @@ async function assertMfaAndSessionAge(req: Request, userId: string) {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId)) {
     throw new AuthError("Sessão inválida. Entre novamente.", 401);
   }
-  const startedAt = await sessionStartedAt(sessionId);
-  if (Date.now() - startedAt >= (isAdmin ? ADMIN_SESSION_MAX_MS : USER_SESSION_MAX_MS)) {
-    throw new AuthError("Prazo de segurança da sessão encerrado. Saia e entre novamente para continuar.", 401);
-  }
+  // Só confere que a sessão existe e não foi revogada. O limite absoluto de
+  // idade (12h admin / 30d usuário) foi desligado por decisão do produto:
+  // bloqueava usuários ativos no meio do trabalho. MFA aal2 segue obrigatório.
+  await sessionStartedAt(sessionId);
+  void ADMIN_SESSION_MAX_MS; void USER_SESSION_MAX_MS;
 }
 
 /** Para funções que confiam em has_role via client de serviço: exige aal2 do chamador. */
