@@ -6,12 +6,31 @@ import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 
+const normalizeSearch = (s: string) =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+/**
+ * Busca literal (sem fuzzy): todas as palavras digitadas precisam aparecer
+ * no texto, ignorando acentos e maiúsculas. Prefixo de palavra ranqueia acima.
+ */
+export const literalCommandFilter = (value: string, search: string, keywords?: string[]): number => {
+  const hay = normalizeSearch(`${value} ${(keywords ?? []).join(" ")}`);
+  const terms = normalizeSearch(search).split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return 1;
+  if (!terms.every((t) => hay.includes(t))) return 0;
+  const first = terms[0];
+  if (hay.startsWith(first)) return 1;
+  if (hay.includes(` ${first}`)) return 0.8;
+  return 0.5;
+};
+
 const Command = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive>
->(({ className, ...props }, ref) => (
+>(({ className, filter, ...props }, ref) => (
   <CommandPrimitive
     ref={ref}
+    filter={filter ?? literalCommandFilter}
     className={cn(
       "flex h-full w-full flex-col overflow-hidden rounded-md bg-popover text-popover-foreground",
       className,
