@@ -1,3 +1,4 @@
+import { localStateEpoch } from "@/lib/local-state-epoch";
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   Plus,
@@ -751,6 +752,11 @@ export function CreateExpenseModal({
   const aiResponseCacheRef = useRef<Map<string, any>>(new Map());
   // Escopo para o storage persistente do cache (separa expenses/sales).
   const aiCacheScope = isSales ? "sales" : "expenses";
+  const aiCompanyRef = useRef(sapSession?.companyDB || "");
+  if (aiCompanyRef.current !== (sapSession?.companyDB || "")) {
+    aiCompanyRef.current = sapSession?.companyDB || "";
+    aiResponseCacheRef.current.clear();
+  }
   // Guards reentrantes fortes para evitar QUALQUER chamada duplicada de IA
   // ou de criação de despesa quando o usuário cancela+retenta rápido, ou o
   // React 18 (StrictMode) invoca o handler duas vezes. Estado (`isProcessing`,
@@ -1078,31 +1084,17 @@ export function CreateExpenseModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Hidrata o cache em memória a partir do localStorage sempre que o modal
-  // abre. Faz merge (persistido + entradas já vivas na sessão) para não
-  // perder nada. Persistir sobrevive a fechar/reabrir o modal e a recarregar
-  // a página — reaproveita extrações da IA por hash de conteúdo do arquivo.
+  // Restore only the authenticated owner/company partition.
   useEffect(() => {
     if (!open) return;
-    try {
-      const persisted = loadAiResponseCache(aiCacheScope);
-      if (persisted.size === 0) return;
-      const merged = aiResponseCacheRef.current;
-      let added = 0;
-      for (const [k, v] of persisted) {
-        if (!merged.has(k)) {
-          merged.set(k, v);
-          added++;
-        }
-      }
-      if (added > 0) {
-        console.info(`[ai-cache] Hidratados ${added} item(s) do cache persistente (${aiCacheScope}).`);
-      }
-    } catch (e) {
-      console.warn("[ai-cache] Falha ao hidratar cache persistente:", e);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+    let cancelled = false;
+    const epoch = localStateEpoch();
+    void loadAiResponseCache(aiCacheScope, sapSession?.companyDB || "").then(persisted => {
+      if (cancelled || epoch !== localStateEpoch()) return;
+      for (const [key, value] of persisted) aiResponseCacheRef.current.set(key, value);
+    });
+    return () => { cancelled = true; };
+  }, [open, aiCacheScope, sapSession?.companyDB]);
 
   // Encerra a sessão de retentativa quando todos os grupos reprocessados
   // saíram de "pending"/"queued" (mantém a barra visível por 4s para o usuário
@@ -1646,6 +1638,8 @@ export function CreateExpenseModal({
       return;
     }
     if (!filesToProcess || filesToProcess.length === 0) return;
+    const aiEpoch = localStateEpoch();
+    const aiCompany = sapSession?.companyDB || "";
     aiInFlightRef.current = true;
     console.info(DEDUP_LOG, "processWithAI START", {
       fileCount: filesToProcess.length,
@@ -1667,6 +1661,7 @@ export function CreateExpenseModal({
     try {
       // Hash de cada arquivo em paralelo para checar o cache.
       const hashes = await Promise.all(filesToProcess.map((f) => hashFile(f)));
+      if (aiEpoch !== localStateEpoch() || aiCompany !== aiCompanyRef.current) return;
       const cache = aiResponseCacheRef.current;
       const cachedResults: (any | null)[] = hashes.map((h) => cache.get(h) ?? null);
       const missIndexes: number[] = [];
@@ -1696,6 +1691,7 @@ export function CreateExpenseModal({
         }
 
         const { result } = await resp.json();
+        if (controller.signal.aborted || aiEpoch !== localStateEpoch() || aiCompany !== aiCompanyRef.current) return;
         fetchedResults = Array.isArray(result) ? result : [result];
 
         // Preenche o cache pelos hashes dos arquivos que foram enviados.
@@ -1710,10 +1706,11 @@ export function CreateExpenseModal({
         // Persiste no localStorage para reaproveitar após fechar/reabrir
         // o modal ou recarregar a página (best-effort, falhas silenciosas).
         if (persistBatch.length > 0) {
-          saveAiResponseCacheEntries(aiCacheScope, persistBatch);
+          await saveAiResponseCacheEntries(aiCacheScope, persistBatch, aiCompany, aiEpoch);
         }
       }
 
+      if (aiEpoch !== localStateEpoch() || aiCompany !== aiCompanyRef.current) return;
       // Compõe a lista final na ordem original: cache primeiro, fetch depois.
       const docs: any[] = filesToProcess.map((_, i) => {
         if (cachedResults[i] !== null) return cachedResults[i];
@@ -2019,6 +2016,7 @@ export function CreateExpenseModal({
   // ─── Persistência do estado da fila (IndexedDB) ─────────────────────
   // Sobrevive a F5 / fechar aba / trocar de página. Escopo separado para
   // despesas vs. pedidos de venda para não misturarem entre si.
+  const queueCompanyDb = sapSession?.companyDB || "";
   const queueScope: QueueScope = isSales ? "sales" : "expenses";
   const queueHydratedRef = useRef(false);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2037,11 +2035,27 @@ export function CreateExpenseModal({
       docs: g.docs.map((d) => ({ file: fromPersistedFile(d.file), extracted: d.extracted, companion: (d as { companion?: boolean }).companion })),
     })), []);
 
+  const hydratedCompanyRef = useRef(queueCompanyDb);
+  useEffect(() => {
+    if (hydratedCompanyRef.current !== queueCompanyDb) {
+      queueHydratedRef.current = false;
+      setQueueHistory([]);
+      setDeferredGroups([]);
+      failedGroupsRef.current.clear();
+      cancelledGroupsRef.current = [];
+      setFiles([]);
+      hydratedCompanyRef.current = queueCompanyDb;
+    }
+    return () => { if (persistTimerRef.current) clearTimeout(persistTimerRef.current); };
+  }, [queueCompanyDb]);
+
   // Grava snapshot (debounced 400ms) do estado inteiro da fila.
   const schedulePersist = useCallback(() => {
     if (!queueHydratedRef.current) return;
     if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    const epoch = localStateEpoch();
     persistTimerRef.current = setTimeout(() => {
+      if (epoch !== localStateEpoch()) return;
       const failedGroups = Array.from(failedGroupsRef.current.values());
       const cancelledGroups = cancelledGroupsRef.current;
       const hasAny =
@@ -2050,7 +2064,7 @@ export function CreateExpenseModal({
         failedGroups.length > 0 ||
         cancelledGroups.length > 0;
       if (!hasAny) {
-        void clearQueueState(queueScope);
+        void clearQueueState(queueScope, queueCompanyDb).catch(console.error);
         return;
       }
       void saveQueueState(queueScope, {
@@ -2059,9 +2073,9 @@ export function CreateExpenseModal({
         failedGroups: serializeGroups(failedGroups),
         cancelledGroups: serializeGroups(cancelledGroups),
         savedAt: Date.now(),
-      });
+      }, queueCompanyDb).catch(console.error);
     }, 400);
-  }, [queueHistory, deferredGroups, queueScope, serializeGroups]);
+  }, [queueHistory, deferredGroups, queueScope, queueCompanyDb, serializeGroups]);
 
   // Dispara a gravação sempre que queueHistory/deferredGroups mudam
   // (mutações em refs failed/cancelled chamam schedulePersist manualmente).
@@ -2075,13 +2089,14 @@ export function CreateExpenseModal({
     if (!open) { queueHydratedRef.current = false; return; }
     if (queueHydratedRef.current) return;
     let cancelledFlag = false;
+    const epoch = localStateEpoch();
     (async () => {
-      const saved = await loadQueueState<QueueEntry>(queueScope);
+      const saved = await loadQueueState<QueueEntry>(queueScope, queueCompanyDb);
       if (cancelledFlag) return;
       queueHydratedRef.current = true;
       if (!saved) return;
       if (!saved.savedAt || Date.now() - saved.savedAt > QUEUE_SNAPSHOT_TTL_MS) {
-        void clearQueueState(queueScope);
+        void clearQueueState(queueScope, queueCompanyDb).catch(console.error);
         return;
       }
       const hasInMemory =
@@ -2095,11 +2110,12 @@ export function CreateExpenseModal({
         saved.deferredGroups.length + saved.failedGroups.length + saved.cancelledGroups.length;
       if (pendingCount === 0) {
         // Só histórico concluído: nada a retomar, limpa para não poluir.
-        void clearQueueState(queueScope);
+        void clearQueueState(queueScope, queueCompanyDb).catch(console.error);
         return;
       }
 
       const restore = () => {
+        if (cancelledFlag || epoch !== localStateEpoch()) return;
         const deferred = deserializeGroups(saved.deferredGroups);
         const failed = deserializeGroups(saved.failedGroups);
         const cancelledG = deserializeGroups(saved.cancelledGroups);
@@ -2128,14 +2144,14 @@ export function CreateExpenseModal({
           action: { label: "Restaurar", onClick: restore },
           cancel: {
             label: "Descartar",
-            onClick: () => { void clearQueueState(queueScope); },
+            onClick: () => { void clearQueueState(queueScope, queueCompanyDb).catch(console.error); },
           },
         },
       );
     })();
     return () => { cancelledFlag = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, queueScope]);
+  }, [open, queueScope, queueCompanyDb]);
 
 
   // Prepara o plano de retomada: aplica as duas verificações (já concluído
@@ -3291,7 +3307,7 @@ export function CreateExpenseModal({
                 onClick={() => {
                   const n = aiResponseCacheRef.current.size;
                   aiResponseCacheRef.current = new Map();
-                  clearAiResponseCache(aiCacheScope);
+                  void clearAiResponseCache(aiCacheScope, sapSession?.companyDB || "");
                   toast.success(
                     n > 0
                       ? `Cache da IA limpo (${n} item(ns) removido(s)). Próximas extrações serão reenviadas.`
@@ -5047,7 +5063,7 @@ export function CreateExpenseModal({
               failedGroupsRef.current = new Map();
               cancelledGroupsRef.current = [];
               // Limpa também o estado persistido — usuário finalizou.
-              void clearQueueState(queueScope);
+              void clearQueueState(queueScope, queueCompanyDb).catch(console.error);
               onClose();
             }}
           >

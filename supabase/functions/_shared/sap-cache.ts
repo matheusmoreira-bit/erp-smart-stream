@@ -7,12 +7,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { tryWatcherLock, releaseWatcherLock } from "./watcher-lock.ts";
+import { requireHttpsEndpoint } from "./secure-transport.ts";
 import { sapFetch } from "./sap-fetch.ts";
 
 export type Sb = ReturnType<typeof createClient>;
 
 export function buildSapBaseUrl(raw: string): string {
-  let url = raw.replace(/\/+$/, "");
+  let url = requireHttpsEndpoint(raw);
   if (url.includes("/b1s/v1")) url = url.replace("/b1s/v1", "/b1s/v2");
   else if (!url.includes("/b1s/v2")) url = `${url}/b1s/v2`;
   return url;

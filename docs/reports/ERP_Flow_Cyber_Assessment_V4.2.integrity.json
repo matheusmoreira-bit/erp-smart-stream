@@ -1,0 +1,114 @@
+{
+  "document_version": "4.2",
+  "date": "2026-09-28",
+  "code_commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+  "expected_pages": 15,
+  "test_execution": "recorded prior results; not rerun for PDF",
+  "deployment": "not verified",
+  "verified_manifests": [
+    {
+      "manifest": "docs/security-v4.2-evidence/manifest.json",
+      "checked": 15,
+      "mismatches": []
+    },
+    {
+      "manifest": "docs/security-remediation-2026-09-28/round2/manifest.json",
+      "checked": 9,
+      "mismatches": []
+    }
+  ],
+  "sources": {
+    "docs/security-remediation-2026-09-28/regression-tests.txt": "d78b7f9df6d4ce833c0008aadb5885684f9ca2e8ba8e8070e8619daad4c5f5a0",
+    "docs/security-remediation-2026-09-28/database-tests.json": "cedb081eb665cb409c60ececa43dab42273281c0ee39d8e29a95a05d7eb7d51e",
+    "docs/security-remediation-2026-09-28/validation.json": "2169792e36ded9b7c0c33487b7e4a73c5b0ecb9761fa63abd6a7037fb331beab",
+    "docs/security-remediation-2026-09-28/round2/browser-tests.json": "6503ed17ea68ffaac3e93e4dfaa879394faf0e30165c88a753b942126868bd53",
+    "docs/security-additional-review-2026-09-28/reproduction-results.json": "a96aa91716df879a1094c326f45f4fa2292068c702a276a4f35d4620a6c17f3f",
+    "docs/security-v4.2-evidence/handler-tests.txt": "68ac7ebd2c9f9e0a5882fe68c4eea2dae6848cfbabac0d7b5e228bb9a6b2ddbc",
+    "docs/security-v4.2-evidence/patch-tests.txt": "5e61bbd08e4bc89113d2a3f04e019f0d74bda26d9d835c647dfa55f24507ffab",
+    "docs/security-v4.2-evidence/database-tests.json": "0c34db299f3141393618e7db6582f5a6e200ed028ccf42ea8eded4cc9c04de3e",
+    "docs/security-v4.2-evidence/deno-comparison.json": "2987119e7b9ab4ea412d17d4baade62d4e3ff618ee292c33e7ce3fbc0d9a21b4",
+    "docs/security-v4.2-evidence/manifest.json": "af744c278a11926c8c55e0332e6ffb4eaaf149de1cabcb27c6585cd046332ba4",
+    "docs/backlog-seguranca-v4.1.md": "5e1f5f4749c79493cf272c65e3981fdfc29b2978c832754882173f64c05ca33b",
+    "docs/seguranca-v4.2.md": "18d96604d6fa4955d186e21450716bc78937763bdb90266a2abd9e0fdcf6ab89",
+    "docs/security-additional-review-2026-09-28/README.md": "4177eea95095d097d2725d726e565669b35b8f3bca6da9f7351684fd43fd0106",
+    "docs/security-remediation-2026-09-28/README.md": "57de6036175acee6f36679fd8bfca29831a1e99a7a36ca80f12bed28aa0f3857",
+    "docs/security-remediation-2026-09-28/round2/README.md": "78981d40c44dd2be4e0a8e0470ea77aaaa90cf503f952c4a8171dbd291f325fe"
+  },
+  "layout": [
+    {
+      "page": 1,
+      "height": 830
+    },
+    {
+      "page": 2,
+      "height": 985
+    },
+    {
+      "page": 3,
+      "height": 785
+    },
+    {
+      "page": 4,
+      "height": 844
+    },
+    {
+      "page": 5,
+      "height": 857
+    },
+    {
+      "page": 6,
+      "height": 711
+    },
+    {
+      "page": 7,
+      "height": 775
+    },
+    {
+      "page": 8,
+      "height": 806
+    },
+    {
+      "page": 9,
+      "height": 859
+    },
+    {
+      "page": 10,
+      "height": 919
+    },
+    {
+      "page": 11,
+      "height": 859
+    },
+    {
+      "page": 12,
+      "height": 907
+    },
+    {
+      "page": 13,
+      "height": 937
+    },
+    {
+      "page": 14,
+      "height": 884
+    },
+    {
+      "page": 15,
+      "height": 944
+    }
+  ],
+  "pdf_sha256": "6c1c981248a11e724dacf577cebb4e43549c86d3f826d8fa869093f97bb163f6",
+  "html_sha256": "a06313ab8aa6dc8aa25f16f20b2b5155896d0c83279029bbd498f21cc1d286d4",
+  "pdf_bytes": 384585,
+  "pdf_validation": {
+    "actual_pages": 15,
+    "text_extraction": "passed",
+    "text_bounds": "passed",
+    "embedded_links": 35,
+    "visual_review_pages": [
+      1,
+      2,
+      10,
+      15
+    ]
+  }
+}

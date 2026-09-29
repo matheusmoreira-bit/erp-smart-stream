@@ -77,3 +77,7 @@ O script SQL conecta exclusivamente a `127.0.0.1:54322`, usa `docker/.env` local
 Reservas evitam nova criação quando há incerteza, mas podem exigir intervenção para recuperar disponibilidade. Campos do SAP que não constam da lista de graváveis permanecem fora do payload; a homologação deve conferir os específicos de cada base. Não há promessa de transação distribuída entre PostgreSQL e SAP.
 
 Os demais itens B01–B20 mantêm as pendências do backlog; esta versão candidata não declara todo o sistema seguro nem todos os testes verdes.
+
+## Continuação — correção das brechas residuais apontadas no PDF
+
+A [rodada residual](security-residual-remediation-2026-09-28/README.md) acrescenta correções de CNAB (migração 0066), transporte HTTPS/retry, sessão, impersonação, autorização da reconciliação/monitor HANA, persistência local e metadados de imagem. Contém evidências, limites e estado de todos os itens citados. A implantação agora também depende da **0066** e do provisionamento de endpoints HTTPS; não publicar os handlers dependentes antes dessas condições. Os PDFs já emitidos representam a revisão anterior a estas mudanças locais.

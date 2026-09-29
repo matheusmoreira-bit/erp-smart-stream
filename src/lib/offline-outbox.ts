@@ -11,6 +11,7 @@
  */
 
 import { getCircuitState, SapCircuitOpenError } from "@/lib/sap-circuit-breaker";
+import { localStateEpoch } from "@/lib/local-state-epoch";
 import { getLocalOwnerId } from "@/lib/local-owner";
 
 const DB_NAME = "erpflow-offline";
@@ -71,8 +72,9 @@ function openDb(): Promise<IDBDatabase> {
   return dbPromise;
 }
 
-async function tx<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+async function tx<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T>, epoch = localStateEpoch()): Promise<T> {
   const db = await openDb();
+  if (epoch !== localStateEpoch()) throw new Error("Sessão local alterada");
   return new Promise<T>((resolve, reject) => {
     const t = db.transaction(STORE, mode);
     const req = fn(t.objectStore(STORE));
@@ -104,10 +106,11 @@ export function subscribeOutbox(listener: Listener): () => void {
 /* ─────────────────────────── CRUD ─────────────────────────── */
 
 export async function listOutbox(): Promise<OutboxEntry[]> {
+  const epoch = localStateEpoch();
   try {
     const all = await tx<OutboxEntry[]>("readonly", (s) => s.getAll() as IDBRequest<OutboxEntry[]>);
     const owner = await getLocalOwnerId();
-    if (!owner) return [];
+    if (!owner || epoch !== localStateEpoch()) return [];
     return (all || []).filter((e) => e.ownerId === owner).sort((a, b) => a.createdAt - b.createdAt);
   } catch {
     return [];
@@ -117,6 +120,7 @@ export async function listOutbox(): Promise<OutboxEntry[]> {
 export async function enqueueOutbox(
   entry: Omit<OutboxEntry, "id" | "createdAt" | "attempts" | "status" | "ownerId">,
 ): Promise<OutboxEntry> {
+  const epoch = localStateEpoch();
   const ownerId = await getLocalOwnerId();
   if (!ownerId) throw new Error("Faça login para guardar o lançamento na fila offline.");
   const full: OutboxEntry = {
@@ -127,7 +131,7 @@ export async function enqueueOutbox(
     attempts: 0,
     status: "pending",
   };
-  await tx("readwrite", (s) => s.put(full));
+  await tx("readwrite", (s) => s.put(full), epoch);
   void notify();
   return full;
 }
@@ -229,13 +233,14 @@ export interface FlushResult {
 
 /** Tenta reenviar tudo que está pendente para as bases já disponíveis. */
 export async function flushOutbox(opts?: { force?: boolean }): Promise<FlushResult> {
+  const epoch = localStateEpoch();
   const result: FlushResult = { sent: 0, failed: 0, skipped: 0 };
   if (flushing) return result;
   flushing = true;
   try {
     const entries = await listOutbox();
     for (const entry of entries) {
-      if (!entry.ownerId || entry.ownerId !== await getLocalOwnerId()) {
+      if (epoch !== localStateEpoch() || !entry.ownerId || entry.ownerId !== await getLocalOwnerId()) {
         result.skipped += 1;
         continue;
       }
@@ -252,7 +257,7 @@ export async function flushOutbox(opts?: { force?: boolean }): Promise<FlushResu
       try {
         // updateOutbox e a consulta do dono são assíncronos; a conta pode mudar
         // enquanto aguardamos. Nunca envie o snapshot anterior sob outra conta.
-        if (entry.ownerId !== await getLocalOwnerId()) {
+        if (epoch !== localStateEpoch() || entry.ownerId !== await getLocalOwnerId()) {
           // Libera apenas o item reservado por este flush, sem enviá-lo.
           await mutateOwnedEntry(entry.id, entry.ownerId, (current) => ({ ...current, status: "pending" }));
           result.skipped += 1;

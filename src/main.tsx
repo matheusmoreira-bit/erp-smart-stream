@@ -1,3 +1,4 @@
+import { invalidateLocalState } from "./lib/local-state-epoch";
 import { createRoot } from "react-dom/client";
 import { HelmetProvider } from "react-helmet-async";
 import App from "./App.tsx";
@@ -24,7 +25,11 @@ beatImpersonation();
 setInterval(beatImpersonation, 30_000);
 window.addEventListener("erp:impersonation-changed", beatImpersonation);
 let impersonationReconciled = false;
+let localOwner: string | null | undefined;
 supabase.auth.onAuthStateChange((event, session) => {
+  const nextOwner = session?.user.id ?? null;
+  if (localOwner !== undefined && localOwner !== nextOwner) invalidateLocalState();
+  localOwner = nextOwner;
   // F13: saiu da conta → nenhum dado local do usuário sobrevive.
   if (event === "SIGNED_OUT") {
     void import("./lib/clear-erp-local-state.ts").then((m) => m.clearErpLocalState()).catch((error) => console.error("[logout] limpeza local incompleta", error));

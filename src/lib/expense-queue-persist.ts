@@ -12,6 +12,7 @@
  * inviabilizam anexos reais de nota fiscal.
  */
 
+import { localStateEpoch } from "@/lib/local-state-epoch";
 import { getLocalOwnerId } from "@/lib/local-owner";
 
 const DB_NAME = "createExpenseModalQueue";
@@ -53,12 +54,13 @@ export interface PersistedQueueState<QueueEntry = any> {
   savedAt: number;
   /** Usuário dono do snapshot (F13). */
   ownerId?: string | null;
+  companyDb?: string;
 }
 
-/** Chave particionada por usuário (F13). */
-async function ownerKey(scope: QueueScope): Promise<string | null> {
+/** Legacy snapshots without a company are deliberately not restored. */
+async function ownerKey(scope: QueueScope, companyDb: string): Promise<{key: string; owner: string} | null> {
   const owner = await getLocalOwnerId();
-  return owner ? `${owner}:${scope}` : null;
+  return owner && companyDb ? {key: JSON.stringify([owner, companyDb, scope]), owner} : null;
 }
 
 function openDb(): Promise<IDBDatabase> {
@@ -76,8 +78,9 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-async function withStore<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T> | T): Promise<T> {
+async function withStore<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T> | T, epoch: string): Promise<T> {
   const db = await openDb();
+  if (epoch !== localStateEpoch()) { db.close(); throw new Error("Sessão local alterada"); }
   return new Promise<T>((resolve, reject) => {
     const tx = db.transaction(STORE, mode);
     const store = tx.objectStore(STORE);
@@ -98,50 +101,30 @@ async function withStore<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore
   }).finally(() => db.close());
 }
 
-/** Salva o snapshot inteiro do escopo (substitui o anterior). */
-export async function saveQueueState<Q>(scope: QueueScope, state: PersistedQueueState<Q>): Promise<void> {
-  try {
-    const key = await ownerKey(scope);
-    if (!key) return;
-    await withStore("readwrite", (store) => store.put({ ...state, ownerId: key.split(":")[0] }, key));
-  } catch (err) {
-    console.warn("[queue-persist] saveQueueState falhou:", err);
-  }
+/** Snapshot scoped to the authenticated owner AND company. */
+export async function saveQueueState<Q>(scope: QueueScope, state: PersistedQueueState<Q>, companyDb: string): Promise<void> {
+  const epoch = localStateEpoch();
+  const identity = await ownerKey(scope, companyDb);
+  if (!identity || epoch !== localStateEpoch()) return;
+  await withStore("readwrite", store => store.put({ ...state, ownerId: identity.owner, companyDb }, identity.key), epoch);
 }
 
-/** Carrega o snapshot do escopo, ou null se não houver / falhar. */
-export async function loadQueueState<Q>(scope: QueueScope): Promise<PersistedQueueState<Q> | null> {
+export async function loadQueueState<Q>(scope: QueueScope, companyDb: string): Promise<PersistedQueueState<Q> | null> {
+  const epoch = localStateEpoch();
+  const identity = await ownerKey(scope, companyDb);
+  if (!identity) return null;
   try {
-    const key = await ownerKey(scope);
-    if (!key) return null;
-    const owner = key.split(":")[0];
-    return await new Promise<PersistedQueueState<Q> | null>((resolve, reject) => {
-      openDb().then((db) => {
-        const tx = db.transaction(STORE, "readonly");
-        const req = tx.objectStore(STORE).get(key);
-        req.onsuccess = () => {
-          const r = (req.result as PersistedQueueState<Q> | undefined) ?? null;
-          resolve(r && r.ownerId === owner ? r : null);
-        };
-        req.onerror = () => reject(req.error);
-        tx.oncomplete = () => db.close();
-      }).catch(reject);
-    });
-  } catch (err) {
-    console.warn("[queue-persist] loadQueueState falhou:", err);
-    return null;
-  }
+    const saved = await withStore<PersistedQueueState<Q> | undefined>("readonly", store => store.get(identity.key), epoch);
+    if (epoch !== localStateEpoch() || identity.owner !== await getLocalOwnerId()) return null;
+    return saved?.ownerId === identity.owner && saved.companyDb === companyDb ? saved : null;
+  } catch { return null; }
 }
 
-/** Remove o snapshot do escopo (usado quando o usuário fecha o resumo final). */
-export async function clearQueueState(scope: QueueScope): Promise<void> {
-  try {
-    const key = await ownerKey(scope);
-    if (!key) return;
-    await withStore("readwrite", (store) => store.delete(key));
-  } catch (err) {
-    console.warn("[queue-persist] clearQueueState falhou:", err);
-  }
+export async function clearQueueState(scope: QueueScope, companyDb: string): Promise<void> {
+  const epoch = localStateEpoch();
+  const identity = await ownerKey(scope, companyDb);
+  if (!identity || epoch !== localStateEpoch()) return;
+  await withStore("readwrite", store => store.delete(identity.key), epoch);
 }
 
 /** Converte `File` do runtime em `PersistedFile` para gravar no IDB. */

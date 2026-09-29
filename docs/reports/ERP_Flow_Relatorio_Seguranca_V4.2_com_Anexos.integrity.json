@@ -1,0 +1,291 @@
+{
+  "version": "4.2",
+  "edition": "Atualização do V4.1, com anexos de evidências",
+  "date": "2026-09-28",
+  "code_commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+  "baseline_commit": "410a28c9081c44a2feefba450736025b61bf75c7",
+  "expected_pages": 14,
+  "sources": {
+    "410a28c9081c44a2feefba450736025b61bf75c7:supabase/functions/_shared/auth.ts": "ace9701473711d423335bc7a5ad7111eea7d7f26115d81f927aabfc3e1fdca1d",
+    "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a:supabase/functions/_shared/auth.ts": "5b7fc5248b4ccb37f13dbf876d160b51b80ff6dd7847fe4f67bec138e9cd1d09",
+    "docs/security-remediation-2026-09-28/regression-tests.txt": "d78b7f9df6d4ce833c0008aadb5885684f9ca2e8ba8e8070e8619daad4c5f5a0",
+    "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a:supabase/functions/accounts-payable-cnab/index.ts": "99f4a487a4a53c5633dd52dc0ffafa6750ff68934302f4a0877ef0f0119b1895",
+    "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a:supabase/functions/nf-entrada-fetch-file/index.ts": "2bcc81be2159f9b6c474a882c94ee67d3abaedeb9b87ce18cbf787fc79711a89",
+    "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a:supabase/functions/copilot-chat/index.ts": "57506831a38a96a7aea7a57e918485f548afde1a936b71166d97867620898185",
+    "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a:supabase/functions/mfa-admin-reset/index.ts": "dc8cf5be52fc6b0c578f115436a32b6ec0a6ee5a8f88823b21b6a8b975bda007",
+    "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a:src/lib/clear-erp-local-state.ts": "bf55a24922c0ccdd8d10deda0d7436557560542109211f431daaa0ce8a4496e2",
+    "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a:src/lib/offline-outbox.ts": "a0b3ae7fa508e3437b3bd9a334917f44ad06c368edb53dad9d9481dcc4ad334c",
+    "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a:supabase/functions/_shared/integration-auth.ts": "c5e5f0970ac9eff847597280a365f7d6b2ca826fbb11d759c244ce2f34c02953",
+    "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a:supabase/functions/employees-sync-run/index.ts": "cfe4410fae268f00e69f112e8a254839a537c9862b96bb0058638ba137c6903a",
+    "docs/security-v4.2-evidence/handler-tests.txt": "68ac7ebd2c9f9e0a5882fe68c4eea2dae6848cfbabac0d7b5e228bb9a6b2ddbc",
+    "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a:supabase/functions/_shared/nf-draft-once.ts": "23fe92f8dbaa7f640faea5a041504f5aa35b1f0960c4495a6b3156a0c2a0d117",
+    "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a:drizzle/migrations/0064_nf_po_draft_idempotency.sql": "ada2e743b961f69ab4ec1c86b017d009950f834d4646363fbbed636600286766",
+    "410a28c9081c44a2feefba450736025b61bf75c7:supabase/functions/_shared/sap-line-merge.ts": "a6ab03a452b074c9964c414fc02f3d7dcd34ca9260ad214e0320972ed37c48d2",
+    "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a:supabase/functions/_shared/sap-line-merge.ts": "d2deb38b9366aa698323a2280eead4e3a905dfc7afdb2199315f3db2fade55ff",
+    "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a:supabase/functions/expense-to-sap/index.ts": "b99d527aeadb9101324c5ca84edc4d75bb12cb317d6b740058dd4172a7083b7b",
+    "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a:supabase/functions/_shared/sap-line-prices.ts": "108318a960a4186152102f1c2912849c243cb88a016e730ddc450fb88f6a4d4f",
+    "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a:src/lib/sap-document-patch.test.ts": "d5c0f343013759e7eff932c178ebf11eab1aafc7796451940e4801ba188bdfa0"
+  },
+  "snippets": [
+    {
+      "path": "supabase/functions/_shared/auth.ts",
+      "commit": "410a28c9081c44a2feefba450736025b61bf75c7",
+      "first_line": 642,
+      "last_line": 643,
+      "sha256": "9ab5e1afa13fa66f3350c2c0f44f01718a67889c8dede046085d92f3d78f4642"
+    },
+    {
+      "path": "supabase/functions/_shared/auth.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 570,
+      "last_line": 579,
+      "sha256": "6f920bb6cbe56cf4476080e782681b3f337e4015c22c392d3b6834696f664fb0"
+    },
+    {
+      "path": "supabase/functions/_shared/auth.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 586,
+      "last_line": 590,
+      "sha256": "5f3b5345283186a15c9f57c299db853a8677f49195bffa5dbfed520b4c6a43be"
+    },
+    {
+      "path": "supabase/functions/accounts-payable-cnab/index.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 1661,
+      "last_line": 1669,
+      "sha256": "86a64f6bf4c94aa136855c54916700b116ae18a163811b893f275a8b0482f546"
+    },
+    {
+      "path": "supabase/functions/_shared/auth.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 498,
+      "last_line": 503,
+      "sha256": "57fce3e4bcf339e08af49695497f8b320034affe06e3f3a881ac58dad36c52ce"
+    },
+    {
+      "path": "supabase/functions/nf-entrada-fetch-file/index.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 118,
+      "last_line": 124,
+      "sha256": "190c19d54c26f3f633f19e774df7e2e2078280c47586dcacbef9158ac52697d8"
+    },
+    {
+      "path": "supabase/functions/copilot-chat/index.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 395,
+      "last_line": 396,
+      "sha256": "b911698b211b90583514bd5112fe9c4210d9fded2292e005f9eb6cef4c917fd5"
+    },
+    {
+      "path": "supabase/functions/copilot-chat/index.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 353,
+      "last_line": 357,
+      "sha256": "2a48097513011ad9501026207703e2bd49837dfd29ff8cb9f183c8bc20e7a02f"
+    },
+    {
+      "path": "supabase/functions/mfa-admin-reset/index.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 58,
+      "last_line": 64,
+      "sha256": "bd48a5a4c8a073f5cd1d22fc91fe74d2041c5c0ad5a886903391719e1e46759b"
+    },
+    {
+      "path": "src/lib/clear-erp-local-state.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 56,
+      "last_line": 67,
+      "sha256": "7f2bf20a8494b913ca488ab643f86e1c59ffb1b6497506faeb1c26897ea201d5"
+    },
+    {
+      "path": "src/lib/offline-outbox.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 255,
+      "last_line": 263,
+      "sha256": "31f3afb8dd33f7b0e9c708636238ca09cfe49a439708264a7a5a7d28767fc374"
+    },
+    {
+      "path": "supabase/functions/_shared/integration-auth.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 22,
+      "last_line": 27,
+      "sha256": "f04bddf7dafec8bddd8c46f8b7e9de0fad324fc2d8c8719bdc9f05cfbd84ddee"
+    },
+    {
+      "path": "supabase/functions/employees-sync-run/index.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 49,
+      "last_line": 49,
+      "sha256": "808eabd086bb2ad3eadf3d5cbddf580c0fce7e255323d4805bcaf3b80022804e"
+    },
+    {
+      "path": "supabase/functions/employees-sync-run/index.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 75,
+      "last_line": 79,
+      "sha256": "6e4044a058304e5c2ef1e3ae01df736ae746b8313a874b5d6c00d5bed7707885"
+    },
+    {
+      "path": "supabase/functions/_shared/integration-auth.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 14,
+      "last_line": 19,
+      "sha256": "1271ea4b2f287dc5bc794560cc8f7871ad1ec5c0552074e656f84f42454e9a94"
+    },
+    {
+      "path": "supabase/functions/_shared/nf-draft-once.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 44,
+      "last_line": 51,
+      "sha256": "3ca7367b092e3f9bad4fef01e6228468368aca1ca624d01b094d1708da1aa863"
+    },
+    {
+      "path": "drizzle/migrations/0064_nf_po_draft_idempotency.sql",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 19,
+      "last_line": 24,
+      "sha256": "0464d4af7eedd3f8a7b6c800e15f347c4766b388318fd0678818c7b3eb46aef8"
+    },
+    {
+      "path": "drizzle/migrations/0064_nf_po_draft_idempotency.sql",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 34,
+      "last_line": 39,
+      "sha256": "837fee724ba1844a71289d78a0ac849d53a6452237d86e96367abdc481860ca3"
+    },
+    {
+      "path": "drizzle/migrations/0064_nf_po_draft_idempotency.sql",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 2,
+      "last_line": 10,
+      "sha256": "24d5a9cb4c4a1be1b1490257a8a94e93d1b85b6fa442f0cd1eccbaf393752261"
+    },
+    {
+      "path": "supabase/functions/_shared/nf-draft-once.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 17,
+      "last_line": 23,
+      "sha256": "81fbaae96b26355447502a1632472dd95a3aa64a16aa74b66f87d8a21bc3525b"
+    },
+    {
+      "path": "supabase/functions/_shared/nf-draft-once.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 26,
+      "last_line": 29,
+      "sha256": "efb84da49b061201eb15d534fd5d469b55b24136b374caec1cbfe62132afb1c4"
+    },
+    {
+      "path": "supabase/functions/_shared/sap-line-merge.ts",
+      "commit": "410a28c9081c44a2feefba450736025b61bf75c7",
+      "first_line": 125,
+      "last_line": 131,
+      "sha256": "fd6511a073c64ff2b7b50a0620bccd219cdb0fd04e02c067f5972d03b86982a6"
+    },
+    {
+      "path": "supabase/functions/_shared/sap-line-merge.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 140,
+      "last_line": 145,
+      "sha256": "6eab45a636ad299917c47900587814341ca5f66d743d2b81d710ad2f5c44e24f"
+    },
+    {
+      "path": "supabase/functions/_shared/sap-line-merge.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 150,
+      "last_line": 154,
+      "sha256": "c8a21a0e20509f0030556250db7aa8aa62f1b4c843bbbe8736d862e45098a1ce"
+    },
+    {
+      "path": "supabase/functions/expense-to-sap/index.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 1741,
+      "last_line": 1745,
+      "sha256": "9f65eadabc1aac3518100ddd607317cbf07290fff3e8a85c0727a40945d18cfb"
+    },
+    {
+      "path": "supabase/functions/_shared/sap-line-merge.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 102,
+      "last_line": 111,
+      "sha256": "3c733b02540300458e005747285ddd64edaf12d0308f95722aafb789b5e2c9dc"
+    },
+    {
+      "path": "supabase/functions/_shared/sap-line-prices.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 57,
+      "last_line": 59,
+      "sha256": "467b139e5ee2c3d324c5338431750be6a177a1e56d511edd1e26b6ec5ff912b5"
+    },
+    {
+      "path": "src/lib/sap-document-patch.test.ts",
+      "commit": "ff8676ddb80e1f48d6e5bd16fbf8305180fa356a",
+      "first_line": 39,
+      "last_line": 39,
+      "sha256": "0f33128da83f53e0a8ad206b58983c5c776ebf029c4372b18488b552e49a4793"
+    }
+  ],
+  "original_v41_sha256": "191cd3725279f6bb2e484fc240268df8ec46957c5a46f63d6712a989203db1d8",
+  "tests": "previous recorded results, not rerun for this document",
+  "deployment": "not verified",
+  "layout": [
+    {
+      "page": 1,
+      "height": 917
+    },
+    {
+      "page": 2,
+      "height": 870
+    },
+    {
+      "page": 3,
+      "height": 915
+    },
+    {
+      "page": 4,
+      "height": 816
+    },
+    {
+      "page": 5,
+      "height": 822
+    },
+    {
+      "page": 6,
+      "height": 823
+    },
+    {
+      "page": 7,
+      "height": 839
+    },
+    {
+      "page": 8,
+      "height": 976
+    },
+    {
+      "page": 9,
+      "height": 922
+    },
+    {
+      "page": 10,
+      "height": 824
+    },
+    {
+      "page": 11,
+      "height": 894
+    },
+    {
+      "page": 12,
+      "height": 837
+    },
+    {
+      "page": 13,
+      "height": 752
+    },
+    {
+      "page": 14,
+      "height": 871
+    }
+  ],
+  "pdf_sha256": "017604aaa78564e739ba26aed422cb2a2bb3287a81950348984711ce47b0fc55",
+  "html_sha256": "07f7fc42de054b14ce04b7bffda47dac41cca7d516e7ff6e1dcdb42603691d7e",
+  "pdf_bytes": 474643
+}

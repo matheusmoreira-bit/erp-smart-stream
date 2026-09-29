@@ -1,0 +1,1551 @@
+{
+  "method": "static source inventory; indirect guards, gateway and deployment not validated",
+  "count": 167,
+  "functions": [
+    {
+      "name": "accounts-payable-cnab",
+      "path": "supabase/functions/accounts-payable-cnab/index.ts",
+      "guards": [
+        "requireAdminOrSapModule"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "admin-users",
+      "path": "supabase/functions/admin-users/index.ts",
+      "guards": [
+        "auth.getUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "advance-reconcile",
+      "path": "supabase/functions/advance-reconcile/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "advance-sap-status",
+      "path": "supabase/functions/advance-sap-status/index.ts",
+      "guards": [
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "advance-to-sap",
+      "path": "supabase/functions/advance-to-sap/index.ts",
+      "guards": [
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "ai-assistant",
+      "path": "supabase/functions/ai-assistant/index.ts",
+      "guards": [
+        "auth.getUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "api-keys-admin",
+      "path": "supabase/functions/api-keys-admin/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "approval-daily-digest",
+      "path": "supabase/functions/approval-daily-digest/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "approval-history-sync",
+      "path": "supabase/functions/approval-history-sync/index.ts",
+      "guards": [
+        "requireAdminOrSapAdmin",
+        "requireAdminOrSapSession",
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "approval-link",
+      "path": "supabase/functions/approval-link/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "approval-rule-manage",
+      "path": "supabase/functions/approval-rule-manage/index.ts",
+      "guards": [
+        "requireAdminOrSapAdmin"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "approvals-feed",
+      "path": "supabase/functions/approvals-feed/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "approver-substitute-manage",
+      "path": "supabase/functions/approver-substitute-manage/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "audit-console-analyze-doc",
+      "path": "supabase/functions/audit-console-analyze-doc/index.ts",
+      "guards": [
+        "auth.getUser",
+        "requireAdmin"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "audit-console-monthly",
+      "path": "supabase/functions/audit-console-monthly/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "audit-console-run",
+      "path": "supabase/functions/audit-console-run/index.ts",
+      "guards": [
+        "auth.getUser",
+        "requireAdmin"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "audit-cross-fiscal-auto",
+      "path": "supabase/functions/audit-cross-fiscal-auto/index.ts",
+      "guards": [
+        "requireIntegrationService"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "audit-cross-fiscal-run",
+      "path": "supabase/functions/audit-cross-fiscal-run/index.ts",
+      "guards": [
+        "authorizeIntegrationCompany",
+        "requireIntegrationCaller"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "audit-cross-po-nf",
+      "path": "supabase/functions/audit-cross-po-nf/index.ts",
+      "guards": [
+        "requireAdminOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "audit-pay-agent",
+      "path": "supabase/functions/audit-pay-agent/index.ts",
+      "guards": [
+        "auth.getClaims"
+      ],
+      "hasServiceCredential": false,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "audit-pay-enqueue",
+      "path": "supabase/functions/audit-pay-enqueue/index.ts",
+      "guards": [
+        "auth.getClaims"
+      ],
+      "hasServiceCredential": false,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "audit-pay-worker",
+      "path": "supabase/functions/audit-pay-worker/index.ts",
+      "guards": [
+        "auth.getClaims"
+      ],
+      "hasServiceCredential": false,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "auth-email-hook",
+      "path": "supabase/functions/auth-email-hook/index.ts",
+      "guards": [],
+      "hasServiceCredential": false,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "backup-to-gdrive",
+      "path": "supabase/functions/backup-to-gdrive/index.ts",
+      "guards": [
+        "auth.getUser",
+        "requireAdmin"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "baixa-recebimento",
+      "path": "supabase/functions/baixa-recebimento/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "becompliance-test",
+      "path": "supabase/functions/becompliance-test/index.ts",
+      "guards": [
+        "requireAdminOrSapAdmin"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "cashflow-forecast",
+      "path": "supabase/functions/cashflow-forecast/index.ts",
+      "guards": [
+        "requireAdminOrSapModule"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "cnpj-lookup",
+      "path": "supabase/functions/cnpj-lookup/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "copilot-chat",
+      "path": "supabase/functions/copilot-chat/index.ts",
+      "guards": [
+        "auth.getUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "credentials",
+      "path": "supabase/functions/credentials/index.ts",
+      "guards": [
+        "requireAdminOrSapModule",
+        "requireAdminOrSapSessionHeaders"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "db-backup-s3",
+      "path": "supabase/functions/db-backup-s3/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "edge-metrics-alerts",
+      "path": "supabase/functions/edge-metrics-alerts/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": true
+    },
+    {
+      "name": "employees-sync-cron",
+      "path": "supabase/functions/employees-sync-cron/index.ts",
+      "guards": [
+        "requireIntegrationService"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "employees-sync-run",
+      "path": "supabase/functions/employees-sync-run/index.ts",
+      "guards": [
+        "authorizeIntegrationCompany",
+        "requireIntegrationCaller"
+      ],
+      "hasServiceCredential": false,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "employees-sync-test-jumpcloud",
+      "path": "supabase/functions/employees-sync-test-jumpcloud/index.ts",
+      "guards": [],
+      "hasServiceCredential": false,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "employees-sync-test-sap",
+      "path": "supabase/functions/employees-sync-test-sap/index.ts",
+      "guards": [],
+      "hasServiceCredential": false,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "expense-approval-action",
+      "path": "supabase/functions/expense-approval-action/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "expense-attachment-sap-audit",
+      "path": "supabase/functions/expense-attachment-sap-audit/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "expense-attachment-sap-backfill",
+      "path": "supabase/functions/expense-attachment-sap-backfill/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "expense-attachment-storage",
+      "path": "supabase/functions/expense-attachment-storage/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "expense-attachment-sweeper",
+      "path": "supabase/functions/expense-attachment-sweeper/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "expense-backfill-due-date",
+      "path": "supabase/functions/expense-backfill-due-date/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "expense-delegate",
+      "path": "supabase/functions/expense-delegate/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "expense-integration-control",
+      "path": "supabase/functions/expense-integration-control/index.ts",
+      "guards": [
+        "requireAdminOrSapModule"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "expense-integration-retry",
+      "path": "supabase/functions/expense-integration-retry/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": true
+    },
+    {
+      "name": "expense-line-item-patch",
+      "path": "supabase/functions/expense-line-item-patch/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "expense-mutation",
+      "path": "supabase/functions/expense-mutation/index.ts",
+      "guards": [
+        "requireAdminOrSapModule",
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "expense-notify-pending",
+      "path": "supabase/functions/expense-notify-pending/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "expense-ocr-capture",
+      "path": "supabase/functions/expense-ocr-capture/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "expense-read",
+      "path": "supabase/functions/expense-read/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "expense-reassign-approver",
+      "path": "supabase/functions/expense-reassign-approver/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "expense-sap-pullback",
+      "path": "supabase/functions/expense-sap-pullback/index.ts",
+      "guards": [
+        "auth.getUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "expense-sap-reconcile",
+      "path": "supabase/functions/expense-sap-reconcile/index.ts",
+      "guards": [
+        "authorizeIntegrationCompany",
+        "requireAdmin",
+        "requireIntegrationCaller"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "expense-sap-status-sync",
+      "path": "supabase/functions/expense-sap-status-sync/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "expense-to-sap",
+      "path": "supabase/functions/expense-to-sap/index.ts",
+      "guards": [
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "expense-tracking-api",
+      "path": "supabase/functions/expense-tracking-api/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "external-approvals-api",
+      "path": "supabase/functions/external-approvals-api/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "financial-review",
+      "path": "supabase/functions/financial-review/index.ts",
+      "guards": [
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "fornecedor-save",
+      "path": "supabase/functions/fornecedor-save/index.ts",
+      "guards": [
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "hana-health-probe",
+      "path": "supabase/functions/hana-health-probe/index.ts",
+      "guards": [
+        "requireAdmin",
+        "requireIntegrationService"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "handle-email-events",
+      "path": "supabase/functions/handle-email-events/index.ts",
+      "guards": [],
+      "hasServiceCredential": false,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "idp-mapping",
+      "path": "supabase/functions/idp-mapping/index.ts",
+      "guards": [
+        "requireAdminOrSapModule"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "impersonation-audit",
+      "path": "supabase/functions/impersonation-audit/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "integration-health-alerts",
+      "path": "supabase/functions/integration-health-alerts/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "intercompany",
+      "path": "supabase/functions/intercompany/index.ts",
+      "guards": [
+        "requireAdminOrSapAdmin"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "item-save",
+      "path": "supabase/functions/item-save/index.ts",
+      "guards": [
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "jumpcloud-attributes-sync",
+      "path": "supabase/functions/jumpcloud-attributes-sync/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "jumpcloud-proxy",
+      "path": "supabase/functions/jumpcloud-proxy/index.ts",
+      "guards": [
+        "requireAdminOrSapModule"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "kyp-orchestrator",
+      "path": "supabase/functions/kyp-orchestrator/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "license-analysis",
+      "path": "supabase/functions/license-analysis/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "license-idle-watcher",
+      "path": "supabase/functions/license-idle-watcher/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": true
+    },
+    {
+      "name": "mastertax-po-nf-search",
+      "path": "supabase/functions/mastertax-po-nf-search/index.ts",
+      "guards": [
+        "requireAdminOrSapModule"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "mastertax-pull",
+      "path": "supabase/functions/mastertax-pull/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "mastertax-test",
+      "path": "supabase/functions/mastertax-test/index.ts",
+      "guards": [
+        "requireAdminOrSapAdmin"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "mfa-admin-reset",
+      "path": "supabase/functions/mfa-admin-reset/index.ts",
+      "guards": [
+        "requireAdmin",
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "nf-entrada-erp-capture",
+      "path": "supabase/functions/nf-entrada-erp-capture/index.ts",
+      "guards": [],
+      "hasServiceCredential": false,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "nf-entrada-erp-queue",
+      "path": "supabase/functions/nf-entrada-erp-queue/index.ts",
+      "guards": [
+        "requireUserOrSapSessionHeaders"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "nf-entrada-erp-status",
+      "path": "supabase/functions/nf-entrada-erp-status/index.ts",
+      "guards": [
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "nf-entrada-fetch-file",
+      "path": "supabase/functions/nf-entrada-fetch-file/index.ts",
+      "guards": [
+        "requireAdminOrSapModule",
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "nf-entrada-invoice-draft",
+      "path": "supabase/functions/nf-entrada-invoice-draft/index.ts",
+      "guards": [
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "nf-entrada-rematch",
+      "path": "supabase/functions/nf-entrada-rematch/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "nf-entrada-rematch-daily",
+      "path": "supabase/functions/nf-entrada-rematch-daily/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "nf-entrada-sap-watcher",
+      "path": "supabase/functions/nf-entrada-sap-watcher/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "nf-entrada-to-sap",
+      "path": "supabase/functions/nf-entrada-to-sap/index.ts",
+      "guards": [
+        "authorizeIntegrationCompany",
+        "requireIntegrationCaller"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "nfse-send-email",
+      "path": "supabase/functions/nfse-send-email/index.ts",
+      "guards": [
+        "auth.getUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "nfse-xml-fetch",
+      "path": "supabase/functions/nfse-xml-fetch/index.ts",
+      "guards": [
+        "auth.getUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "notification-dispatch-resend",
+      "path": "supabase/functions/notification-dispatch-resend/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "notification-dispatch-worker",
+      "path": "supabase/functions/notification-dispatch-worker/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": true
+    },
+    {
+      "name": "okta-attributes-sync",
+      "path": "supabase/functions/okta-attributes-sync/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "okta-proxy",
+      "path": "supabase/functions/okta-proxy/index.ts",
+      "guards": [
+        "requireAdminOrSapModule"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "omie-proxy",
+      "path": "supabase/functions/omie-proxy/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "overdue-reminders-dispatch",
+      "path": "supabase/functions/overdue-reminders-dispatch/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": true
+    },
+    {
+      "name": "pagcorp-backfill-attachments",
+      "path": "supabase/functions/pagcorp-backfill-attachments/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "pagcorp-card-mapping",
+      "path": "supabase/functions/pagcorp-card-mapping/index.ts",
+      "guards": [
+        "requireAdminOrSapModule",
+        "requireUserOrSapSessionHeaders"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "pagcorp-integration-reconcile",
+      "path": "supabase/functions/pagcorp-integration-reconcile/index.ts",
+      "guards": [
+        "requireUserOrSapSessionHeaders"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "pagcorp-integration-status",
+      "path": "supabase/functions/pagcorp-integration-status/index.ts",
+      "guards": [
+        "requireUserOrSapSessionHeaders"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "pagcorp-nf-scan",
+      "path": "supabase/functions/pagcorp-nf-scan/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "pagcorp-portal-approve",
+      "path": "supabase/functions/pagcorp-portal-approve/index.ts",
+      "guards": [
+        "requireAdminOrSapModule"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "pagcorp-proxy",
+      "path": "supabase/functions/pagcorp-proxy/index.ts",
+      "guards": [
+        "requireUserOrSapSessionHeaders"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "pagcorp-relations-resolver",
+      "path": "supabase/functions/pagcorp-relations-resolver/index.ts",
+      "guards": [
+        "requireUserOrSapSessionHeaders"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "pagcorp-settlement-audit",
+      "path": "supabase/functions/pagcorp-settlement-audit/index.ts",
+      "guards": [
+        "requireAdmin"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "pagcorp-settlement-candidates",
+      "path": "supabase/functions/pagcorp-settlement-candidates/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "pagcorp-settlement-repair",
+      "path": "supabase/functions/pagcorp-settlement-repair/index.ts",
+      "guards": [
+        "requireAdmin"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "pagcorp-settlement-watcher",
+      "path": "supabase/functions/pagcorp-settlement-watcher/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "pagcorp-status-api",
+      "path": "supabase/functions/pagcorp-status-api/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "pagcorp-to-omie",
+      "path": "supabase/functions/pagcorp-to-omie/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "pagcorp-to-sap",
+      "path": "supabase/functions/pagcorp-to-sap/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "preview-transactional-email",
+      "path": "supabase/functions/preview-transactional-email/index.ts",
+      "guards": [],
+      "hasServiceCredential": false,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "process-expense-doc",
+      "path": "supabase/functions/process-expense-doc/index.ts",
+      "guards": [
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "push-subscribe",
+      "path": "supabase/functions/push-subscribe/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "registration-sla-reminders",
+      "path": "supabase/functions/registration-sla-reminders/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "registration-supplier-create",
+      "path": "supabase/functions/registration-supplier-create/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "replica-storage-sync",
+      "path": "supabase/functions/replica-storage-sync/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "replica-sync",
+      "path": "supabase/functions/replica-sync/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "report-ai-chat",
+      "path": "supabase/functions/report-ai-chat/index.ts",
+      "guards": [
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "resend-missing-attachment-notifications",
+      "path": "supabase/functions/resend-missing-attachment-notifications/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sales-nfse-emit",
+      "path": "supabase/functions/sales-nfse-emit/index.ts",
+      "guards": [
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sales-nfse-mastertax-file",
+      "path": "supabase/functions/sales-nfse-mastertax-file/index.ts",
+      "guards": [
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sales-nfse-reconcile",
+      "path": "supabase/functions/sales-nfse-reconcile/index.ts",
+      "guards": [
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sales-nfse-transmit-watcher",
+      "path": "supabase/functions/sales-nfse-transmit-watcher/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-approvals-hana",
+      "path": "supabase/functions/sap-approvals-hana/index.ts",
+      "guards": [
+        "requireUser",
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-archive-attachments",
+      "path": "supabase/functions/sap-archive-attachments/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-archive-master-pull",
+      "path": "supabase/functions/sap-archive-master-pull/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-archive-pull",
+      "path": "supabase/functions/sap-archive-pull/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-archive-restore",
+      "path": "supabase/functions/sap-archive-restore/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-auto-login",
+      "path": "supabase/functions/sap-auto-login/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-b1-proxy",
+      "path": "supabase/functions/sap-b1-proxy/index.ts",
+      "guards": [
+        "auth.getUser",
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-cancel-purchase-order",
+      "path": "supabase/functions/sap-cancel-purchase-order/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-change-password",
+      "path": "supabase/functions/sap-change-password/index.ts",
+      "guards": [
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-document-link-watcher",
+      "path": "supabase/functions/sap-document-link-watcher/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-fluxo-analise-sync",
+      "path": "supabase/functions/sap-fluxo-analise-sync/index.ts",
+      "guards": [],
+      "hasServiceCredential": false,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-groups-sync",
+      "path": "supabase/functions/sap-groups-sync/index.ts",
+      "guards": [
+        "requireAdmin"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-list-service",
+      "path": "supabase/functions/sap-list-service/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-master-data-replicate",
+      "path": "supabase/functions/sap-master-data-replicate/index.ts",
+      "guards": [],
+      "hasServiceCredential": false,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-nf-entrada-sync",
+      "path": "supabase/functions/sap-nf-entrada-sync/index.ts",
+      "guards": [],
+      "hasServiceCredential": false,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-nfse-lookup",
+      "path": "supabase/functions/sap-nfse-lookup/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-payment-terms-sync",
+      "path": "supabase/functions/sap-payment-terms-sync/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-po-cache-sync",
+      "path": "supabase/functions/sap-po-cache-sync/index.ts",
+      "guards": [],
+      "hasServiceCredential": false,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-po-nf-cp-sync",
+      "path": "supabase/functions/sap-po-nf-cp-sync/index.ts",
+      "guards": [],
+      "hasServiceCredential": false,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-provision-user-access",
+      "path": "supabase/functions/sap-provision-user-access/index.ts",
+      "guards": [
+        "requireAdmin"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-purchase-orders-hana",
+      "path": "supabase/functions/sap-purchase-orders-hana/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-retry-worker",
+      "path": "supabase/functions/sap-retry-worker/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": true
+    },
+    {
+      "name": "sap-sl-cache-refresh",
+      "path": "supabase/functions/sap-sl-cache-refresh/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-suppliers-hana",
+      "path": "supabase/functions/sap-suppliers-hana/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-user-credentials",
+      "path": "supabase/functions/sap-user-credentials/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-user-profile-sync",
+      "path": "supabase/functions/sap-user-profile-sync/index.ts",
+      "guards": [
+        "requireUser"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-users-admin",
+      "path": "supabase/functions/sap-users-admin/index.ts",
+      "guards": [
+        "requireAdmin",
+        "requireAdminOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sap-vendor-payment-cache-sync",
+      "path": "supabase/functions/sap-vendor-payment-cache-sync/index.ts",
+      "guards": [],
+      "hasServiceCredential": false,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "security-csrf-token",
+      "path": "supabase/functions/security-csrf-token/index.ts",
+      "guards": [
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "send-smtp-email",
+      "path": "supabase/functions/send-smtp-email/index.ts",
+      "guards": [],
+      "hasServiceCredential": false,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "sla-escalation-dispatch",
+      "path": "supabase/functions/sla-escalation-dispatch/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "standalone-snapshot",
+      "path": "supabase/functions/standalone-snapshot/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "storage-mirror-s3",
+      "path": "supabase/functions/storage-mirror-s3/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "supplier-ai-extract",
+      "path": "supabase/functions/supplier-ai-extract/index.ts",
+      "guards": [
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "supplier-sync",
+      "path": "supabase/functions/supplier-sync/index.ts",
+      "guards": [
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "synapse-jc-sync",
+      "path": "supabase/functions/synapse-jc-sync/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "synapse-okta-sync",
+      "path": "supabase/functions/synapse-okta-sync/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "synapse-pagcorp-sync",
+      "path": "supabase/functions/synapse-pagcorp-sync/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "synapse-po-notify",
+      "path": "supabase/functions/synapse-po-notify/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "transfer-approvals",
+      "path": "supabase/functions/transfer-approvals/index.ts",
+      "guards": [
+        "requireAdminOrSapAdmin"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "uber-trips",
+      "path": "supabase/functions/uber-trips/index.ts",
+      "guards": [
+        "requireAdminOrSapSessionHeaders"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "user-credentials-email",
+      "path": "supabase/functions/user-credentials-email/index.ts",
+      "guards": [
+        "requireAdminOrSapAdmin"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "user-profile-save",
+      "path": "supabase/functions/user-profile-save/index.ts",
+      "guards": [
+        "requireUserOrSapSession"
+      ],
+      "hasServiceCredential": true,
+      "hasExternalFetch": false,
+      "hasLiteralHttp": false
+    },
+    {
+      "name": "whatsapp-approval-digest",
+      "path": "supabase/functions/whatsapp-approval-digest/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": true
+    },
+    {
+      "name": "whatsapp-approval-watcher",
+      "path": "supabase/functions/whatsapp-approval-watcher/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": true
+    },
+    {
+      "name": "whatsapp-flow-approval-watcher",
+      "path": "supabase/functions/whatsapp-flow-approval-watcher/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": true
+    },
+    {
+      "name": "whatsapp-login-watcher",
+      "path": "supabase/functions/whatsapp-login-watcher/index.ts",
+      "guards": [],
+      "hasServiceCredential": true,
+      "hasExternalFetch": true,
+      "hasLiteralHttp": true
+    }
+  ]
+}

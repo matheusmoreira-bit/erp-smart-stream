@@ -1,3 +1,5 @@
+import { invalidateLocalState } from "@/lib/local-state-epoch";
+import { clearAiCache } from "@/lib/ai-file-cache";
 /**
  * Limpeza de estado local do ERP.
  *
@@ -15,7 +17,9 @@ const PRESERVED_LOCAL_KEYS = new Set<string>([
 
 /** Prefixos de chaves em localStorage que pertencem à sessão do usuário. */
 const USER_SCOPED_LOCAL_PREFIXES = [
+  "ai-response-cache-v1:",
   "ai-response-cache-v2:",
+  "ai-response-cache-v3:",
   "notifications_dismissed_",
   "intercompany.",
   "erp:",
@@ -28,6 +32,8 @@ const USER_SCOPED_LOCAL_PREFIXES = [
 
 export async function clearErpLocalState(): Promise<void> {
   if (typeof window === "undefined") return;
+  invalidateLocalState();
+  clearAiCache();
 
   // sessionStorage é inteiramente escopado à sessão do ERP — pode ir todo.
   try {

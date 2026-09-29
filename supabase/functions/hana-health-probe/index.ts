@@ -14,14 +14,15 @@
 // Histórico dos disparos: public.integration_health_alerts
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { requireIntegrationService } from "../_shared/integration-auth.ts";
+import { requireAdmin, authErrorResponse } from "../_shared/auth.ts";
 import { logSend } from "../_shared/send-log.ts";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { generateDynamicToken, resolveHanaSchema } from "../_shared/hana-views.ts";
 import { filterHealthAlertRecipients } from "../_shared/health-alert-optout.ts";
 
-const DEFAULT_HANA_API_URL = "http://201.48.79.205:8001";
-const FALLBACK_HANA_API_URL = "http://189.91.68.202:8001";
+import { requireHttpsEndpoint } from "../_shared/secure-transport.ts";
 const PROVIDER = "hanaapi_v2";
 const LABEL = "HanaAPI V2";
 const PROBE_VIEW = "VW_FORNECEDORES";
@@ -39,7 +40,7 @@ interface ProbeResult {
 }
 
 function slBaseUrl(raw: string): string {
-  let url = raw.replace(/\/+$/, "");
+  let url = requireHttpsEndpoint(raw);
   if (url.includes("/b1s/v1")) url = url.replace("/b1s/v1", "/b1s/v2");
   else if (!url.includes("/b1s/v2")) url = `${url}/b1s/v2`;
   return url;
@@ -48,6 +49,7 @@ function slBaseUrl(raw: string): string {
 async function sapLogin(baseUrl: string, u: string, p: string, db: string): Promise<string> {
   const r = await fetch(`${baseUrl}/Login`, {
     method: "POST",
+    redirect: "error",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ UserName: u, Password: p, CompanyDB: db }),
     signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
@@ -64,10 +66,11 @@ async function probeBase(
   companyDb: string | null,
 ): Promise<ProbeResult> {
   const started = Date.now();
-  const url = `${base.replace(/\/+$/, "")}/data/${encodeURIComponent(schema)}.${PROBE_VIEW}?limit=1`;
+  const url = `${requireHttpsEndpoint(base)}/data/${encodeURIComponent(schema)}.${PROBE_VIEW}?limit=1`;
   try {
     const token = await generateDynamicToken();
     const r = await fetch(url, {
+      redirect: "error",
       headers: { dynamictoken: token, sessionid: sessionId },
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
@@ -162,6 +165,13 @@ async function sendSlack(channel: string, text: string) {
 Deno.serve(withEdgeMetrics("hana-health-probe", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  try {
+    try { requireIntegrationService(req); }
+    catch { await requireAdmin(req); }
+  } catch (error) {
+    return authErrorResponse(error, corsHeaders) || new Response(JSON.stringify({ error: "Acesso negado" }), { status: 403, headers: corsHeaders });
+  }
+
   const sb = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -204,14 +214,6 @@ Deno.serve(withEdgeMetrics("hana-health-probe", async (req) => {
     });
   }
 
-  // 2. Endpoints a sondar: IPs configurados + primário padrão + fallback.
-  const bases = new Set<string>([DEFAULT_HANA_API_URL, FALLBACK_HANA_API_URL]);
-  for (const [, kv] of candidates) {
-    const u = (kv.hana_api_url ?? "").trim();
-    if (u) bases.add(u.replace(/\/+$/, ""));
-  }
-  const baseList = Array.from(bases);
-
   // 3. Sessão do Service Layer (header sessionid do HanaAPI). Se a empresa
   // escolhida não tiver a view publicada (404 "nao encontrado"), tenta a próxima.
   let probes: ProbeResult[] = [];
@@ -220,7 +222,9 @@ Deno.serve(withEdgeMetrics("hana-health-probe", async (req) => {
 
   for (const [companyDb, kv] of candidates.slice(0, 4)) {
     let sessionId = "";
+    let hanaBase: string;
     try {
+      hanaBase = requireHttpsEndpoint(kv.hana_api_url);
       sessionId = await sapLogin(slBaseUrl(kv.service_layer_url), kv.username, kv.password, kv.db_name || companyDb);
     } catch (e) {
       loginError = e instanceof Error ? e.message : String(e);
@@ -229,7 +233,7 @@ Deno.serve(withEdgeMetrics("hana-health-probe", async (req) => {
     if (!sessionId) continue;
     lastCompany = companyDb;
     const schema = resolveHanaSchema(companyDb, kv.db_name);
-    const attempt = await Promise.all(baseList.map((base) => probeBase(base, schema, sessionId, companyDb)));
+    const attempt = await Promise.all([probeBase(hanaBase, schema, sessionId, companyDb)]);
     probes = attempt;
     const schemaIssue = attempt.every((p) =>
       p.http_status === 404 && /nao encontrado|não encontrado/i.test(p.error_message ?? "")
@@ -238,9 +242,9 @@ Deno.serve(withEdgeMetrics("hana-health-probe", async (req) => {
   }
 
   if (probes.length === 0) {
-    probes = baseList.map((base) => ({
-      base_url: base,
-      company_db: lastCompany,
+    probes = candidates.slice(0, 4).map(([company, kv]) => ({
+      base_url: kv.hana_api_url || "não configurado",
+      company_db: company,
       view_name: PROBE_VIEW,
       ok: false,
       http_status: null,

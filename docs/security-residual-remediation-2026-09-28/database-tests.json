@@ -1,0 +1,45 @@
+{
+  "environment": "loopback PostgreSQL; disposable synthetic database",
+  "tests": [
+    {
+      "name": "unapproved batch cannot reserve payment",
+      "passed": true
+    },
+    {
+      "name": "self approval rejected by database",
+      "passed": true
+    },
+    {
+      "name": "approval atomically verifies content SHA256",
+      "passed": true
+    },
+    {
+      "name": "concurrent claims: only one reservation",
+      "passed": true
+    },
+    {
+      "name": "old uncertain worker never reacquired by TTL",
+      "passed": true
+    },
+    {
+      "name": "approved content immutable",
+      "passed": true
+    },
+    {
+      "name": "approved titles cannot change scope or be removed",
+      "passed": true
+    },
+    {
+      "name": "another return cannot replace registered identity",
+      "passed": true
+    },
+    {
+      "name": "cancelled batch cannot reserve payment",
+      "passed": true
+    },
+    {
+      "name": "claim restricted to service role",
+      "passed": true
+    }
+  ]
+}

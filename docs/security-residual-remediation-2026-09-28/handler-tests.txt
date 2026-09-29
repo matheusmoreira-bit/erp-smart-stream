@@ -1,0 +1,53 @@
+(node:23130) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ SAP: valid proof works, missing/expired proof is denied after a successful call (40.867917ms)
+✔ SAP: changed user/company and invalid signature are rejected (8.655291ms)
+✔ Cloud MFA rejection cannot fall back to SAP; authorized AAL2 still works (8.262708ms)
+✔ Impersonation rejection cannot fall back to SAP (3.910791ms)
+✔ Security RPC errors fail closed instead of reusing an earlier permission (14.878958ms)
+✔ Revoked or deprovisioned SAP sessions are denied immediately after success (6.699458ms)
+✔ Credential write authorizes edit against the body company, never view against header (5.289875ms)
+✔ Unauthorized credential write and non-admin global write have no side effects (9.358417ms)
+✔ Admin with MFA retains global credential management (4.6045ms)
+✔ Fiscal document: reject anonymous before DB, cross-company before signing; authorized reads work (15.957541ms)
+✔ Copilot pending confirmation remains owned by its request during interleaving (1.635ms)
+✔ MFA reset: self denied, audit failure blocks deletion, successful reset is audited (4.799833ms)
+✔ Strict rate limiter denies missing/error counters while preserving legacy callers (1.120417ms)
+✔ CNAB dispatcher requires the matching action on the body company for every operation (15.376458ms)
+✔ Revocation helper does not cache negative results and denies malformed lookup responses (1.387625ms)
+✔ F09: absolute session age, revoked session and lookup failure block access; recent sessions work (4.871041ms)
+✔ F12: credential GET allowed, POST/DELETE and profile sync denied during impersonation (2.615875ms)
+(node:23131) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ F08: HTTP and URL credentials rejected before network; HTTPS read works without redirects (34.543375ms)
+[sapFetch] https://erp.invalid/x -> HTTP 503, retry 1/2 em 0ms
+✔ F05: transport never retries POST/PATCH even on timeout or HTTP 503; reads can retry (26.023167ms)
+[hana-views] 503 on https://erp.invalid/data/A.V body=
+✔ F08: HANA sends credentials only to the configured HTTPS endpoint and never falls back (5.262667ms)
+✔ F05: approval rejects self, missing content, altered hash and lost CAS; independent approval works (35.655583ms)
+✔ F05: cancelled batch, cross-batch reference and divergent paid amount cause no payment (17.721333ms)
+✔ F05: successful return is replay-safe; ambiguous POST and local persist failure stay reserved (18.38225ms)
+✔ F11/F15: health probe denies anonymous before DB; admin and scheduler reach the authorized boundary (7.049542ms)
+✔ F11: reconciliation denies anonymous, cross-company and unprivileged global requests before ERP (10.514167ms)
+(node:23132) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ N01: anonymous cannot reach DB or ERP in three handlers and their two scheduler entrypoints (70.706709ms)
+✔ Integration identity: public/fake service tokens denied; real technical key and Cloud actor supported (2.179083ms)
+✔ N01/N02: wrong company, cancelled/rejected/completed notes and unprivileged batch cause no write (20.44875ms)
+✔ N01/N03: authorized NF integrates, replays reuse it, concurrent calls create one Draft (6.717167ms)
+✔ N03: ambiguous POST reconciles an existing Draft without issuing a second POST (3.4865ms)
+✔ N03: uncertainty with no remote match fails closed until reconciliation finds the Draft (3.199167ms)
+✔ N01: fiscal audit scopes actual company before adapter or deletion; permitted flow retained (8.922125ms)
+✔ N04: employees derive actor and execution type from identity; spoofed body never becomes audit author (6.297209ms)
+✔ Expense reapproval: real payload builder and PATCH pipeline preserve complete approved content and repair zero SAP prices (4.517916ms)
+✔ N03: SAP success followed by local completion failure reconciles without duplicate creation (3.721917ms)
+✔ N01: employees from another company are denied before audit/lock/ERP writes (3.509375ms)
+✔ Scheduler entrypoints retain authenticated technical execution (4.222083ms)
+ℹ tests 37
+ℹ suites 0
+ℹ pass 37
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 215.67

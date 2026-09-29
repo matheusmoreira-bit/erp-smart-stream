@@ -324,3 +324,17 @@ A prioridade de B19 passa a incluir imediatamente N02. Não contar esses IDs com
 Validação local: 12 testes de handlers/fluxo, 6 de PATCH, 6 cenários PostgreSQL e 15 regressões da rodada anterior passaram; build passou. Vitest geral: 247 passaram, 49 ignorados e 1 falha anterior de PDF. Deno nas quatro rotas centrais: os mesmos 25 erros do baseline, sem novos diagnósticos por mensagem/arquivo.
 
 B01/B13/B19/B20 avançam nos vetores acima, mas não estão integralmente encerrados. Os achados históricos da seção 12 permanecem como evidência anterior à correção; os novos estados desta seção prevalecem para execução.
+
+## 14. Brechas residuais — correções locais após a revisão do PDF
+
+[Alterações, testes, trechos e estados de todos os F01–F15](security-residual-remediation-2026-09-28/README.md). Esta seção prevalece sobre as pendências de implementação das rodadas anteriores, apenas nos vetores explicitamente tratados.
+
+- **B19/F05:** aprovação com hash revalidado atomicamente e atualização confirmada; títulos vinculados ao lote; valores conferidos; reserva sem expiração e sem repetição de POST incerto. Migração **0066** necessária. Perfil bancário, legados e homologação integral continuam abertos.
+- **B07/F08:** HTTPS obrigatório nos helpers HANA/SAP e caminhos tratados; sem IP HTTP fixo ou fallback para endpoint de outra empresa. Infraestrutura e demais consumidores permanecem pendentes.
+- **B04/F09:** guard compartilhado passa a conferir início/existência da sessão e prazo absoluto; não generalizar a endpoints com autenticação própria.
+- **B01/B09/B13/F11/F12/F15:** escritas de credenciais e sincronização durante impersonação bloqueadas; reconciliação exige empresa/ação; monitor HANA exige admin ou identidade técnica. Inventário estático de 167 handlers anexado.
+- **B10/F13:** snapshots/cache IA por usuário+empresa, invalidação de operações locais após logout entre abas, conferência de contexto antes de persistir resultados. Demais caches, requisições já recebidas pelo servidor e fila concorrente continuam em revisão.
+- **B11/F14:** JPEG/PNG não recorrem ao original após erro de sanitização; WebP remove EXIF/XMP. Outros formatos/canais e governança seguem abertos.
+- **B14:** `qa-migrate` interrompe na primeira falha; replay integral ainda pendente.
+
+Validação: 37 testes de handlers, 10 cenários SQL, 9 de navegador e 3 formatos de imagem passaram. Build/TypeScript frontend passaram. Vitest mantém a mesma falha anterior de PDF; Deno mantém os mesmos 33 erros principais nas quatro rotas conferidas, sem novos diagnósticos por mensagem/arquivo. Sem acesso ao Supabase remoto/SAP, sem implantação. Os estados detalhados e as condições de compatibilidade estão no registro desta rodada.

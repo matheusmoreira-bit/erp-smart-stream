@@ -1,3 +1,5 @@
+import { getLocalOwnerId } from "@/lib/local-owner";
+import { localStateEpoch } from "@/lib/local-state-epoch";
 // Persistência do cache de respostas da IA por hash de conteúdo (SHA-256).
 // Objetivo: reaproveitar extrações mesmo após fechar/reabrir o modal ou
 // recarregar a página. Vive em localStorage — payloads são JSON pequenos
@@ -10,7 +12,7 @@
 // - Cap: quando ultrapassa MAX_ENTRIES, remove os mais antigos por `ts`.
 // - Falhas silenciosas (quota exceeded, JSON inválido) — cache é opcional.
 
-const VERSION = 2;
+const VERSION = 3;
 const TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 dias
 const MAX_ENTRIES = 500;
 
@@ -18,14 +20,15 @@ type Scope = "expenses" | "sales";
 type CacheEntry = { data: unknown; ts: number };
 type CacheFile = { version: number; entries: Record<string, CacheEntry> };
 
-// v2: chave inclui MIME e lastModified além de hash|size|name — invalida
-// automaticamente entradas gravadas no formato v1 (readFile as descarta
-// porque o `version` do arquivo não bate mais).
-const storageKey = (scope: Scope) => `ai-response-cache-v2:${scope}`;
+// Legacy entries without owner/company are never imported into the new scope.
+async function storageKey(scope: Scope, companyDb: string): Promise<string | null> {
+  const owner = await getLocalOwnerId();
+  return owner && companyDb ? `ai-response-cache-v3:${JSON.stringify([owner, companyDb, scope])}` : null;
+}
 
-function readFile(scope: Scope): CacheFile {
+function readFile(key: string): CacheFile {
   try {
-    const raw = localStorage.getItem(storageKey(scope));
+    const raw = localStorage.getItem(key);
     if (!raw) return { version: VERSION, entries: {} };
     const parsed = JSON.parse(raw) as CacheFile;
     if (!parsed || parsed.version !== VERSION || typeof parsed.entries !== "object") {
@@ -45,7 +48,7 @@ function readFile(scope: Scope): CacheFile {
   }
 }
 
-function writeFile(scope: Scope, file: CacheFile): void {
+function writeFile(key: string, file: CacheFile): void {
   try {
     // Aplica cap por antiguidade se necessário.
     const keys = Object.keys(file.entries);
@@ -58,39 +61,48 @@ function writeFile(scope: Scope, file: CacheFile): void {
       for (const [k] of sorted) trimmed[k] = file.entries[k];
       file = { version: VERSION, entries: trimmed };
     }
-    localStorage.setItem(storageKey(scope), JSON.stringify(file));
+    localStorage.setItem(key, JSON.stringify(file));
   } catch {
     // QuotaExceeded ou storage indisponível — segue sem persistir.
   }
 }
 
 /** Carrega o cache inteiro como Map<hash, data> para uso em memória. */
-export function loadAiResponseCache(scope: Scope): Map<string, any> {
-  const file = readFile(scope);
+export async function loadAiResponseCache(scope: Scope, companyDb: string): Promise<Map<string, any>> {
+  const epoch = localStateEpoch();
+  const key = await storageKey(scope, companyDb);
+  if (!key || epoch !== localStateEpoch()) return new Map();
+  const file = readFile(key);
   const map = new Map<string, any>();
   for (const [k, v] of Object.entries(file.entries)) map.set(k, v.data);
   return map;
 }
 
 /** Persiste (upsert) várias entradas de uma vez. */
-export function saveAiResponseCacheEntries(
+export async function saveAiResponseCacheEntries(
   scope: Scope,
   entries: Array<{ hash: string; data: unknown }>,
-): void {
+  companyDb: string,
+  epoch = localStateEpoch(),
+): Promise<void> {
   if (entries.length === 0) return;
-  const file = readFile(scope);
+  const key = await storageKey(scope, companyDb);
+  if (!key || epoch !== localStateEpoch()) return;
+  const file = readFile(key);
   const now = Date.now();
   for (const { hash, data } of entries) {
     if (!hash || data == null) continue;
     file.entries[hash] = { data, ts: now };
   }
-  writeFile(scope, file);
+  writeFile(key, file);
 }
 
 /** Remove tudo do escopo (usado se o usuário quiser resetar). */
-export function clearAiResponseCache(scope: Scope): void {
+export async function clearAiResponseCache(scope: Scope, companyDb: string): Promise<void> {
+  const key = await storageKey(scope, companyDb);
+  if (!key) return;
   try {
-    localStorage.removeItem(storageKey(scope));
+    localStorage.removeItem(key);
   } catch {
     // ignore
   }

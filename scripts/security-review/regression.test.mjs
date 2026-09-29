@@ -11,17 +11,17 @@ function js(ts){return stripTypeScriptTypes(ts,{mode:'transform'}).replace(/^imp
 const env={SUPABASE_URL:'https://example.invalid',SUPABASE_ANON_KEY:'anon',SUPABASE_SERVICE_ROLE_KEY:'svc',SAP_MIDDLEWARE_SECRET:'synthetic-secret'};
 const base={Request,Response,URL,URLSearchParams,TextEncoder,TextDecoder,Uint8Array,crypto:webcrypto,atob,btoa,console:{warn(){},error(){},log(){}}};
 const b64=x=>Buffer.from(x).toString('base64url');
-const jwt=aal=>b64('{}')+'.'+b64(JSON.stringify({sub:'test-user',aal}))+'.synthetic';
+const jwt=aal=>b64('{}')+'.'+b64(JSON.stringify({sub:'test-user',aal,session_id:'11111111-1111-4111-8111-111111111111'}))+'.synthetic';
 const req=(headers={},body={},fn='expense-mutation')=>new Request('https://example.invalid/functions/v1/'+fn,{method:'POST',headers,body:JSON.stringify(body)});
 async function authFixture(){
- const state={admin:false,impersonating:false,roleError:false,impError:false,revoked:false,revError:false,deprovisioned:false,depError:false,allow:false,calls:[],now:Date.now()};
+ const state={admin:false,impersonating:false,roleError:false,impError:false,revoked:false,revError:false,deprovisioned:false,depError:false,allow:false,calls:[],now:Date.now(),sessionAge:0,sessionError:false,sessionMissing:false};
  class Clock extends Date{static now(){return state.now;}}
  const ctx=vm.createContext({...base,Date:Clock,Deno:{env:{get:k=>env[k]}},
   isErpSessionRevoked:async()=>{if(state.revError)throw Error('offline');return state.revoked;},
   createClient:()=>({auth:{getClaims:async()=>({data:{claims:{sub:'test-user',email:'user@growth.gg'}},error:null})},
    rpc:async(name,args)=>{state.calls.push({name,args});return {
-    data:name==='has_role'?state.admin:name==='is_impersonating'?state.impersonating:name==='is_erp_user_deprovisioned'?state.deprovisioned:name==='has_module_action'?state.allow:false,
-    error:(name==='has_role'&&state.roleError)||(name==='is_impersonating'&&state.impError)||(name==='is_erp_user_deprovisioned'&&state.depError)?{message:'offline'}:null};}})
+    data:name==='session_started_at'?(state.sessionMissing?null:new Date(state.now-state.sessionAge).toISOString()):name==='has_role'?state.admin:name==='is_impersonating'?state.impersonating:name==='is_erp_user_deprovisioned'?state.deprovisioned:name==='has_module_action'?state.allow:false,
+    error:(name==='session_started_at'&&state.sessionError)||(name==='has_role'&&state.roleError)||(name==='is_impersonating'&&state.impError)||(name==='is_erp_user_deprovisioned'&&state.depError)?{message:'offline'}:null};}})
  });
  vm.runInContext(js(await source('supabase/functions/_shared/auth.ts')),ctx);
  const headers={'x-sap-session':'synthetic-session-123','x-sap-user':'sap-user','x-company-db':'A'};
@@ -149,4 +149,26 @@ test('Revocation helper does not cache negative results and denies malformed loo
  assert.equal(await c.isErpSessionRevoked(db,'session'),false);
  data=null;await assert.rejects(()=>c.isErpSessionRevoked(db,'session'));
  data=true;assert.equal(await c.isErpSessionRevoked(db,'session'),true);
+});
+
+test('F09: absolute session age, revoked session and lookup failure block access; recent sessions work',async()=>{
+ for(const admin of [false,true]){
+  const {ctx,state}=await authFixture();state.admin=admin;
+  const request=req({Authorization:'Bearer '+jwt(admin?'aal2':'aal1')});
+  await ctx.requireUser(request);
+  state.sessionAge=(admin?12:30*24)*3600000;
+  await assert.rejects(()=>ctx.requireUser(request),e=>e.status===401);
+  state.sessionAge=0;state.sessionMissing=true;
+  await assert.rejects(()=>ctx.requireUser(request),e=>e.status===401);
+  state.sessionMissing=false;state.sessionError=true;
+  await assert.rejects(()=>ctx.requireUser(request),e=>e.status===503);
+ }
+});
+test('F12: credential GET allowed, POST/DELETE and profile sync denied during impersonation',async()=>{
+ const {ctx,state}=await authFixture();state.impersonating=true;
+ const headers={Authorization:'Bearer '+jwt('aal1')};
+ await ctx.requireUser(new Request('https://app.invalid/functions/v1/sap-user-credentials',{headers}));
+ for(const fn of ['sap-user-credentials','sap-user-profile-sync','expense-sap-reconcile']){
+  await assert.rejects(()=>ctx.requireUser(req(headers,{},fn)),e=>e.status===423);
+ }
 });

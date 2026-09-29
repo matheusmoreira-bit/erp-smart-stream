@@ -1,3 +1,5 @@
+import { getLocalOwnerId } from "@/lib/local-owner";
+import { localStateEpoch } from "@/lib/local-state-epoch";
 /**
  * In-memory, session-scoped cache for AI document/extraction results.
  *
@@ -51,9 +53,16 @@ export async function withAiCache<T>(
   key: string,
   producer: () => Promise<T>,
 ): Promise<T> {
-  const cached = memCache.get(key) as T | undefined;
+  const epoch = localStateEpoch();
+  const owner = await getLocalOwnerId();
+  if (!owner) throw new Error("Faça login para processar o documento.");
+  const scopedKey = JSON.stringify([owner, epoch, key]);
+  const cached = memCache.get(scopedKey) as T | undefined;
   if (cached !== undefined) return cached;
   const value = await producer();
-  memCache.set(key, value);
+  if (epoch !== localStateEpoch() || owner !== await getLocalOwnerId()) {
+    throw new Error("A sessão mudou durante a leitura do documento. Abra o documento novamente.");
+  }
+  memCache.set(scopedKey, value);
   return value;
 }

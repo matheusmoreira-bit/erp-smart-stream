@@ -1,0 +1,42 @@
+{
+  "browser": "154.0.8037.58",
+  "environment": "isolated loopback, real IndexedDB, mocked identity and ERP circuit",
+  "tests": [
+    {
+      "name": "owner isolation: list/update/delete preserve another user’s queued item",
+      "status": "passed"
+    },
+    {
+      "name": "identity changes during flush: no send; original owner can resume",
+      "status": "passed"
+    },
+    {
+      "name": "cleanup waits for a blocked connection; other tab releases on versionchange",
+      "status": "passed"
+    },
+    {
+      "name": "blocked deletion reports failure instead of successful cleanup",
+      "status": "passed"
+    },
+    {
+      "name": "logout removes scoped storage, keeps theme, queue still works after reload",
+      "status": "passed"
+    },
+    {
+      "name": "snapshots partition by company; legacy unscoped snapshots are not restored",
+      "status": "passed"
+    },
+    {
+      "name": "logout invalidates pending snapshot and late AI result, including another tab",
+      "status": "passed"
+    },
+    {
+      "name": "AI session cache preserves reuse but never serves another owner",
+      "status": "passed"
+    },
+    {
+      "name": "persistent AI cache isolates owner/company and rejects work from before logout",
+      "status": "passed"
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "browser": "154.0.8037.58",
+  "environment": "synthetic image containers and real browser decoding",
+  "tests": [
+    {
+      "mime": "image/jpeg",
+      "metadataRemoved": true,
+      "dimensions": [
+        8,
+        8
+      ],
+      "pixel": [
+        170,
+        187,
+        203,
+        255
+      ],
+      "truncatedRejected": true
+    },
+    {
+      "mime": "image/png",
+      "metadataRemoved": true,
+      "dimensions": [
+        8,
+        8
+      ],
+      "pixel": [
+        170,
+        187,
+        204,
+        255
+      ],
+      "truncatedRejected": true
+    },
+    {
+      "mime": "image/webp",
+      "metadataRemoved": true,
+      "dimensions": [
+        8,
+        8
+      ],
+      "pixel": [
+        173,
+        186,
+        204,
+        255
+      ],
+      "truncatedRejected": true
+    }
+  ]
+}

@@ -51,7 +51,7 @@ qa-seed: ## Baixa último dump S3 (db-backup-s3) e importa no banco QA
 	bash scripts/qa-seed.sh $(DATE)
 
 qa-migrate: ## Reaplica migrations do repo (útil após alterar schema)
-	@for f in supabase/migrations/*.sql; do \
+	@set -eu; for f in supabase/migrations/*.sql; do \
 	  echo ">> $$f"; \
 	  PGPASSWORD=$$(grep '^POSTGRES_PASSWORD=' docker/.env | cut -d= -f2) \
 	  psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -q -f $$f; \

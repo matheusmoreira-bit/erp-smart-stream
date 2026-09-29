@@ -1,0 +1,6 @@
+{
+  "environment": "psql substituted with a failing stub; no DB connection",
+  "first_failure_stops_runner": true,
+  "psql_calls": 1,
+  "make_exit_code": 2
+}

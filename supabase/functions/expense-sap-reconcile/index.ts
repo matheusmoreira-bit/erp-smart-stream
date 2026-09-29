@@ -6,6 +6,9 @@
 // impostos, despesas adicionais/frete, arredondamento, câmbio ou diferença de
 // linhas). O resultado é gravado em public.sap_total_reconciliation.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { requireIntegrationCaller, authorizeIntegrationCompany, type IntegrationCaller } from "../_shared/integration-auth.ts";
+import { requireAdmin, authErrorResponse } from "../_shared/auth.ts";
+import { requireHttpsEndpoint } from "../_shared/secure-transport.ts";
 import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 const TOLERANCE = 0.02;
@@ -232,19 +235,10 @@ Deno.serve(async (req) => {
     const cronKey = Deno.env.get("RECONCILE_CRON_KEY") || "";
     const isCron = !!cronKey && req.headers.get("x-cron-key") === cronKey;
 
-    const authHeader = req.headers.get("Authorization") || "";
-    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-    if (!token && !isCron) return json({ error: "UNAUTHORIZED" }, 401, cors);
-
-    let actorEmail = isCron ? "cron" : "service_role";
-    if (!isCron && token !== serviceKey) {
-      const asCaller = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-        global: { headers: { Authorization: `Bearer ${token}` } },
-      });
-      const { data: userData } = await asCaller.auth.getUser();
-      if (!userData?.user) return json({ error: "Sessão inválida. Faça login novamente." }, 401, cors);
-      actorEmail = userData.user.email || "desconhecido";
-    }
+    const caller: IntegrationCaller = isCron
+      ? { technical: true, userId: null, actor: "service:reconcile-scheduler" }
+      : await requireIntegrationCaller(req);
+    const actorEmail = caller.actor;
 
     const body = await req.json().catch(() => ({}));
     const companyDb = String(body.company_db || "").trim();
@@ -255,6 +249,7 @@ Deno.serve(async (req) => {
 
     // Execução automática (cron diário): varre todas as empresas ativas, uma a uma.
     if (companyDb === "all") {
+      if (!caller.technical) await requireAdmin(req);
       const { data: companies } = await supabase
         .from("companies")
         .select("company_db")
@@ -275,6 +270,8 @@ Deno.serve(async (req) => {
       }
       return json({ success: true, mode: "all", companies: summary }, 200, cors);
     }
+
+    if (!expenseId) await authorizeIntegrationCompany(req, caller, "fiscal_audit", companyDb);
 
     let query = supabase
       .from("expenses")
@@ -298,6 +295,8 @@ Deno.serve(async (req) => {
       return json({ error: "Documentos de empresas diferentes na mesma execução" }, 400, cors);
     }
 
+    await authorizeIntegrationCompany(req, caller, "fiscal_audit", db);
+
     // Linhas locais para comparação por item.
     const ids = expenses.map((e) => e.id);
     const { data: itemRows } = await supabase
@@ -319,12 +318,13 @@ Deno.serve(async (req) => {
     const creds: Record<string, string> = {};
     for (const r of credRows || []) creds[r.credential_key] = r.credential_value ?? "";
 
-    const baseUrl = buildBaseUrl(creds.service_layer_url || creds.base_url || creds.url || "");
+    const baseUrl = requireHttpsEndpoint(buildBaseUrl(creds.service_layer_url || creds.base_url || creds.url || ""));
     const user = creds.username || creds.user_name || creds.api_user || "";
     const pass = creds.password || creds.api_password || "";
     if (!user || !pass) return json({ error: "Credenciais de integração (Apiuser) não configuradas." }, 400, cors);
 
     const loginRes = await fetch(`${baseUrl}/Login`, {
+      redirect: "error",
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ UserName: user, Password: pass, CompanyDB: db }),
@@ -351,7 +351,7 @@ Deno.serve(async (req) => {
       let sapDocNum: number | null = exp.sap_doc_num ?? null;
 
       try {
-        const docRes = await fetch(`${baseUrl}/${endpoint}(${exp.sap_doc_entry})`, { headers: { Cookie: cookies } });
+        const docRes = await fetch(`${baseUrl}/${endpoint}(${exp.sap_doc_entry})`, { redirect: "error", headers: { Cookie: cookies } });
         if (docRes.status === 404) {
           finding = {
             status: "divergent",
@@ -439,7 +439,7 @@ Deno.serve(async (req) => {
       await Promise.all(expenses.slice(i, i + CONCURRENCY).map((exp) => processOne(exp)));
     }
 
-    await fetch(`${baseUrl}/Logout`, { method: "POST", headers: { Cookie: cookies } }).catch(() => {});
+    await fetch(`${baseUrl}/Logout`, { method: "POST", redirect: "error", headers: { Cookie: cookies } }).catch(() => {});
 
     if (rowsToUpsert.length) {
       const { error: upErr } = await supabase
@@ -473,6 +473,9 @@ Deno.serve(async (req) => {
       cors,
     );
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : String(e) }, 500, cors);
+    const authResponse = authErrorResponse(e, cors);
+    if (authResponse) return authResponse;
+    console.error("[expense-sap-reconcile]", e);
+    return json({ error: "Não foi possível concluir a reconciliação." }, 500, cors);
   }
 });

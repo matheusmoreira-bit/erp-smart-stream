@@ -1,0 +1,86 @@
+[
+  {
+    "path": "supabase/functions/accounts-payable-cnab/index.ts",
+    "first_line": 1379,
+    "last_line": 1392,
+    "sha256": "84741e7d236bb9ab71860e0029c0054a9f0e966d39b44dccc65f948abea2244c"
+  },
+  {
+    "path": "supabase/functions/accounts-payable-cnab/index.ts",
+    "first_line": 1549,
+    "last_line": 1557,
+    "sha256": "c300185dc393ac9a5f6fcf3601877aedf96c2f107f6b31183ec1ec779330b9d6"
+  },
+  {
+    "path": "drizzle/migrations/0066_cnab_return_safety.sql",
+    "first_line": 8,
+    "last_line": 20,
+    "sha256": "5823401f6fb1b7c2c9de587b5fbe1799e0e5a6c9aba816e3fd285c3103c44958"
+  },
+  {
+    "path": "drizzle/migrations/0066_cnab_return_safety.sql",
+    "first_line": 48,
+    "last_line": 52,
+    "sha256": "ebd65ba2e21aaea8ee7bcea1dee5632e4d0715a0897a71e57d73dd53a1eb80b3"
+  },
+  {
+    "path": "supabase/functions/accounts-payable-cnab/index.ts",
+    "first_line": 1663,
+    "last_line": 1668,
+    "sha256": "f46c008b71069c50d944ca45c49602f5b462ce6043bc6f3fbe563a9bc20b1a61"
+  },
+  {
+    "path": "supabase/functions/_shared/sap-fetch.ts",
+    "first_line": 28,
+    "last_line": 37,
+    "sha256": "d17250649e9a8b8f51db98cdc0068c316c850a3563f45704189c4adfb1f97b35"
+  },
+  {
+    "path": "supabase/functions/_shared/secure-transport.ts",
+    "first_line": 2,
+    "last_line": 10,
+    "sha256": "a8a6b05f911c066badd10494ca7cbab250877b41de71931d3f96c6d69744e534"
+  },
+  {
+    "path": "supabase/functions/_shared/auth.ts",
+    "first_line": 251,
+    "last_line": 258,
+    "sha256": "1c6dc63d3409d3d3c6a2462860c6164dfbfcca8cf83b7cd4450141d35df0da8f"
+  },
+  {
+    "path": "supabase/functions/expense-sap-reconcile/index.ts",
+    "first_line": 298,
+    "last_line": 299,
+    "sha256": "b530e09afff1aa88a678f2f05bb40589f45c91bb5a5da31e5e8accafafed736c"
+  },
+  {
+    "path": "supabase/functions/_shared/auth.ts",
+    "first_line": 298,
+    "last_line": 305,
+    "sha256": "2a89bd1f0ecc8205f9e6f7964249c1e8aa494e554344588e5c361c393e33fa3c"
+  },
+  {
+    "path": "src/lib/expense-queue-persist.ts",
+    "first_line": 61,
+    "last_line": 64,
+    "sha256": "2f81f8517123dce910177270aa402a0ceafe0f7d5ddc2d8ce58821a42b454115"
+  },
+  {
+    "path": "src/lib/ai-file-cache.ts",
+    "first_line": 63,
+    "last_line": 68,
+    "sha256": "b388fa007c45bc2180c245dc4d3d31a5f5f7a0bd14764c1566a641638286e7ea"
+  },
+  {
+    "path": "supabase/functions/_shared/ai-minimize.ts",
+    "first_line": 90,
+    "last_line": 98,
+    "sha256": "aa235f65cc3d658d7a2730dfa867e5bd52658ec331161eac83c955645027290b"
+  },
+  {
+    "path": "supabase/functions/hana-health-probe/index.ts",
+    "first_line": 169,
+    "last_line": 174,
+    "sha256": "edb62d58e7e427286aa978e146426d43b6d53e867066849c7e5a6b6a38018bf0"
+  }
+]

@@ -1,0 +1,237 @@
+Check file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts
+Check file:///tmp/erp-residual-baseline/supabase/functions/hana-health-probe/index.ts
+Check file:///tmp/erp-residual-baseline/supabase/functions/expense-sap-reconcile/index.ts
+Check file:///tmp/erp-residual-baseline/supabase/functions/expense-ocr-capture/index.ts
+TS2345 [ERROR]: Argument of type 'SupabaseClient<any, "public", any>' is not assignable to parameter of type 'SupabaseClient<unknown, never, GenericSchema>'.
+  Type '"public"' is not assignable to type 'never'.
+        results.push(await syncCompany(sb, companyDb, {
+                                       ~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/_shared/sap-cache.ts:275:40
+
+TS2769 [ERROR]: No overload matches this call.
+  Overload 1 of 2, '(values: Record<string, unknown>, options?: { onConflict?: string | undefined; ignoreDuplicates?: boolean | undefined; count?: "exact" | "planned" | "estimated" | undefined; } | undefined): PostgrestFilterBuilder<...>', gave the following error.
+    Argument of type 'R[]' is not assignable to parameter of type 'Record<string, unknown>'.
+      Index signature for type 'string' is missing in type 'R[]'.
+  Overload 2 of 2, '(values: Record<string, unknown>[], options?: { onConflict?: string | undefined; ignoreDuplicates?: boolean | undefined; count?: "exact" | "planned" | "estimated" | undefined; defaultToNull?: boolean | undefined; } | undefined): PostgrestFilterBuilder<...>', gave the following error.
+    Argument of type 'R[]' is not assignable to parameter of type 'Record<string, unknown>[]'.
+      Type 'R' is not assignable to type 'Record<string, unknown>'.
+    const { error: upErr } = await o.sb.from(o.cacheTable).upsert(rows, { onConflict });
+                                                                  ~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/_shared/sap-cache.ts:418:67
+
+TS2208 [ERROR]:     This type parameter might need an `extends Record<string, unknown>` constraint.
+    export async function runIncrementalPager<T extends OdataDoc, R>(
+                                                                  ^
+        at file:///tmp/erp-residual-baseline/supabase/functions/_shared/sap-cache.ts:343:63
+
+TS2352 [ERROR]: Conversion of type '{ [x: string]: unknown; }' to type 'SupplierPaymentProfileRow' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type '{ [x: string]: unknown; }' is missing the following properties from type 'SupplierPaymentProfileRow': company_db, supplier_code, supplier_name, supplier_tax_id, and 11 more.
+      next: supplierPaymentResponse(supplierCode, bpRow, data as SupplierPaymentProfileRow),
+                                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:884:58
+
+TS2352 [ERROR]: Conversion of type '{ [x: string]: unknown; }' to type 'SupplierPaymentProfileRow' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type '{ [x: string]: unknown; }' is missing the following properties from type 'SupplierPaymentProfileRow': company_db, supplier_code, supplier_name, supplier_tax_id, and 11 more.
+      profile: supplierPaymentResponse(supplierCode, bpRow, data as SupplierPaymentProfileRow),
+                                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:891:61
+
+TS2352 [ERROR]: Conversion of type '{ [x: string]: unknown; }' to type 'SupplierPaymentProfileRow' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type '{ [x: string]: unknown; }' is missing the following properties from type 'SupplierPaymentProfileRow': company_db, supplier_code, supplier_name, supplier_tax_id, and 11 more.
+      profile: supplierPaymentResponse(supplierCode, bpRow, data as SupplierPaymentProfileRow),
+                                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:942:61
+
+TS2322 [ERROR]: Type 'unknown' is not assignable to type 'string | null | undefined'.
+    dueFrom: body.due_from,
+    ~~~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1029:5
+
+TS2322 [ERROR]: Type 'unknown' is not assignable to type 'string | null | undefined'.
+    dueTo: body.due_to,
+    ~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1030:5
+
+TS7053 [ERROR]: Element implicitly has an 'any' type because expression of type '0' can't be used to index type '{}'.
+  Property '0' does not exist on type '{}'.
+  if (error || !data?.[0]) throw new Error(error ? message(error) : "Não foi possível reservar a sequência do arquivo.");
+                ~~~~~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1092:17
+
+TS7053 [ERROR]: Element implicitly has an 'any' type because expression of type '0' can't be used to index type '{}'.
+  Property '0' does not exist on type '{}'.
+  return { bankAccountId: data[0].bank_account_id as string, sequence: Number(data[0].file_sequence) };
+                          ~~~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1093:27
+
+TS7053 [ERROR]: Element implicitly has an 'any' type because expression of type '0' can't be used to index type '{}'.
+  Property '0' does not exist on type '{}'.
+  return { bankAccountId: data[0].bank_account_id as string, sequence: Number(data[0].file_sequence) };
+                                                                              ~~~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1093:79
+
+TS2345 [ERROR]: Argument of type '(batch: { id: string; }) => string' is not assignable to parameter of type '(value: { id: unknown; company_db: unknown; bank_account_id: unknown; file_sequence: unknown; filename: unknown; payment_date: unknown; title_count: unknown; total_amount: unknown; status: unknown; content_sha256: unknown; return_filename: unknown; return_sha256: unknown; generated_by: unknown; generated_at: unknown...'.
+  Types of parameters 'batch' and 'value' are incompatible.
+    Type '{ id: unknown; company_db: unknown; bank_account_id: unknown; file_sequence: unknown; filename: unknown; payment_date: unknown; title_count: unknown; total_amount: unknown; status: unknown; content_sha256: unknown; return_filename: unknown; return_sha256: unknown; generated_by: unknown; generated_at: unknown; ... 5 ...' is not assignable to type '{ id: string; }'.
+      Types of property 'id' are incompatible.
+        Type 'unknown' is not assignable to type 'string'.
+  const batchIds = (batches || []).map((batch: { id: string }) => batch.id).filter(Boolean);
+                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1312:40
+
+TS2345 [ERROR]: Argument of type '(batch: { id: string; }) => { accounts_payable_batch_items: unknown[]; id: string; }' is not assignable to parameter of type '(value: { id: unknown; company_db: unknown; bank_account_id: unknown; file_sequence: unknown; filename: unknown; payment_date: unknown; title_count: unknown; total_amount: unknown; status: unknown; content_sha256: unknown; return_filename: unknown; return_sha256: unknown; generated_by: unknown; generated_at: unknown...'.
+  Types of parameters 'batch' and 'value' are incompatible.
+    Type '{ id: unknown; company_db: unknown; bank_account_id: unknown; file_sequence: unknown; filename: unknown; payment_date: unknown; title_count: unknown; total_amount: unknown; status: unknown; content_sha256: unknown; return_filename: unknown; return_sha256: unknown; generated_by: unknown; generated_at: unknown; ... 5 ...' is not assignable to type '{ id: string; }'.
+      Types of property 'id' are incompatible.
+        Type 'unknown' is not assignable to type 'string'.
+  return (batches || []).map((batch: { id: string }) => ({
+                             ^
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1328:30
+
+TS2769 [ERROR]: No overload matches this call.
+  Overload 1 of 2, '(column: "id", value: {}): PostgrestFilterBuilder<GenericSchema, Record<string, unknown>, null, "accounts_payable_batches", unknown>', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type '{}'.
+  Overload 2 of 2, '(column: string, value: {}): PostgrestFilterBuilder<GenericSchema, Record<string, unknown>, null, "accounts_payable_batches", unknown>', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type '{}'.
+  }).eq("id", batch.id);
+              ~~~~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1555:15
+
+TS2769 [ERROR]: No overload matches this call.
+  Overload 1 of 2, '(column: "id", value: {}): PostgrestFilterBuilder<GenericSchema, Record<string, unknown>, null, "accounts_payable_batch_items", unknown>', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type '{}'.
+  Overload 2 of 2, '(column: string, value: {}): PostgrestFilterBuilder<GenericSchema, Record<string, unknown>, null, "accounts_payable_batch_items", unknown>', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type '{}'.
+      }).eq("id", item.id);
+                  ~~~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1586:19
+
+TS7053 [ERROR]: Element implicitly has an 'any' type because expression of type '0' can't be used to index type '{}'.
+  Property '0' does not exist on type '{}'.
+          if (claimError || !claimed?.[0]) {
+                             ~~~~~~~~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1601:30
+
+TS2769 [ERROR]: No overload matches this call.
+  Overload 1 of 2, '(column: "id", value: {}): PostgrestFilterBuilder<GenericSchema, Record<string, unknown>, null, "accounts_payable_batch_items", unknown>', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type '{}'.
+  Overload 2 of 2, '(column: string, value: {}): PostgrestFilterBuilder<GenericSchema, Record<string, unknown>, null, "accounts_payable_batch_items", unknown>', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type '{}'.
+          }).eq("id", item.id);
+                      ~~~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1610:23
+
+TS2769 [ERROR]: No overload matches this call.
+  Overload 1 of 2, '(column: "id", value: {}): PostgrestFilterBuilder<GenericSchema, Record<string, unknown>, null, "accounts_payable_batch_items", unknown>', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type '{}'.
+  Overload 2 of 2, '(column: string, value: {}): PostgrestFilterBuilder<GenericSchema, Record<string, unknown>, null, "accounts_payable_batch_items", unknown>', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type '{}'.
+              await admin.from("accounts_payable_batch_items").update({ status: "already_settled" }).eq("id", item.id);
+                                                                                                              ~~~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1616:111
+
+TS2769 [ERROR]: No overload matches this call.
+  Overload 1 of 2, '(column: "id", value: {}): PostgrestFilterBuilder<GenericSchema, Record<string, unknown>, null, "accounts_payable_batch_items", unknown>', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type '{}'.
+  Overload 2 of 2, '(column: string, value: {}): PostgrestFilterBuilder<GenericSchema, Record<string, unknown>, null, "accounts_payable_batch_items", unknown>', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type '{}'.
+            }).eq("id", item.id);
+                        ~~~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1628:25
+
+TS2769 [ERROR]: No overload matches this call.
+  Overload 1 of 2, '(column: "id", value: {}): PostgrestFilterBuilder<GenericSchema, Record<string, unknown>, null, "accounts_payable_batch_items", unknown>', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type '{}'.
+  Overload 2 of 2, '(column: string, value: {}): PostgrestFilterBuilder<GenericSchema, Record<string, unknown>, null, "accounts_payable_batch_items", unknown>', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type '{}'.
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1633:145
+
+TS2769 [ERROR]: No overload matches this call.
+  Overload 1 of 2, '(column: "id", value: {}): PostgrestFilterBuilder<GenericSchema, Record<string, unknown>, null, "accounts_payable_batches", unknown>', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type '{}'.
+  Overload 2 of 2, '(column: string, value: {}): PostgrestFilterBuilder<GenericSchema, Record<string, unknown>, null, "accounts_payable_batches", unknown>', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type '{}'.
+      await admin.from("accounts_payable_batches").update({ status: "error", error_message: message(error).slice(0, 1000) }).eq("id", batch.id);
+                                                                                                                                      ~~~~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1641:135
+
+TS2769 [ERROR]: No overload matches this call.
+  Overload 1 of 2, '(column: "id", value: {}): PostgrestFilterBuilder<GenericSchema, Record<string, unknown>, null, "accounts_payable_batches", unknown>', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type '{}'.
+  Overload 2 of 2, '(column: string, value: {}): PostgrestFilterBuilder<GenericSchema, Record<string, unknown>, null, "accounts_payable_batches", unknown>', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type '{}'.
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1649:154
+
+TS2345 [ERROR]: Argument of type 'SupabaseClient<any, "public", any>' is not assignable to parameter of type 'SupabaseClient<unknown, never, GenericSchema>'.
+  Type '"public"' is not assignable to type 'never'.
+    if (action === "get_config") return json({ config: await loadBankConfig(admin, companyDb) });
+                                                                            ~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1681:77
+
+TS2345 [ERROR]: Argument of type 'SupabaseClient<any, "public", any>' is not assignable to parameter of type 'SupabaseClient<unknown, never, GenericSchema>'.
+  Type '"public"' is not assignable to type 'never'.
+    if (action === "save_config") return json({ config: await saveBankConfig(admin, companyDb, body, actor) });
+                                                                             ~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1682:78
+
+TS2345 [ERROR]: Argument of type 'SupabaseClient<any, "public", any>' is not assignable to parameter of type 'SupabaseClient<unknown, never, GenericSchema>'.
+  Type '"public"' is not assignable to type 'never'.
+    if (action === "get_supplier_payment_profile") return json(await getSupplierPaymentProfile(admin, companyDb, body, req));
+                                                                                               ~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1683:96
+
+TS2345 [ERROR]: Argument of type 'SupabaseClient<any, "public", any>' is not assignable to parameter of type 'SupabaseClient<unknown, never, GenericSchema>'.
+  Type '"public"' is not assignable to type 'never'.
+    if (action === "save_supplier_payment_profile") return json(await saveSupplierPaymentProfile(admin, companyDb, body, actor, req));
+                                                                                                 ~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1684:98
+
+TS2345 [ERROR]: Argument of type 'SupabaseClient<any, "public", any>' is not assignable to parameter of type 'SupabaseClient<unknown, never, GenericSchema>'.
+  Type '"public"' is not assignable to type 'never'.
+    if (action === "list_open") return json({ titles: await listAvailableTitles(admin, companyDb, req, body) });
+                                                                                ~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1685:81
+
+TS2345 [ERROR]: Argument of type 'SupabaseClient<any, "public", any>' is not assignable to parameter of type 'SupabaseClient<unknown, never, GenericSchema>'.
+  Type '"public"' is not assignable to type 'never'.
+    if (action === "generate") return json(await generateBatch(admin, companyDb, body, actor, req));
+                                                               ~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1686:64
+
+TS2345 [ERROR]: Argument of type 'SupabaseClient<any, "public", any>' is not assignable to parameter of type 'SupabaseClient<unknown, never, GenericSchema>'.
+  Type '"public"' is not assignable to type 'never'.
+    if (action === "list_batches") return json({ batches: await listBatches(admin, companyDb) });
+                                                                            ~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1687:77
+
+TS2345 [ERROR]: Argument of type 'SupabaseClient<any, "public", any>' is not assignable to parameter of type 'SupabaseClient<unknown, never, GenericSchema>'.
+  Type '"public"' is not assignable to type 'never'.
+    if (action === "approve_batch") return json(await approveBatch(admin, companyDb, body, actor));
+                                                                   ~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1688:68
+
+TS2345 [ERROR]: Argument of type 'SupabaseClient<any, "public", any>' is not assignable to parameter of type 'SupabaseClient<unknown, never, GenericSchema>'.
+  Type '"public"' is not assignable to type 'never'.
+    if (action === "approve_supplier_payment_profile") return json(await approveSupplierPaymentProfile(admin, companyDb, body, actor, req));
+                                                                                                       ~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1689:104
+
+TS2345 [ERROR]: Argument of type 'SupabaseClient<any, "public", any>' is not assignable to parameter of type 'SupabaseClient<unknown, never, GenericSchema>'.
+  Type '"public"' is not assignable to type 'never'.
+    if (action === "download_batch") return json(await downloadBatch(admin, companyDb, body, actor));
+                                                                     ~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1690:70
+
+TS2345 [ERROR]: Argument of type 'SupabaseClient<any, "public", any>' is not assignable to parameter of type 'SupabaseClient<unknown, never, GenericSchema>'.
+  Type '"public"' is not assignable to type 'never'.
+    if (action === "preview_return") return json(await previewReturn(admin, companyDb, String(body.content || "")));
+                                                                     ~~~~~
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1691:70
+
+TS2345 [ERROR]: Argument of type 'SupabaseClient<any, "public", any>' is not assignable to parameter of type 'SupabaseClient<unknown, never, GenericSchema>'.
+  Type '"public"' is not assignable to type 'never'.
+    at file:///tmp/erp-residual-baseline/supabase/functions/accounts-payable-cnab/index.ts:1692:70
+
+Found 33 errors.
+
+error: Type checking failed.

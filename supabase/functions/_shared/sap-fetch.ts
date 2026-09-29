@@ -1,6 +1,7 @@
+import { requireHttpsEndpoint } from "./secure-transport.ts";
 // Helper compartilhado para chamadas ao SAP Service Layer.
 // - timeout via AbortSignal (default 30s)
-// - retry com backoff exponencial em 5xx, 408, 429 e erros de rede/timeout
+// - retry somente de GET/HEAD; escritas incertas exigem reconciliação
 // - propaga erros em 4xx (exceto 408/429) sem retry
 
 export interface SapFetchOptions extends RequestInit {
@@ -18,22 +19,32 @@ function sleep(ms: number) {
 export async function sapFetch(url: string, options: SapFetchOptions = {}): Promise<Response> {
   const {
     timeoutMs = 30_000,
-    maxAttempts = 3,
+    maxAttempts: requestedAttempts = 3,
     baseDelayMs = 1000,
     signal: externalSignal,
     ...init
   } = options;
 
+  // Validate origin independently of OData query parameters.
+  const endpoint = new URL(url);
+  requireHttpsEndpoint(endpoint.origin);
+  if (endpoint.username || endpoint.password) throw new Error("Credenciais na URL SAP não são permitidas.");
+  const method = (init.method || "GET").toUpperCase();
+  // An uncertain write may already have committed. Only reads can be retried here.
+  const maxAttempts = ["GET", "HEAD"].includes(method)
+    ? Math.min(5, Math.max(1, Math.floor(requestedAttempts) || 1)) : 1;
   let lastErr: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(new Error(`SAP timeout após ${timeoutMs}ms`)), timeoutMs);
+    const onAbort = () => ctrl.abort(externalSignal?.reason);
     if (externalSignal) {
       if (externalSignal.aborted) ctrl.abort(externalSignal.reason);
-      else externalSignal.addEventListener("abort", () => ctrl.abort(externalSignal.reason), { once: true });
+      else externalSignal.addEventListener("abort", onAbort, { once: true });
     }
     try {
-      const res = await fetch(url, { ...init, signal: ctrl.signal });
+      if (ctrl.signal.aborted) throw ctrl.signal.reason;
+      const res = await fetch(url, { ...init, redirect: "error", signal: ctrl.signal });
       clearTimeout(timer);
       if (RETRY_STATUSES.has(res.status) && attempt < maxAttempts) {
         // descarta corpo para liberar conexão
@@ -47,11 +58,14 @@ export async function sapFetch(url: string, options: SapFetchOptions = {}): Prom
     } catch (e) {
       clearTimeout(timer);
       lastErr = e;
-      if (attempt >= maxAttempts) break;
+      if (externalSignal?.aborted || attempt >= maxAttempts) break;
       const delay = baseDelayMs * Math.pow(2, attempt - 1);
       const msg = e instanceof Error ? e.message : String(e);
       console.warn(`[sapFetch] ${url} -> erro de rede (${msg}), retry ${attempt}/${maxAttempts - 1} em ${delay}ms`);
       await sleep(delay);
+    } finally {
+      clearTimeout(timer);
+      externalSignal?.removeEventListener("abort", onAbort);
     }
   }
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));

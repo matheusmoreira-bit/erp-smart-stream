@@ -463,6 +463,13 @@
       "when": 1790625861896,
       "tag": "0065_cactus_providers_disable_standalone",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1790625861897,
+      "tag": "0066_cnab_return_safety",
+      "breakpoints": true
     }
   ]
 }

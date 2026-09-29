@@ -2,6 +2,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { requireAdminOrSapModule, authErrorResponse, parseSapHeaders } from "../_shared/auth.ts";
+import { sapFetch } from "../_shared/sap-fetch.ts";
 import { buildSapBaseUrl, loadSapCreds, sapSessionLogin, sapLogoutSession } from "../_shared/sap-cache.ts";
 import {
   generateSicoobCnab240,
@@ -564,7 +565,7 @@ function sapCookie(session: { sessionId: string; routeId?: string }): string {
 }
 
 async function sapJson(baseUrl: string, cookie: string, path: string, init: RequestInit = {}) {
-  const response = await fetch(`${baseUrl}/${path.replace(/^\/+/, "")}`, {
+  const response = await sapFetch(`${baseUrl}/${path.replace(/^\/+/, "")}`, {
     ...init,
     headers: { Cookie: cookie, "Content-Type": "application/json", ...(init.headers || {}) },
   });
@@ -1371,16 +1372,22 @@ async function approveBatch(admin: AdminClient, companyDb: string, body: Record<
   if (sameActor(batch.generated_by, actor)) {
     throw new Error("Segregação de funções: quem gerou a remessa não pode aprová-la.");
   }
-  if (batch.content && (await sha256(String(batch.content))) !== String(batch.content_sha256 || "")) {
+  if (!batch.content || !batch.content_sha256 || (await sha256(String(batch.content))) !== String(batch.content_sha256)) {
     throw new Error("Integridade da remessa violada: o arquivo foi alterado após a geração.");
   }
   const approvedAt = new Date().toISOString();
-  const { error: upErr } = await admin
+  const { data: approved, error: upErr } = await admin
     .from("accounts_payable_batches")
     .update({ status: "approved", approved_by: actor, approved_at: approvedAt })
     .eq("id", batchId)
-    .eq("status", "generated");
+    .eq("company_db", companyDb)
+    .eq("status", "generated")
+    .eq("content_sha256", batch.content_sha256)
+    .eq("generated_by", String(batch.generated_by))
+    .is("approved_by", null)
+    .select("id").maybeSingle();
   if (upErr) throw new Error(`Falha ao aprovar remessa: ${message(upErr)}`);
+  if (!approved) throw new Error("A remessa mudou durante a aprovação. Recarregue e confira novamente.");
   await admin.rpc("insert_audit_log", {
     p_action: "accounts_payable_batch_approved",
     p_entity_type: "accounts_payable_batch",
@@ -1457,14 +1464,13 @@ async function downloadBatch(admin: AdminClient, companyDb: string, body: Record
   return { filename: batch.filename, content: remittance.content, content_sha256: expectedHash, regenerated: true };
 }
 
-async function matchReturn(admin: AdminClient, companyDb: string, parsedTitles: SicoobReturnTitle[]) {
+async function matchReturn(admin: AdminClient, companyDb: string, parsedTitles: SicoobReturnTitle[], batchId?: string) {
   const references = parsedTitles.map((title) => title.companyReference).filter(Boolean);
   if (!references.length) return [];
-  const { data, error } = await admin
-    .from("accounts_payable_batch_items")
-    .select("*")
-    .eq("company_db", companyDb)
-    .in("company_reference", references);
+  let query = admin.from("accounts_payable_batch_items").select("*")
+    .eq("company_db", companyDb).in("company_reference", references);
+  if (batchId) query = query.eq("batch_id", batchId);
+  const { data, error } = await query;
   if (error) throw new Error(`Títulos do retorno: ${message(error)}`);
   const byReference = new Map((data || []).map((row) => [row.company_reference, row]));
   return parsedTitles.map((title) => ({ ...title, item: byReference.get(title.companyReference) || null }));
@@ -1515,7 +1521,9 @@ async function processReturn(admin: AdminClient, companyDb: string, content: str
   if (batchError) throw new Error(`Lote do retorno: ${message(batchError)}`);
   if (!batch) throw new Error(`Não existe remessa ${parsed.fileSequence} para esta empresa.`);
   // F05: retorno só para remessa aprovada, de origem conferida e por quem não gerou.
-  if (!batch.approved_by) throw new Error("Esta remessa não foi aprovada; o retorno não pode ser processado.");
+  if (!batch.approved_by || !batch.approved_at || ["cancelled", "generated"].includes(String(batch.status))) {
+    throw new Error("Esta remessa não está aprovada para processamento do retorno.");
+  }
   if (sameActor(batch.generated_by, actor)) {
     throw new Error("Segregação de funções: quem gerou a remessa não pode processar o retorno.");
   }
@@ -1538,21 +1546,33 @@ async function processReturn(admin: AdminClient, companyDb: string, content: str
     throw new Error("Arquivo de retorno não pertence à conta Sicoob configurada desta empresa (CNPJ/conta divergentes).");
   }
   if (batch.return_sha256 && batch.return_sha256 !== returnHash) throw new Error("Este lote já recebeu outro arquivo de retorno.");
-  const matches = await matchReturn(admin, companyDb, parsed.titles);
+  const matches = await matchReturn(admin, companyDb, parsed.titles, String(batch.id));
+  for (const match of matches) {
+    if (!match.item) throw new Error("Retorno contém título que não pertence a esta remessa.");
+    if (match.status === "paid" && (!Number.isFinite(match.paymentAmount) || match.paymentAmount <= 0 ||
+        Math.abs(roundMoney(match.paymentAmount) - roundMoney(Number(match.item.amount))) > 0.005)) {
+      throw new Error("Valor do retorno diverge do valor aprovado. Reconciliação manual necessária.");
+    }
+  }
   const accountRelation = Array.isArray(batch.accounts_payable_bank_accounts)
     ? batch.accounts_payable_bank_accounts[0]
     : batch.accounts_payable_bank_accounts;
   const transferAccount = String(accountRelation?.sap_transfer_account || "");
   if (!transferAccount) throw new Error("Conta contábil de saída não configurada.");
 
-  await admin.from("accounts_payable_batches").update({
+  const { data: processing, error: processingError } = await admin.from("accounts_payable_batches").update({
     status: "processing",
     return_filename: filename || `RET_${parsed.fileSequence}.RET`,
     return_sha256: returnHash,
     return_imported_by: actor,
     return_imported_at: new Date().toISOString(),
     error_message: null,
-  }).eq("id", batch.id);
+  }).eq("id", batch.id).eq("company_db", companyDb)
+    .in("status", ["approved", "partial", "error", "processed"])
+    .or(`return_sha256.is.null,return_sha256.eq.${returnHash}`)
+    .select("id").maybeSingle();
+  if (processingError) throw new Error("Falha ao reservar o processamento do retorno.");
+  if (!processing) throw new Error("Retorno já está em processamento ou remessa alterada. Recarregue antes de continuar.");
 
   const results: Array<Record<string, unknown>> = [];
   const paidMatches: typeof matches = [];
@@ -1578,13 +1598,15 @@ async function processReturn(admin: AdminClient, companyDb: string, content: str
 
     if (!item) {
       results.push({ reference: match.companyReference, status: "unmatched" });
-    } else if (match.status !== "paid") {
+    } else if (match.status !== "paid" && !["sap_processing", "sap_settled", "already_settled", "cancelled"].includes(String(item.status))) {
       await admin.from("accounts_payable_batch_items").update({
         status: match.status === "scheduled" ? "scheduled" : match.status === "rejected" ? "bank_rejected" : item.status,
         return_occurrences: match.occurrenceCodes,
         bank_protocol: match.bankReference || null,
       }).eq("id", item.id);
       results.push({ reference: match.companyReference, status: match.status });
+    } else if (match.status !== "paid") {
+      results.push({ reference: match.companyReference, status: "ignored" });
     } else if (item.sap_payment_doc_entry) {
       results.push({ reference: match.companyReference, status: "already_processed", sap_doc_entry: item.sap_payment_doc_entry });
     } else {
@@ -1598,17 +1620,20 @@ async function processReturn(admin: AdminClient, companyDb: string, content: str
         for (const match of paidMatches) {
           const item = match.item as Record<string, unknown>;
           const { data: claimed, error: claimError } = await admin.rpc("claim_accounts_payable_item", { p_item_id: item.id });
-          if (claimError || !claimed?.[0]) {
+          if (claimError) throw new Error("Falha ao reservar título para integração.");
+          if (!claimed?.[0]) {
             results.push({ reference: match.companyReference, status: "already_claimed" });
             continue;
           }
-          await admin.from("accounts_payable_batch_items").update({
+          const { error: paymentMetadataError } = await admin.from("accounts_payable_batch_items").update({
             return_occurrences: match.occurrenceCodes,
             bank_protocol: match.bankReference || null,
             paid_date: match.paymentDate,
             paid_amount: match.paymentAmount || item.amount,
           }).eq("id", item.id);
 
+          if (paymentMetadataError) throw new Error("Falha ao persistir dados do retorno; título permanece reservado.");
+          let postStarted = false;
           try {
             const invoice = await getInvoice(baseUrl, cookie, Number(item.sap_doc_entry));
             const open = invoiceOpenAmount(invoice);
@@ -1619,21 +1644,27 @@ async function processReturn(admin: AdminClient, companyDb: string, content: str
             }
             const paidAmount = roundMoney(match.paymentAmount || item.amount);
             if (paidAmount > open + 0.005) throw new Error(`Valor pago (${paidAmount}) excede saldo atual da NF (${open}).`);
+            postStarted = true;
             const payment = await postVendorPayment(baseUrl, cookie, invoice, item, match, transferAccount);
-            await admin.from("accounts_payable_batch_items").update({
+            if (!Number.isInteger(Number(payment?.DocEntry)) || Number(payment.DocEntry) <= 0) {
+              throw new Error("Resposta SAP sem identificador de pagamento válido.");
+            }
+            const { data: settled, error: settleError } = await admin.from("accounts_payable_batch_items").update({
               status: "sap_settled",
               sap_payment_doc_entry: Number(payment.DocEntry),
               sap_payment_doc_num: Number(payment.DocNum ?? payment.DocEntry),
               sap_error: null,
-            }).eq("id", item.id);
+            }).eq("id", item.id).eq("status", "sap_processing").select("id").maybeSingle();
+            if (settleError || !settled) throw new Error("Pagamento SAP sem confirmação de persistência local.");
             await admin.from("accounts_payable_return_events").update({ processing_status: "sap_settled" })
               .eq("return_sha256", returnHash).eq("line_number", match.lineNumber);
             results.push({ reference: match.companyReference, status: "sap_settled", sap_doc_entry: payment.DocEntry });
           } catch (error) {
-            await admin.from("accounts_payable_batch_items").update({ status: "sap_error", sap_error: message(error).slice(0, 1000) }).eq("id", item.id);
+            // An uncertain POST remains reserved indefinitely. Never free it for retry.
+            await admin.from("accounts_payable_batch_items").update({ status: postStarted ? "sap_processing" : "sap_error", sap_error: message(error).slice(0, 1000) }).eq("id", item.id).eq("status", "sap_processing");
             await admin.from("accounts_payable_return_events").update({ processing_status: "sap_error" })
               .eq("return_sha256", returnHash).eq("line_number", match.lineNumber);
-            results.push({ reference: match.companyReference, status: "sap_error", error: message(error) });
+            results.push({ reference: match.companyReference, status: postStarted ? "reconciliation_required" : "sap_error", error: message(error) });
           }
         }
       });
@@ -1643,7 +1674,7 @@ async function processReturn(admin: AdminClient, companyDb: string, content: str
     }
   }
 
-  const failures = results.filter((result) => result.status === "sap_error" || result.status === "unmatched").length;
+  const failures = results.filter((result) => ["sap_error", "unmatched", "already_claimed", "reconciliation_required"].includes(String(result.status))).length;
   const successes = results.filter((result) => result.status === "sap_settled" || result.status === "already_processed" || result.status === "already_settled").length;
   const status = failures ? (successes ? "partial" : "error") : "processed";
   await admin.from("accounts_payable_batches").update({ status, error_message: failures ? `${failures} ocorrência(s) exigem revisão.` : null }).eq("id", batch.id);

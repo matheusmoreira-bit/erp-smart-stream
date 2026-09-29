@@ -206,7 +206,7 @@ export async function requireUser(req: Request) {
 // ============================================================
 const ADMIN_SESSION_MAX_MS = 12 * 60 * 60 * 1000; // 12h
 const USER_SESSION_MAX_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
-const sessionStartCache = new Map<string, { until: number; startedAt: number | null }>();
+
 
 function tokenPayload(req: Request): Record<string, unknown> {
   try {
@@ -231,16 +231,13 @@ async function hasAdminRole(userId: string): Promise<boolean> {
   return data;
 }
 
-async function sessionStartedAt(sessionId: string): Promise<number | null> {
-  const hit = sessionStartCache.get(sessionId);
-  if (hit && hit.until > Date.now()) return hit.startedAt;
-  let startedAt: number | null = null;
-  try {
-    const { data } = await svcClient().rpc("session_started_at", { _session_id: sessionId });
-    startedAt = data ? new Date(String(data)).getTime() : null;
-  } catch { /* falha aberta: não derruba o app por indisponibilidade */ }
-  if (sessionStartCache.size > 2000) sessionStartCache.clear();
-  sessionStartCache.set(sessionId, { until: Date.now() + 5 * 60_000, startedAt });
+async function sessionStartedAt(sessionId: string): Promise<number> {
+  const { data, error } = await svcClient().rpc("session_started_at", { _session_id: sessionId });
+  if (error) throw new AuthError("Não foi possível verificar a sessão. Tente novamente.", 503);
+  const startedAt = typeof data === "string" ? Date.parse(data) : NaN;
+  if (!Number.isFinite(startedAt) || startedAt > Date.now() + 60_000) {
+    throw new AuthError("Sessão inválida ou revogada. Entre novamente.", 401);
+  }
   return startedAt;
 }
 
@@ -251,11 +248,14 @@ async function assertMfaAndSessionAge(req: Request, userId: string) {
   if (isAdmin && aal !== "aal2") {
     throw new AuthError("Administradores precisam confirmar o código de verificação (segundo fator) para continuar.", 403);
   }
-  // Prazo absoluto de sessão desligado: a data de criação da sessão não muda
-  // quando o usuário confirma o segundo fator ou renova o acesso, e isso
-  // bloqueava usuários ativos ("Sua sessão expirou") em todas as funções.
-  // O controle fica no segundo fator (admins) e na revogação de sessões.
-  void sessionStartedAt; void ADMIN_SESSION_MAX_MS; void USER_SESSION_MAX_MS;
+  const sessionId = typeof payload.session_id === "string" ? payload.session_id : "";
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId)) {
+    throw new AuthError("Sessão inválida. Entre novamente.", 401);
+  }
+  const startedAt = await sessionStartedAt(sessionId);
+  if (Date.now() - startedAt >= (isAdmin ? ADMIN_SESSION_MAX_MS : USER_SESSION_MAX_MS)) {
+    throw new AuthError("Prazo de segurança da sessão encerrado. Saia e entre novamente para continuar.", 401);
+  }
 }
 
 /** Para funções que confiam em has_role via client de serviço: exige aal2 do chamador. */
@@ -272,10 +272,10 @@ export function callerHasMfa(req: Request): boolean {
 export const READ_ONLY_IMPERSONATION_FUNCTIONS = new Set<string>([
   "sap-b1-proxy", "impersonation-audit", "security-csrf-token", "expense-read", "approvals-feed",
   "approval-rule-manage-read", "sap-approvals-hana", "sap-purchase-orders-hana", "sap-suppliers-hana",
-  "sap-list-service", "sap-nfse-lookup", "sap-user-credentials", "sap-auto-login", "sap-user-profile-sync",
+  "sap-list-service", "sap-nfse-lookup", "sap-auto-login",
   "nfse-xml-fetch", "nf-entrada-fetch-file", "pagcorp-integration-status", "pagcorp-status-api",
-  "pagcorp-relations-resolver", "hana-health-probe", "cnpj-lookup", "supplier-ai-extract", "license-analysis",
-  "cashflow-forecast", "expense-sap-reconcile", "report-ai-chat",
+  "pagcorp-relations-resolver", "cnpj-lookup", "supplier-ai-extract", "license-analysis",
+  "cashflow-forecast", "report-ai-chat",
 ]);
 export function edgeFunctionName(req: Request): string {
   try {
@@ -295,6 +295,7 @@ export async function isUserImpersonating(userId: string): Promise<boolean> {
 
 async function assertNotImpersonatingWrite(req: Request, userId: string) {
   const fn = edgeFunctionName(req);
+  if (fn === "sap-user-credentials" && req.method === "GET") return;
   if (READ_ONLY_IMPERSONATION_FUNCTIONS.has(fn)) return;
   if (!(await isUserImpersonating(userId))) return;
   throw new AuthError(

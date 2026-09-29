@@ -102,14 +102,14 @@ Deno.serve(async (req) => {
 
   // F14: minimização — tira metadados da foto (GPS, aparelho, comentários).
   let aiImage = image;
-  if (parsed.mime === "image/jpeg" || parsed.mime === "image/png") {
+  if (["image/jpeg", "image/png", "image/webp"].includes(parsed.mime)) {
     try {
       const bin = Uint8Array.from(atob(parsed.base64), (c) => c.charCodeAt(0));
       const clean = stripImageMetadata(bin, parsed.mime);
       let b = "";
       for (let i = 0; i < clean.length; i += 8192) b += String.fromCharCode(...clean.subarray(i, i + 8192));
       aiImage = `data:${parsed.mime};base64,${btoa(b)}`;
-    } catch { /* mantém original */ }
+    } catch { return json({ error: "invalid_image", message: "Não foi possível validar a imagem. Exporte novamente em JPEG, PNG ou WebP." }, 400); }
   }
 
   const instruction = [

@@ -4,11 +4,11 @@
 // com headers `dynamictoken` e `sessionid` (lowercase).
 //
 // V1 (middleware n8n) foi descontinuado — todas as bases estão migradas.
-// Se `hanaApiUrl` não vier setado, usa o IP primário conhecido do HanaAPI.
+// Endpoint HTTPS explícito; nenhum fallback para outro destinatário.
 
 import { generateDynamicToken } from "./sap-middleware-token.ts";
 
-const DEFAULT_HANA_API_URL = "http://201.48.79.205:8001";
+import { requireHttpsEndpoint } from "./secure-transport.ts";
 
 /**
  * Overrides de schema HANA por companyDB do Service Layer.
@@ -56,7 +56,7 @@ export interface FetchHanaViewParams {
   view: string;
   /** SessionId obtido no Login do Service Layer. */
   sessionId: string;
-  /** URL base do servidor HANA direto (V2). Se omitida, usa o IP primário conhecido. */
+  /** URL base do servidor HANA direto (V2). Obrigatória; HTTPS com certificado válido. */
   hanaApiUrl?: string | null;
   /** @deprecated V1 foi descontinuada; o helper sempre usa V2. Mantido para compat. */
   useV2?: boolean;
@@ -151,7 +151,7 @@ function parsePayload(text: string): Record<string, unknown>[] {
 
 /**
  * Executa a chamada da view HANA sempre via V2 (direto no servidor de origem).
- * Tenta o `hanaApiUrl` da empresa primeiro e faz fallback para o IP secundário.
+ * Usa apenas o endpoint HTTPS configurado para a empresa, sem redirecionamentos.
  */
 export async function fetchHanaView(
   params: FetchHanaViewParams,
@@ -160,20 +160,7 @@ export async function fetchHanaView(
   const dynamicToken = await generateDynamicToken();
   const timeoutMs = Math.min(Math.max(Number(params.timeoutMs ?? 30_000), 5_000), 90_000);
 
-  const primaryBase = (params.hanaApiUrl && params.hanaApiUrl.trim()
-    ? params.hanaApiUrl
-    : DEFAULT_HANA_API_URL
-  ).replace(/\/+$/, "");
-  // Fallback secundário: IP alternativo, mesma porta/path.
-  const FALLBACK_BASE = "http://189.91.68.202:8001";
-  const bases: string[] = [primaryBase];
-  try {
-    const primaryHost = new URL(primaryBase).host;
-    const fallbackHost = new URL(FALLBACK_BASE).host;
-    if (primaryHost !== fallbackHost) bases.push(FALLBACK_BASE);
-  } catch {
-    bases.push(FALLBACK_BASE);
-  }
+  const bases = [requireHttpsEndpoint(params.hanaApiUrl)];
 
   // Query string opcional: limit/offset + filtros Campo__op=valor.
   const qs = new URLSearchParams();
@@ -199,6 +186,7 @@ export async function fetchHanaView(
     const started = Date.now();
     try {
       const r = await fetch(url, {
+        redirect: "error",
         headers: {
           dynamictoken: dynamicToken,
           sessionid: sessionId,
