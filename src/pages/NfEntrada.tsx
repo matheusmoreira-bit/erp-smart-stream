@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, FileText, FileCode2, History, RefreshCw, XCircle, Download, RotateCw, Link2, ChevronRight, Pencil, ShoppingCart, FilePlus2, ScanSearch } from "lucide-react";
@@ -70,7 +71,7 @@ export default function NfEntrada() {
 
 
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [detail, setDetail] = useState<NfEntradaImport | null>(null);
   const [logs, setLogs] = useState<NfEntradaLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
@@ -342,7 +343,7 @@ export default function NfEntrada() {
         <div className="flex flex-wrap items-center gap-3">
           <Input
             placeholder="Buscar por NF, CNPJ, fornecedor ou chave de acesso"
-            value={search}
+            value={searchInput}
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-sm"
           />

@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useMemo, useState } from "react";
 import { Download, Loader2, PlayCircle, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -71,7 +72,7 @@ interface Props {
 export function PoNfBoard({ companyDb, inicio, fim }: Props) {
   const { toast } = useToast();
   const { data, loading, run } = useAuditPoNf();
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
 
   const filterRows = (rows: PoNfRow[]) => {
     const q = search.trim().toLowerCase();
@@ -133,7 +134,7 @@ export function PoNfBoard({ companyDb, inicio, fim }: Props) {
           <Search className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Buscar por fornecedor, CNPJ, nº do PC, NF ou chave..."
-            value={search}
+            value={searchInput}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-8"
           />

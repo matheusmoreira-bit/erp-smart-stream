@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSap } from "@/contexts/SapContext";
@@ -97,7 +98,7 @@ export function NotificationDeliveriesTab() {
   const [to, setTo] = useState(format(today, "yyyy-MM-dd"));
   const [channel, setChannel] = useState<string>("all");
   const [status, setStatus] = useState<string>("all");
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [rows, setRows] = useState<Delivery[]>([]);
   const [selected, setSelected] = useState<Delivery | null>(null);
   const [attempts, setAttempts] = useState<DeliveryAttempt[]>([]);
@@ -237,7 +238,7 @@ export function NotificationDeliveriesTab() {
             <Input
               className="pl-8"
               placeholder="Motivo, destinatário, assunto..."
-              value={search}
+              value={searchInput}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>

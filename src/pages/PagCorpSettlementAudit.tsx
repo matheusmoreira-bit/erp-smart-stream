@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useCallback, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -97,7 +98,7 @@ export default function PagCorpSettlementAudit({ embedded = false }: { embedded?
   const [errors, setErrors] = useState<Array<{ companyDb: string; message: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [ran, setRan] = useState(false);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [onlyIssues, setOnlyIssues] = useState(true);
   const [repairing, setRepairing] = useState(false);
   const [repairPreview, setRepairPreview] = useState<RepairAction[] | null>(null);
@@ -308,7 +309,7 @@ export default function PagCorpSettlementAudit({ embedded = false }: { embedded?
             <Input
               className="pl-8"
               placeholder="Buscar por baixa, NF ou fornecedor"
-              value={search}
+              value={searchInput}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>

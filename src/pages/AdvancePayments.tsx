@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
@@ -57,7 +58,7 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
   const { session } = useSap();
   const { items, loading, error, refresh, approve, reject, retry, remove, reconcile, syncSapStatus } = useAdvancePayments(advanceType);
   const [createOpen, setCreateOpen] = useState(false);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -215,7 +216,7 @@ export default function AdvancePayments({ advanceType = "supplier" }: { advanceT
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              value={search}
+              value={searchInput}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={`Buscar por ${partnerLabel}, CNPJ, solicitante...`}
               className="pl-9"

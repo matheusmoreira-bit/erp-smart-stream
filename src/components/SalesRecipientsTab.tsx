@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useCallback, useMemo, useState } from "react";
 import { Loader2, Plus, RefreshCw, Save, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
@@ -45,7 +46,7 @@ export default function SalesRecipientsTab() {
   const [toText, setToText] = useState("");
   const [ccText, setCcText] = useState("");
   const [saving, setSaving] = useState(false);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
 
   const customers = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -192,7 +193,7 @@ export default function SalesRecipientsTab() {
 
       <div className="flex items-center gap-2">
         <Input
-          value={search}
+          value={searchInput}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar por cliente, código ou marca…"
           className="max-w-sm"

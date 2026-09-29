@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -289,7 +290,7 @@ export default function IntegrationsMonitor() {
 
   const [sourceFilter, setSourceFilter] = useState<"all" | Source>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | UnifiedIntegration["status"]>("all");
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [selected, setSelected] = useState<UnifiedIntegration | null>(null);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [pendingCancel, setPendingCancel] = useState<UnifiedIntegration | null>(null);
@@ -571,7 +572,7 @@ export default function IntegrationsMonitor() {
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Buscar por fornecedor, ID, DocNum, usuário…"
-              value={search}
+              value={searchInput}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
             />

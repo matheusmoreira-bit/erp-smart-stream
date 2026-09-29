@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useSap } from "@/contexts/SapContext";
@@ -63,7 +64,7 @@ export default function IdpSyncPage() {
     unlinkUser,
   } = useIdpSync(provider);
 
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [statusFilter, setStatusFilter] = useState<"all" | "linked" | "pending">("all");
   const [syncing, setSyncing] = useState(false);
   const [syncingAttrs, setSyncingAttrs] = useState(false);
@@ -401,7 +402,7 @@ export default function IdpSyncPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder="Buscar por nome, código ou e-mail..."
-              value={search}
+              value={searchInput}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-10 bg-card border-border"
             />

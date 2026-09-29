@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -195,7 +196,7 @@ function FolderConfigDialog({
   const [trail, setTrail] = useState<{ id: string; name: string }[]>([{ id: "root", name: "Meu Drive" }]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [selected, setSelected] = useState<DriveFolder | null>(null);
   const [manualId, setManualId] = useState("");
   const [newFolder, setNewFolder] = useState("");
@@ -324,7 +325,7 @@ function FolderConfigDialog({
               <Input
                 className="pl-8"
                 placeholder="Buscar pasta pelo nome…"
-                value={search}
+                value={searchInput}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") browse(currentParent.id, search); }}
               />

@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -89,7 +90,7 @@ export default function BackofficeRetryQueue() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [groupByDoc, setGroupByDoc] = useState(true);
   const [windowHours, setWindowHours] = useState<number>(24);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [selected, setSelected] = useState<string[]>([]);
   const [dispatching, setDispatching] = useState(false);
 
@@ -324,7 +325,7 @@ export default function BackofficeRetryQueue() {
           <Input
             className="pl-8"
             placeholder="Buscar empresa, documento ou erro"
-            value={search}
+            value={searchInput}
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Buscar no histórico de integrações"
           />

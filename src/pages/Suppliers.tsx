@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -107,7 +108,7 @@ export default function Suppliers() {
   const { hasAccess: canWrite } = useModuleAccess("suppliers_register_direct");
   const { suppliers, isLoading, refresh } = useSuppliers(session?.companyDB);
   const { getLabel } = useCompanies(true);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [editing, setEditing] = useState<Supplier | null>(null);
   const [creating, setCreating] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
@@ -344,7 +345,7 @@ export default function Suppliers() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                value={search}
+                value={searchInput}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Nome, CNPJ/CPF, CardCode..."
                 className="pl-9 bg-card"

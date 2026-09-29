@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -67,7 +68,7 @@ export default function MobileApprovals() {
   } = useExpenses("purchase");
 
   const [tab, setTab] = useState<ViewTab>("pending");
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [decision, setDecision] = useState<{ expense: Expense; action: "approve" | "reject" } | null>(
     null,
@@ -204,7 +205,7 @@ export default function MobileApprovals() {
               className="pl-9"
               inputMode="search"
               placeholder="Buscar fornecedor, CC, projeto…"
-              value={search}
+              value={searchInput}
               onChange={(e) => setSearch(e.target.value)}
               aria-label="Buscar documentos"
             />

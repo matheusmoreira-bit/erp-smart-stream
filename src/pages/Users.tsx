@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -234,7 +235,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
     setParams(next, { replace: true });
   };
 
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [viewMode, setViewMode] = useState<string>("recentes");
   const [managementFilter, setManagementFilter] = useState<string>("all");
   const [companyFilter, setCompanyFilter] = useState<string>(params.get("company") || "all");
@@ -572,7 +573,7 @@ export default function UsersPage({ embedded = false }: { embedded?: boolean } =
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder="Buscar por código, nome, e-mail ou username…"
-              value={search}
+              value={searchInput}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-10 bg-card border-border"
             />

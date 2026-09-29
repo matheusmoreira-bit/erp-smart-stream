@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import AccessAuditTab from "@/components/users/AccessAuditTab";
@@ -55,7 +56,7 @@ function formatDate(d: string): string {
 export default function UserActivityPage() {
   const navigate = useNavigate();
   const { records, isLoading, error, refresh } = useUserActivity();
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [actionFilter, setActionFilter] = useState("all");
   const [daysFilter, setDaysFilter] = useState("7");
   const [userTypeFilter, setUserTypeFilter] = useState("no_api");
@@ -240,7 +241,7 @@ export default function UserActivityPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder="Buscar usuário, IP, máquina..."
-              value={search}
+              value={searchInput}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-10 bg-card border-border"
             />

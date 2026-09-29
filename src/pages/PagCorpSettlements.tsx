@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Banknote, Loader2, RefreshCw, Search } from "lucide-react";
@@ -72,7 +73,7 @@ export default function PagCorpSettlements() {
 
   const [rows, setRows] = useState<PendingRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [target, setTarget] = useState<PendingRow | null>(null);
   const [accountCode, setAccountCode] = useState<string>("");
   const [posting, setPosting] = useState(false);
@@ -205,7 +206,7 @@ export default function PagCorpSettlements() {
                 <Input
                   className="pl-9"
                   placeholder="Buscar por PC, NF, fornecedor ou cartão…"
-                  value={search}
+                  value={searchInput}
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>

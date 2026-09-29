@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useMemo, useState } from "react";
 import {
   ArrowDownUp,
@@ -713,7 +714,7 @@ function capitalize(value: string) {
 }
 
 export default function BackofficeRoadmap() {
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [kind, setKind] = useState<ItemKind | "all">("all");
   const [track, setTrack] = useState("all");
   const [order, setOrder] = useState<"asc" | "desc">("asc");
@@ -837,7 +838,7 @@ export default function BackofficeRoadmap() {
                 aria-hidden="true"
               />
               <Input
-                value={search}
+                value={searchInput}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Buscar entrega, área ou commit..."
                 className="pl-9"

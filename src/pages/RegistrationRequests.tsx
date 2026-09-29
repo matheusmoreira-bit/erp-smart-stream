@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ClipboardList, Clock, Loader2, RefreshCw, Send, ShieldAlert, ShieldCheck } from "lucide-react";
@@ -670,7 +671,7 @@ export default function RegistrationRequests() {
   const [scope, setScope] = useState<"mine" | "all">("mine");
   const [scopeTouched, setScopeTouched] = useState(false);
   const [status, setStatus] = useState<"todos" | RegistrationStatus>("todos");
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [selected, setSelected] = useState<RegistrationRequest | null>(null);
 
   // Agentes (Facilities/Admin) abrem direto na fila do time.
@@ -739,7 +740,7 @@ export default function RegistrationRequests() {
           )}
           <div className="flex-1 min-w-[240px]">
             <Label className="text-xs text-muted-foreground mb-1 block">Buscar</Label>
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Nome, CNPJ, chamado…" />
+            <Input value={searchInput} onChange={(e) => setSearch(e.target.value)} placeholder="Nome, CNPJ, chamado…" />
           </div>
           <div className="w-52">
             <Label className="text-xs text-muted-foreground mb-1 block">Status</Label>

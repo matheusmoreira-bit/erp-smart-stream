@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -98,7 +99,7 @@ export default function Items() {
   const { hasAccess: canWrite } = useModuleAccess("items_write");
   const { items, isLoading, refresh, setRowOverlay } = useItems(session?.companyDB);
   const { getLabel } = useCompanies(true);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [editing, setEditing] = useState<SapItem | null>(null);
   const [creating, setCreating] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
@@ -331,7 +332,7 @@ export default function Items() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                value={search}
+                value={searchInput}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="ItemCode, nome, grupo..."
                 className="pl-9 bg-card"

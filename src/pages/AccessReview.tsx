@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ShieldCheck,
@@ -97,7 +98,7 @@ export default function AccessReview() {
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: "", period: currentQuarter(), due: "", notes: "" });
 
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [typeFilter, setTypeFilter] = useState<"all" | "grupo" | "alcada">("all");
   const [decisionFilter, setDecisionFilter] = useState<"all" | Decision>("all");
 
@@ -413,7 +414,7 @@ export default function AccessReview() {
 
             <div className="flex flex-wrap items-center gap-2">
               <Input
-                value={search}
+                value={searchInput}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar pessoa, acesso ou empresa…"
                 className="min-w-[220px] flex-1"

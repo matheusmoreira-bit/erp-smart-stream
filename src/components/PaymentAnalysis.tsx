@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useMemo, useState } from "react";
 import { Loader2, RefreshCw, DollarSign, AlertTriangle, TrendingUp, Users, Clock, Calendar } from "lucide-react";
 import { usePaymentAnalysis, type PaymentAnalysisRow } from "@/hooks/usePaymentAnalysis";
@@ -233,7 +234,7 @@ function ChartCard({ title, children, className = "" }: { title: string; childre
 /* ── Main component ── */
 export function PaymentAnalysis() {
   const { rows: allRows, isLoading, error, refresh } = usePaymentAnalysis();
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [period, setPeriod] = useState<PeriodFilterValue>(DEFAULT_PERIOD);
 
   const rows = useMemo(
@@ -535,7 +536,7 @@ export function PaymentAnalysis() {
       <TabsContent value="tabela" className="space-y-4 mt-0">
         <Input
           placeholder="Buscar por nº pagamento, fornecedor, solicitante..."
-          value={search}
+          value={searchInput}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full sm:max-w-sm"
         />

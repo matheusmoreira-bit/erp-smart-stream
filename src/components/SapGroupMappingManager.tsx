@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useEffect, useMemo, useState } from "react";
 import {
   ChevronLeft,
@@ -76,7 +77,7 @@ export default function SapGroupMappingManager({ onBack }: { onBack: () => void 
   const [mappings, setMappings] = useState<Mapping[]>([]);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [editing, setEditing] = useState<Mapping | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -283,7 +284,7 @@ export default function SapGroupMappingManager({ onBack }: { onBack: () => void 
             <div className="relative flex-1">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
-                value={search}
+                value={searchInput}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar grupo ou módulo..."
                 className="pl-9"

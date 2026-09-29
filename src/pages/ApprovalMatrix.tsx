@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
@@ -109,7 +110,7 @@ export default function ApprovalMatrix() {
 
   const [flow, setFlow] = useState<"all" | MatrixFlow>("all");
   const [category, setCategory] = useState<"all" | MatrixCategory>("all");
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [onlyActive, setOnlyActive] = useState(true);
   const [view, setView] = useState<"list" | "map">(() => {
     if (typeof window === "undefined") return "list";
@@ -218,7 +219,7 @@ export default function ApprovalMatrix() {
             <div className="relative min-w-[220px] flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                value={search}
+                value={searchInput}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar por regra, condição ou aprovador"
                 className="pl-9"

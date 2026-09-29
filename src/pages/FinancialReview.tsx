@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -106,7 +107,7 @@ export default function FinancialReview() {
     refreshInvoicesWithAdvances,
   } = useFinancialReview(companyDb);
 
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [bpFilter, setBpFilter] = useState<"all" | "supplier" | "customer">("all");
   const [typeFilter, setTypeFilter] = useState<"all" | AdvanceItem["doc_type"]>("all");
   const [selected, setSelected] = useState<AdvanceItem | null>(null);
@@ -346,7 +347,7 @@ export default function FinancialReview() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder="Buscar código, nome, nº doc ou referência…"
-              value={search}
+              value={searchInput}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
             />
@@ -632,7 +633,7 @@ function InvoicesWithAdvancesTab({
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Buscar parceiro, nº NF ou referência…"
-            value={search}
+            value={searchInput}
             onChange={(e) => onSearchChange(e.target.value)}
             className="pl-9"
           />

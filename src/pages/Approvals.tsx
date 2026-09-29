@@ -1,3 +1,4 @@
+import { useSearchState } from "@/hooks/useSearchState";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { docNumberLabel, isInternalDoc, matchesDocQuery } from "@/lib/doc-number";
 import { DocKindOriginChip, DOC_KIND_LABEL, type DocKind as SharedDocKind } from "@/components/DocKindOriginChip";
@@ -2243,7 +2244,7 @@ function MyRequestDetailModal({ doc, open, onClose }: { doc: MyRequestDoc | null
 
 function MyRequestsTab() {
   const { requests, isLoading, error, refresh } = useMyRequests();
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [statusFilter, setStatusFilter] = useState<MyRequestDoc["status"][]>([]);
   const [selected, setSelected] = useState<MyRequestDoc | null>(null);
 
@@ -2283,7 +2284,7 @@ function MyRequestsTab() {
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Buscar por nº ou código interno, parceiro, tipo..."
-            value={search}
+            value={searchInput}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 bg-muted/30 border-border"
           />
@@ -2450,7 +2451,7 @@ export default function ApprovalsPage() {
   };
   const { getLabel } = useCompanies(true);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch, search] = useSearchState();
   const [selectedDoc, setSelectedDoc] = useState<ApprovalDoc | null>(null);
   const [relationsMapExpense, setRelationsMapExpense] = useState<Expense | null>(null);
   const [actionPhase, setActionPhase] = useState<"idle" | "sending" | "refreshing">("idle");
@@ -4007,7 +4008,7 @@ export default function ApprovalsPage() {
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Buscar por nº ou código interno, fornecedor, aprovador, projeto..."
-              value={search}
+              value={searchInput}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 bg-muted/30 border-border"
             />
