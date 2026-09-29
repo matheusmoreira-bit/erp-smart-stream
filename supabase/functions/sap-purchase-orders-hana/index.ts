@@ -194,7 +194,7 @@ function isViewMissing(msg: string): boolean {
 
 /** Erros transitórios devem degradar a listagem, não derrubar a tela de compras. */
 function isTransientUpstreamError(msg: string): boolean {
-  return /(timeout|abort|network|fetch|connection|econn|etimedout|socket|h?ana view .*falhou|todos os ips|service layer .*falhou 5\d\d)/i.test(msg);
+  return /(timeout|timed out|abort|network|fetch|connection|econn|etimedout|socket|h?ana view .*falhou|todos os ips|service layer .*falhou 5\d\d)/i.test(msg);
 }
 
 /** Mapeia um pedido de compra do Service Layer para o mesmo shape da view HANA. */
