@@ -28,7 +28,8 @@ import { useSapCachedList } from "@/hooks/useSapCachedList";
 import { useSap } from "@/contexts/SapContext";
 import { useMyPermissionGroups } from "@/hooks/useMyPermissionGroups";
 import { useMyCapabilities } from "@/hooks/useMyCapabilities";
-import { isSalesOnlyItemCode } from "@/hooks/useCurrentUserCostCenter";
+import { isSalesOnlyItemCode, isItemAllowedForCostCenter, useCurrentUserCostCenter } from "@/hooks/useCurrentUserCostCenter";
+import { filterProjectsForLotus, useAuthEmail } from "@/lib/item-project-policy";
 
 import { canViewLotusCostCenters, filterLotusCostCenters } from "@/lib/cost-center-visibility";
 import {
