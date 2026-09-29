@@ -150,12 +150,20 @@ Deno.serve(async (req) => {
         }),
       });
 
+      // Falha nas credenciais do Omie NÃO é falha de sessão do usuário:
+      // usar 424 (dependência externa) para não derrubar a tela como "não autenticado".
       if (!omieRes.ok) {
         const errText = await omieRes.text();
         console.error("OMIE login error:", errText);
+        const suspended = /inv[aá]lida|suspenso/i.test(errText);
         return new Response(
-          JSON.stringify({ error: "Falha ao autenticar com OMIE. Verifique as credenciais." }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({
+            error: suspended
+              ? "A chave de acesso Omie desta empresa está inválida ou o aplicativo Omie está suspenso. Atualize as credenciais em Integrações."
+              : "Falha ao autenticar com OMIE. Verifique as credenciais.",
+            code: "OMIE_CREDENTIALS",
+          }),
+          { status: 424, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
@@ -163,8 +171,8 @@ Deno.serve(async (req) => {
 
       if (omieData.faultstring) {
         return new Response(
-          JSON.stringify({ error: omieData.faultstring }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: omieData.faultstring, code: "OMIE_CREDENTIALS" }),
+          { status: 424, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
