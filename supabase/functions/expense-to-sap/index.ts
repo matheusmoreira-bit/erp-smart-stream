@@ -1664,6 +1664,31 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       }),
     };
 
+    // Frete (pedido de compra): vai como despesa adicional nativa do SAP.
+    // Código da despesa: credencial "freight_expense_code" ou a despesa
+    // adicional cadastrada no SAP cujo nome contém "Frete"/"Freight".
+    {
+      const freight = Math.round(Number((expense as any).freight_amount || 0) * 100) / 100;
+      if (!isSales && freight > 0) {
+        let expenseCode = Number((sapCreds as any)?.freight_expense_code);
+        if (!Number.isFinite(expenseCode) || expenseCode <= 0) {
+          const r = await fetch(
+            `${sap.baseUrl}/AdditionalExpenses?$select=ExpensCode,Name&$top=100`,
+            { headers: { Cookie: sap.cookies } },
+          );
+          if (!r.ok) throw new Error(`Não foi possível consultar as despesas adicionais do SAP (${r.status}) para lançar o frete.`);
+          const list = ((await r.json())?.value || []) as Array<{ ExpensCode: number; Name: string }>;
+          const hit = list.find((x) => /frete|freight/i.test(String(x.Name || "")));
+          if (!hit) throw new Error("Nenhuma despesa adicional de Frete cadastrada no SAP desta empresa. Cadastre-a no SAP ou informe o código em freight_expense_code.");
+          expenseCode = Number(hit.ExpensCode);
+        }
+        (sapPayload as any).DocumentAdditionalExpenses = [{ ExpenseCode: expenseCode, LineTotal: freight }];
+      } else if (!isSales && isPatchMode) {
+        // Frete removido na edição: zera a despesa adicional existente.
+        (sapPayload as any).DocumentAdditionalExpenses = [];
+      }
+    }
+
     // Consistência de tipo do documento: o SAP recusa linhas de serviço (sem
     // ItemCode) em um pedido de itens ("Item number is missing [line: N]").
     // - Todas as linhas sem item  -> documento de serviço (DocType).
