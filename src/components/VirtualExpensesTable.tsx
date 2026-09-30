@@ -74,6 +74,14 @@ function VirtualRowComponent({
         <Building2 className="w-3.5 h-3.5 text-primary/70 shrink-0" aria-hidden="true" />
         <span className="truncate">{exp.supplier_name}</span>
         <DocCodeLink id={exp.id} docNum={exp.sap_doc_num} onOpen={() => onOpen(exp, origin)} className="shrink-0" />
+        {(exp as { sap_legacy_backup?: boolean }).sap_legacy_backup && (
+          <span
+            className="shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+            title="Documento da instância SAP antiga, mantido como backup para auditoria"
+          >
+            Backup SAP antigo
+          </span>
+        )}
       </div>
       <div role="cell" className="text-foreground truncate">{exp.requester_name}</div>
       <div role="cell" className="text-muted-foreground whitespace-nowrap">{formatDate(exp.created_at)}</div>
