@@ -1813,14 +1813,17 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         // Fallback de período contábil: o SAP recusa datas fora do intervalo
         // permitido ("Specify a date within the permissible range", -5002).
         // Nesse caso reintegramos com a data de hoje em TaxDate/DocDueDate.
-        const outOfDateRange = /permissible range|intervalo permitido|date within the permissible|data dentro do intervalo|per[ií]odo cont[aá]bil/i.test(msg1);
+        const outOfDateRange = /permissible range|intervalo permitido|date within the permissible|data dentro do intervalo|per[ií]odo cont[aá]bil|PER[IÍ]ODO BLOQUEADO/i.test(msg1);
         if (outOfDateRange && !isPatchMode) {
-          (sapPayload as any).DocDate = today;
-          (sapPayload as any).TaxDate = today;
-          const currentDue = String((sapPayload as any).DocDueDate || today);
-          if (currentDue < today) (sapPayload as any).DocDueDate = today;
+          // PagCorp (cartão corporativo): reenvia com o dia 01 do mês atual,
+          // mantendo a compra no mês aberto mais próximo da data original.
+          const retryDate = isPagCorp ? `${today.slice(0, 7)}-01` : today;
+          (sapPayload as any).DocDate = retryDate;
+          (sapPayload as any).TaxDate = retryDate;
+          const currentDue = String((sapPayload as any).DocDueDate || retryDate);
+          if (currentDue < retryDate) (sapPayload as any).DocDueDate = retryDate;
           lastSapPayload = sapPayload;
-          console.log("[expense-to-sap] Retrying with today's dates due to date range error:", msg1.slice(0, 200));
+          console.log(`[expense-to-sap] Retrying with ${retryDate} due to date range/locked period error:`, msg1.slice(0, 200));
           sapResult = await sendDocument();
         } else {
 
