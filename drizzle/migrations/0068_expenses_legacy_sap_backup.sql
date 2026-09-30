@@ -1,0 +1,2 @@
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS sap_legacy_backup boolean NOT NULL DEFAULT false;
+COMMENT ON COLUMN public.expenses.sap_legacy_backup IS 'Documento pertence à instância SAP antiga (backup de auditoria); não sincroniza com o SAP atual.';

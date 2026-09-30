@@ -477,6 +477,13 @@
       "when": 1790689096313,
       "tag": "0067_expenses_freight_amount",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1790779916616,
+      "tag": "0068_expenses_legacy_sap_backup",
+      "breakpoints": true
     }
   ]
 }
