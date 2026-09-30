@@ -177,6 +177,14 @@ function asString(value: unknown): string | null {
   return text ? text : null;
 }
 
+
+/** Guarda contra colisão de DocEntry (ex.: troca de ambiente SAP): NF só vale se o fornecedor confere. */
+function supplierMatches(expected: string | null | undefined, actual: string | null | undefined): boolean {
+  const e = String(expected || "").trim().toUpperCase();
+  const a = String(actual || "").trim().toUpperCase();
+  return !e || !a || e === a;
+}
+
 async function readRelations(companyDb: string, sapDocEntry: number): Promise<SapDocumentRelation[]> {
   const { data, error } = await (supabase as any)
     .from("sap_document_relations")
@@ -316,7 +324,7 @@ export function useNfEntradaLinks({
       }));
     for (const r of relationOnly) matchedDocEntries.add(Number(r.sap_invoice_draft_id));
     const cacheOnly: Omit<NfEntradaLink, "ap_links">[] = cacheRows
-      .filter((r) => !matchedDocEntries.has(r.doc_entry) && r.cancelled !== "tYES")
+      .filter((r) => !matchedDocEntries.has(r.doc_entry) && r.cancelled !== "tYES" && supplierMatches(supplierCode, r.card_code))
       .map((r) => ({
         id: `sap-cache:${r.doc_entry}`,
         chave_acesso: `SAP#${r.doc_entry}`,
@@ -407,7 +415,7 @@ export function useNfEntradaLinks({
   }, [sapDocEntry, companyDb, supplierCode]);
 
   return useExternalCache<NfEntradaLink[]>({
-    cacheKey: sapDocEntry && companyDb ? `relmap:nf:v4:${sapDocEntry}:${supplierCode || ""}` : null,
+    cacheKey: sapDocEntry && companyDb ? `relmap:nf:v5:${sapDocEntry}:${supplierCode || ""}` : null,
 
     companyDb: companyDb ?? null,
     fetcher,
@@ -517,7 +525,7 @@ export function useContasPagarLinks({
         if (!cacheErr && Array.isArray(cache)) {
           const existing = new Set(invoices.map((i) => i.DocEntry));
           const cachedInvoices = (cache as NfEntradaCacheRow[])
-            .filter((r) => r?.cancelled !== "tYES" && Number.isFinite(Number(r?.doc_entry)))
+            .filter((r) => r?.cancelled !== "tYES" && Number.isFinite(Number(r?.doc_entry)) && supplierMatches(supplierCode, r?.card_code))
             .filter((r) => !existing.has(Number(r.doc_entry)))
             .map((r) => {
               const total = Number(r?.doc_total) || 0;
