@@ -142,6 +142,7 @@ export type Database = {
           next_file_sequence: number
           sap_transfer_account: string
           tax_id: string
+          transit_account_code: string | null
           updated_at: string
         }
         Insert: {
@@ -161,6 +162,7 @@ export type Database = {
           next_file_sequence?: number
           sap_transfer_account: string
           tax_id: string
+          transit_account_code?: string | null
           updated_at?: string
         }
         Update: {
@@ -180,6 +182,7 @@ export type Database = {
           next_file_sequence?: number
           sap_transfer_account?: string
           tax_id?: string
+          transit_account_code?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -195,6 +198,7 @@ export type Database = {
           created_at: string
           currency: string
           due_date: string
+          expense_id: string | null
           id: string
           idempotency_key: string
           installment_id: number
@@ -208,7 +212,10 @@ export type Database = {
           sap_error: string | null
           sap_payment_doc_entry: number | null
           sap_payment_doc_num: number | null
+          sap_settlement_status: string
           scheduled_date: string
+          settlement_note: string | null
+          source: string
           status: string
           supplier_code: string
           supplier_name: string
@@ -225,6 +232,7 @@ export type Database = {
           created_at?: string
           currency?: string
           due_date: string
+          expense_id?: string | null
           id?: string
           idempotency_key: string
           installment_id?: number
@@ -238,7 +246,10 @@ export type Database = {
           sap_error?: string | null
           sap_payment_doc_entry?: number | null
           sap_payment_doc_num?: number | null
+          sap_settlement_status?: string
           scheduled_date: string
+          settlement_note?: string | null
+          source?: string
           status?: string
           supplier_code: string
           supplier_name: string
@@ -255,6 +266,7 @@ export type Database = {
           created_at?: string
           currency?: string
           due_date?: string
+          expense_id?: string | null
           id?: string
           idempotency_key?: string
           installment_id?: number
@@ -268,7 +280,10 @@ export type Database = {
           sap_error?: string | null
           sap_payment_doc_entry?: number | null
           sap_payment_doc_num?: number | null
+          sap_settlement_status?: string
           scheduled_date?: string
+          settlement_note?: string | null
+          source?: string
           status?: string
           supplier_code?: string
           supplier_name?: string
@@ -4137,6 +4152,7 @@ export type Database = {
           original_approver: string | null
           payment_boleto_barcode: string | null
           payment_boleto_digitable_line: string | null
+          payment_lock_batch_item_id: string | null
           payment_metadata: Json
           payment_method: string | null
           payment_terms_code: string | null
@@ -4191,6 +4207,7 @@ export type Database = {
           original_approver?: string | null
           payment_boleto_barcode?: string | null
           payment_boleto_digitable_line?: string | null
+          payment_lock_batch_item_id?: string | null
           payment_metadata?: Json
           payment_method?: string | null
           payment_terms_code?: string | null
@@ -4245,6 +4262,7 @@ export type Database = {
           original_approver?: string | null
           payment_boleto_barcode?: string | null
           payment_boleto_digitable_line?: string | null
+          payment_lock_batch_item_id?: string | null
           payment_metadata?: Json
           payment_method?: string | null
           payment_terms_code?: string | null
@@ -10567,6 +10585,7 @@ export type Database = {
           created_at: string
           currency: string
           due_date: string
+          expense_id: string | null
           id: string
           idempotency_key: string
           installment_id: number
@@ -10580,7 +10599,10 @@ export type Database = {
           sap_error: string | null
           sap_payment_doc_entry: number | null
           sap_payment_doc_num: number | null
+          sap_settlement_status: string
           scheduled_date: string
+          settlement_note: string | null
+          source: string
           status: string
           supplier_code: string
           supplier_name: string
