@@ -10866,6 +10866,23 @@ export type Database = {
           total: number
         }[]
       }
+      get_legacy_po_chain: {
+        Args: { _expense_id: string }
+        Returns: {
+          applied: number
+          card_code: string
+          card_name: string
+          doc_date: string
+          doc_entry: number
+          doc_num: number
+          due_date: string
+          invoice_doc_entry: number
+          kind: string
+          paid: number
+          status: string
+          total: number
+        }[]
+      }
       get_my_directorate_peers: {
         Args: { _sap_user_name?: string }
         Returns: {
