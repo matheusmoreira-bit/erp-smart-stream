@@ -133,6 +133,8 @@ Deno.serve(async (req) => {
       .from("expenses")
       .select("id, doc_type, company_db, sap_doc_entry, status, supplier_name, supplier_code, total_amount, sap_sync_attempts, sap_purchase_order_status")
       .not("sap_doc_entry", "is", null)
+      // Documentos da instância SAP antiga ficam congelados (backup de auditoria).
+      .eq("sap_legacy_backup", false)
       .in("status", ["aprovado", "pc_lancado", "nf_entrada", "pagamento", "finalizado"])
       .order("sap_status_last_check_at", { ascending: true, nullsFirst: true })
       .limit(200);

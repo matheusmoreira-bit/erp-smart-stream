@@ -4157,6 +4157,7 @@ export type Database = {
           sap_integration_error: string | null
           sap_integration_last_attempt_at: string | null
           sap_integration_locked_at: string | null
+          sap_legacy_backup: boolean
           sap_purchase_order_status: string | null
           sap_status_last_check_at: string | null
           sap_sync_attempts: number
@@ -4210,6 +4211,7 @@ export type Database = {
           sap_integration_error?: string | null
           sap_integration_last_attempt_at?: string | null
           sap_integration_locked_at?: string | null
+          sap_legacy_backup?: boolean
           sap_purchase_order_status?: string | null
           sap_status_last_check_at?: string | null
           sap_sync_attempts?: number
@@ -4263,6 +4265,7 @@ export type Database = {
           sap_integration_error?: string | null
           sap_integration_last_attempt_at?: string | null
           sap_integration_locked_at?: string | null
+          sap_legacy_backup?: boolean
           sap_purchase_order_status?: string | null
           sap_status_last_check_at?: string | null
           sap_sync_attempts?: number
