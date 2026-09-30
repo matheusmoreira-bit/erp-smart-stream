@@ -57,18 +57,18 @@ Deno.serve(async (req) => {
   const auth = await requireSchedulerOrAdmin(req, corsHeaders);
   if (!auth.ok) return auth.response;
 
+  const body = (await req.json().catch(() => ({}))) as { hop?: unknown; target?: unknown };
+  const target = parseTarget(body.target);
+  const cfg = targetConfig(target);
   const srcUrl = Deno.env.get("SUPABASE_DB_URL");
-  const dstUrl = Deno.env.get("REPLICA_DB_URL");
-  if (!srcUrl || !dstUrl) return json(400, { error: "Conexões da origem/réplica não configuradas" });
-
-  const body = (await req.json().catch(() => ({}))) as { hop?: unknown };
+  if (!srcUrl || !cfg.ok) return json(400, { error: cfg.ok ? "Origem não configurada" : cfg.error });
   const hop = typeof body.hop === "number" && body.hop >= 0 && body.hop <= MAX_HOPS ? Math.floor(body.hop) : 0;
 
   const started = Date.now();
   const deadline = started + TIME_BUDGET_MS;
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const src = postgres(srcUrl, { max: 1, prepare: false, idle_timeout: 5 });
-  const dst = postgres(dstUrl, { max: 1, prepare: false, idle_timeout: 5, ssl: "require" });
+  const dst = postgres(cfg.url, { max: 1, prepare: false, idle_timeout: 5, ssl: cfg.ssl, connect_timeout: 15 });
   const results: Awaited<ReturnType<typeof syncTable>>[] = [];
   const errors: string[] = [];
 
@@ -78,6 +78,18 @@ Deno.serve(async (req) => {
       await src.end({ timeout: 5 }).catch(() => undefined);
       await dst.end({ timeout: 5 }).catch(() => undefined);
       return json(200, { ok: true, skipped: "outra rodada em andamento" });
+    }
+    // Cria as tabelas no destino se ainda não existirem (mesmas colunas da origem).
+    for (const t of ID_CURSOR_TABLES) {
+      const [{ exists }] = await dst`select to_regclass(${"public." + t}) is not null as exists`;
+      if (exists) continue;
+      const cols = await src`
+        select a.attname as n, format_type(a.atttypid, a.atttypmod) as ty
+        from pg_attribute a where a.attrelid = ${"public." + t}::regclass and a.attnum > 0 and not a.attisdropped
+        order by a.attnum`;
+      const ddl = cols.map((c) => `${dst(c.n as string).toString?.() ?? ""}`).length; void ddl;
+      const colSql = cols.map((c) => `"${String(c.n).replace(/"/g, '""')}" ${c.ty}`).join(", ");
+      await dst.unsafe(`create table if not exists public."${t}" (${colSql}, primary key (id))`);
     }
     await dst`set session_replication_role = replica`;
     for (const t of ID_CURSOR_TABLES) {
