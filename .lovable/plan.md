@@ -22,6 +22,15 @@ Com o SAP fora do ar (previsão: final de 20/10, por alguns dias), o time financ
 - Acesso: admin ou permissão em `financial_review`, empresa da sessão igual à da requisição, sem exigir sessão SAP no modo standalone.
 - Auditoria de cada lote, aprovação, download, retorno e baixa posterior.
 
+## Ajustes da avaliação
+- **Trava do pedido em remessa:** ao gerar a remessa, o pedido fica travado (etiqueta "Em remessa"). Enquanto a remessa estiver ativa, ou o pagamento aguardar baixa no SAP, ninguém consegue editar valor, fornecedor ou itens, nem cancelar o pedido. A trava vale no servidor (função de edição/cancelamento e trigger no banco), não só na tela. Ela sai sozinha se o banco rejeitar o título ou se o lote for descartado antes do envio.
+- **Validação do código de barras do boleto:** confere o tamanho (44 dígitos ou linha digitável de 47/48), os dígitos verificadores (módulo 10 nos campos e módulo 11 no geral), o banco e o vencimento. O valor embutido no código precisa bater com o valor do título, com tolerância zero. A checagem roda na tela, enquanto a pessoa digita, e de novo no servidor antes de gerar. Também dá para colar a linha digitável, que é convertida automaticamente.
+- **Tolerância PC → NF na conciliação:** na volta do SAP, o sistema acha a NF ligada ao PC.
+  - Valor pago igual ao saldo da NF: faz a baixa direto.
+  - Valor diferente, NF inexistente, várias NFs ou NF já fechada: não baixa nada. O título vai para a aba "Conciliação pós-standalone" com o motivo e as ações possíveis: baixa parcial, escolher a NF certa, ou marcar como ajuste manual (com justificativa e auditoria).
+- **Conta transitória:** a baixa no SAP usa uma conta transitória de pagamentos em contingência, configurada por empresa na Configuração Sicoob, e não a conta do banco. Assim o extrato importado no SAP não gera saída de caixa duplicada: a tesouraria concilia o extrato contra a transitória. A data do pagamento é a data do retorno do banco.
+
+
 ## Preparação antes de 20/10 (checklist operacional)
 - Cadastrar e aprovar o perfil de pagamento (banco/PIX) dos fornecedores recorrentes. Vou gerar um relatório dos fornecedores com pedidos aprovados que ainda não têm perfil aprovado.
 - Copiar os cadastros do ERP (botão já existente) em 19–20/10.
