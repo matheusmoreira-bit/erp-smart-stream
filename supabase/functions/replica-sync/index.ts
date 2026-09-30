@@ -6,6 +6,7 @@
 import postgres from "npm:postgres@3.4.4";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
+import { parseTarget, targetConfig } from "../_shared/replica-target.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -87,7 +88,6 @@ Deno.serve(async (req) => {
         select a.attname as n, format_type(a.atttypid, a.atttypmod) as ty
         from pg_attribute a where a.attrelid = ${"public." + t}::regclass and a.attnum > 0 and not a.attisdropped
         order by a.attnum`;
-      const ddl = cols.map((c) => `${dst(c.n as string).toString?.() ?? ""}`).length; void ddl;
       const colSql = cols.map((c) => `"${String(c.n).replace(/"/g, '""')}" ${c.ty}`).join(", ");
       await dst.unsafe(`create table if not exists public."${t}" (${colSql}, primary key (id))`);
     }
@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
   const copied = results.reduce((s, r) => s + r.copied, 0);
   await sb.from("infra_backup_log").insert({
     kind: "replica", status: errors.length ? "partial" : allDone ? "ok" : "running",
-    trigger: hop > 0 ? "chain" : auth.source, bucket: "replica", s3_prefix: `hop-${hop}`,
+    trigger: hop > 0 ? "chain" : auth.source, bucket: target === "local" ? "replica-local" : "replica", s3_prefix: `hop-${hop}`,
     finished_at: new Date().toISOString(), duration_ms: Date.now() - started,
     tables_count: results.length, manifest: { results, copied },
     error_message: errors.length ? errors.slice(0, 5).join(" | ") : null,
@@ -127,12 +127,12 @@ Deno.serve(async (req) => {
           "Content-Type": "application/json",
           "x-scheduler-secret": Deno.env.get("SCHEDULER_SECRET") || "",
         },
-        body: JSON.stringify({ hop: hop + 1 }),
+        body: JSON.stringify({ hop: hop + 1, target }),
       });
     } catch (e) {
       if ((e as Error).name !== "AbortError") console.error("chain failed", (e as Error).message);
     } finally { clearTimeout(timer); }
   }
 
-  return json(errors.length ? 207 : 200, { ok: errors.length === 0, hop, all_done: allDone, copied, results, errors });
+  return json(errors.length ? 207 : 200, { ok: errors.length === 0, target, hop, all_done: allDone, copied, results, errors });
 });

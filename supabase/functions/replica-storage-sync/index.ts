@@ -6,6 +6,7 @@
 import postgres from "npm:postgres@3.4.4";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
+import { parseTarget, targetConfig } from "../_shared/replica-target.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -34,18 +35,18 @@ Deno.serve(async (req) => {
   const auth = await requireSchedulerOrAdmin(req, corsHeaders);
   if (!auth.ok) return auth.response;
 
+  const body = (await req.json().catch(() => ({}))) as { hop?: unknown; target?: unknown };
+  const target = parseTarget(body.target);
+  const cfg = targetConfig(target);
   const srcUrl = Deno.env.get("SUPABASE_DB_URL");
-  const dstUrl = Deno.env.get("REPLICA_DB_URL");
-  if (!srcUrl || !dstUrl) return json(400, { error: "Conexões da origem/réplica não configuradas" });
-
-  const body = (await req.json().catch(() => ({}))) as { hop?: unknown };
+  if (!srcUrl || !cfg.ok) return json(400, { error: cfg.ok ? "Origem não configurada" : cfg.error });
   const hop = typeof body.hop === "number" && body.hop >= 0 && body.hop <= MAX_HOPS ? Math.floor(body.hop) : 0;
 
   const started = Date.now();
   const deadline = started + TIME_BUDGET_MS;
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const src = postgres(srcUrl, { max: 1, prepare: false, idle_timeout: 5 });
-  const dst = postgres(dstUrl, { max: 1, prepare: false, idle_timeout: 5, ssl: "require" });
+  const dst = postgres(cfg.url, { max: 1, prepare: false, idle_timeout: 5, ssl: cfg.ssl, connect_timeout: 15 });
   let copied = 0, bytes = 0, skipped = 0, done = false, remaining = -1;
   const errors: string[] = [];
 
@@ -56,6 +57,11 @@ Deno.serve(async (req) => {
       await dst.end({ timeout: 5 }).catch(() => undefined);
       return json(200, { ok: true, skipped: "outra rodada em andamento" });
     }
+    await dst`create schema if not exists backup_files`;
+    await dst`create table if not exists backup_files.objects (bucket_id text not null, name text not null, src_id uuid,
+      mimetype text, size bigint, sha256 text, content bytea, src_updated_at timestamptz, copied_at timestamptz not null default now(),
+      primary key (bucket_id, name))`;
+    await dst`create table if not exists backup_files.cursor (id int primary key, ts timestamptz, src_id uuid)`;
     const cur = await dst`select ts, src_id from backup_files.cursor where id = 1`;
     let ts: string = cur[0]?.ts ? new Date(cur[0].ts).toISOString() : "1970-01-01T00:00:00Z";
     let sid: string = cur[0]?.src_id ?? "00000000-0000-0000-0000-000000000000";
@@ -106,7 +112,7 @@ Deno.serve(async (req) => {
   const fatal = errors.filter((e) => !e.startsWith("grande demais"));
   await sb.from("infra_backup_log").insert({
     kind: "replica", status: fatal.length ? "partial" : done ? "ok" : "running",
-    trigger: hop > 0 ? "chain" : auth.source, bucket: "replica-storage", s3_prefix: `files-hop-${hop}`,
+    trigger: hop > 0 ? "chain" : auth.source, bucket: target === "local" ? "replica-local-storage" : "replica-storage", s3_prefix: `files-hop-${hop}`,
     finished_at: new Date().toISOString(), duration_ms: Date.now() - started,
     tables_count: 0, manifest: { copied, bytes, skipped, remaining },
     error_message: errors.length ? errors.slice(0, 5).join(" | ") : null,
@@ -119,7 +125,7 @@ Deno.serve(async (req) => {
       await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/replica-storage-sync`, {
         method: "POST", signal: ctl.signal,
         headers: { "Content-Type": "application/json", "x-scheduler-secret": Deno.env.get("SCHEDULER_SECRET") || "" },
-        body: JSON.stringify({ hop: hop + 1 }),
+        body: JSON.stringify({ hop: hop + 1, target }),
       });
     } catch (e) {
       if ((e as Error).name !== "AbortError") console.error("chain failed", (e as Error).message);
