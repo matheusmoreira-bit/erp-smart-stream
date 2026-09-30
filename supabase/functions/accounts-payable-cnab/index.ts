@@ -904,6 +904,17 @@ async function saveSupplierPaymentProfile(admin: AdminClient, companyDb: string,
   });
 }
 
+// Empresas de teste (tst_*): sem validação de boleto e sem aprovação/segregação, a pedido, para ensaio.
+function isTestCompany(companyDb: string): boolean {
+  return /^tst_/i.test(String(companyDb || ""));
+}
+
+function rawBarcodeUnchecked(input: unknown): string {
+  const d = String(input ?? "").replace(/\D/g, "");
+  if (d.length === 47) return `${d.slice(0, 4)}${d.slice(32, 33)}${d.slice(33, 47)}${d.slice(4, 9)}${d.slice(10, 20)}${d.slice(21, 31)}`;
+  return d.length >= 44 ? d.slice(0, 44) : d.padEnd(44, "0");
+}
+
 function sameActor(a: unknown, b: unknown): boolean {
   const x = String(a ?? "").trim().toLowerCase();
   const y = String(b ?? "").trim().toLowerCase();
@@ -1270,7 +1281,8 @@ async function persistBatch(
     content: remittance.content,
     content_sha256: contentHash,
     generated_by: actor,
-    status: "generated",
+    status: isTestCompany(companyDb) ? "approved" : "generated",
+    ...(isTestCompany(companyDb) ? { approved_by: `${actor} (teste sem aprovação)`, approved_at: new Date().toISOString() } : {}),
   };
   let { error: batchError } = await admin.from("accounts_payable_batches").insert(batchPayload);
   if (batchError && isMissingColumn(batchError)) {
@@ -1350,6 +1362,9 @@ async function persistBatch(
     p_details: { filename, title_count: validated.length, total_amount: remittance.totalAmount, content_sha256: contentHash },
   });
   // F05: o arquivo só é liberado após aprovação de outra pessoa (download_batch).
+  if (isTestCompany(companyDb)) {
+    return { batch_id: batchId, filename, content: remittance.content, pending_approval: false, sequence: reserved.sequence, title_count: validated.length, total_amount: remittance.totalAmount };
+  }
   return { batch_id: batchId, filename, content: null, pending_approval: true, sequence: reserved.sequence, title_count: validated.length, total_amount: remittance.totalAmount };
 }
 
@@ -1377,7 +1392,10 @@ async function generateFlowBatch(
     const requestedMethod = normalizeRemittancePaymentMethod(input.payment_method || current.payment_method);
     let paymentMethod = normalizeRemittancePaymentMethod(current.payment_method);
     let barcode = "";
-    if (requestedMethod === "boleto") {
+    if (requestedMethod === "boleto" && isTestCompany(companyDb)) {
+      barcode = rawBarcodeUnchecked(input.barcode);
+      paymentMethod = "boleto";
+    } else if (requestedMethod === "boleto") {
       const check = validateBoletoForAmount(input.barcode, amount);
       if (!check.ok || !check.barcode) throw new Error(`${label}: ${check.error || "código de barras inválido."}`);
       barcode = check.barcode;
@@ -1787,7 +1805,7 @@ async function processReturn(admin: AdminClient, companyDb: string, content: str
   if (!batch.approved_by || !batch.approved_at || ["cancelled", "generated"].includes(String(batch.status))) {
     throw new Error("Esta remessa não está aprovada para processamento do retorno.");
   }
-  if (sameActor(batch.generated_by, actor)) {
+  if (!isTestCompany(companyDb) && sameActor(batch.generated_by, actor)) {
     throw new Error("Segregação de funções: quem gerou a remessa não pode processar o retorno.");
   }
   const config = await loadBankConfig(admin, companyDb);
