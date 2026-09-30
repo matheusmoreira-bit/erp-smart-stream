@@ -1034,8 +1034,6 @@ async function listOpenInvoices(
 const ACTIVE_REMITTANCE_STATUSES = ["remitted", "scheduled", "paid", "sap_processing", "sap_error"];
 
 const FLOW_ELIGIBLE_STATUSES = ["aprovado", "pc_lancado", "nf_entrada", "pagamento"];
-// Status antes do pagamento pelo banco; "pagamento" só entra se não houver pagamento conhecido.
-const FLOW_PRE_PAYMENT_STATUSES = ["aprovado", "pc_lancado", "nf_entrada"];
 
 async function listFlowTitles(admin: AdminClient, companyDb: string, body: Record<string, unknown>): Promise<OpenTitle[]> {
   let query = admin
@@ -2150,7 +2148,7 @@ async function settlePendingInSap(admin: AdminClient, companyDb: string, body: R
       }
     }
   });
-  return { results };
+  return { results, invoice_cache_refreshed: cacheRefreshed };
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
