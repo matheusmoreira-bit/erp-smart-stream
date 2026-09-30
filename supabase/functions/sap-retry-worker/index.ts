@@ -187,7 +187,19 @@ Deno.serve(async (req) => {
   // Empresas em modo standalone: a fila não é processada (o ERP está parado).
   const standaloneCompanies = new Set(await listStandaloneCompanies());
 
-  for (const row of claimed) {
+  // Orçamento de tempo: cada envio ao SAP pode levar dezenas de segundos e a
+  // função é encerrada pelo runtime; linhas não processadas voltam à fila em
+  // vez de ficarem presas em in_flight por 10 min.
+  const startedAt = Date.now();
+  const TIME_BUDGET_MS = 45_000;
+  for (let i = 0; i < claimed.length; i++) {
+    const row = claimed[i];
+    if (Date.now() - startedAt > TIME_BUDGET_MS) {
+      const rest = claimed.slice(i).map((r) => r.id);
+      await admin.from("sap_retry_queue").update({ status: "pending" }).in("id", rest).eq("status", "in_flight");
+      for (const id of rest) results.push({ id, ok: false, action: "deferred_time_budget" });
+      break;
+    }
     if (row.company_db && standaloneCompanies.has(String(row.company_db))) {
       await admin.from("sap_retry_queue").update({ status: "pending" }).eq("id", row.id);
       results.push({ id: row.id, ok: false, action: "standalone_hold" });
