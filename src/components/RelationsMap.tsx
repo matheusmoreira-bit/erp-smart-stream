@@ -717,6 +717,15 @@ export function RelationsMap({ open, onClose, expense, title, flowType = "compra
                   {mapStatusLabel}
                 </Badge>
               )}
+              {(expense as { sap_legacy_backup?: boolean }).sap_legacy_backup && (
+                <Badge
+                  variant="outline"
+                  className="text-xs"
+                  title="Documento da instância SAP antiga, mantido como backup para auditoria"
+                >
+                  Backup SAP antigo
+                </Badge>
+              )}
             </DialogTitle>
             <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-4 gap-y-1">
               {expense.supplier_name && <span>{expense.supplier_name}</span>}
