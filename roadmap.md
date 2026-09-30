@@ -15,3 +15,5 @@
 - [x] F13 — Logout/saída da conta apagam IndexedDB (fila offline e anexos); fila e rascunhos marcados por usuário; cache de aprovações no servidor por usuário. Falta teste real pela tela.
 - [~] F14 — OCR valida token + limite de uso; imagens sem metadados, texto mascarado; só gateway sem retenção; limpeza 180d. Falta: aprovação da política (docs/politica-ia-documentos-lgpd.md).
 - [~] F15 — Higiene de ambiente/inventário — VISTO. Diferença de bases explicada: novas empresas foram acopladas depois do relatório. Pontos abertos, sem mudança por ora: org Okta demo, bases de teste/nome de pessoa ativas, segredo do agendador escrito nos jobs.
+
+- [ ] CNAB standalone: incorporar avaliação (trava de pedido, validação de boleto, tolerância NF, conta transitória) ao plano
