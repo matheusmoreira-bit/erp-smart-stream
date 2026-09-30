@@ -41,6 +41,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useStandaloneMode } from "@/hooks/useStandaloneMode";
+import { parseBoleto, validateBoletoForAmount } from "@/lib/boleto-barcode";
+import { StandaloneSettlementTab } from "@/components/accounts-payable/StandaloneSettlementTab";
 
 type PaymentMethod = "boleto" | "pix" | "ted" | "unknown";
 type RemittancePaymentMethod = "boleto" | "pix" | "ted" | "unknown";
@@ -77,6 +80,11 @@ interface OpenTitle {
   pix_key?: string | null;
   bank_account_summary?: string | null;
   payment_data_source?: string | null;
+  source?: "sap" | "flow";
+  expense_id?: string | null;
+  sap_po_doc_num?: number | null;
+  expense_status?: string | null;
+  readiness?: "ready" | "missing_barcode" | "missing_bank_data" | "no_approved_profile";
 }
 
 interface BankConfig {
@@ -89,6 +97,7 @@ interface BankConfig {
   account_digit: string;
   agency_account_digit: string;
   sap_transfer_account: string;
+  transit_account_code?: string;
   active?: boolean;
 }
 
@@ -182,6 +191,7 @@ const emptyConfig: BankConfig = {
   account_digit: "",
   agency_account_digit: "",
   sap_transfer_account: "",
+  transit_account_code: "",
 };
 
 const emptySupplierPaymentForm: SupplierPaymentForm = {
@@ -201,7 +211,7 @@ const emptySupplierPaymentForm: SupplierPaymentForm = {
   pix_key: "",
 };
 
-const SAP_REQUIRED_ACTIONS = new Set(["list_open", "generate", "process_return", "get_supplier_payment_profile", "save_supplier_payment_profile", "approve_supplier_payment_profile"]);
+const SAP_REQUIRED_ACTIONS = new Set(["list_open", "generate", "process_return", "settle_pending_in_sap", "get_supplier_payment_profile", "save_supplier_payment_profile", "approve_supplier_payment_profile"]);
 
 function normalizeCurrency(currency?: string | null) {
   const value = String(currency || "BRL").trim().toUpperCase();
@@ -357,11 +367,15 @@ export default function AccountsPayable() {
   const [returnFilename, setReturnFilename] = useState("");
   const [returnPreview, setReturnPreview] = useState<ReturnPreview | null>(null);
   const [processingReturn, setProcessingReturn] = useState(false);
+  const { isStandalone, mode: standaloneMode } = useStandaloneMode();
+  const [listSource, setListSource] = useState<"sap" | "flow">("sap");
+  const [onlyReady, setOnlyReady] = useState(false);
 
   const call = useCallback(async <T,>(action: string, payload: Record<string, unknown> = {}): Promise<T> => {
     if (!companyDb) throw new Error("Selecione uma empresa SAP.");
     const sapHeaders: Record<string, string> = {};
-    if (session?.erpType === "sap" && SAP_REQUIRED_ACTIONS.has(action)) {
+    const skipSap = isStandalone && action !== "settle_pending_in_sap" && !action.includes("supplier_payment");
+    if (session?.erpType === "sap" && SAP_REQUIRED_ACTIONS.has(action) && !skipSap) {
       const resolved = await resolveSapSession(companyDb, false) || await resolveSapSession(companyDb, true);
       if (!resolved?.sessionId) throw new Error("Sessão SAP não encontrada. Entre na empresa SAP para carregar os títulos em aberto.");
       sapHeaders["x-sap-session"] = resolved.sessionId;
@@ -377,14 +391,14 @@ export default function AccountsPayable() {
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body?.error || `Falha no serviço (${response.status}).`);
     return body as T;
-  }, [companyDb, session?.erpType]);
+  }, [companyDb, isStandalone, session?.erpType]);
 
   const load = useCallback(async () => {
     if (!companyDb) return;
     setLoading(true);
     try {
       const [openResult, batchResult, configResult] = await Promise.allSettled([
-        call<{ titles: OpenTitle[] }>("list_open", {
+        call<{ titles: OpenTitle[]; source?: "sap" | "flow" }>("list_open", {
           due_from: dueFrom || undefined,
           due_to: dueTo || undefined,
         }),
@@ -394,6 +408,7 @@ export default function AccountsPayable() {
 
       if (openResult.status === "fulfilled") {
         const nextTitles = openResult.value.titles || [];
+        setListSource(openResult.value.source === "flow" ? "flow" : "sap");
         setTitles(nextTitles);
         setSelected((current) => new Set([...current].filter((key) => nextTitles.some((title) => title.key === key))));
       } else {
@@ -420,7 +435,7 @@ export default function AccountsPayable() {
     } finally {
       setLoading(false);
     }
-  }, [call, companyDb, dueFrom, dueTo]);
+  }, [call, companyDb, dueFrom, dueTo, isStandalone]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -459,6 +474,11 @@ export default function AccountsPayable() {
     });
   }, [titles]);
 
+  const boletoCheck = useCallback((title: OpenTitle) => {
+    const raw = barcodes[title.key] || title.boleto_barcode || title.boleto_digitable_line || "";
+    return title.source === "flow" ? validateBoletoForAmount(raw, title.open_amount) : { ...parseBoleto(raw), ok: boletoBarcodeFrom(raw).length === 44 };
+  }, [barcodes]);
+
   const methodOf = useCallback((title: OpenTitle): RemittancePaymentMethod => (
     titlePaymentMethods[title.key] || asRemittancePaymentMethod(title.payment_method)
   ), [titlePaymentMethods]);
@@ -473,16 +493,17 @@ export default function AccountsPayable() {
       (!dueFrom && !dueTo || dateInRange(title.due_date, dueFrom, dueTo)) &&
       (!paymentFrom && !paymentTo || dateInRange(paymentDate, paymentFrom, paymentTo)) &&
       amountInRange(title.open_amount, amountFrom, amountTo) &&
-      (paymentMethod === "all" || methodOf(title) === paymentMethod),
+      (paymentMethod === "all" || methodOf(title) === paymentMethod) &&
+      (!onlyReady || title.source !== "flow" || title.readiness === "ready"),
     );
-  }, [amountFrom, amountTo, dueFrom, dueTo, methodOf, paymentDate, paymentFrom, paymentMethod, paymentTo, query, supplierFilter, titles]);
+  }, [onlyReady, amountFrom, amountTo, dueFrom, dueTo, methodOf, paymentDate, paymentFrom, paymentMethod, paymentTo, query, supplierFilter, titles]);
 
   const selectedTitles = useMemo(() => titles.filter((title) => selected.has(title.key)), [selected, titles]);
   const selectedTotal = useMemo(() => selectedTitles.reduce((sum, title) => sum + title.open_amount, 0), [selectedTitles]);
   const allFilteredSelected = filtered.length > 0 && filtered.every((title) => selected.has(title.key));
   const selectedMissingMethod = useMemo(() => selectedTitles.filter((title) => methodOf(title) === "unknown"), [methodOf, selectedTitles]);
   const selectedMissingBarcode = useMemo(
-    () => selectedTitles.filter((title) => methodOf(title) === "boleto" && boletoBarcodeFrom(barcodes[title.key] || title.boleto_barcode || title.boleto_digitable_line || "").length !== 44),
+    () => selectedTitles.filter((title) => methodOf(title) === "boleto" && !boletoCheck(title).ok),
     [barcodes, methodOf, selectedTitles],
   );
   const selectedMissingTedData = useMemo(
@@ -628,6 +649,8 @@ export default function AccountsPayable() {
       const result = await call<{ filename: string; title_count: number }>("generate", {
         payment_date: paymentDate,
         titles: selectedTitles.map((title) => ({
+          source: title.source || "sap",
+          expense_id: title.expense_id || undefined,
           sap_doc_entry: title.sap_doc_entry,
           installment_id: title.installment_id,
           amount: title.open_amount,
@@ -769,7 +792,19 @@ export default function AccountsPayable() {
             <TabsTrigger value="open">Títulos em aberto</TabsTrigger>
             <TabsTrigger value="batches">Lotes CNAB</TabsTrigger>
             <TabsTrigger value="returns">Retornos</TabsTrigger>
+            <TabsTrigger value="settlement">Conciliação pós-standalone</TabsTrigger>
           </TabsList>
+
+          {listSource === "flow" && (
+            <Alert>
+              <AlertTitle>Modo standalone — títulos vindos do ERP Flow</AlertTitle>
+              <AlertDescription>
+                A lista mostra pedidos de compra aprovados, com PC ou com NF, ainda não pagos. O valor é o aprovado no Flow (itens + frete).
+                Ao gerar a remessa, o pedido fica travado para edição e cancelamento até o retorno do banco.
+                {standaloneMode?.ends_at ? ` Modo previsto até ${new Date(standaloneMode.ends_at).toLocaleString("pt-BR")}.` : ""}
+              </AlertDescription>
+            </Alert>
+          )}
 
           <TabsContent value="open" className="space-y-5">
             <div className="flex flex-col gap-3 border-y border-border py-4 lg:flex-row lg:items-end lg:justify-between">
@@ -782,6 +817,12 @@ export default function AccountsPayable() {
                 <p className="text-sm text-muted-foreground">
                   {filtered.length} de {titles.length} título(s)
                 </p>
+                {listSource === "flow" && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox checked={onlyReady} onCheckedChange={(v) => setOnlyReady(v === true)} aria-label="Somente com dados bancários completos" />
+                    Somente com dados bancários completos
+                  </label>
+                )}
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-end">
                 <div className="space-y-1.5">
@@ -897,7 +938,7 @@ export default function AccountsPayable() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-10"><Checkbox checked={allFilteredSelected} onCheckedChange={(value) => toggleFiltered(value === true)} aria-label="Selecionar títulos visíveis" /></TableHead>
-                    <TableHead className="w-20">NF SAP</TableHead>
+                    <TableHead className="w-20">{listSource === "flow" ? "PC" : "NF SAP"}</TableHead>
                     <TableHead className="w-[26%]">Fornecedor</TableHead>
                     <TableHead className="w-28">Vencimento</TableHead>
                     <TableHead className="w-40">Tipo</TableHead>
@@ -912,7 +953,15 @@ export default function AccountsPayable() {
                     return (
                       <TableRow key={title.key} data-state={selected.has(title.key) ? "selected" : undefined}>
                         <TableCell><Checkbox checked={selected.has(title.key)} onCheckedChange={(value) => toggleTitle(title.key, value === true)} aria-label={`Selecionar NF ${title.sap_doc_num}`} /></TableCell>
-                        <TableCell className="break-words font-mono text-sm">#{title.sap_doc_num}{title.installment_id > 0 ? ` / ${title.installment_id}` : ""}</TableCell>
+                        <TableCell className="break-words font-mono text-sm">
+                          {title.source === "flow" ? (title.sap_po_doc_num ? `#${title.sap_po_doc_num}` : "sem PC") : `#${title.sap_doc_num}`}
+                          {title.installment_id > 0 ? ` / ${title.installment_id}` : ""}
+                          {title.source === "flow" && title.readiness && title.readiness !== "ready" && (
+                            <Badge variant="outline" className="mt-1 block w-fit font-sans text-[10px]">
+                              {title.readiness === "no_approved_profile" ? "Sem perfil aprovado" : "Dados incompletos"}
+                            </Badge>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <p className="truncate font-medium">{title.supplier_name}</p>
                           <p className="text-xs text-muted-foreground">{title.supplier_code}</p>
@@ -960,6 +1009,14 @@ export default function AccountsPayable() {
                                 placeholder="Linha digitável ou código de barras"
                               />
                               {title.boleto_digitable_line && <p className="truncate text-xs text-muted-foreground">Linha digitável capturada no pedido</p>}
+                              {(() => {
+                                const raw = barcodes[title.key] || "";
+                                if (!raw) return null;
+                                const check = boletoCheck(title);
+                                return check.ok
+                                  ? <p className="text-xs text-muted-foreground">Código válido{check.amount ? ` · ${money(check.amount)}` : ""}</p>
+                                  : <p role="alert" className="text-xs text-destructive">{check.error || "Código inválido."}</p>;
+                              })()}
                               {!hasSupplierPaymentData(title) && (
                                 <Button
                                   type="button"
@@ -1116,6 +1173,9 @@ export default function AccountsPayable() {
                 <p>Selecione um arquivo para visualizar as ocorrências.</p>
               </div>
             )}
+          </TabsContent>
+          <TabsContent value="settlement">
+            <StandaloneSettlementTab call={call} standalone={isStandalone} />
           </TabsContent>
         </Tabs>
       </main>
@@ -1373,8 +1433,9 @@ export default function AccountsPayable() {
               ["agency", "Agência"], ["agency_digit", "Dígito da agência"], ["account_number", "Conta"],
               ["account_digit", "Dígito da conta"], ["agency_account_digit", "Dígito agência/conta"],
               ["sap_transfer_account", "Conta contábil SAP para saída"],
+              ["transit_account_code", "Conta transitória SAP (baixas pós-standalone)"],
             ] as Array<[keyof BankConfig, string]>).map(([key, label]) => (
-              <div key={key} className={key === "legal_name" || key === "sap_transfer_account" ? "space-y-1.5 sm:col-span-2" : "space-y-1.5"}>
+              <div key={key} className={key === "legal_name" || key === "sap_transfer_account" || key === "transit_account_code" ? "space-y-1.5 sm:col-span-2" : "space-y-1.5"}>
                 <Label htmlFor={`config-${key}`}>{label}</Label>
                 <Input id={`config-${key}`} value={String(config[key] || "")} onChange={(event) => setConfig((current) => ({ ...current, [key]: event.target.value }))} />
               </div>
