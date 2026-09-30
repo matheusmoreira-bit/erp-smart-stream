@@ -237,6 +237,7 @@ async function readRelations(companyDb: string, sapDocEntry: number): Promise<Sa
 
 /** NFs de entrada vinculadas ao PC — leitura direta do Cloud (barato, sem cache externo). */
 export function useNfEntradaLinks({
+  expenseId,
   sapDocEntry,
   companyDb,
   supplierCode,
@@ -341,7 +342,50 @@ export function useNfEntradaLinks({
         paid_amount: r.paid_to_date,
       }));
 
-    const nfs: Omit<NfEntradaLink, "ap_links">[] = [...importRows, ...relationOnly, ...cacheOnly];
+    // Backup da instância SAP antiga: a cadeia PC → NF → pagamento vem do arquivo
+    // de auditoria (sap_archive_documents). Retorna vazio para pedidos normais.
+    const legacyPayments = new Map<number, NfApLink[]>();
+    let legacyNfs: Omit<NfEntradaLink, "ap_links">[] = [];
+    if (expenseId) {
+      try {
+        const { data: legacy } = await (supabase as unknown as DynamicSupabase).rpc("get_legacy_po_chain", { _expense_id: expenseId });
+        const rows = (Array.isArray(legacy) ? legacy : []) as Array<{
+          kind: string; doc_entry: number; doc_num: number | null; doc_date: string | null; due_date: string | null;
+          card_code: string | null; card_name: string | null; total: number | null; paid: number | null;
+          status: string | null; invoice_doc_entry: number | null; applied: number | null;
+        }>;
+        for (const r of rows.filter((x) => x.kind === "payment" && x.invoice_doc_entry != null)) {
+          const arr = legacyPayments.get(Number(r.invoice_doc_entry)) || [];
+          arr.push({
+            ap_doc_entry: String(r.doc_entry), ap_doc_num: r.doc_num != null ? String(r.doc_num) : null,
+            ap_total: r.applied, ap_paid: r.applied, source: "sap", linked_at: r.doc_date || "",
+            notes: "Pagamento do SAP antigo (backup de auditoria)",
+            payment_doc_entry: r.doc_entry, payment_doc_num: r.doc_num, payment_date: r.doc_date,
+          });
+          legacyPayments.set(Number(r.invoice_doc_entry), arr);
+        }
+        const known = new Set([...importRows, ...relationOnly, ...cacheOnly].map((n) => Number(n.sap_invoice_draft_id)));
+        legacyNfs = rows.filter((x) => x.kind === "nf" && !known.has(Number(x.doc_entry))).map((r) => ({
+          id: `sap-legacy:${r.doc_entry}`,
+          chave_acesso: `SAP#${r.doc_entry}`,
+          numero_nf: r.doc_num != null ? String(r.doc_num) : null,
+          serie: null,
+          nome_fornecedor: r.card_name || r.card_code,
+          valor_total: r.total,
+          status: r.status === "bost_Close" ? "sap_close" : "sap_open",
+          sap_invoice_draft_id: String(r.doc_entry),
+          created_at: r.doc_date || "",
+          updated_at: r.doc_date || "",
+          doc_date: r.doc_date,
+          due_date: r.due_date,
+          paid_amount: r.paid,
+        }));
+      } catch (e) {
+        console.warn("[relations-map] falha ao ler backup do SAP antigo:", e);
+      }
+    }
+
+    const nfs: Omit<NfEntradaLink, "ap_links">[] = [...importRows, ...relationOnly, ...cacheOnly, ...legacyNfs];
     if (nfs.length === 0) return [];
 
     // Busca contas a pagar vinculadas (N por NF) — tabela de rastreabilidade.
@@ -392,6 +436,9 @@ export function useNfEntradaLinks({
           notes: "NF de entrada vinculada pelo watcher SAP",
         });
       }
+      for (const lp of legacyPayments.get(invEntry) || []) {
+        if (!arr.some((link) => link.payment_doc_entry === lp.payment_doc_entry)) arr.push(lp);
+      }
       for (const rel of paymentRelationsByInvoice.get(invEntry) || []) {
         const paymentKey = String(rel.target_doc_entry);
         if (arr.some((link) => link.payment_doc_entry === rel.target_doc_entry || link.ap_doc_entry === paymentKey)) continue;
@@ -412,10 +459,10 @@ export function useNfEntradaLinks({
     }
 
     return nfs.map((n) => ({ ...n, ap_links: byNf.get(n.id) || [] })) as NfEntradaLink[];
-  }, [sapDocEntry, companyDb, supplierCode]);
+  }, [expenseId, sapDocEntry, companyDb, supplierCode]);
 
   return useExternalCache<NfEntradaLink[]>({
-    cacheKey: sapDocEntry && companyDb ? `relmap:nf:v5:${sapDocEntry}:${supplierCode || ""}` : null,
+    cacheKey: sapDocEntry && companyDb ? `relmap:nf:v6:${expenseId}:${sapDocEntry}:${supplierCode || ""}` : null,
 
     companyDb: companyDb ?? null,
     fetcher,
