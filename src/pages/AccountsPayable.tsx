@@ -85,6 +85,7 @@ interface OpenTitle {
   sap_po_doc_num?: number | null;
   expense_status?: string | null;
   readiness?: "ready" | "missing_barcode" | "missing_bank_data" | "no_approved_profile";
+  prior_payment_check?: boolean;
 }
 
 interface BankConfig {
@@ -668,6 +669,8 @@ export default function AccountsPayable() {
     }
   }
 
+  const [discardingBatchId, setDiscardingBatchId] = useState<string | null>(null);
+
   async function approveBatch(batch: Batch) {
     setApprovingBatchId(batch.id);
     try {
@@ -678,6 +681,25 @@ export default function AccountsPayable() {
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       setApprovingBatchId(null);
+    }
+  }
+
+  async function discardBatch(batch: Batch) {
+    const reason = window.prompt(`Descartar a remessa ${batch.filename}? Os pedidos voltam para a lista.\nInforme o motivo (mínimo 10 caracteres):`);
+    if (reason == null) return;
+    if (reason.trim().length < 10) {
+      toast.error("Informe o motivo com pelo menos 10 caracteres.");
+      return;
+    }
+    setDiscardingBatchId(batch.id);
+    try {
+      const result = await call<{ released: number }>("discard_batch", { batch_id: batch.id, reason: reason.trim() });
+      toast.success(`Remessa descartada. ${result.released} título(s) liberado(s).`);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setDiscardingBatchId(null);
     }
   }
 
@@ -961,6 +983,11 @@ export default function AccountsPayable() {
                               {title.readiness === "no_approved_profile" ? "Sem perfil aprovado" : "Dados incompletos"}
                             </Badge>
                           )}
+                          {title.source === "flow" && title.prior_payment_check && (
+                            <Badge variant="outline" className="mt-1 block w-fit border-warning/50 font-sans text-[10px]" title="O pedido já está em Pagamento. Confira no banco se ele não foi pago por fora antes de incluir.">
+                              Em Pagamento — confira
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell>
                           <p className="truncate font-medium">{title.supplier_name}</p>
@@ -1115,6 +1142,12 @@ export default function AccountsPayable() {
                             <Button variant="secondary" size="sm" onClick={() => void approveBatch(batch)} disabled={approvingBatchId === batch.id} title={`Gerado por ${batch.generated_by || "-"}. Quem gerou não pode aprovar.`}>
                               {approvingBatchId === batch.id && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
                               Aprovar
+                            </Button>
+                          )}
+                          {(batch.status === "generated" || batch.status === "approved") && (
+                            <Button variant="ghost" size="sm" onClick={() => void discardBatch(batch)} disabled={discardingBatchId === batch.id} title="Descarta a remessa antes de ir ao banco e libera os pedidos">
+                              {discardingBatchId === batch.id && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                              Descartar
                             </Button>
                           )}
                           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void downloadBatch(batch)} disabled={downloadingBatchId === batch.id || !batch.approved_by} title={batch.approved_by ? `Aprovado por ${batch.approved_by}` : "Disponível após aprovação"}>
