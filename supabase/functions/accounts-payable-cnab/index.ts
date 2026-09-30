@@ -11,6 +11,8 @@ import {
   type SicoobPaymentTitle,
   type SicoobReturnTitle,
 } from "../_shared/sicoob-cnab240.ts";
+import { getStandaloneMode } from "../_shared/standalone-mode.ts";
+import { validateBoletoForAmount } from "../_shared/boleto-barcode.ts";
 
 const corsHeaders = {
   ...baseCorsHeaders,
@@ -113,6 +115,11 @@ interface OpenTitle {
   pix_key?: string | null;
   bank_account_summary?: string | null;
   payment_data_source?: string | null;
+  source?: "sap" | "flow";
+  expense_id?: string | null;
+  sap_po_doc_num?: number | null;
+  expense_status?: string | null;
+  readiness?: "ready" | "missing_barcode" | "missing_bank_data" | "no_approved_profile";
 }
 
 function json(body: unknown, status = 200) {
@@ -1025,6 +1032,101 @@ async function listOpenInvoices(
 
 const ACTIVE_REMITTANCE_STATUSES = ["remitted", "scheduled", "paid", "sap_processing", "sap_error"];
 
+const FLOW_ELIGIBLE_STATUSES = ["aprovado", "pc_lancado", "nf_entrada"];
+
+async function listFlowTitles(admin: AdminClient, companyDb: string, body: Record<string, unknown>): Promise<OpenTitle[]> {
+  let query = admin
+    .from("expenses")
+    .select("id, supplier_code, supplier_name, doc_date, due_date, total_amount, freight_amount, currency, status, cost_center, project, sap_doc_entry, sap_doc_num, description")
+    .eq("company_db", companyDb)
+    .eq("doc_type", "purchase")
+    .eq("sap_legacy_backup", false)
+    .is("payment_lock_batch_item_id", null)
+    .in("status", FLOW_ELIGIBLE_STATUSES)
+    .order("due_date", { ascending: true, nullsFirst: false })
+    .limit(2000);
+  const dueFrom = requestDate(body.due_from);
+  const dueTo = requestDate(body.due_to);
+  if (dueFrom) query = query.gte("due_date", dueFrom);
+  if (dueTo) query = query.lte("due_date", dueTo);
+  let { data, error } = await query;
+  if (error && isMissingColumn(error)) {
+    // coluna description opcional
+    ({ data, error } = await admin
+      .from("expenses")
+      .select("id, supplier_code, supplier_name, doc_date, due_date, total_amount, freight_amount, currency, status, cost_center, project, sap_doc_entry, sap_doc_num")
+      .eq("company_db", companyDb).eq("doc_type", "purchase").eq("sap_legacy_backup", false)
+      .is("payment_lock_batch_item_id", null).in("status", FLOW_ELIGIBLE_STATUSES).limit(2000));
+  }
+  if (error) throw new Error(`Pedidos do Flow: ${message(error)}`);
+  const rows = (data || []) as Array<Record<string, unknown>>;
+
+  const { data: active, error: activeError } = await admin
+    .from("accounts_payable_batch_items")
+    .select("expense_id")
+    .eq("company_db", companyDb)
+    .eq("source", "flow")
+    .in("status", ACTIVE_REMITTANCE_STATUSES);
+  if (activeError) throw new Error(`Remessas em andamento: ${message(activeError)}`);
+  const busy = new Set((active || []).map((row) => String(row.expense_id)));
+
+  const profiles = new Map<string, SupplierPaymentProfileRow | null>();
+  const titles: OpenTitle[] = [];
+  for (const row of rows) {
+    const id = String(row.id);
+    if (busy.has(id)) continue;
+    const currency = normalizeCurrency(row.currency);
+    if (currency !== "BRL") continue;
+    const amount = roundMoney(Number(row.total_amount || 0) + Number(row.freight_amount || 0));
+    if (amount <= 0) continue;
+    const code = String(row.supplier_code || "");
+    if (code && !profiles.has(code)) profiles.set(code, await loadStoredSupplierPaymentProfile(admin, companyDb, code));
+    const stored = code ? profiles.get(code) || null : null;
+    const profile = paymentProfileFromStored(stored);
+    const readiness: OpenTitle["readiness"] = !stored
+      ? "no_approved_profile"
+      : profile ? "ready" : "missing_bank_data";
+    titles.push({
+      key: `flow:${id}`,
+      sap_doc_entry: 0,
+      sap_doc_num: Number(row.sap_doc_num || 0),
+      installment_id: 0,
+      supplier_code: code,
+      supplier_name: String(row.supplier_name || code || "Fornecedor"),
+      supplier_tax_id: digits(stored?.supplier_tax_id || stored?.beneficiary_tax_id) || null,
+      document_date: day(row.doc_date),
+      due_date: day(row.due_date) || day(row.doc_date),
+      open_amount: amount,
+      currency,
+      description: String(row.description || "").slice(0, 200),
+      cost_centers: uniqueStrings([row.cost_center]),
+      projects: uniqueStrings([row.project]),
+      payment_method: profile?.payment_method || "unknown",
+      payment_method_label: profile?.payment_method_label || "Informe o boleto ou cadastre o fornecedor",
+      boleto_barcode: null,
+      boleto_digitable_line: null,
+      beneficiary_name: profile?.beneficiary_name ?? null,
+      beneficiary_tax_id: profile?.beneficiary_tax_id ?? null,
+      bank_code: profile?.bank_code ?? null,
+      branch: profile?.branch ?? null,
+      branch_digit: profile?.branch_digit ?? null,
+      account_number: profile?.account_number ?? null,
+      account_digit: profile?.account_digit ?? null,
+      account_type: profile?.account_type ?? null,
+      pix_key_type: profile?.pix_key_type ?? null,
+      pix_key: profile?.pix_key ?? null,
+      bank_account_summary: profile?.bank_account_summary ?? null,
+      payment_data_source: profile ? "Perfil de pagamento aprovado" : null,
+      source: "flow",
+      expense_id: id,
+      sap_po_doc_num: row.sap_doc_num ? Number(row.sap_doc_num) : null,
+      expense_status: String(row.status),
+      readiness,
+    });
+  }
+  return titles;
+}
+
 async function listAvailableTitles(admin: AdminClient, companyDb: string, req: Request, body: Record<string, unknown>): Promise<OpenTitle[]> {
   const openTitles = await withSap(admin, companyDb, req, (baseUrl, cookie) => listOpenInvoices(admin, companyDb, baseUrl, cookie, {
     dueFrom: body.due_from,
@@ -1080,6 +1182,7 @@ async function saveBankConfig(admin: AdminClient, companyDb: string, body: Recor
     account_digit: digits(body.account_digit),
     agency_account_digit: String(body.agency_account_digit || "").trim(),
     sap_transfer_account: String(body.sap_transfer_account).trim(),
+    transit_account_code: String(body.transit_account_code || "").trim() || null,
     active: body.active !== false,
     created_by: actor,
   };
@@ -1113,6 +1216,192 @@ function stableReference(id: string): string {
   return `AP${id.replace(/-/g, "").slice(0, 18)}`;
 }
 
+async function persistBatch(
+  admin: AdminClient,
+  companyDb: string,
+  config: Record<string, unknown>,
+  validated: Array<Record<string, unknown> & { id: string; reference: string }>,
+  paymentDate: string,
+  actor: string,
+) {
+  const reserved = await reserveSequence(admin, companyDb);
+  const cnabTitles: SicoobPaymentTitle[] = validated.map((title) => ({
+    id: title.id,
+    paymentMethod: title.payment_method as "boleto" | "pix" | "ted",
+    barcode: title.barcode ? String(title.barcode) : null,
+    supplierName: String(title.beneficiary_name || title.supplier_name),
+    supplierTaxId: title.beneficiary_tax_id ? String(title.beneficiary_tax_id) : title.supplier_tax_id ? String(title.supplier_tax_id) : null,
+    dueDate: String(title.due_date),
+    paymentDate,
+    amount: Number(title.amount),
+    companyReference: title.reference,
+    bankCode: title.bank_code ? String(title.bank_code) : null,
+    branch: title.branch ? String(title.branch) : null,
+    branchDigit: title.branch_digit ? String(title.branch_digit) : null,
+    accountNumber: title.account_number ? String(title.account_number) : null,
+    accountDigit: title.account_digit ? String(title.account_digit) : null,
+    accountType: title.account_type ? String(title.account_type) : null,
+    pixKeyType: title.pix_key_type ? String(title.pix_key_type) : null,
+    pixKey: title.pix_key ? String(title.pix_key) : null,
+  }));
+  const remittance = generateSicoobCnab240({ account: bankAccount(config), fileSequence: reserved.sequence, titles: cnabTitles });
+  const contentHash = await sha256(remittance.content);
+  const filename = `PAG_${paymentDate.replace(/-/g, "")}_${String(reserved.sequence).padStart(6, "0")}.REM`;
+  const batchId = crypto.randomUUID();
+  const batchPayload = {
+    id: batchId,
+    company_db: companyDb,
+    bank_account_id: reserved.bankAccountId,
+    file_sequence: reserved.sequence,
+    filename,
+    payment_date: paymentDate,
+    title_count: validated.length,
+    total_amount: remittance.totalAmount,
+    content: remittance.content,
+    content_sha256: contentHash,
+    generated_by: actor,
+    status: "generated",
+  };
+  let { error: batchError } = await admin.from("accounts_payable_batches").insert(batchPayload);
+  if (batchError && isMissingColumn(batchError)) {
+    const safePayload = { ...batchPayload };
+    delete (safePayload as Record<string, unknown>).content;
+    ({ error: batchError } = await admin.from("accounts_payable_batches").insert(safePayload));
+  }
+  if (batchError) throw new Error(`Falha ao registrar remessa: ${message(batchError)}`);
+
+  const rows = validated.map((title) => ({
+    id: title.id,
+    batch_id: batchId,
+    company_db: companyDb,
+    sap_doc_entry: title.sap_doc_entry,
+    sap_doc_num: title.sap_doc_num,
+    installment_id: title.installment_id,
+    supplier_code: title.supplier_code,
+    supplier_name: title.supplier_name,
+    supplier_tax_id: title.supplier_tax_id,
+    due_date: title.due_date,
+    scheduled_date: paymentDate,
+    amount: title.amount,
+    currency: title.currency,
+    barcode: title.payment_method === "boleto" ? title.barcode : null,
+    payment_method: title.payment_method,
+    payment_metadata: {
+      beneficiary_name: title.beneficiary_name,
+      beneficiary_tax_id: title.beneficiary_tax_id,
+      bank_code: title.bank_code,
+      branch: title.branch,
+      branch_digit: title.branch_digit,
+      account_number: title.account_number,
+      account_digit: title.account_digit,
+      account_type: title.account_type,
+      pix_key_type: title.pix_key_type,
+      pix_key: title.pix_key,
+      barcode_source: title.barcode_source,
+      payment_data_source: title.payment_data_source,
+    },
+    company_reference: title.reference,
+    source: title.source === "flow" ? "flow" : "sap",
+    expense_id: title.source === "flow" ? title.expense_id : null,
+    sap_settlement_status: title.source === "flow" ? "pending" : "not_required",
+    idempotency_key: title.source === "flow"
+      ? `${companyDb}:${batchId}:flow:${title.expense_id}`
+      : `${companyDb}:${batchId}:${title.sap_doc_entry}:${title.installment_id}`,
+  }));
+  try {
+    await insertBatchItems(admin, rows);
+  } catch (itemError) {
+    await admin.from("accounts_payable_batches").delete().eq("id", batchId);
+    throw new Error(`Falha ao registrar títulos: ${message(itemError)}`);
+  }
+  // Trava de edição/cancelamento dos pedidos do Flow enquanto a remessa estiver ativa.
+  const locked: string[] = [];
+  for (const row of rows.filter((r) => r.source === "flow")) {
+    const { data: lock, error: lockError } = await admin.from("expenses")
+      .update({ payment_lock_batch_item_id: row.id })
+      .eq("id", String(row.expense_id)).eq("company_db", companyDb)
+      .is("payment_lock_batch_item_id", null).in("status", FLOW_ELIGIBLE_STATUSES)
+      .select("id").maybeSingle();
+    if (lockError || !lock) {
+      for (const expenseId of locked) {
+        await admin.from("expenses").update({ payment_lock_batch_item_id: null }).eq("id", expenseId);
+      }
+      await admin.from("accounts_payable_batches").delete().eq("id", batchId);
+      throw new Error("Um dos pedidos mudou ou já está em outra remessa. Recarregue a lista e gere novamente.");
+    }
+    locked.push(String(row.expense_id));
+  }
+  await admin.rpc("insert_audit_log", {
+    p_action: "accounts_payable_batch_generated",
+    p_entity_type: "accounts_payable_batch",
+    p_entity_id: batchId,
+    p_company_db: companyDb,
+    p_actor_email: actor,
+    p_details: { filename, title_count: validated.length, total_amount: remittance.totalAmount, content_sha256: contentHash },
+  });
+  // F05: o arquivo só é liberado após aprovação de outra pessoa (download_batch).
+  return { batch_id: batchId, filename, content: null, pending_approval: true, sequence: reserved.sequence, title_count: validated.length, total_amount: remittance.totalAmount };
+}
+
+async function generateFlowBatch(
+  admin: AdminClient,
+  companyDb: string,
+  requested: Array<Record<string, unknown>>,
+  paymentDate: string,
+  config: Record<string, unknown>,
+  actor: string,
+) {
+  const available = await listFlowTitles(admin, companyDb, {});
+  const byExpense = new Map(available.map((title) => [String(title.expense_id), title]));
+  const validated: Array<Record<string, unknown> & { id: string; reference: string }> = [];
+  for (const input of requested) {
+    // F05: valor, fornecedor e dados bancários são relidos no servidor.
+    const expenseId = String(input.expense_id || "");
+    const current = byExpense.get(expenseId);
+    if (!current) throw new Error("Pedido indisponível: foi alterado, pago ou já está em outra remessa. Recarregue a lista.");
+    const amount = roundMoney(input.amount);
+    if (Math.abs(amount - current.open_amount) > 0.005) {
+      throw new Error(`Pedido de ${current.supplier_name}: o valor mudou (R$ ${current.open_amount.toFixed(2)}). Recarregue a lista.`);
+    }
+    const label = current.sap_po_doc_num ? `PC ${current.sap_po_doc_num}` : `Pedido de ${current.supplier_name}`;
+    const requestedMethod = normalizeRemittancePaymentMethod(input.payment_method || current.payment_method);
+    let paymentMethod = normalizeRemittancePaymentMethod(current.payment_method);
+    let barcode = "";
+    if (requestedMethod === "boleto") {
+      const check = validateBoletoForAmount(input.barcode, amount);
+      if (!check.ok || !check.barcode) throw new Error(`${label}: ${check.error || "código de barras inválido."}`);
+      barcode = check.barcode;
+      paymentMethod = "boleto";
+    } else if (requestedMethod !== paymentMethod) {
+      throw new Error(`${label}: forma de pagamento diferente da cadastrada e aprovada para o fornecedor.`);
+    }
+    if (paymentMethod === "unknown") throw new Error(`${label}: fornecedor sem perfil de pagamento aprovado. Informe um boleto ou aprove o perfil.`);
+    const bankCode = digits(current.bank_code);
+    const beneficiaryTaxId = digits(current.beneficiary_tax_id || current.supplier_tax_id);
+    if (paymentMethod === "ted" && (!bankCode || !digits(current.branch) || !digits(current.account_number) || !beneficiaryTaxId)) {
+      throw new Error(`${label}: fornecedor sem dados bancários aprovados para TED.`);
+    }
+    if (paymentMethod === "pix" && (!current.pix_key_type || !current.pix_key || !beneficiaryTaxId)) {
+      throw new Error(`${label}: fornecedor sem chave PIX aprovada.`);
+    }
+    const id = crypto.randomUUID();
+    validated.push({
+      id,
+      reference: stableReference(id),
+      ...current,
+      barcode,
+      barcode_source: barcode ? "manual_validated" : "none",
+      payment_method: paymentMethod,
+      beneficiary_name: current.beneficiary_name || current.supplier_name,
+      beneficiary_tax_id: beneficiaryTaxId || null,
+      bank_code: bankCode || null,
+      amount,
+      supplier_tax_id: digits(current.supplier_tax_id) || null,
+    });
+  }
+  return await persistBatch(admin, companyDb, config, validated, paymentDate, actor);
+}
+
 async function generateBatch(admin: AdminClient, companyDb: string, body: Record<string, unknown>, actor: string, req: Request) {
   const requested = Array.isArray(body.titles) ? body.titles as Array<Record<string, unknown>> : [];
   if (!requested.length) throw new Error("Selecione ao menos um título.");
@@ -1120,6 +1409,10 @@ async function generateBatch(admin: AdminClient, companyDb: string, body: Record
   if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)) throw new Error("Data de pagamento inválida.");
   const config = await loadBankConfig(admin, companyDb);
   if (!config || config.active === false) throw new Error("Configure uma conta Sicoob ativa antes de gerar a remessa.");
+
+  const flowCount = requested.filter((title) => title.source === "flow").length;
+  if (flowCount && flowCount !== requested.length) throw new Error("Não misture títulos do SAP e do ERP Flow na mesma remessa.");
+  if (flowCount) return await generateFlowBatch(admin, companyDb, requested, paymentDate, config, actor);
 
   const requestedEntries = requested.map((title) => Number(title.sap_doc_entry)).filter(Number.isInteger);
   const { data: activeItems, error: activeError } = await admin
@@ -1203,101 +1496,7 @@ async function generateBatch(admin: AdminClient, companyDb: string, body: Record
       });
     }
 
-    const reserved = await reserveSequence(admin, companyDb);
-    const cnabTitles: SicoobPaymentTitle[] = validated.map((title) => ({
-      id: title.id,
-      paymentMethod: title.payment_method as "boleto" | "pix" | "ted",
-      barcode: title.barcode ? String(title.barcode) : null,
-      supplierName: String(title.beneficiary_name || title.supplier_name),
-      supplierTaxId: title.beneficiary_tax_id ? String(title.beneficiary_tax_id) : title.supplier_tax_id ? String(title.supplier_tax_id) : null,
-      dueDate: String(title.due_date),
-      paymentDate,
-      amount: Number(title.amount),
-      companyReference: title.reference,
-      bankCode: title.bank_code ? String(title.bank_code) : null,
-      branch: title.branch ? String(title.branch) : null,
-      branchDigit: title.branch_digit ? String(title.branch_digit) : null,
-      accountNumber: title.account_number ? String(title.account_number) : null,
-      accountDigit: title.account_digit ? String(title.account_digit) : null,
-      accountType: title.account_type ? String(title.account_type) : null,
-      pixKeyType: title.pix_key_type ? String(title.pix_key_type) : null,
-      pixKey: title.pix_key ? String(title.pix_key) : null,
-    }));
-    const remittance = generateSicoobCnab240({ account: bankAccount(config), fileSequence: reserved.sequence, titles: cnabTitles });
-    const contentHash = await sha256(remittance.content);
-    const filename = `PAG_${paymentDate.replace(/-/g, "")}_${String(reserved.sequence).padStart(6, "0")}.REM`;
-    const batchId = crypto.randomUUID();
-    const batchPayload = {
-      id: batchId,
-      company_db: companyDb,
-      bank_account_id: reserved.bankAccountId,
-      file_sequence: reserved.sequence,
-      filename,
-      payment_date: paymentDate,
-      title_count: validated.length,
-      total_amount: remittance.totalAmount,
-      content: remittance.content,
-      content_sha256: contentHash,
-      generated_by: actor,
-      status: "generated",
-    };
-    let { error: batchError } = await admin.from("accounts_payable_batches").insert(batchPayload);
-    if (batchError && isMissingColumn(batchError)) {
-      const safePayload = { ...batchPayload };
-      delete (safePayload as Record<string, unknown>).content;
-      ({ error: batchError } = await admin.from("accounts_payable_batches").insert(safePayload));
-    }
-    if (batchError) throw new Error(`Falha ao registrar remessa: ${message(batchError)}`);
-
-    const rows = validated.map((title) => ({
-      id: title.id,
-      batch_id: batchId,
-      company_db: companyDb,
-      sap_doc_entry: title.sap_doc_entry,
-      sap_doc_num: title.sap_doc_num,
-      installment_id: title.installment_id,
-      supplier_code: title.supplier_code,
-      supplier_name: title.supplier_name,
-      supplier_tax_id: title.supplier_tax_id,
-      due_date: title.due_date,
-      scheduled_date: paymentDate,
-      amount: title.amount,
-      currency: title.currency,
-      barcode: title.payment_method === "boleto" ? title.barcode : null,
-      payment_method: title.payment_method,
-      payment_metadata: {
-        beneficiary_name: title.beneficiary_name,
-        beneficiary_tax_id: title.beneficiary_tax_id,
-        bank_code: title.bank_code,
-        branch: title.branch,
-        branch_digit: title.branch_digit,
-        account_number: title.account_number,
-        account_digit: title.account_digit,
-        account_type: title.account_type,
-        pix_key_type: title.pix_key_type,
-        pix_key: title.pix_key,
-        barcode_source: title.barcode_source,
-        payment_data_source: title.payment_data_source,
-      },
-      company_reference: title.reference,
-      idempotency_key: `${companyDb}:${batchId}:${title.sap_doc_entry}:${title.installment_id}`,
-    }));
-    try {
-      await insertBatchItems(admin, rows);
-    } catch (itemError) {
-      await admin.from("accounts_payable_batches").delete().eq("id", batchId);
-      throw new Error(`Falha ao registrar títulos: ${message(itemError)}`);
-    }
-    await admin.rpc("insert_audit_log", {
-      p_action: "accounts_payable_batch_generated",
-      p_entity_type: "accounts_payable_batch",
-      p_entity_id: batchId,
-      p_company_db: companyDb,
-      p_actor_email: actor,
-      p_details: { filename, title_count: validated.length, total_amount: remittance.totalAmount, content_sha256: contentHash },
-    });
-    // F05: o arquivo só é liberado após aprovação de outra pessoa (download_batch).
-    return { batch_id: batchId, filename, content: null, pending_approval: true, sequence: reserved.sequence, title_count: validated.length, total_amount: remittance.totalAmount };
+    return await persistBatch(admin, companyDb, config, validated, paymentDate, actor);
   });
 }
 
@@ -1558,7 +1757,8 @@ async function processReturn(admin: AdminClient, companyDb: string, content: str
     ? batch.accounts_payable_bank_accounts[0]
     : batch.accounts_payable_bank_accounts;
   const transferAccount = String(accountRelation?.sap_transfer_account || "");
-  if (!transferAccount) throw new Error("Conta contábil de saída não configurada.");
+  const hasSapItems = matches.some((m) => (m.item as Record<string, unknown> | null)?.source !== "flow");
+  if (!transferAccount && hasSapItems) throw new Error("Conta contábil de saída não configurada.");
 
   const { data: processing, error: processingError } = await admin.from("accounts_payable_batches").update({
     status: "processing",
@@ -1604,11 +1804,42 @@ async function processReturn(admin: AdminClient, companyDb: string, content: str
         return_occurrences: match.occurrenceCodes,
         bank_protocol: match.bankReference || null,
       }).eq("id", item.id);
+      if (match.status === "rejected" && item.source === "flow") {
+        await admin.from("expenses").update({ payment_lock_batch_item_id: null })
+          .eq("payment_lock_batch_item_id", String(item.id));
+      }
       results.push({ reference: match.companyReference, status: match.status });
     } else if (match.status !== "paid") {
       results.push({ reference: match.companyReference, status: "ignored" });
     } else if (item.sap_payment_doc_entry) {
       results.push({ reference: match.companyReference, status: "already_processed", sap_doc_entry: item.sap_payment_doc_entry });
+    } else if (item.source === "flow") {
+      if (["paid", "sap_settled", "sap_processing"].includes(String(item.status))) {
+        results.push({ reference: match.companyReference, status: "already_processed" });
+        continue;
+      }
+      // Standalone: registra o pagamento no Flow; a baixa no SAP acontece na conciliação.
+      await admin.from("accounts_payable_batch_items").update({
+        status: "paid",
+        sap_settlement_status: "pending",
+        return_occurrences: match.occurrenceCodes,
+        bank_protocol: match.bankReference || null,
+        paid_date: match.paymentDate,
+        paid_amount: match.paymentAmount || item.amount,
+      }).eq("id", item.id);
+      await admin.from("expenses").update({ status: "pagamento" })
+        .eq("id", String(item.expense_id)).in("status", FLOW_ELIGIBLE_STATUSES);
+      await admin.from("accounts_payable_return_events").update({ processing_status: "paid" })
+        .eq("return_sha256", returnHash).eq("line_number", match.lineNumber);
+      await admin.rpc("insert_audit_log", {
+        p_action: "accounts_payable_flow_paid",
+        p_entity_type: "expense",
+        p_entity_id: String(item.expense_id),
+        p_company_db: companyDb,
+        p_actor_email: actor,
+        p_details: { batch_id: batch.id, item_id: item.id, amount: match.paymentAmount, payment_date: match.paymentDate },
+      });
+      results.push({ reference: match.companyReference, status: "paid_pending_sap" });
     } else {
       paidMatches.push(match);
     }
@@ -1675,10 +1906,181 @@ async function processReturn(admin: AdminClient, companyDb: string, content: str
   }
 
   const failures = results.filter((result) => ["sap_error", "unmatched", "already_claimed", "reconciliation_required"].includes(String(result.status))).length;
-  const successes = results.filter((result) => result.status === "sap_settled" || result.status === "already_processed" || result.status === "already_settled").length;
+  const successes = results.filter((result) => result.status === "sap_settled" || result.status === "already_processed" || result.status === "already_settled" || result.status === "paid_pending_sap").length;
   const status = failures ? (successes ? "partial" : "error") : "processed";
   await admin.from("accounts_payable_batches").update({ status, error_message: failures ? `${failures} ocorrência(s) exigem revisão.` : null }).eq("id", batch.id);
   return { batch_id: batch.id, status, results };
+}
+
+async function listSettlements(admin: AdminClient, companyDb: string) {
+  const { data, error } = await admin
+    .from("accounts_payable_batch_items")
+    .select("id, batch_id, expense_id, supplier_code, supplier_name, amount, paid_amount, paid_date, status, sap_settlement_status, settlement_note, sap_payment_doc_num, sap_error, updated_at, payment_metadata")
+    .eq("company_db", companyDb)
+    .eq("source", "flow")
+    .in("sap_settlement_status", ["pending", "needs_review", "error", "settled"])
+    .order("updated_at", { ascending: false })
+    .limit(500);
+  if (error) throw new Error(`Conciliação: ${message(error)}`);
+  const expenseIds = uniqueStrings((data || []).map((row) => row.expense_id));
+  const { data: expenses } = expenseIds.length
+    ? await admin.from("expenses").select("id, sap_doc_entry, sap_doc_num").in("id", expenseIds)
+    : { data: [] };
+  const byId = new Map((expenses || []).map((row: Record<string, unknown>) => [String(row.id), row]));
+  return (data || []).map((row: Record<string, unknown>) => {
+    const exp = byId.get(String(row.expense_id)) as Record<string, unknown> | undefined;
+    const meta = isRecord(row.payment_metadata) ? row.payment_metadata : {};
+    return {
+      ...row,
+      payment_metadata: undefined,
+      sap_po_doc_entry: exp?.sap_doc_entry ?? null,
+      sap_po_doc_num: exp?.sap_doc_num ?? null,
+      candidate_invoices: meta.candidate_invoices ?? null,
+    };
+  });
+}
+
+async function markSettlement(admin: AdminClient, itemId: string, status: string, note: string, extra: Record<string, unknown> = {}) {
+  await admin.from("accounts_payable_batch_items").update({
+    sap_settlement_status: status,
+    settlement_note: note.slice(0, 1000),
+    ...extra,
+  }).eq("id", itemId);
+}
+
+async function settlePendingInSap(admin: AdminClient, companyDb: string, body: Record<string, unknown>, actor: string, req: Request) {
+  if (await getStandaloneMode(companyDb)) throw new Error("Desligue o modo standalone antes de conciliar com o SAP.");
+  const mode = String(body.mode || "auto");
+  if (!["auto", "partial", "manual_adjust"].includes(mode)) throw new Error("Modo de conciliação inválido.");
+  const itemId = body.item_id ? String(body.item_id) : null;
+  if (mode !== "auto" && !itemId) throw new Error("Baixa parcial e ajuste manual exigem um título específico.");
+  const note = String(body.note || "").trim().slice(0, 500);
+  if (mode === "manual_adjust" && note.length < 10) throw new Error("Informe a justificativa do ajuste manual (mínimo 10 caracteres).");
+  const chosenInvoice = body.invoice_doc_entry != null ? Number(body.invoice_doc_entry) : null;
+  if (chosenInvoice != null && (!Number.isInteger(chosenInvoice) || chosenInvoice <= 0)) throw new Error("NF escolhida inválida.");
+
+  const config = await loadBankConfig(admin, companyDb);
+  const transitAccount = String(config?.transit_account_code || "").trim();
+  if (!transitAccount && mode !== "manual_adjust") {
+    throw new Error("Configure a conta transitória de contingência na Configuração Sicoob antes de conciliar.");
+  }
+
+  let query = admin.from("accounts_payable_batch_items").select("*")
+    .eq("company_db", companyDb).eq("source", "flow").eq("status", "paid")
+    .in("sap_settlement_status", ["pending", "needs_review", "error"]).limit(50);
+  if (itemId) query = query.eq("id", itemId);
+  const { data: items, error } = await query;
+  if (error) throw new Error(`Títulos pendentes: ${message(error)}`);
+  if (!items?.length) return { results: [], message: "Nenhum título pendente de baixa." };
+
+  const results: Array<Record<string, unknown>> = [];
+
+  if (mode === "manual_adjust") {
+    const item = items[0] as Record<string, unknown>;
+    await admin.from("accounts_payable_batch_items").update({
+      status: "sap_settled", sap_settlement_status: "settled", settlement_note: `Ajuste manual: ${note}`,
+    }).eq("id", item.id).eq("status", "paid");
+    await admin.from("expenses").update({ payment_lock_batch_item_id: null }).eq("payment_lock_batch_item_id", String(item.id));
+    await admin.rpc("insert_audit_log", {
+      p_action: "accounts_payable_flow_manual_adjust", p_entity_type: "accounts_payable_batch_item",
+      p_entity_id: String(item.id), p_company_db: companyDb, p_actor_email: actor,
+      p_details: { note, expense_id: item.expense_id, paid_amount: item.paid_amount },
+    });
+    return { results: [{ item_id: item.id, status: "settled_manual" }] };
+  }
+
+  await withSap(admin, companyDb, req, async (baseUrl, cookie) => {
+    for (const raw of items) {
+      const item = raw as Record<string, unknown>;
+      const id = String(item.id);
+      const paid = roundMoney(item.paid_amount || item.amount);
+      const { data: expense } = await admin.from("expenses").select("id, sap_doc_entry, sap_doc_num")
+        .eq("id", String(item.expense_id)).maybeSingle();
+      const poEntry = Number(expense?.sap_doc_entry || 0);
+      if (!poEntry) {
+        await markSettlement(admin, id, "needs_review", "Pedido ainda sem PC no SAP. Lance o PC/NF e tente de novo.");
+        results.push({ item_id: id, status: "needs_review", reason: "no_po" });
+        continue;
+      }
+      let invoiceEntries: number[] = [];
+      if (chosenInvoice) invoiceEntries = [chosenInvoice];
+      else {
+        const { data: cands } = await admin.from("sap_nf_entrada_cache").select("doc_entry, doc_num, doc_total, cancelled")
+          .eq("company_db", companyDb).eq("base_po_doc_entry", poEntry);
+        invoiceEntries = (cands || []).filter((c: Record<string, unknown>) => String(c.cancelled || "") !== "tYES")
+          .map((c: Record<string, unknown>) => Number(c.doc_entry)).filter((n) => n > 0);
+        if (invoiceEntries.length > 1) {
+          const meta = isRecord(item.payment_metadata) ? item.payment_metadata : {};
+          await markSettlement(admin, id, "needs_review", `Há ${invoiceEntries.length} NFs ligadas ao PC ${expense?.sap_doc_num}. Escolha a NF.`, {
+            payment_metadata: { ...meta, candidate_invoices: (cands || []).map((c: Record<string, unknown>) => ({ doc_entry: c.doc_entry, doc_num: c.doc_num, doc_total: c.doc_total })) },
+          });
+          results.push({ item_id: id, status: "needs_review", reason: "multiple_invoices" });
+          continue;
+        }
+      }
+      if (!invoiceEntries.length) {
+        await markSettlement(admin, id, "needs_review", `NF de entrada do PC ${expense?.sap_doc_num} ainda não encontrada no SAP.`);
+        results.push({ item_id: id, status: "needs_review", reason: "no_invoice" });
+        continue;
+      }
+      let invoice: SapInvoice;
+      try {
+        invoice = await getInvoice(baseUrl, cookie, invoiceEntries[0]);
+      } catch (e) {
+        await markSettlement(admin, id, "error", `Falha ao ler a NF no SAP: ${message(e)}`);
+        results.push({ item_id: id, status: "error" });
+        continue;
+      }
+      const open = invoiceOpenAmount(invoice);
+      if (open <= 0.005 || invoice.DocumentStatus === "bost_Close") {
+        await markSettlement(admin, id, "needs_review", `NF ${invoice.DocNum} já está fechada no SAP. Confira se houve baixa em duplicidade ou use ajuste manual.`);
+        results.push({ item_id: id, status: "needs_review", reason: "invoice_closed" });
+        continue;
+      }
+      if (String(invoice.CardCode) !== String(item.supplier_code)) {
+        await markSettlement(admin, id, "needs_review", `NF ${invoice.DocNum} é de outro fornecedor (${invoice.CardCode}).`);
+        results.push({ item_id: id, status: "needs_review", reason: "supplier_mismatch" });
+        continue;
+      }
+      const equal = Math.abs(paid - open) <= 0.005;
+      if (!equal && !(mode === "partial" && paid < open)) {
+        await markSettlement(admin, id, "needs_review",
+          `Valor pago R$ ${paid.toFixed(2)} diferente do saldo da NF ${invoice.DocNum} (R$ ${open.toFixed(2)}). Escolha baixa parcial ou ajuste manual.`);
+        results.push({ item_id: id, status: "needs_review", reason: "amount_mismatch", paid, open });
+        continue;
+      }
+      const { data: claimed } = await admin.rpc("claim_accounts_payable_item", { p_item_id: id });
+      if (!claimed?.[0]) { results.push({ item_id: id, status: "already_claimed" }); continue; }
+      let postStarted = false;
+      try {
+        postStarted = true;
+        const payment = await postVendorPayment(baseUrl, cookie, invoice, { ...item, installment_id: 0 }, {
+          paymentAmount: paid, paymentDate: day(item.paid_date) || day(item.scheduled_date),
+        } as SicoobReturnTitle, transitAccount);
+        if (!Number.isInteger(Number(payment?.DocEntry)) || Number(payment.DocEntry) <= 0) throw new Error("Resposta SAP sem identificador de pagamento.");
+        await admin.from("accounts_payable_batch_items").update({
+          status: "sap_settled", sap_settlement_status: "settled",
+          settlement_note: mode === "partial" ? `Baixa parcial na NF ${invoice.DocNum}` : `Baixa na NF ${invoice.DocNum}`,
+          sap_doc_entry: invoice.DocEntry, sap_doc_num: invoice.DocNum,
+          sap_payment_doc_entry: Number(payment.DocEntry), sap_payment_doc_num: Number(payment.DocNum ?? payment.DocEntry), sap_error: null,
+        }).eq("id", id).eq("status", "sap_processing");
+        await admin.from("expenses").update({ payment_lock_batch_item_id: null }).eq("payment_lock_batch_item_id", id);
+        await admin.rpc("insert_audit_log", {
+          p_action: "accounts_payable_flow_settled_in_sap", p_entity_type: "accounts_payable_batch_item",
+          p_entity_id: id, p_company_db: companyDb, p_actor_email: actor,
+          p_details: { mode, invoice_doc_num: invoice.DocNum, payment_doc_entry: payment.DocEntry, paid, open },
+        });
+        results.push({ item_id: id, status: "settled", sap_payment_doc_num: payment.DocNum ?? payment.DocEntry });
+      } catch (e) {
+        // POST incerto permanece reservado (sap_processing) para conferência manual — nunca reenviar sozinho.
+        await admin.from("accounts_payable_batch_items").update({
+          status: postStarted ? "sap_processing" : "paid", sap_settlement_status: "error", sap_error: message(e).slice(0, 1000),
+        }).eq("id", id).eq("status", "sap_processing");
+        results.push({ item_id: id, status: "error", error: message(e) });
+      }
+    }
+  });
+  return { results };
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
@@ -1694,6 +2096,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     preview_return: "view", save_config: "edit", save_supplier_payment_profile: "edit",
     generate: "create", approve_batch: "approve", approve_supplier_payment_profile: "approve",
     download_batch: "export", process_return: "integrate",
+    list_settlements: "view", settle_pending_in_sap: "integrate",
   } as const;
   if (!Object.hasOwn(actions, action)) return json({ error: "Ação inválida." }, 400);
   let auth: Record<string, unknown>;
@@ -1713,7 +2116,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (action === "save_config") return json({ config: await saveBankConfig(admin, companyDb, body, actor) });
     if (action === "get_supplier_payment_profile") return json(await getSupplierPaymentProfile(admin, companyDb, body, req));
     if (action === "save_supplier_payment_profile") return json(await saveSupplierPaymentProfile(admin, companyDb, body, actor, req));
-    if (action === "list_open") return json({ titles: await listAvailableTitles(admin, companyDb, req, body) });
+    if (action === "list_open") {
+      const standalone = await getStandaloneMode(companyDb);
+      if (standalone || body.source === "flow") {
+        return json({ source: "flow", standalone: !!standalone, titles: await listFlowTitles(admin, companyDb, body) });
+      }
+      return json({ source: "sap", standalone: false, titles: await listAvailableTitles(admin, companyDb, req, body) });
+    }
+    if (action === "list_settlements") return json({ items: await listSettlements(admin, companyDb) });
+    if (action === "settle_pending_in_sap") return json(await settlePendingInSap(admin, companyDb, body, actor, req));
     if (action === "generate") return json(await generateBatch(admin, companyDb, body, actor, req));
     if (action === "list_batches") return json({ batches: await listBatches(admin, companyDb) });
     if (action === "approve_batch") return json(await approveBatch(admin, companyDb, body, actor));
