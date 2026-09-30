@@ -21,6 +21,7 @@ interface ExpenseRow {
   sap_doc_entry: number | null;
   status: string;
   supplier_name: string;
+  supplier_code?: string | null;
   total_amount: number | null;
   sap_sync_attempts?: number | null;
   sap_purchase_order_status?: string | null;
@@ -28,6 +29,7 @@ interface ExpenseRow {
 
 interface NfCacheRow {
   base_po_doc_entry: number | null;
+  card_code?: string | null;
   doc_total: number | null;
   paid_to_date?: number | null;
   cancelled: string | null;
@@ -129,7 +131,7 @@ Deno.serve(async (req) => {
     // pelas NFs e pelos pagamentos conhecidos no cache SAP.
     let query = sb
       .from("expenses")
-      .select("id, doc_type, company_db, sap_doc_entry, status, supplier_name, total_amount, sap_sync_attempts, sap_purchase_order_status")
+      .select("id, doc_type, company_db, sap_doc_entry, status, supplier_name, supplier_code, total_amount, sap_sync_attempts, sap_purchase_order_status")
       .not("sap_doc_entry", "is", null)
       .in("status", ["aprovado", "pc_lancado", "nf_entrada", "pagamento", "finalizado"])
       .order("sap_status_last_check_at", { ascending: true, nullsFirst: true })
@@ -399,7 +401,7 @@ Deno.serve(async (req) => {
 
         let { data: nfRows, error: nfError } = await sb
           .from("sap_nf_entrada_cache")
-          .select("base_po_doc_entry, doc_total, paid_to_date, cancelled")
+          .select("base_po_doc_entry, card_code, doc_total, paid_to_date, cancelled")
           .eq("company_db", companyDb)
           .in("base_po_doc_entry", docEntries);
         // Compatibilidade durante rollout: a presença da NF continua atualizando
@@ -407,16 +409,26 @@ Deno.serve(async (req) => {
         if (nfError && nfError.message.includes("paid_to_date")) {
           const fallback = await sb
             .from("sap_nf_entrada_cache")
-            .select("base_po_doc_entry, doc_total, cancelled")
+            .select("base_po_doc_entry, card_code, doc_total, cancelled")
             .eq("company_db", companyDb)
             .in("base_po_doc_entry", docEntries);
           nfRows = fallback.data;
           nfError = fallback.error;
         }
         if (nfError) throw new Error(`Cache de NF erro: ${nfError.message}`);
+        // DocEntry pode colidir (ex.: troca de ambiente SAP): só conta a NF
+        // quando o fornecedor da NF é o mesmo do pedido.
+        const supplierByPo = new Map<number, string>();
+        for (const r of list) {
+          const code = String(r.supplier_code || "").trim().toUpperCase();
+          if (code) supplierByPo.set(Number(r.sap_doc_entry), code);
+        }
         for (const nf of (nfRows || []) as NfCacheRow[]) {
           const poEntry = Number(nf.base_po_doc_entry);
           if (!Number.isFinite(poEntry)) continue;
+          const expected = supplierByPo.get(poEntry);
+          const actual = String(nf.card_code || "").trim().toUpperCase();
+          if (expected && actual && expected !== actual) continue;
           const invoices = invoicesByPo.get(poEntry) || [];
           invoices.push({
             docTotal: nf.doc_total,
