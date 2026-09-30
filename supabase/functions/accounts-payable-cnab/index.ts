@@ -120,6 +120,7 @@ interface OpenTitle {
   sap_po_doc_num?: number | null;
   expense_status?: string | null;
   readiness?: "ready" | "missing_barcode" | "missing_bank_data" | "no_approved_profile";
+  prior_payment_check?: boolean;
 }
 
 function json(body: unknown, status = 200) {
@@ -1032,7 +1033,9 @@ async function listOpenInvoices(
 
 const ACTIVE_REMITTANCE_STATUSES = ["remitted", "scheduled", "paid", "sap_processing", "sap_error"];
 
-const FLOW_ELIGIBLE_STATUSES = ["aprovado", "pc_lancado", "nf_entrada"];
+const FLOW_ELIGIBLE_STATUSES = ["aprovado", "pc_lancado", "nf_entrada", "pagamento"];
+// Status antes do pagamento pelo banco; "pagamento" só entra se não houver pagamento conhecido.
+const FLOW_PRE_PAYMENT_STATUSES = ["aprovado", "pc_lancado", "nf_entrada"];
 
 async function listFlowTitles(admin: AdminClient, companyDb: string, body: Record<string, unknown>): Promise<OpenTitle[]> {
   let query = admin
@@ -1061,6 +1064,22 @@ async function listFlowTitles(admin: AdminClient, companyDb: string, body: Recor
     .in("status", ACTIVE_REMITTANCE_STATUSES);
   if (activeError) throw new Error(`Remessas em andamento: ${message(activeError)}`);
   const busy = new Set((active || []).map((row) => String(row.expense_id)));
+  // Pedidos em "Pagamento": só aparecem se nenhum pagamento foi registrado pelo Flow
+  // (remessa paga/baixada) nem existe pagamento no SAP ligado às NFs do PC.
+  const inPayment = rows.filter((r) => String(r.status) === "pagamento");
+  if (inPayment.length) {
+    const ids = inPayment.map((r) => String(r.id));
+    const { data: paidFlow } = await admin.from("accounts_payable_batch_items").select("expense_id")
+      .eq("company_db", companyDb).in("expense_id", ids).in("status", ["paid", "sap_settled", "already_settled"]);
+    for (const r of paidFlow || []) busy.add(String(r.expense_id));
+    const poEntries = inPayment.map((r) => Number(r.sap_doc_entry || 0)).filter((n) => n > 0);
+    if (poEntries.length) {
+      const { data: nfs } = await admin.from("sap_nf_entrada_cache").select("base_po_doc_entry, paid_to_date")
+        .eq("company_db", companyDb).in("base_po_doc_entry", poEntries).gt("paid_to_date", 0);
+      const paidPo = new Set((nfs || []).map((n: Record<string, unknown>) => Number(n.base_po_doc_entry)));
+      for (const r of inPayment) if (paidPo.has(Number(r.sap_doc_entry || 0))) busy.add(String(r.id));
+    }
+  }
 
   const profiles = new Map<string, SupplierPaymentProfileRow | null>();
   const titles: OpenTitle[] = [];
@@ -1114,6 +1133,7 @@ async function listFlowTitles(admin: AdminClient, companyDb: string, body: Recor
       sap_po_doc_num: row.sap_doc_num ? Number(row.sap_doc_num) : null,
       expense_status: String(row.status),
       readiness,
+      prior_payment_check: String(row.status) === "pagamento",
     });
   }
   return titles;
@@ -1590,6 +1610,60 @@ async function approveBatch(admin: AdminClient, companyDb: string, body: Record<
   return { batch_id: batchId, status: "approved", approved_by: actor, approved_at: approvedAt };
 }
 
+async function discardBatch(admin: AdminClient, companyDb: string, body: Record<string, unknown>, actor: string) {
+  const batchId = String(body.batch_id || "").trim();
+  const reason = String(body.reason || "").trim().slice(0, 500);
+  if (!batchId) throw new Error("batch_id é obrigatório.");
+  if (reason.length < 10) throw new Error("Informe o motivo do descarte (mínimo 10 caracteres).");
+  const { data: batch, error } = await admin.from("accounts_payable_batches")
+    .select("id, status, filename").eq("company_db", companyDb).eq("id", batchId).maybeSingle();
+  if (error) throw new Error(`Lote: ${message(error)}`);
+  if (!batch) throw new Error("Lote não encontrado.");
+  if (!["generated", "approved"].includes(String(batch.status))) {
+    throw new Error("Só é possível descartar remessas que ainda não tiveram retorno do banco.");
+  }
+  // Se o arquivo já foi baixado, pode ter sido enviado ao banco: não descarta.
+  const { data: downloads } = await admin.from("audit_log").select("id")
+    .eq("company_db", companyDb).eq("entity_id", batchId).eq("action", "accounts_payable_batch_downloaded").limit(1);
+  if (downloads?.length) {
+    throw new Error("O arquivo desta remessa já foi baixado e pode ter sido enviado ao banco. Importe o retorno do banco em vez de descartar.");
+  }
+  const { data: updated, error: upErr } = await admin.from("accounts_payable_batches")
+    .update({ status: "cancelled", error_message: `Descartada: ${reason}` })
+    .eq("id", batchId).eq("company_db", companyDb).in("status", ["generated", "approved"])
+    .select("id").maybeSingle();
+  if (upErr) throw new Error(`Falha ao descartar: ${message(upErr)}`);
+  if (!updated) throw new Error("A remessa mudou. Recarregue e tente de novo.");
+  const { data: items } = await admin.from("accounts_payable_batch_items").update({ status: "cancelled" })
+    .eq("batch_id", batchId).eq("company_db", companyDb).in("status", ["remitted", "scheduled"]).select("id");
+  const itemIds = (items || []).map((i: Record<string, unknown>) => String(i.id));
+  if (itemIds.length) {
+    await admin.from("expenses").update({ payment_lock_batch_item_id: null }).in("payment_lock_batch_item_id", itemIds);
+  }
+  await admin.rpc("insert_audit_log", {
+    p_action: "accounts_payable_batch_discarded", p_entity_type: "accounts_payable_batch", p_entity_id: batchId,
+    p_company_db: companyDb, p_actor_email: actor, p_details: { reason, filename: batch.filename, released_items: itemIds.length },
+  });
+  return { batch_id: batchId, status: "cancelled", released: itemIds.length };
+}
+
+async function refreshInvoiceCache(companyDb: string) {
+  try {
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 90_000);
+    const resp = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/sap-nf-entrada-sync`, {
+      method: "POST", signal: ctrl.signal,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ company_db: companyDb }),
+    });
+    clearTimeout(timer);
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function downloadBatch(admin: AdminClient, companyDb: string, body: Record<string, unknown>, actor: string) {
   const batchId = String(body.batch_id || "").trim();
   if (!batchId) throw new Error("batch_id é obrigatório.");
@@ -1981,6 +2055,10 @@ async function settlePendingInSap(admin: AdminClient, companyDb: string, body: R
     return { results: [{ item_id: item.id, status: "settled_manual" }] };
   }
 
+  // Atualiza a cópia das NFs do SAP antes de procurar a NF de cada PC.
+  const cacheRefreshed = await refreshInvoiceCache(companyDb);
+  if (!cacheRefreshed) console.warn("[accounts-payable-cnab] Falha ao atualizar a cópia das NFs antes da conciliação.");
+
   await withSap(admin, companyDb, req, async (baseUrl, cookie) => {
     for (const raw of items) {
       const item = raw as Record<string, unknown>;
@@ -2119,6 +2197,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (action === "settle_pending_in_sap") return json(await settlePendingInSap(admin, companyDb, body, actor, req));
     if (action === "generate") return json(await generateBatch(admin, companyDb, body, actor, req));
     if (action === "list_batches") return json({ batches: await listBatches(admin, companyDb) });
+    if (action === "discard_batch") return json(await discardBatch(admin, companyDb, body, actor));
     if (action === "approve_batch") return json(await approveBatch(admin, companyDb, body, actor));
     if (action === "approve_supplier_payment_profile") return json(await approveSupplierPaymentProfile(admin, companyDb, body, actor, req));
     if (action === "download_batch") return json(await downloadBatch(admin, companyDb, body, actor));
