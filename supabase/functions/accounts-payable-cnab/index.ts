@@ -1037,7 +1037,7 @@ const FLOW_ELIGIBLE_STATUSES = ["aprovado", "pc_lancado", "nf_entrada"];
 async function listFlowTitles(admin: AdminClient, companyDb: string, body: Record<string, unknown>): Promise<OpenTitle[]> {
   let query = admin
     .from("expenses")
-    .select("id, supplier_code, supplier_name, doc_date, due_date, total_amount, freight_amount, currency, status, cost_center, project, sap_doc_entry, sap_doc_num, description")
+    .select("id, supplier_code, supplier_name, doc_date, due_date, total_amount, freight_amount, currency, status, cost_center, project, sap_doc_entry, sap_doc_num")
     .eq("company_db", companyDb)
     .eq("doc_type", "purchase")
     .eq("sap_legacy_backup", false)
@@ -1049,15 +1049,7 @@ async function listFlowTitles(admin: AdminClient, companyDb: string, body: Recor
   const dueTo = requestDate(body.due_to);
   if (dueFrom) query = query.gte("due_date", dueFrom);
   if (dueTo) query = query.lte("due_date", dueTo);
-  let { data, error } = await query;
-  if (error && isMissingColumn(error)) {
-    // coluna description opcional
-    ({ data, error } = await admin
-      .from("expenses")
-      .select("id, supplier_code, supplier_name, doc_date, due_date, total_amount, freight_amount, currency, status, cost_center, project, sap_doc_entry, sap_doc_num")
-      .eq("company_db", companyDb).eq("doc_type", "purchase").eq("sap_legacy_backup", false)
-      .is("payment_lock_batch_item_id", null).in("status", FLOW_ELIGIBLE_STATUSES).limit(2000));
-  }
+  const { data, error } = await query;
   if (error) throw new Error(`Pedidos do Flow: ${message(error)}`);
   const rows = (data || []) as Array<Record<string, unknown>>;
 
@@ -1098,7 +1090,7 @@ async function listFlowTitles(admin: AdminClient, companyDb: string, body: Recor
       due_date: day(row.due_date) || day(row.doc_date),
       open_amount: amount,
       currency,
-      description: String(row.description || "").slice(0, 200),
+      description: "",
       cost_centers: uniqueStrings([row.cost_center]),
       projects: uniqueStrings([row.project]),
       payment_method: profile?.payment_method || "unknown",
