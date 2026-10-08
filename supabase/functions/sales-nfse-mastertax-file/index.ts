@@ -161,7 +161,13 @@ Deno.serve(async (req) => {
         allowedAccess = isAdmin === true;
       }
       if (!allowedAccess) {
-        const { data: allowed, error: accessError } = await supabase.rpc(
+        // Regra depende de auth.uid()/JWT: roda com o token do usuário.
+        const asUser = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_ANON_KEY")!,
+          { global: { headers: { Authorization: req.headers.get("Authorization") || "" } } },
+        );
+        const { data: allowed, error: accessError } = await asUser.rpc(
           "is_email_allowed_for_company",
           { _email: auth.email, _company_db: companyDb },
         );

@@ -140,8 +140,15 @@ Deno.serve(async (req) => {
     // a empresa (ou é administrador), e a sessão nunca vai para o navegador.
     let serviceAllowed = false;
     if (allowService) {
+      // A regra de vínculo depende de auth.uid()/JWT: precisa rodar com o
+      // token do próprio usuário (com service_role ela sempre retorna false).
+      const asUser = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: req.headers.get("Authorization") || "" } } },
+      );
       const [{ data: linked }, { data: isAdm }] = await Promise.all([
-        admin.rpc("is_email_allowed_for_company", { _email: user.email ?? "", _company_db: companyDb }),
+        asUser.rpc("is_email_allowed_for_company", { _email: user.email ?? "", _company_db: companyDb }),
         admin.rpc("has_role", { _user_id: user.id, _role: "admin" }),
       ]);
       serviceAllowed = linked === true || isAdm === true;
