@@ -3,7 +3,7 @@
 // 1) Itens com código "IMP%" só podem ser usados por quem é do centro de custo
 //    FISCAL/TRIBUTÁRIO — 1.2.2.4. CC desconhecido também bloqueia.
 // 2) Usuários da BU Lotus (e-mail @lotusblanca.net) só podem usar os projetos
-//    da Lotus: VERA e CASSINO.
+//    da Lotus: VERA, CASSINO e 7K.
 // Administradores / super-usuários ficam fora das duas regras.
 // Espelho no navegador: src/lib/item-project-policy.ts (mantenha em sincronia).
 // deno-lint-ignore no-explicit-any
@@ -12,7 +12,7 @@ type SupabaseClient = any;
 export const TAX_ITEM_PREFIX = "IMP";
 export const TAX_COST_CENTER = "1.2.2.4";
 export const LOTUS_EMAIL_DOMAINS = ["lotusblanca.net"];
-export const LOTUS_PROJECTS = ["VERA", "CASSINO"];
+export const LOTUS_PROJECTS = ["VERA", "CASSINO", "7K"];
 
 const norm = (v: unknown) => String(v ?? "").trim();
 
