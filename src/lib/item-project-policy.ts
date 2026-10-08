@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
  */
 export const TAX_COST_CENTER = "1.2.2.4";
 export const LOTUS_EMAIL_DOMAINS = ["lotusblanca.net"];
-export const LOTUS_PROJECTS = ["VERA", "CASSINO"];
+export const LOTUS_PROJECTS = ["VERA", "CASSINO", "7K"];
 
 export function isTaxCostCenter(cc: string | null | undefined): boolean {
   const c = String(cc ?? "").trim();
