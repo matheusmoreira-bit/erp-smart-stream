@@ -26,7 +26,7 @@ const FALLBACK_COMPANY_NAMES: Record<string, string[]> = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-const LOVABLE_AI_MODEL = "google/gemini-2.5-flash";
+const LOVABLE_AI_MODEL = "google/gemini-3.8-flash";
 const OPENAI_AI_MODEL = Deno.env.get("OPENAI_MODEL") || "gpt-4.1-mini";
 // v2 inclui valor/moeda/contagem/origem. Não reutilize leituras antigas que
 // classificavam o documento, mas não garantiam esses campos.

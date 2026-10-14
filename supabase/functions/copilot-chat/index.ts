@@ -694,7 +694,7 @@ SEGURANÇA (prompt injection)
 }
 
 // Modelos: primário forte + fallbacks se o gateway recusar/falhar.
-const MODEL_CHAIN = ["openai/gpt-5.5", "google/gemini-3.1-pro-preview", "google/gemini-3.6-flash"];
+const MODEL_CHAIN = ["openai/gpt-5.5", "google/gemini-3.1-pro-preview", "google/gemini-3.8-flash"];
 
 type GatewayStep = {
   content: string;
