@@ -504,7 +504,7 @@ Deno.serve(async (req) => {
     if (!rows.length) return json(404, { error: "Este pedido não tem anexos para a IA analisar." });
 
     // Cache: mesma combinação de anexos não é reavaliada pela IA.
-    const AI_MODEL = "google/gemini-3.6-flash";
+    const AI_MODEL = "google/gemini-3.8-flash";
     const cacheKey = {
       scope: "nf_entrada_extract",
       inputHash: await hashInput({

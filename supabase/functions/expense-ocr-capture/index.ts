@@ -15,7 +15,7 @@ import { stripImageMetadata } from "../_shared/ai-minimize.ts";
  */
 
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const MODEL = "google/gemini-3.6-flash";
+const MODEL = "google/gemini-3.8-flash";
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // ~8MB de imagem (base64 já decodificado)
 
 function json(body: unknown, status = 200) {

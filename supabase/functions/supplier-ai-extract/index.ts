@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
     }];
 
     // Cache: o mesmo documento não é reavaliado pela IA.
-    const AI_MODEL = "google/gemini-2.5-flash";
+    const AI_MODEL = "google/gemini-3.8-flash";
     const cacheKey = {
       scope: "supplier_extract",
       inputHash: await hashInput({ model: AI_MODEL, content: userContent }),
