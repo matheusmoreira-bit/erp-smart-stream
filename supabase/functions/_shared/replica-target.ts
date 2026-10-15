@@ -1,9 +1,18 @@
 // Destinos de réplica (F07). "primary" = REPLICA_DB_URL (SSL obrigatório).
-// "local" = REPLICA2_DB_URL — instância local em 201.48.79.205, exceção de
+// "local" = REPLICA2_DB_URL — instância local on-prem, exceção de
 // transporte aprovada por Matheus Moreira em 30/09/2026 (SSL se disponível).
+// Hosts aceitos: 201.48.79.205 e 189.20.156.34 (transição de data center
+// 15/10/2026), mais os listados na env opcional REPLICA_LOCAL_ALLOWED_HOSTS
+// (separados por vírgula).
 export type ReplicaTarget = "primary" | "local";
 
-const LOCAL_ALLOWED_HOST = "201.48.79.205";
+const DEFAULT_LOCAL_ALLOWED_HOSTS = ["201.48.79.205", "189.20.156.34"];
+
+function localAllowedHosts(): Set<string> {
+  const extra = (Deno.env.get("REPLICA_LOCAL_ALLOWED_HOSTS") || "")
+    .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+  return new Set([...DEFAULT_LOCAL_ALLOWED_HOSTS, ...extra]);
+}
 
 export function parseTarget(v: unknown): ReplicaTarget {
   return v === "local" ? "local" : "primary";
@@ -20,7 +29,7 @@ export function targetConfig(t: ReplicaTarget):
   if (!url) return { ok: false, error: "REPLICA2_DB_URL não configurada" };
   try {
     const u = new URL(url);
-    if (!/^postgres(ql)?:$/.test(u.protocol) || u.hostname !== LOCAL_ALLOWED_HOST) {
+    if (!/^postgres(ql)?:$/.test(u.protocol) || !localAllowedHosts().has(u.hostname.toLowerCase())) {
       return { ok: false, error: "REPLICA2_DB_URL fora do endereço autorizado" };
     }
   } catch {
