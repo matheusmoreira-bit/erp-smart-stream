@@ -5,8 +5,9 @@
  * legada ainda só responde em HTTP. Hosts listados aqui (ou na env
  * ERP_INSECURE_HOST_ALLOWLIST, separados por vírgula) são aceitos em HTTP
  * até o fornecedor habilitar TLS. Qualquer outro host continua exigindo HTTPS.
+ * Transição de data center (15/10/2026): 201.48.79.205 -> 189.20.156.34; remover o IP antigo após a virada.
  */
-const DEFAULT_INSECURE_ALLOWLIST = ["201.48.79.205:8001"];
+const DEFAULT_INSECURE_ALLOWLIST = ["201.48.79.205:8001", "189.20.156.34:8001"];
 
 function insecureAllowlist(): Set<string> {
   const extra = (Deno.env.get("ERP_INSECURE_HOST_ALLOWLIST") || "")
