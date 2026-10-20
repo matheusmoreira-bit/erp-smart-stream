@@ -2049,6 +2049,13 @@ async function runCreateOnce(admin: SupabaseClient, caller: Caller, body: any, r
       if (!prevExpense || prevStatus === "cancelado" || prevStatus === "rejeitado") {
         return await releaseAndRetry();
       }
+      // Sem chave explícita do cliente, a coincidência de conteúdo só vale como
+      // repetição imediata. Depois da janela, é um novo pedido legítimo; a
+      // duplicidade de documento fica com o controle de hash dos anexos.
+      const completedAt = Date.parse(String(row.completed_at));
+      if (!headerKey && Number.isFinite(completedAt) && Date.now() - completedAt > FINGERPRINT_REPLAY_WINDOW_MS) {
+        return await releaseAndRetry();
+      }
       return json(Number(row.status_code) || 200, row.response);
     }
 

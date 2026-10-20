@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { sapFunctionFetch } from "@/lib/auth-fetch";
 import { uploadExpenseAttachment } from "@/lib/attachment-upload";
+import { hashFileContent } from "@/lib/expense-dedupe";
 import { sapQuery, type SapSession } from "@/lib/sap-client";
 import { useSap } from "@/contexts/SapContext";
 import { getErpShortLabel } from "@/lib/erp-labels";
@@ -928,6 +929,9 @@ export function useExpenses(
           nfse_split_mode: input.nfse_split_mode || "unified",
           sales_usage: input.sales_usage || null,
           attachment_count: input.files?.length || 0,
+          // Identifica a tentativa pelo conteúdo dos anexos: mesmo valor/itens
+          // com outra NF é um pedido diferente.
+          attachment_hashes: await Promise.all((input.files || []).map((f) => hashFileContent(f).catch(() => ""))),
           defer_submit_supported: true,
           items: enrichedItems,
         },
