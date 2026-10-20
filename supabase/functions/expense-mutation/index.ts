@@ -44,6 +44,7 @@ import { isPagCorpExpense } from "../_shared/pagcorp-expense.ts";
 import { assertCompanyAccess } from "../_shared/company-access.ts";
 import { isNativeErpExpenseOrigin } from "../_shared/expense-origin.ts";
 import { CACTUS_TECNOLOGIA_DB, notifyCactusExpenseCreated } from "../_shared/expense-created-notify.ts";
+import { buildCreateFingerprintPayload } from "../_shared/expense-create-fingerprint.ts";
 
 
 
@@ -1995,18 +1996,11 @@ async function sha256Hex(input: string): Promise<string> {
 }
 
 async function createFingerprint(caller: Caller, body: any): Promise<string> {
-  const input = body?.input ?? {};
-  const items = Array.isArray(input.items) ? input.items : [];
-  return await sha256Hex(JSON.stringify({
-    who: normalize(caller.identity),
-    db: normalize(input.company_db || caller.companyDB),
-    supplier: normalize(input.supplier_code || input.supplier_name),
-    doc: normalize(input.doc_date),
-    due: normalize(input.due_date),
-    total: items.reduce((s: number, it: any) => s + Number(it.line_total || 0), 0),
-    items: items.map((it: any) => [it.item_code, it.quantity, it.unit_price, it.cost_center, it.project]),
-  }));
+  return await sha256Hex(buildCreateFingerprintPayload(caller.identity, caller.companyDB, body?.input));
 }
+
+/** Chave derivada do conteúdo só protege contra repetição imediata. */
+const FINGERPRINT_REPLAY_WINDOW_MS = 10 * 60 * 1000;
 
 async function runCreateOnce(admin: SupabaseClient, caller: Caller, body: any, req: Request, depth = 0) {
   const fingerprint = await createFingerprint(caller, body);
@@ -2053,6 +2047,13 @@ async function runCreateOnce(admin: SupabaseClient, caller: Caller, body: any, r
         .maybeSingle();
       const prevStatus = String((prevExpense as any)?.status || "");
       if (!prevExpense || prevStatus === "cancelado" || prevStatus === "rejeitado") {
+        return await releaseAndRetry();
+      }
+      // Sem chave explícita do cliente, a coincidência de conteúdo só vale como
+      // repetição imediata. Depois da janela, é um novo pedido legítimo; a
+      // duplicidade de documento fica com o controle de hash dos anexos.
+      const completedAt = Date.parse(String(row.completed_at));
+      if (!headerKey && Number.isFinite(completedAt) && Date.now() - completedAt > FINGERPRINT_REPLAY_WINDOW_MS) {
         return await releaseAndRetry();
       }
       return json(Number(row.status_code) || 200, row.response);
