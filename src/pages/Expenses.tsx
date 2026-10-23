@@ -53,7 +53,7 @@ import {
 } from "lucide-react";
 import { exportListReportPdf, exportListReportCsv, exportExpenseDetailPdf } from "@/lib/report-pdf";
 import { getErpShortLabel } from "@/lib/erp-labels";
-import { isPendingApproval } from "@/lib/approval-authz";
+import { isPendingApproval, matchesApproverIdentity } from "@/lib/approval-authz";
 import { buildDuplicateDraftPayload } from "@/lib/expense-duplicate";
 import { expenseRead } from "@/lib/expense-read";
 import { supabase } from "@/integrations/supabase/client";
@@ -1230,7 +1230,7 @@ function ExpenseCard({
 export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" | "sales" } = {}) {
   const { session, logout } = useSap();
   const erpLabel = getErpShortLabel(session?.erpType);
-  const { isAdmin: isLovableAdmin } = useAuth();
+  const { isAdmin: isLovableAdmin, user: authUser } = useAuth();
   const navigate = useNavigate();
   // Consulta paginada no servidor: montada mais abaixo (depende dos filtros) e
   // aplicada pelo hook — evita trazer a lista inteira da empresa para o browser.
@@ -1816,6 +1816,17 @@ export default function ExpensesPage({ mode = "purchase" }: { mode?: "purchase" 
     if (isAdmin) return true;
     const approver = (expense.current_approver || "").toLowerCase().trim();
     const me = userIdentifier;
+    // O código SAP (ex.: "robsonluiz") nem sempre bate com o nome gravado
+    // ("Robson Luiz"); usa também o e-mail e o nome do login, como em Aprovações.
+    if (
+      approver &&
+      matchesApproverIdentity(
+        [me, authUser?.email, (authUser?.user_metadata as { full_name?: string } | undefined)?.full_name],
+        null,
+        expense.current_approver || null,
+        null,
+      )
+    ) return true;
     if (!approver || !me) return false;
     if (approver === me) return true;
     if (approver.includes(me) || me.includes(approver.split("@")[0])) return true;
