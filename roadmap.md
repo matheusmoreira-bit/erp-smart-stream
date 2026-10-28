@@ -1,7 +1,7 @@
 # Roadmap — Melhorias de segurança (pentest)
 
 - [ ] André Coura — liberação restrita de compras na Cactus Tecnologia; aguarda aprovação do plano e sessão administrativa com MFA.
-- [ ] André Coura — esclarecer impacto de conceder administrador em vez da exceção restrita.
+- [x] André Coura — esclarecido: administrador é global, não restrito à Cactus Tecnologia.
 
 - [x] F01 — Cadastro aberto / domínio só no navegador
 - [x] F02 — Sessão SAP amarrada à identidade
