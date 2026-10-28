@@ -1,6 +1,6 @@
 # Roadmap — Melhorias de segurança (pentest)
 
-- [ ] André Coura — plano autorizado; sessão conectada recebida pelas ferramentas não inclui comprovação de MFA e has_role recusa autorização administrativa. Aplicação bloqueada; nenhuma permissão ou regra de domínio alterada.
+- [ ] André Coura — em 28/10/2026, após Hiller informar MFA concluído no ERP Flow, a sessão fornecida às ferramentas ainda veio sem comprovação do segundo fator; consulta autenticada a has_role retornou false. Aplicação bloqueada pela sessão das ferramentas; não solicitar repetição do MFA como solução garantida. Nenhuma permissão ou regra de domínio alterada.
 - [x] André Coura — esclarecido: administrador é global, não restrito à Cactus Tecnologia.
 - [x] André Coura — caminho de verificação conferido: tela Verificação em duas etapas, autenticador e Confirmar; sessão das ferramentas pode omitir comprovação mesmo após MFA no app.
 
