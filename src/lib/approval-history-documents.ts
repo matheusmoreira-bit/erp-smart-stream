@@ -6,7 +6,9 @@ export function historyDocumentLabel(row: ApprovalHistoryRow): string {
   if (row.draft_entry) return `Esboço #${row.draft_entry}`;
   // Legacy audit numbers are provisional, never proof of a final order.
   if (row.source === "audit_log") return "Documento não identificado";
-  return row.doc_num ? `Pedido #${row.doc_num}` : "Documento não identificado";
+  // Só a view HANA traz nº final (já em po_doc_num); legado/webhook usa nº provisório do esboço.
+  const provisional = Number(row.raw?.provisional_doc_num ?? row.doc_num) || null;
+  return provisional ? `Esboço #${provisional}` : "Documento não identificado";
 }
 export function historyDecisionDate(row: ApprovalHistoryRow): string {
   if (!row.decision_date) return row.decision_precision === "document" ? "Decisão do documento — data não informada" : "—";
@@ -14,4 +16,8 @@ export function historyDecisionDate(row: ApprovalHistoryRow): string {
   return row.decision_precision === "document"
     ? `${date.toLocaleDateString("pt-BR", { timeZone: "UTC" })} · decisão do documento`
     : date.toLocaleString("pt-BR");
+}export function historyLevelLabel(row: ApprovalHistoryRow): string {
+  const level = row.level_order ?? (row.source === "erp_flow" ? row.step : null);
+  const base = level ? `Nível ${level}` : "—";
+  return row.repeat_label ? `${base} · ${row.repeat_label}` : base;
 }
