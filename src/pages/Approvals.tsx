@@ -1981,6 +1981,11 @@ interface SapApprovalDecisionRow {
 
 interface SapApprovalRequestPayload {
   Code?: number;
+  DraftEntry?: number;
+  ObjectEntry?: number;
+  ObjectType?: string;
+  IsDraft?: string;
+  DocNum?: number;
   Status?: string;
   ApprovalRequestDecisions?: SapApprovalDecisionRow[];
   ApprovalRequestLines?: SapApprovalDecisionRow[];
@@ -2070,7 +2075,7 @@ async function decideSapApprovalRequest(
   // pode aceitar um PATCH ambíguo sem alterar a decisão deste aprovador.
   const userKey = await getCurrentSapUserKey(session);
   const request = await getSapApprovalRequest(session, code);
-  const auditDocumentOf = (value: Record<string, unknown>) => ({
+  const auditDocumentOf = (value: SapApprovalRequestPayload) => ({
     draftEntry: Number(value.DraftEntry || (value.IsDraft === "tYES" ? value.ObjectEntry : 0)) || null,
     objectType: value.ObjectType || null,
     finalDocEntry: value.IsDraft === "tNO" ? Number(value.ObjectEntry) || null : null,
