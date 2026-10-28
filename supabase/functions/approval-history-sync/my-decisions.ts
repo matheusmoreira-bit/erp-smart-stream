@@ -1,5 +1,7 @@
 // Leitura "Minhas decisões": identidade, empresas e período resolvidos no
 // servidor. Os aliases NUNCA vêm do cliente — saem do JWT/sessão SAP.
+import { readDirectory } from "./document-backfill.ts";
+import { rawOf, reconcileDecisions } from "./document-reconciliation.ts";
 import type { createClient } from "npm:@supabase/supabase-js@2";
 
 type Db = ReturnType<typeof createClient>;
@@ -89,7 +91,7 @@ export async function listMyDecisions(db: Db, opts: {
     .flatMap((f) => identity.aliases.map((a) => `${f}.ilike.${a}`)).join(",");
 
   const sapRows = await paged<Record<string, unknown>>((a, b) => {
-    let q = db.from("approval_history").select("*").in("company_db", companies)
+    let q = db.from("approval_history").select("*").in("company_db", companies).is("raw->>superseded_by", null)
       .in("decision", decision === "all" ? ["Y", "N"] : [decision]).or(sapOr)
       .order("decision_date", { ascending: false, nullsFirst: false }).order("id").range(a, b);
     if (from) q = q.gte("decision_date", from);
@@ -130,9 +132,13 @@ export async function listMyDecisions(db: Db, opts: {
     return q;
   }, cap) : [];
 
+  const directory = await readDirectory(db);
+  const canonicalSap = reconcileDecisions(sapRows, directory);
+  const knownAudit = new Set(canonicalSap.filter(r => rawOf(r).source === "audit_log").map(r => String(r.external_id)));
+  const remainingAudit = auditRows.filter(r => !knownAudit.has(`${r.entity_id}::${norm(r.actor_email)}`));
   const truncated = sapRows.length > cap || scopedLog.length > cap || auditRows.length > cap;
   return {
-    sapRows: sapRows.slice(0, cap), logRows: scopedLog.slice(0, cap), expenses,
-    auditRows: auditRows.slice(0, cap), truncated,
+    sapRows: canonicalSap.slice(0, cap), logRows: scopedLog.slice(0, cap), expenses,
+    auditRows: remainingAudit.slice(0, cap), truncated,
   };
 }
