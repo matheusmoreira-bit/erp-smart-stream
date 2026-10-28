@@ -1,3 +1,4 @@
+import { historyDocumentLabel, historyDecisionDate } from "@/lib/approval-history-documents";
 import { useSearchState } from "@/hooks/useSearchState";
 import { useMemo, useRef, useState, useEffect } from "react";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
@@ -183,7 +184,7 @@ export default function ApprovalHistory() {
       return [
         r.card_name, r.card_code, r.requester_name, r.approver_name,
         r.substituted_for_name, r.substituted_for_email,
-        r.doc_type_name, String(r.doc_num || ""), exportDocLabel(r), r.remarks, r.stage_name,
+        r.doc_type_name, String(r.doc_num || ""), historyDocumentLabel(r), r.remarks, r.stage_name,
       ].some((v) => (v || "").toString().toLowerCase().includes(q))
         || matchesDocQuery({ docNum: Number(r.doc_num || 0), __internalId: r.expense_id }, q);
     });
@@ -236,10 +237,11 @@ export default function ApprovalHistory() {
                   { label: "Escopo", value: effectiveScope === "all" ? "Todos" : "Minhas" },
                 ],
                 columns: [
-                  { header: "Data", cell: (r: typeof filtered[number]) => formatDate(r.decision_date) },
+                  { header: "Data", cell: (r: typeof filtered[number]) => historyDecisionDate(r) },
                   { header: "Empresa", cell: (r: typeof filtered[number]) => getLabel(r.company_db) || r.company_db || "—" },
                   { header: "Decisão", cell: (r: typeof filtered[number]) => r.decision === "Y" ? "Aprovado" : r.decision === "N" ? "Rejeitado" : String(r.decision ?? "—") },
-                  { header: "Doc #", cell: (r: typeof filtered[number]) => exportDocLabel(r) },
+                  { header: "Doc #", cell: (r: typeof filtered[number]) => historyDocumentLabel(r) },
+                  { header: "Esboço", cell: (r: typeof filtered[number]) => r.draft_entry ? String(r.draft_entry) : "—" },
                   { header: "Tipo", cell: (r: typeof filtered[number]) => r.doc_type_name || "—" },
                   { header: "Parceiro", cell: (r: typeof filtered[number]) => r.card_name || "—" },
                   { header: "Solicitante", cell: (r: typeof filtered[number]) => displayUserName(r.requester_name || r.requester_code) },
@@ -548,7 +550,8 @@ function HistoryCard({ row, onRelationsMap, companyLabel }: { row: ApprovalHisto
               </span>
             )}
           </div>
-          <h3 className="font-mono font-semibold mt-1">{Number(row.doc_num || 0) > 0 ? `#${row.doc_num}` : exportDocLabel(row)}</h3>
+          <h3 className="font-mono font-semibold mt-1">{historyDocumentLabel(row)}</h3>
+          {row.po_doc_num && row.draft_entry && <p className="text-xs text-muted-foreground">esboço #{row.draft_entry}</p>}
         </div>
         <div className="text-right flex items-start gap-1">
           {onRelationsMap && (
@@ -591,7 +594,7 @@ function HistoryCard({ row, onRelationsMap, companyLabel }: { row: ApprovalHisto
           </div>
         )}
         <div className="flex items-center gap-2"><FileText className="w-3.5 h-3.5 text-primary/70" />Solicitante: <span className="text-foreground font-medium">{displayUserName(row.requester_name || row.requester_code)}</span></div>
-        <div className="flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-primary/70" />{formatDate(row.decision_date)}</div>
+        <div className="flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-primary/70" />{historyDecisionDate(row)}</div>
       </div>
 
       {row.remarks && (

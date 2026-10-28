@@ -1,3 +1,5 @@
+import { backfillDocuments, readCompanyHistory, readDirectory, writeHistory } from "./document-backfill.ts";
+import { enrichAudit, positiveInt, rawOf, reconcileDecisions, splitHanaPeople, uniqueHanaMatch, type HistoryRecord } from "./document-reconciliation.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireAdminOrSapAdmin, requireAdminOrSapSession, requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
 import { tryWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
@@ -379,11 +381,12 @@ async function fetchAndMergeHanaApprovals(
       await sapLogoutServiceLayer(baseUrl, session);
     }
 
-    const mapped = new Map<string, ReturnType<typeof mapHanaApprovalRow>>();
+    const directory = await readDirectory(supabase);
+    const mapped = new Map<string, HistoryRecord>();
     for (const r of rows) {
       const row = mapHanaApprovalRow(r, companyDb);
       if (!row) continue;
-      mapped.set(`${row.company_db}::${row.external_id}`, row);
+      for (const individual of splitHanaPeople(row, directory)) mapped.set(`${individual.company_db}::${individual.external_id}`, individual);
     }
     const payload = Array.from(mapped.values()).filter((r): r is NonNullable<typeof r> => !!r);
 
@@ -402,7 +405,11 @@ async function fetchAndMergeHanaApprovals(
         if ((existing || []).length < 1000) break;
       }
     }
-    const safe = payload.filter((p) => {
+    const canonical = reconcileDecisions([...Array.from(existingByKey.values()).filter(r => rawOf(r).source === "audit_log"), ...payload], directory);
+    const canonicalKeys = new Set(canonical.map(r => String(r.external_id)));
+    const safe = payload.map(p => canonicalKeys.has(String(p.external_id)) ? p : {
+      ...p, raw: { ...rawOf(p), superseded_by: "audit_same_draft_approver" },
+    }).filter((p) => {
       const prev = existingByKey.get(`${p.company_db}::${p.external_id}`);
       if ((prev?.decision === "Y" || prev?.decision === "N") && p.decision === "P") return false;
       return !prev || !unchangedHanaRow(prev, p);
@@ -432,6 +439,36 @@ async function fetchAndMergeHanaApprovals(
 }
 
 
+
+async function lookupApprovalRequests(db: ReturnType<typeof createClient>, company: string, codes: number[]): Promise<Map<number, HistoryRecord>> {
+  const { data, error } = await db.from("system_credentials_v").select("credential_key,credential_value")
+    .eq("system_name", "sap").eq("company_db", company);
+  if (error) throw new Error(error.message);
+  const creds = Object.fromEntries((data || []).map(r => [r.credential_key, r.credential_value]));
+  const found = new Map<number, HistoryRecord>();
+  if (String(creds.username || "").toLowerCase() !== "apiuser" || !creds.password || !creds.service_layer_url) return found;
+  const base = normalizeSapBaseUrl(creds.service_layer_url);
+  let session: { sessionId: string; routeId: string };
+  try { session = await withRemoteTimeout(() => sapLoginServiceLayer(base, creds.username, creds.password, creds.company_db || company), "Login SAP"); }
+  catch { return found; }
+  const deadline = Date.now() + 18000;
+  try {
+    for (let offset = 0; offset < codes.length && Date.now() < deadline; offset += 8) {
+      await Promise.all(codes.slice(offset, offset + 8).map(async code => {
+        try {
+          const resp = await fetch(`${base}/ApprovalRequests(${code})`, { signal: AbortSignal.timeout(Math.max(1, Math.min(5000, deadline - Date.now()))),
+            headers: { Cookie: `B1SESSION=${session.sessionId}${session.routeId ? `; B1ROUTEID=${session.routeId}` : ""}` } });
+          if (!resp.ok) return;
+          const request = await resp.json();
+          const draftEntry = positiveInt(request.DraftEntry) ?? (String(request.IsDraft) === "tYES" ? positiveInt(request.ObjectEntry) : null);
+          if (draftEntry) found.set(code, { draftEntry, objectType: request.ObjectType,
+            finalDocEntry: String(request.IsDraft) === "tNO" ? positiveInt(request.ObjectEntry) : null });
+        } catch { /* unique HANA match remains available; no credentials in output */ }
+      }));
+    }
+  } finally { await sapLogoutServiceLayer(base, session); }
+  return found;
+}
 
 async function updateSyncState(
   supabase: ReturnType<typeof createClient>,
@@ -471,6 +508,7 @@ async function listApprovalHistory(
     .from("approval_history")
     .select("*")
     .eq("company_db", companyDb)
+    .is("raw->>superseded_by", null)
     .order("decision_date", { ascending: false, nullsFirst: false })
     .limit(limit);
   if (decision !== "all") q = q.eq("decision", decision);
@@ -485,22 +523,13 @@ async function listApprovalHistory(
       canReadAll = true;
     } catch { /* usuário ERP comum: restringe ao próprio histórico */ }
     if (!canReadAll) {
-      // O UserCode SAP ("jose.victor") raramente é igual ao e-mail gravado
-      // ("jose.victor@empresa.com"). Sem os padrões abaixo o usuário comum
-      // via o histórico vazio mesmo tendo decisões registradas.
-      const user = caller.userName.toLowerCase().replace(/[,()*%]/g, "");
-      const local = user.includes("@") ? user.split("@")[0] : user;
-      const patterns = Array.from(new Set([user, local, `${local}@%`]));
-      const fields = [
-        "approver_email",
-        "approver_code",
-        "approver_name",
-        "requester_code",
-        "requester_name",
-      ];
-      const orParts: string[] = [];
-      for (const f of fields) for (const p of patterns) orParts.push(`${f}.ilike.${p}`);
-      q = q.or(orParts.join(","));
+      const c = caller as unknown as { email?: string; userName?: string; source?: string };
+      const identity = await resolveIdentity(supabase, c.source === "sap_session" ? null : c.email || c.userName || null,
+        c.source === "sap_session" ? c.userName || null : null);
+      const { data: access } = c.source === "sap_session" ? { data: true } : await supabase.rpc("user_can_access_company", { _email: c.email || c.userName, _company_db: companyDb });
+      if (access !== true) return jsonResponse({ success: false, error: "Sem acesso a esta empresa" }, 403);
+      const result = await listMyDecisions(supabase, { identity, companies: [companyDb], ...range, decision });
+      return jsonResponse({ success: true, rows: result.sapRows.slice(0, limit), syncState: null });
     }
   }
 
@@ -581,7 +610,7 @@ Deno.serve(async (req) => {
   let phase = "authorization";
   const runStartedAt = new Date().toISOString();
   try {
-    let body: { companyDb?: string; action?: string; decision?: string; limit?: number; from?: string; to?: string; allCompanies?: boolean } = {};
+    let body: { companyDb?: string; action?: string; decision?: string; limit?: number; from?: string; to?: string; allCompanies?: boolean; cursor?: number } = {};
     try { body = await req.json(); } catch { /* no body */ }
     const isMine = body.action === "list_mine";
     const isList = body.action === "list" || isMine;
@@ -628,6 +657,23 @@ Deno.serve(async (req) => {
       return await listApprovalHistory(supabase, req, caller, { ...body, companyDb });
     }
 
+
+    if (body.action === "backfill_documents") {
+      if (!["SBO_ANAGAMING", "SBO_CACTUS", "SBO_INSTITUTO_ANA", "open_gaming_sa"].includes(companyDb)) {
+        return jsonResponse({ success: false, error: "Empresa fora do escopo autorizado" }, 400);
+      }
+      if (!(isSchedulerSecretRequest(req) || isServiceRoleRequest(req))) await requireAdminOrSapAdmin(req);
+      const cursor = Number(body.cursor ?? 0);
+      if (!Number.isSafeInteger(cursor) || cursor < 0) return jsonResponse({ success: false, error: "Cursor inválido" }, 400);
+      lockAcquired = await tryWatcherLock(supabase, "approval-history-sync", 3);
+      if (!lockAcquired) return jsonResponse({ success: false, skipped: "another_run_in_progress" }, 409);
+      phase = "backfill_documents";
+      const result = await backfillDocuments(supabase, companyDb, cursor, codes => lookupApprovalRequests(supabase, companyDb, codes));
+      syncStatus = "success";
+      syncCount = result.corrected;
+      syncMessage = `Correção de documentos: ${JSON.stringify(result)}`;
+      return jsonResponse({ success: true, ...result });
+    }
 
     // Lock anti-execução-paralela
     lockAcquired = await tryWatcherLock(supabase, "approval-history-sync", 3);
@@ -750,6 +796,9 @@ Deno.serve(async (req) => {
         }
       }
       const updates = pendingAuditUpdates(pendingRows, decisions, runStartedAt);
+      const persisted = await readCompanyHistory(supabase, companyDb);
+      const hanaHistory = persisted.filter(r => rawOf(r).source === "hana_view" && !rawOf(r).superseded_by);
+      const persistedByKey = new Map(persisted.map(r => [String(r.external_id), r]));
       const canonicalRows = decisions.map((a) => {
         const code = String(a.entity_id);
         const actorEmail = String(a.actor_email).toLowerCase();
@@ -759,7 +808,7 @@ Deno.serve(async (req) => {
         // (b) Upsert linha canônica chaveada pelo ator.
         const docNum = toInt(details.docNum);
         const docType = (details.docType as string) || null;
-        const objectType = docType ? DOC_TYPE_TO_OBJECT[docType] || null : null;
+        const objectType = String(details.objectType || (docType ? DOC_TYPE_TO_OBJECT[docType] || "22" : "22"));
         const remarksParts = [
           (details.remarks as string) || null,
           details.actedAsSubstitute
@@ -793,7 +842,9 @@ Deno.serve(async (req) => {
           raw: { source: "audit_log", ...details } as unknown as Record<string, unknown>,
           synced_at: new Date().toISOString(),
         };
-        return row;
+        const prior = persistedByKey.get(row.external_id);
+        const base = { ...row, raw: { ...rawOf(prior || {}), ...details, source: "audit_log" } };
+        return enrichAudit(base, uniqueHanaMatch(base, hanaHistory), null);
       });
       const write = async (batch: Record<string, unknown>[]) => {
         const { error } = await supabase.from("approval_history").upsert(batch, { onConflict: "company_db,external_id" });
