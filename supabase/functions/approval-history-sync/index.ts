@@ -5,6 +5,7 @@ import { fetchHanaView as fetchHanaViewV2, resolveHanaSchema } from "../_shared/
 import { normalizeCompact } from "../_shared/text-normalize.ts";
 import { readOptionalWebhook, finalSyncStatus } from "./webhook.ts";
 import { auditCutoff, dedupeAuditDecisions, pendingAuditUpdates, writeAuditBatches, withRemoteTimeout, unchangedHanaRow, SAP_HANA_TIMEOUT_MS, type AuditDecision } from "./audit-batch.ts";
+import { resolveIdentity, parseRange, listMyDecisions } from "./my-decisions.ts";
 import { isSchedulerSecretRequest, isServiceRoleRequest, requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 
 // HanaAPI V1 (middleware n8n) foi descontinuada — HANA queries usam V2 via fetchHanaViewV2.
@@ -458,7 +459,7 @@ async function listApprovalHistory(
   supabase: ReturnType<typeof createClient>,
   req: Request,
   caller: Awaited<ReturnType<typeof requireAdminOrSapSession>>,
-  body: { companyDb?: string; decision?: string; limit?: number },
+  body: { companyDb?: string; decision?: string; limit?: number; from?: string; to?: string },
 ) {
   const companyDb = (body.companyDb || "").trim();
   if (!companyDb) return jsonResponse({ success: false, error: "companyDb é obrigatório" }, 400);
@@ -473,6 +474,9 @@ async function listApprovalHistory(
     .order("decision_date", { ascending: false, nullsFirst: false })
     .limit(limit);
   if (decision !== "all") q = q.eq("decision", decision);
+  const range = parseRange(body.from, body.to);
+  if (range.from) q = q.gte("decision_date", range.from);
+  if (range.to) q = q.lte("decision_date", range.to);
 
   if (caller.source === "sap_session" || (caller as { source?: string }).source === "cloud_user") {
     let canReadAll = false;
@@ -512,6 +516,51 @@ async function listApprovalHistory(
   return jsonResponse({ success: true, rows: rows || [], syncState: syncState || null });
 }
 
+async function listMine(
+  supabase: ReturnType<typeof createClient>,
+  req: Request,
+  caller: Awaited<ReturnType<typeof requireAdminOrSapSession>>,
+  body: { companyDb: string; decision?: string; from?: string; to?: string; allCompanies?: boolean },
+) {
+  const c = caller as unknown as { source?: string; email?: string | null; userName?: string; companyDB?: string };
+  const isSap = c.source === "sap_session";
+  const email = isSap ? null : (c.email || (c.userName?.includes("@") ? c.userName : null) || null);
+  const sapUser = isSap ? (c.userName || null) : null;
+  if (!email && !sapUser) return jsonResponse({ success: false, error: "Identidade não resolvida" }, 403);
+
+  let isAdmin = false;
+  try { await requireAdminOrSapAdmin(req); isAdmin = true; } catch { /* comum */ }
+
+  let companies: string[];
+  if (isSap) {
+    companies = [c.companyDB || body.companyDb];
+  } else {
+    const { data: all } = await supabase.from("companies").select("company_db");
+    const candidates = body.allCompanies
+      ? ((all || []) as Array<{ company_db: string }>).map((r) => r.company_db)
+      : [body.companyDb];
+    if (isAdmin) companies = candidates;
+    else {
+      const checks = await Promise.all(candidates.map(async (db) => {
+        const { data } = await supabase.rpc("user_can_access_company", { _email: email, _company_db: db });
+        return data === true ? db : null;
+      }));
+      companies = checks.filter((x): x is string => !!x);
+      if (!body.allCompanies && companies.length === 0) {
+        return jsonResponse({ success: false, error: "Sem acesso a esta empresa" }, 403);
+      }
+    }
+  }
+
+  const identity = await resolveIdentity(supabase, email, sapUser);
+  const range = parseRange(body.from, body.to);
+  const decision = body.decision === "Y" || body.decision === "N" ? body.decision : "all";
+  const result = await listMyDecisions(supabase, { identity, companies, ...range, decision });
+  const { data: syncState } = await supabase.from("approval_history_sync_state")
+    .select("last_sync_at,last_status,last_message,last_count").eq("id", 1).maybeSingle();
+  return jsonResponse({ success: true, ...result, companies, syncState: syncState || null });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -532,9 +581,10 @@ Deno.serve(async (req) => {
   let phase = "authorization";
   const runStartedAt = new Date().toISOString();
   try {
-    let body: { companyDb?: string; action?: string; decision?: string; limit?: number } = {};
+    let body: { companyDb?: string; action?: string; decision?: string; limit?: number; from?: string; to?: string; allCompanies?: boolean } = {};
     try { body = await req.json(); } catch { /* no body */ }
-    const isList = body.action === "list";
+    const isMine = body.action === "list_mine";
+    const isList = body.action === "list" || isMine;
 
     // Leitura (action=list) é somente-leitura e já é escopada por usuário:
     // aceita qualquer usuário autenticado no Cloud, mesmo com a sessão SAP
@@ -570,6 +620,9 @@ Deno.serve(async (req) => {
     }
     if (caller.source === "sap_session" && caller.companyDB !== companyDb) {
       return jsonResponse({ success: false, error: "Empresa inválida para a sessão atual" }, 403);
+    }
+    if (isMine) {
+      return await listMine(supabase, req, caller, { ...body, companyDb });
     }
     if (isList) {
       return await listApprovalHistory(supabase, req, caller, { ...body, companyDb });

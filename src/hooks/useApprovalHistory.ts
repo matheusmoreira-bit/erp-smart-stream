@@ -66,6 +66,13 @@ export interface ApprovalHistoryFilters {
   page?: number;
   /** Tamanho da página. Default 50. */
   pageSize?: number;
+  /** "mine": identidade/período resolvidos no servidor, sem paginação. */
+  scope?: "mine" | "all";
+  /** Intervalo ISO inclusivo (null = sem limite). */
+  from?: string | null;
+  to?: string | null;
+  /** Só no escopo "mine": junta todas as empresas acessíveis. */
+  allCompanies?: boolean;
 }
 
 const SUBSTITUTE_RE =
@@ -86,7 +93,12 @@ export function useApprovalHistory(
     substituteSearch = "",
     page = 1,
     pageSize = 50,
+    scope = "all",
+    from = null,
+    to = null,
+    allCompanies = false,
   } = filters;
+  const mine = scope === "mine";
   const trimmedSubSearch = substituteSearch.trim();
 
   const [rows, setRows] = useState<ApprovalHistoryRow[]>([]);
@@ -95,6 +107,7 @@ export function useApprovalHistory(
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [truncated, setTruncated] = useState(false);
 
   // Estabiliza o array de chaves para o dependency array
   const substituteKey = useMemo(() => substituteFilter.join("|"), [substituteFilter]);
@@ -133,12 +146,30 @@ export function useApprovalHistory(
       let sapRows: ApprovalHistoryRow[] = [];
       let backendSyncState: ApprovalHistorySyncState | null = null;
       let sapWarning: string | null = null;
-      if (companyDb) {
+      let mineLog: any[] | null = null;
+      let mineExpenses: any[] = [];
+      let mineAudit: any[] | null = null;
+      let isTruncated = false;
+      if (companyDb && mine) {
+        const res = await sapFunctionFetch("approval-history-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "list_mine", companyDb, decision, from, to, allCompanies }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok || body?.success === false) throw new Error(body?.error || `HTTP ${res.status}`);
+        sapRows = (body?.sapRows || []) as ApprovalHistoryRow[];
+        mineLog = body?.logRows || [];
+        mineExpenses = body?.expenses || [];
+        mineAudit = body?.auditRows || [];
+        isTruncated = !!body?.truncated;
+        backendSyncState = (body?.syncState || null) as ApprovalHistorySyncState | null;
+      } else if (companyDb) {
         try {
           const res = await sapFunctionFetch("approval-history-sync", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "list", companyDb, decision, limit: fetchCap }),
+            body: JSON.stringify({ action: "list", companyDb, decision, limit: fetchCap, from, to }),
           });
           const body = await res.json().catch(() => ({}));
           if (!res.ok || body?.success === false) {
@@ -178,6 +209,8 @@ export function useApprovalHistory(
         )
         .order("decided_at", { ascending: false, nullsFirst: false })
         .limit(logFetchCap);
+      if (from) logQ = logQ.gte("decided_at", from);
+      if (to) logQ = logQ.lte("decided_at", to);
       if (mode === "any") {
         logQ = logQ.or(
           "substituted_for_email.not.is.null,substituted_for_name.not.is.null",
@@ -200,14 +233,14 @@ export function useApprovalHistory(
           `substituted_for_email.ilike.%${k}%,substituted_for_name.ilike.%${k}%`,
         );
       }
-      const { data: logRows } = await logQ;
+      const logRows = mineLog ?? (await logQ).data;
 
       // Enriquecimento: puxa somente os expenses referenciados por essa página.
       const expenseIds = Array.from(
         new Set(((logRows || []) as any[]).map((l) => l.expense_id).filter(Boolean)),
       );
-      let expensesById = new Map<string, any>();
-      if (expenseIds.length > 0) {
+      let expensesById = new Map<string, any>(mineExpenses.map((e: any) => [e.id, e]));
+      if (!mine && expenseIds.length > 0) {
         let expensesQ = expenseRead("expenses")
           .select(
             "id, supplier_code, supplier_name, total_amount, currency, sap_doc_entry, sap_doc_num, doc_type, requester_name, requester_email, company_db, created_at",
@@ -269,7 +302,9 @@ export function useApprovalHistory(
         .order("created_at", { ascending: false, nullsFirst: false })
         .limit(fetchCap);
       if (companyDb) auditQ = auditQ.eq("company_db", companyDb);
-      const { data: auditRows } = await auditQ;
+      if (from) auditQ = auditQ.gte("created_at", from);
+      if (to) auditQ = auditQ.lte("created_at", to);
+      const auditRows = mineAudit ?? (await auditQ).data;
 
       const auditHistoryRows: ApprovalHistoryRow[] = ((auditRows || []) as any[])
         .map((a) => {
@@ -314,6 +349,9 @@ export function useApprovalHistory(
           .map((r) => `${r.company_db}|${r.doc_entry}|${r.decision}|${r.step ?? 0}`),
       );
       const filteredInternal = internalRows.filter((r) => {
+        const sub = !!(r.substituted_for_email || r.substituted_for_name);
+        if (mode === "any" && !sub) return false;
+        if (mode === "none" && sub) return false;
         if (r.doc_entry == null) return true;
         return !sapKey.has(`${r.company_db}|${r.doc_entry}|${r.decision}|${r.step ?? 0}`);
       });
@@ -373,9 +411,10 @@ export function useApprovalHistory(
         });
       }
 
-      const pageRows = merged.slice(0, window);
+      const pageRows = mine ? merged : merged.slice(0, window);
       setRows(pageRows);
-      setHasMore(merged.length > window);
+      setHasMore(!mine && merged.length > window);
+      setTruncated(isTruncated);
 
       setSyncState(backendSyncState);
       // Só sinaliza erro quando NADA pôde ser carregado; caso contrário o aviso
@@ -387,7 +426,7 @@ export function useApprovalHistory(
       setIsLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyDb, decision, substituteKey, trimmedSubSearch, page, pageSize]);
+  }, [companyDb, decision, substituteKey, trimmedSubSearch, page, pageSize, mine, from, to, allCompanies]);
 
   const sync = useCallback(async () => {
     setIsSyncing(true);
@@ -412,5 +451,5 @@ export function useApprovalHistory(
     load();
   }, [load]);
 
-  return { rows, hasMore, syncState, isLoading, isSyncing, error, refresh: load, sync };
+  return { rows, hasMore, truncated, syncState, isLoading, isSyncing, error, refresh: load, sync };
 }
