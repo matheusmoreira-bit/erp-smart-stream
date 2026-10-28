@@ -1,5 +1,5 @@
 import type { createClient } from "npm:@supabase/supabase-js@2";
-import { enrichAudit, identityIndex, positiveInt, rawOf, reconcileDecisions, splitHanaPeople, uniqueHanaMatch, type HistoryRecord } from "./document-reconciliation.ts";
+import { enrichAudit, identityIndex, matchDocumentDecisions, positiveInt, rawOf, reconcileDecisions, splitHanaPeople, uniqueHanaMatch, type HistoryRecord } from "./document-reconciliation.ts";
 type Db = ReturnType<typeof createClient>;
 export async function readCompanyHistory(db: Db, company: string): Promise<HistoryRecord[]> {
   const rows: HistoryRecord[] = [];
@@ -75,4 +75,11 @@ export async function backfillDocuments(db: Db, company: string, cursor: number,
   return { companyDb: company, processed: batch.length, corrected: corrected.filter(r => r.doc_num || rawOf(r).draft_entry).length,
     without_final: corrected.filter(r => !r.doc_num).length, total_audit: audit.length, nextCursor, done, hana_individuals: splitCount, deduplicated,
     sap_resolved: requests.size };
+}
+/** Segunda passada: concilia audit/legado sem documento com decisão HANA única (idempotente). */
+export async function reconcileDocumentMatches(db: Db, company: string) {
+  const [history, index] = await Promise.all([readCompanyHistory(db, company), readDirectory(db)]);
+  const { writes, counts } = matchDocumentDecisions(history, index);
+  await writeHistory(db, writes);
+  return { companyDb: company, ...counts, writes: writes.length };
 }
