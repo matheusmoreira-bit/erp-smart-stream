@@ -1,5 +1,7 @@
 # Roadmap — Melhorias de segurança (pentest)
 
+- [ ] Histórico de Aprovações — otimizar audit em lotes de 200 e janela incremental, limitar SAP/HANA a 15s, finalizar estado/trava, liberar somente trava presa e validar SBO_ANAGAMING pelo caminho autorizado do scheduler.
+
 - [x] Histórico de Aprovações — filtro Minhas com identidade canônica e webhook não fatal; nove testes passaram e somente approval-history-sync foi publicada.
 - [ ] Histórico de Aprovações — validar sincronização real de SBO_ANAGAMING: sessão administrativa das ferramentas recusada por MFA (HTTP 403); estado permanece error de 28/10 14:54:05 UTC, 0 decisões Y/N desde 07/10. Não contornar autorização nem modificar scheduler; validação visual autenticada também pendente.
 
