@@ -9,8 +9,6 @@ import { exportDocLabel, matchesDocQuery } from "@/lib/doc-number";
 import { toast } from "sonner";
 import { useSap } from "@/contexts/SapContext";
 import { useAuth } from "@/hooks/useAuth";
-import { useUserDirectory } from "@/lib/user-identity";
-import { approvalHistoryIdentityKeys, matchesApprovalHistoryIdentity } from "@/lib/approval-history-identity";
 import { useModuleAccess } from "@/hooks/usePermissions";
 import { HISTORY_PERIODS, PERIOD_LABELS, periodLabel, periodRange, summarizeDecisions, type HistoryPeriod } from "@/lib/approval-history-period";
 import { useApprovalHistory, type ApprovalHistoryRow } from "@/hooks/useApprovalHistory";
@@ -45,8 +43,7 @@ function formatDate(iso?: string | null) {
 export default function ApprovalHistory() {
   const navigate = useNavigate();
   const { session, logout } = useSap();
-  const { isAdmin: isLovableAdmin, user } = useAuth();
-  const { users: directoryUsers } = useUserDirectory();
+  const { isAdmin: isLovableAdmin } = useAuth();
   const isAdmin = isLovableAdmin || (session?.isSuperUser ?? false);
   const { hasAccess: canViewAllApprovals } = useModuleAccess("approvals_view_all");
   const { canViewAll: canViewAllByGroup } = useCanViewAllDocuments();
@@ -158,9 +155,6 @@ export default function ApprovalHistory() {
 
 
 
-  const myKeys = useMemo(() => {
-    return approvalHistoryIdentityKeys(session?.userName, user?.email, directoryUsers);
-  }, [session?.userName, user?.email, directoryUsers]);
 
   // Lista de oficiais substituídos presentes nos dados — alimenta o Select.
   const substitutedOptions = useMemo(() => {
