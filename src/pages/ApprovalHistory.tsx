@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserDirectory } from "@/lib/user-identity";
 import { approvalHistoryIdentityKeys, matchesApprovalHistoryIdentity } from "@/lib/approval-history-identity";
 import { useModuleAccess } from "@/hooks/usePermissions";
+import { HISTORY_PERIODS, PERIOD_LABELS, periodLabel, periodRange, summarizeDecisions, type HistoryPeriod } from "@/lib/approval-history-period";
 import { useApprovalHistory, type ApprovalHistoryRow } from "@/hooks/useApprovalHistory";
 import { useExpenses, type Expense } from "@/hooks/useExpenses";
 import { useCompanies } from "@/hooks/useCompanies";
@@ -84,6 +85,18 @@ export default function ApprovalHistory() {
   })();
 
   const initialSubSearch = searchParams.get("subq") || "";
+  const initialPeriod = (() => {
+    const v = searchParams.get("period") as HistoryPeriod | null;
+    return v && HISTORY_PERIODS.includes(v) ? v : "30d";
+  })();
+  const [period, setPeriod] = useState<HistoryPeriod>(initialPeriod);
+  const [customFrom, setCustomFrom] = useState(searchParams.get("from") || "");
+  const [customTo, setCustomTo] = useState(searchParams.get("to") || "");
+  const [allCompanies, setAllCompanies] = useState(searchParams.get("companies") === "all");
+  const range = useMemo(
+    () => periodRange(period, { from: customFrom, to: customTo }),
+    [period, customFrom, customTo],
+  );
 
   const [queryInput, setQuery, query] = useSearchState();
   const [decision, setDecision] = useState<"all" | "Y" | "N">(initialDecision);
@@ -108,19 +121,26 @@ export default function ApprovalHistory() {
     else next.set("sub", substituteFilter.map((v) => encodeURIComponent(v)).join(","));
     if (!debouncedSubSearch.trim()) next.delete("subq");
     else next.set("subq", debouncedSubSearch.trim());
+    next.set("period", period);
+    if (period === "custom" && customFrom) next.set("from", customFrom); else next.delete("from");
+    if (period === "custom" && customTo) next.set("to", customTo); else next.delete("to");
+    if (allCompanies) next.set("companies", "all"); else next.delete("companies");
     if (next.toString() !== searchParams.toString()) {
       setSearchParams(next, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [decision, substituteFilter, debouncedSubSearch]);
+  }, [decision, substituteFilter, debouncedSubSearch, period, customFrom, customTo, allCompanies]);
 
   // Reseta paginação quando filtros mudam.
   useEffect(() => {
     setPage(1);
-  }, [decision, substituteFilter, debouncedSubSearch, session?.companyDB]);
+  }, [decision, substituteFilter, debouncedSubSearch, session?.companyDB, period, customFrom, customTo, allCompanies, scope]);
+
+  const effectiveScope: "mine" | "all" = canViewAll ? scope : "mine";
+  const mineAllCompanies = effectiveScope === "mine" && allCompanies;
 
   // Hook com filtros aplicados no banco + paginação incremental.
-  const { rows, hasMore, syncState, isLoading, isSyncing, sync } = useApprovalHistory(
+  const { rows, hasMore, truncated, syncState, isLoading, isSyncing, sync } = useApprovalHistory(
     session?.companyDB,
     {
       decision,
@@ -128,6 +148,10 @@ export default function ApprovalHistory() {
       substituteSearch: debouncedSubSearch,
       page,
       pageSize: PAGE_SIZE,
+      scope: effectiveScope,
+      from: range.from,
+      to: range.to,
+      allCompanies: mineAllCompanies,
     },
   );
 
@@ -137,8 +161,6 @@ export default function ApprovalHistory() {
   const myKeys = useMemo(() => {
     return approvalHistoryIdentityKeys(session?.userName, user?.email, directoryUsers);
   }, [session?.userName, user?.email, directoryUsers]);
-
-  const effectiveScope: "mine" | "all" = canViewAll ? scope : "mine";
 
   // Lista de oficiais substituídos presentes nos dados — alimenta o Select.
   const substitutedOptions = useMemo(() => {
@@ -162,7 +184,9 @@ export default function ApprovalHistory() {
     const q = query.trim().toLowerCase();
     return rows.filter((r) => {
       if (r.decision !== "Y" && r.decision !== "N") return false;
-      if (effectiveScope === "mine") {
+      // No escopo "mine" a identidade já foi aplicada no servidor; aqui só
+      // fica a checagem defensiva quando a lista vem do modo paginado.
+      if (effectiveScope === "mine" && false) {
         const candidates = [
           r.approver_code, r.approver_email, r.approver_name,
           r.requester_code, r.requester_name,
@@ -179,6 +203,8 @@ export default function ApprovalHistory() {
         || matchesDocQuery({ docNum: Number(r.doc_num || 0), __internalId: r.expense_id }, q);
     });
   }, [rows, query, effectiveScope, myKeys]);
+  const summary = useMemo(() => summarizeDecisions(filtered), [filtered]);
+  const periodText = periodLabel(period, { from: customFrom, to: customTo });
 
 
 
@@ -220,11 +246,13 @@ export default function ApprovalHistory() {
                 title: "Relatório — Histórico de Aprovações",
                 subtitle: `${filtered.length} decisão(ões)`,
                 meta: [
-                  { label: "Empresa", value: getLabel(session?.companyDB) || "—" },
+                  { label: "Empresa", value: mineAllCompanies ? "Todas as empresas" : getLabel(session?.companyDB) || "—" },
+                  { label: "Período", value: periodText },
                   { label: "Escopo", value: effectiveScope === "all" ? "Todos" : "Minhas" },
                 ],
                 columns: [
                   { header: "Data", cell: (r: typeof filtered[number]) => formatDate(r.decision_date) },
+                  { header: "Empresa", cell: (r: typeof filtered[number]) => getLabel(r.company_db) || r.company_db || "—" },
                   { header: "Decisão", cell: (r: typeof filtered[number]) => r.decision === "Y" ? "Aprovado" : r.decision === "N" ? "Rejeitado" : String(r.decision ?? "—") },
                   { header: "Doc #", cell: (r: typeof filtered[number]) => exportDocLabel(r) },
                   { header: "Tipo", cell: (r: typeof filtered[number]) => r.doc_type_name || "—" },
@@ -291,6 +319,31 @@ export default function ApprovalHistory() {
                 <SelectItem value="all">Todas as decisões</SelectItem>
               </SelectContent>
             </Select>
+          )}
+
+          {effectiveScope === "mine" && (
+            <Select value={allCompanies ? "all" : "session"} onValueChange={(v) => setAllCompanies(v === "all")}>
+              <SelectTrigger className="w-48" aria-label="Empresas"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="session">Empresa atual</SelectItem>
+                <SelectItem value="all">Todas as empresas</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+
+          <Select value={period} onValueChange={(v) => setPeriod(v as HistoryPeriod)}>
+            <SelectTrigger className="w-52" aria-label="Período"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {HISTORY_PERIODS.map((p) => <SelectItem key={p} value={p}>{PERIOD_LABELS[p]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {period === "custom" && (
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-muted-foreground" htmlFor="ah-from">De</label>
+              <Input id="ah-from" type="date" value={customFrom} max={customTo || undefined} onChange={(e) => setCustomFrom(e.target.value)} className="w-40" />
+              <label className="text-sm text-muted-foreground" htmlFor="ah-to">Até</label>
+              <Input id="ah-to" type="date" value={customTo} min={customFrom || undefined} onChange={(e) => setCustomTo(e.target.value)} className="w-40" />
+            </div>
           )}
 
           <Select value={decision} onValueChange={(v) => setDecision(v as "all" | "Y" | "N")}>
@@ -404,6 +457,23 @@ export default function ApprovalHistory() {
           </div>
         )}
 
+
+        {!isLoading && (
+          <div className="glass-card p-3 mb-4 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm" aria-live="polite">
+            <span><strong>{summary.total}</strong> decisões · {periodText}</span>
+            <span className="text-muted-foreground">Aprovadas: <strong className="text-foreground">{summary.approved}</strong></span>
+            <span className="text-muted-foreground">Rejeitadas: <strong className="text-foreground">{summary.rejected}</strong></span>
+            {Object.entries(summary.byCurrency).map(([c, v]) => (
+              <span key={c} className="text-muted-foreground">Total {c}: <strong className="text-foreground">{formatCurrency(v, c)}</strong></span>
+            ))}
+            {hasMore && <span className="text-muted-foreground">(somente o que já foi carregado)</span>}
+          </div>
+        )}
+        {truncated && (
+          <div className="mb-4 p-3 rounded-lg border border-border bg-muted text-sm">
+            O resultado passou de 5.000 decisões e foi cortado. Diminua o período para ver tudo.
+          </div>
+        )}
 
         {isLoading ? (
           <div className="text-center py-16 text-muted-foreground">Carregando histórico...</div>
