@@ -1,5 +1,7 @@
 # Roadmap — Melhorias de segurança (pentest)
 
+- [ ] Lembretes — preservar pendências próprias nas substituições recíprocas/fixas, manter férias, testar dedupe e executar dry_run dos dois canais; sem alterar agendamentos.
+
 - [x] Histórico SAP — metadados de esboço/pedido, solicitante, identidade individual HANA e dedupe implementados; backfill concluído nas quatro empresas autorizadas. 8964 confirmado como pedido 7974/esboço 8682. 34 testes passaram. Sem número final: ANA 103, Cactus 47, Instituto 13, Open Gaming 3. Navegador autenticado/exportações aguardam prompt separado; NO-GO para confirmação visual em Live.
 - [x] Lembretes diários de aprovação (e-mail + WhatsApp, dias úteis 08:00 BRT, Flow+SAP, substitutos) — ativados.
 
