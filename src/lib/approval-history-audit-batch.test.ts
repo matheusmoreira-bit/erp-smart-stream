@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { auditCutoff, dedupeAuditDecisions, pendingAuditUpdates, writeAuditBatches, SAP_HANA_TIMEOUT_MS, type AuditDecision } from "../../supabase/functions/approval-history-sync/audit-batch";
+import { auditCutoff, dedupeAuditDecisions, pendingAuditUpdates, writeAuditBatches, withRemoteTimeout, SAP_HANA_TIMEOUT_MS, type AuditDecision } from "../../supabase/functions/approval-history-sync/audit-batch";
 
 const now = Date.parse("2026-10-28T15:26:00Z");
 const decision = (entity: string, actor: string, date: string, action = "approve"): AuditDecision => ({
@@ -40,5 +40,15 @@ describe("audit sync batching and cutoff", () => {
   });
   it("limits SAP and HANA calls to 15 seconds", () => {
     expect(SAP_HANA_TIMEOUT_MS).toBe(15_000);
+  });
+  it("expires the whole remote operation even if fetch never resolves", async () => {
+    vi.useFakeTimers();
+    try {
+      const result = expect(withRemoteTimeout(() => new Promise<never>(() => {}), "Consulta HANA")).rejects.toThrow("Consulta HANA: timeout após 15 s");
+      await vi.advanceTimersByTimeAsync(15_000);
+      await result;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

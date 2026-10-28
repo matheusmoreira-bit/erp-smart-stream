@@ -4,7 +4,7 @@ import { tryWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { fetchHanaView as fetchHanaViewV2, resolveHanaSchema } from "../_shared/hana-views.ts";
 import { normalizeCompact } from "../_shared/text-normalize.ts";
 import { readOptionalWebhook, finalSyncStatus } from "./webhook.ts";
-import { auditCutoff, dedupeAuditDecisions, pendingAuditUpdates, writeAuditBatches, SAP_HANA_TIMEOUT_MS, type AuditDecision } from "./audit-batch.ts";
+import { auditCutoff, dedupeAuditDecisions, pendingAuditUpdates, writeAuditBatches, withRemoteTimeout, SAP_HANA_TIMEOUT_MS, type AuditDecision } from "./audit-batch.ts";
 import { isSchedulerSecretRequest, isServiceRoleRequest, requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 
 // HanaAPI V1 (middleware n8n) foi descontinuada — HANA queries usam V2 via fetchHanaViewV2.
@@ -368,11 +368,12 @@ async function fetchAndMergeHanaApprovals(
 
     const baseUrl = normalizeSapBaseUrl(creds.service_layer_url);
     const dbName = creds.company_db || companyDb;
-    const session = await sapLoginServiceLayer(baseUrl, creds.username, creds.password, dbName);
+    const session = await withRemoteTimeout(() => sapLoginServiceLayer(baseUrl, creds.username, creds.password, dbName), "Login SAP");
 
     let rows: Record<string, unknown>[] = [];
     try {
-      rows = await fetchHanaView(companyDb, dbName, session.sessionId, "VW_PEDIDOS_COMPRA_APROVACOES", creds.hana_api_url);
+      rows = await withRemoteTimeout(() => fetchHanaView(companyDb, dbName, session.sessionId, "VW_PEDIDOS_COMPRA_APROVACOES", creds.hana_api_url), "Consulta HANA");
+      console.log(`[approval-history-sync] phase=hana fetched rows=${rows.length}`);
     } finally {
       await sapLogoutServiceLayer(baseUrl, session);
     }

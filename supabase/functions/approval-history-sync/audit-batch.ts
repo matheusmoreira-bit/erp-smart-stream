@@ -2,6 +2,20 @@ export const AUDIT_BATCH_SIZE = 200;
 export const SAP_HANA_TIMEOUT_MS = 15_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+export async function withRemoteTimeout<T>(operation: () => Promise<T>, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label}: timeout após 15 s`)), SAP_HANA_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 export function auditCutoff(now: number, lastSuccess?: string | null): string {
   const parsed = lastSuccess ? Date.parse(lastSuccess) : NaN;
   const since = Number.isFinite(parsed) && parsed <= now ? parsed : now - 30 * DAY_MS;
