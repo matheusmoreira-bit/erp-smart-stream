@@ -37,7 +37,8 @@ export function splitHanaPeople(row: HistoryRecord, index: Map<string, Directory
     const person = resolvePerson(index, [name, ...(names.length === 1 ? [row.approver_email, row.approver_code] : [])]);
     const key = person?.key || normIdentity(name);
     const day = row.decision_date ? String(row.decision_date).slice(0, 10) : null;
-    return { ...row, external_id: `hana::${draft ? `E${draft}` : `N${row.doc_num}`}::${key}`,
+    const { id: _id, ...withoutId } = row;
+    return { ...withoutId, external_id: `hana::${draft ? `E${draft}` : `N${row.doc_num}`}::${key}`,
       approver_name: name, approver_email: person?.email || null, approver_code: person?.code || null,
       decision_date: day ? `${day}T00:00:00.000Z` : null,
       raw: { ...raw, source: "hana_view", draft_entry: draft, po_doc_num: positiveInt(row.doc_num), identity_key: person?.key || null,
