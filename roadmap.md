@@ -1,5 +1,8 @@
 # Roadmap — Melhorias de segurança (pentest)
 
+- [ ] Histórico SAP — corrigir identificação esboço/pedido, enriquecer audit com documento final/solicitante, deduplicar por esboço e aprovador, resolver identidades HANA; backfill limitado a SBO_ANAGAMING, SBO_CACTUS, SBO_INSTITUTO_ANA e open_gaming_sa, com comparações 8964 e Minhas/Este ano.
+- [ ] WhatsApp — esclarecer envio único ou recorrente para pendências de todas as empresas; digest existente cobre apenas SAP produtivo e há watcher separado para Flow; nenhum disparo realizado.
+
 - [x] Histórico de Aprovações — audit em lotes de 200 e checkpoint por empresa, SAP/HANA limitado a 15s, finally para estado/trava, somente trava presa liberada; 19 testes passaram, função publicada e scheduler retornou HTTP 200 em 19,53s (HANA 9968 recebidos, zero alterações).
 
 - [x] Histórico de Aprovações — filtro Minhas com identidade canônica e webhook não fatal; nove testes passaram e somente approval-history-sync foi publicada.
