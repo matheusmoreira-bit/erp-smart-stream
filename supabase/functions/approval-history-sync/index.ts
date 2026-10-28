@@ -409,13 +409,19 @@ async function fetchAndMergeHanaApprovals(
 
     let upserted = 0;
     const BATCH = 200;
-    for (let i = 0; i < safe.length; i += BATCH) {
-      const slice = safe.slice(i, i + BATCH);
-      const { error } = await supabase
-        .from("approval_history")
-        .upsert(slice, { onConflict: "company_db,external_id" });
-      if (error) throw new Error(error.message);
-      upserted += slice.length;
+    // Disjoint canonical keys: four bounded batches avoid serial HANA writes
+    // exceeding the HTTP request budget without changing merge semantics.
+    for (let i = 0; i < safe.length; i += BATCH * 4) {
+      const results = await Promise.all(Array.from({ length: 4 }, async (_, slot) => {
+        const slice = safe.slice(i + slot * BATCH, i + (slot + 1) * BATCH);
+        if (!slice.length) return { count: 0, error: null };
+        const { error } = await supabase.from("approval_history")
+          .upsert(slice, { onConflict: "company_db,external_id" });
+        return { count: error ? 0 : slice.length, error };
+      }));
+      const failed = results.find((result) => result.error);
+      if (failed?.error) throw new Error(failed.error.message);
+      upserted += results.reduce((sum, result) => sum + result.count, 0);
     }
 
     return { merged: rows.length, upserted };
@@ -762,12 +768,13 @@ Deno.serve(async (req) => {
       if (hanaResult.skipped) console.log(`[approval-history-sync] HANA view skipped: ${hanaResult.skipped}`);
     }
 
-    const summary = `Sincronizados ${upserted} (teste:${skippedTest}, sem-empresa:${skippedUnknownCompany}, regressões:${skippedRegression}, audit-merge:${auditMerged}, audit-upsert:${auditInserted}, hana-merge:${hanaResult.merged}, hana-upsert:${hanaResult.upserted}${hanaResult.skipped ? `, hana-skipped:${hanaResult.skipped}` : ""}${hanaResult.error ? `, hana-error:${hanaResult.error}` : ""})`;
+    const totalWritten = upserted + auditMerged + auditInserted + hanaResult.upserted;
+    const summary = `Sincronizados ${totalWritten} (teste:${skippedTest}, sem-empresa:${skippedUnknownCompany}, regressões:${skippedRegression}, audit-merge:${auditMerged}, audit-upsert:${auditInserted}, hana-merge:${hanaResult.merged}, hana-upsert:${hanaResult.upserted}${hanaResult.skipped ? `, hana-skipped:${hanaResult.skipped}` : ""}${hanaResult.error ? `, hana-error:${hanaResult.error}` : ""})`;
     const finalSummary = [summary, webhookWarning, auditError ? `audit-error:${auditError}` : undefined].filter(Boolean).join("; ");
     const status = finalSyncStatus(auditError, hanaResult.error);
     syncStatus = status;
     syncMessage = finalSummary;
-    syncCount = upserted + auditMerged + auditInserted + hanaResult.upserted;
+    syncCount = totalWritten;
     console.log(`[approval-history-sync] phase=complete status=${status} count=${syncCount}`);
 
     return jsonResponse({
