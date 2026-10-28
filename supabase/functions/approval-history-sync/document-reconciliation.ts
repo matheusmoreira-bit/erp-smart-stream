@@ -31,7 +31,7 @@ export function draftOf(row: HistoryRecord): number | null {
 }
 export function splitHanaPeople(row: HistoryRecord, index: Map<string, DirectoryIdentity[]>): HistoryRecord[] {
   const raw = rawOf(row);
-  const names = [...new Set(String(raw["Aprovador(es)"] ?? row.approver_name ?? "").split(",").map(n => n.trim()).filter(Boolean))];
+  const names = [...new Set(String(raw.reconciled_version ? row.approver_name : raw["Aprovador(es)"] ?? row.approver_name ?? "").split(",").map(n => n.trim()).filter(Boolean))];
   const draft = draftOf(row);
   return names.map(name => {
     const person = resolvePerson(index, [name, ...(names.length === 1 ? [row.approver_email, row.approver_code] : [])]);
