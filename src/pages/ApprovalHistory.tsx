@@ -184,16 +184,7 @@ export default function ApprovalHistory() {
     const q = query.trim().toLowerCase();
     return rows.filter((r) => {
       if (r.decision !== "Y" && r.decision !== "N") return false;
-      // No escopo "mine" a identidade já foi aplicada no servidor; aqui só
-      // fica a checagem defensiva quando a lista vem do modo paginado.
-      if (effectiveScope === "mine" && false) {
-        const candidates = [
-          r.approver_code, r.approver_email, r.approver_name,
-          r.requester_code, r.requester_name,
-        ];
-        const hit = matchesApprovalHistoryIdentity(myKeys, candidates);
-        if (!hit) return false;
-      }
+      // Escopo "mine": identidade e período já aplicados no servidor.
       if (!q) return true;
       return [
         r.card_name, r.card_code, r.requester_name, r.approver_name,
@@ -202,7 +193,7 @@ export default function ApprovalHistory() {
       ].some((v) => (v || "").toString().toLowerCase().includes(q))
         || matchesDocQuery({ docNum: Number(r.doc_num || 0), __internalId: r.expense_id }, q);
     });
-  }, [rows, query, effectiveScope, myKeys]);
+  }, [rows, query]);
   const summary = useMemo(() => summarizeDecisions(filtered), [filtered]);
   const periodText = periodLabel(period, { from: customFrom, to: customTo });
 
@@ -493,6 +484,7 @@ export default function ApprovalHistory() {
                   <HistoryCard
                     key={r.id}
                     row={r}
+                    companyLabel={mineAllCompanies ? getLabel(r.company_db) || r.company_db : undefined}
                     onRelationsMap={linked ? () => setRelationsMapExpense(linked) : undefined}
                   />
                 );
@@ -523,7 +515,7 @@ export default function ApprovalHistory() {
   );
 }
 
-function HistoryCard({ row, onRelationsMap }: { row: ApprovalHistoryRow; onRelationsMap?: () => void }) {
+function HistoryCard({ row, onRelationsMap, companyLabel }: { row: ApprovalHistoryRow; onRelationsMap?: () => void; companyLabel?: string }) {
   const isApproved = row.decision === "Y";
   const isRejected = row.decision === "N";
   const sourceLabel = row.source === "erp_flow" ? "ERP Flow" : row.source === "audit_log" ? "Ação" : "SAP";
@@ -556,6 +548,11 @@ function HistoryCard({ row, onRelationsMap }: { row: ApprovalHistoryRow; onRelat
             >
               {sourceLabel}
             </span>
+            {companyLabel && (
+              <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border border-border text-muted-foreground" title="Empresa">
+                {companyLabel}
+              </span>
+            )}
           </div>
           <h3 className="font-mono font-semibold mt-1">{Number(row.doc_num || 0) > 0 ? `#${row.doc_num}` : exportDocLabel(row)}</h3>
         </div>
