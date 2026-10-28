@@ -561,12 +561,12 @@ async function listMine(
   try { await requireAdminOrSapAdmin(req); isAdmin = true; } catch { /* comum */ }
 
   let companies: string[];
+  // Bases de teste nunca entram em "Minhas" (nem com "Todas as empresas").
+  const { data: all } = await supabase.from("companies").select("company_db,is_test");
+  const testDbs = new Set(((all || []) as Array<{ company_db: string; is_test: boolean | null }>).filter((r) => r.is_test).map((r) => r.company_db));
   if (isSap) {
-    companies = [c.companyDB || body.companyDb];
+    companies = [c.companyDB || body.companyDb].filter((db) => !testDbs.has(db));
   } else {
-    // Bases de teste nunca entram em "Minhas" (nem com "Todas as empresas").
-    const { data: all } = await supabase.from("companies").select("company_db,is_test");
-    const testDbs = new Set(((all || []) as Array<{ company_db: string; is_test: boolean | null }>).filter((r) => r.is_test).map((r) => r.company_db));
     const candidates = (body.allCompanies
       ? ((all || []) as Array<{ company_db: string }>).map((r) => r.company_db)
       : [body.companyDb]).filter((db) => !testDbs.has(db));
