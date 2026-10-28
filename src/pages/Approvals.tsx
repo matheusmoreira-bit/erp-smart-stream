@@ -2060,7 +2060,7 @@ async function decideSapApprovalRequest(
   action: "approve" | "reject",
   remarks: string,
   doc?: ApprovalDoc | null,
-): Promise<{ recoveredFromSapError: boolean }> {
+): Promise<{ recoveredFromSapError: boolean; auditDocument: Record<string, unknown> }> {
   // A decisão é sempre aplicada ao usuário da sessão do Service Layer. Se a
   // sessão ativa for técnica (ApiUser), o SAP recusa com "You are not
   // permitted to perform this action" — por isso exigimos sessão do usuário.
@@ -2070,9 +2070,15 @@ async function decideSapApprovalRequest(
   // pode aceitar um PATCH ambíguo sem alterar a decisão deste aprovador.
   const userKey = await getCurrentSapUserKey(session);
   const request = await getSapApprovalRequest(session, code);
+  const auditDocumentOf = (value: Record<string, unknown>) => ({
+    draftEntry: Number(value.DraftEntry || (value.IsDraft === "tYES" ? value.ObjectEntry : 0)) || null,
+    objectType: value.ObjectType || null,
+    finalDocEntry: value.IsDraft === "tNO" ? Number(value.ObjectEntry) || null : null,
+    finalDocNum: value.IsDraft === "tNO" ? Number(value.DocNum) || null : null,
+  });
   const decisions = decisionRowsOf(request);
   if (findCompletedDecisionForAction(decisions, userKey, action)) {
-    return { recoveredFromSapError: true };
+    return { recoveredFromSapError: true, auditDocument: auditDocumentOf(request) };
   }
   if (findPendingDecisionIndex(decisions, userKey) < 0) {
     throw new Error(formatSapApprovalError(
@@ -2098,7 +2104,7 @@ async function decideSapApprovalRequest(
       await new Promise((resolve) => setTimeout(resolve, delayMs));
       const fresh = await getSapApprovalRequest(session, code);
       if (findCompletedDecisionForAction(decisionRowsOf(fresh), userKey, action)) {
-        return { recoveredFromSapError: false };
+        return { recoveredFromSapError: false, auditDocument: auditDocumentOf(fresh) };
       }
     }
     throw new Error(
@@ -2110,7 +2116,7 @@ async function decideSapApprovalRequest(
       const fresh = await getSapApprovalRequest(session, code);
       const freshDecisions = decisionRowsOf(fresh);
       if (findCompletedDecisionForAction(freshDecisions, userKey, action)) {
-        return { recoveredFromSapError: true };
+        return { recoveredFromSapError: true, auditDocument: auditDocumentOf(fresh) };
       }
     } catch { /* keep original SAP error */ }
     throw new Error(formatSapApprovalError(message, doc));
@@ -3492,6 +3498,7 @@ export default function ApprovalsPage() {
                 actor_email: session.userName,
                 company_db: session.companyDB,
                 details: {
+                  ...result.auditDocument,
                   docNum: doc?.docNum,
                   docType: doc?.docTypeName,
                   cardName: doc?.cardName,

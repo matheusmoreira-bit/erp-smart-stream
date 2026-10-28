@@ -30,6 +30,10 @@ export interface ApprovalHistoryRow {
   synced_at: string;
   /** Fonte da decisão: 'sap' = SAP Approval Hub, 'erp_flow' = fluxo interno, 'audit_log' = ação já registrada no histórico */
   source?: "sap" | "erp_flow" | "audit_log";
+  raw?: Record<string, unknown>;
+  draft_entry?: number | null;
+  po_doc_num?: number | null;
+  decision_precision?: "individual" | "document";
   /** Preenchido apenas para rows internos (permite abrir o mapa de relações) */
   expense_id?: string | null;
   /** Rastreabilidade: quando a decisão foi tomada por um substituto autorizado */
@@ -327,7 +331,10 @@ export function useApprovalHistory(
             doc_object_type: null,
             doc_type_name: details.docType || "Pedido de Compra",
             doc_entry: null,
-            doc_num: typeof details.docNum === "number" ? details.docNum : Number(details.docNum) || null,
+            doc_num: Number(details.finalDocNum || details.po_doc_num) || null,
+            draft_entry: Number(details.draftEntry || details.draft_entry) || null,
+            po_doc_num: Number(details.finalDocNum || details.po_doc_num) || null,
+            decision_precision: "individual",
             doc_total: typeof details.docTotal === "number" ? details.docTotal : Number(details.docTotal) || null,
             currency: details.currency || "BRL",
             card_code: null,
@@ -381,7 +388,10 @@ export function useApprovalHistory(
 
       let merged = [
         ...((sapRows || []) as ApprovalHistoryRow[]).map((r) =>
-          parseSubstitution({ ...r, source: (r as any).raw?.source === "audit_log" ? "audit_log" as const : "sap" as const }),
+          parseSubstitution({ ...r, source: r.raw?.source === "audit_log" ? "audit_log" as const : "sap" as const,
+            draft_entry: Number(r.raw?.draft_entry || r.raw?.draftEntry || (r.raw?.source === "hana_view" ? r.doc_entry : 0)) || null,
+            po_doc_num: Number(r.raw?.po_doc_num || (r.raw?.source === "hana_view" ? r.doc_num : 0)) || null,
+            decision_precision: r.raw?.decision_precision === "document" ? "document" : "individual" }),
         ),
         ...filteredInternal.map(parseSubstitution),
         ...filteredAuditRows.map(parseSubstitution),
