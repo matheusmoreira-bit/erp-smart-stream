@@ -387,20 +387,18 @@ async function fetchAndMergeHanaApprovals(
     const payload = Array.from(mapped.values()).filter((r): r is NonNullable<typeof r> => !!r);
 
     // Regra de regressão: não sobrescrever Y/N existente com P.
-    const externalIds = payload.map((p) => p.external_id);
     const existingByKey = new Map<string, Record<string, unknown>>();
-    if (externalIds.length > 0) {
-      const CHUNK = 500;
-      for (let i = 0; i < externalIds.length; i += CHUNK) {
-        const ids = externalIds.slice(i, i + CHUNK);
-        const { data: existing } = await supabase
-          .from("approval_history")
-          .select("*")
-          .eq("company_db", companyDb)
-          .in("external_id", ids);
+    if (payload.length > 0) {
+      // Long external-id IN URLs were rejected and silently read as empty.
+      // Paginate the company instead and fail explicitly on read errors.
+      for (let offset = 0; ; offset += 1000) {
+        const { data: existing, error } = await supabase.from("approval_history")
+          .select("*").eq("company_db", companyDb).order("id").range(offset, offset + 999);
+        if (error) throw new Error(error.message);
         for (const e of (existing || []) as Array<{ company_db: string; external_id: string; decision: string | null; [key: string]: unknown }>) {
           existingByKey.set(`${e.company_db}::${e.external_id}`, e);
         }
+        if ((existing || []).length < 1000) break;
       }
     }
     const safe = payload.filter((p) => {
