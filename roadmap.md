@@ -2,6 +2,7 @@
 
 - [ ] André Coura — plano autorizado; sessão conectada recebida pelas ferramentas não inclui comprovação de MFA e has_role recusa autorização administrativa. Aplicação bloqueada; nenhuma permissão ou regra de domínio alterada.
 - [x] André Coura — esclarecido: administrador é global, não restrito à Cactus Tecnologia.
+- [x] André Coura — caminho de verificação conferido: tela Verificação em duas etapas, autenticador e Confirmar; sessão das ferramentas pode omitir comprovação mesmo após MFA no app.
 
 - [x] F01 — Cadastro aberto / domínio só no navegador
 - [x] F02 — Sessão SAP amarrada à identidade
