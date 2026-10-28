@@ -23,7 +23,7 @@ const WHATSAPP_URL = Deno.env.get("WHATSAPP_URL") || "http://63.177.171.140/send
 const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || Deno.env.get("WHATSAPP_API_TOKEN") || "";
 const SOURCE = "approval-daily-digest";
 const MAX_DOCS = 2000;
-const SAP_TIMEOUT_MS = 20_000;
+const SAP_TIMEOUT_MS = 30_000;
 
 type Channel = "email" | "whatsapp";
 
@@ -171,7 +171,7 @@ async function collectSap(
   catch (e) { return { docs: [], result: { ...result, status: "error", error: (e as Error).message } }; }
   try {
     const [rows, users] = await Promise.all([
-      fetchHanaView({ schema: resolveHanaSchema(company.company_db, dbName), view: "VW_APROVACOES_DETALHADAS", sessionId: session.sessionId, hanaApiUrl: creds.hana_api_url, timeoutMs: 45_000 }),
+      fetchHanaView({ schema: resolveHanaSchema(company.company_db, dbName), view: "VW_APROVACOES_DETALHADAS", sessionId: session.sessionId, hanaApiUrl: creds.hana_api_url, timeoutMs: 90_000 }),
       listSapUsersHybrid({ sb, companyDb: company.company_db, baseUrl, sapSession: session, database: dbName, needsPhone: true })
         .catch(() => ({ users: [] as any[], source: "hana" as const })),
     ]);
