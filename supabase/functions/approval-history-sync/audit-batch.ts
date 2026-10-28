@@ -2,6 +2,24 @@ export const AUDIT_BATCH_SIZE = 200;
 export const SAP_HANA_TIMEOUT_MS = 15_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+function stableValue(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableValue).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => `${JSON.stringify(key)}:${stableValue(item)}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+export function unchangedHanaRow(existing: Record<string, unknown>, incoming: Record<string, unknown>): boolean {
+  return Object.entries(incoming).every(([key, value]) => {
+    if (key === "synced_at") return true;
+    if (key === "decision_date" && value && existing[key]) {
+      return Date.parse(String(value)) === Date.parse(String(existing[key]));
+    }
+    return stableValue(value) === stableValue(existing[key]);
+  });
+}
+
 export async function withRemoteTimeout<T>(operation: () => Promise<T>, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {

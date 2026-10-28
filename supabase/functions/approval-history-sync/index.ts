@@ -4,7 +4,7 @@ import { tryWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { fetchHanaView as fetchHanaViewV2, resolveHanaSchema } from "../_shared/hana-views.ts";
 import { normalizeCompact } from "../_shared/text-normalize.ts";
 import { readOptionalWebhook, finalSyncStatus } from "./webhook.ts";
-import { auditCutoff, dedupeAuditDecisions, pendingAuditUpdates, writeAuditBatches, withRemoteTimeout, SAP_HANA_TIMEOUT_MS, type AuditDecision } from "./audit-batch.ts";
+import { auditCutoff, dedupeAuditDecisions, pendingAuditUpdates, writeAuditBatches, withRemoteTimeout, unchangedHanaRow, SAP_HANA_TIMEOUT_MS, type AuditDecision } from "./audit-batch.ts";
 import { isSchedulerSecretRequest, isServiceRoleRequest, requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 
 // HanaAPI V1 (middleware n8n) foi descontinuada — HANA queries usam V2 via fetchHanaViewV2.
@@ -388,24 +388,25 @@ async function fetchAndMergeHanaApprovals(
 
     // Regra de regressão: não sobrescrever Y/N existente com P.
     const externalIds = payload.map((p) => p.external_id);
-    const existingByKey = new Map<string, string>();
+    const existingByKey = new Map<string, Record<string, unknown>>();
     if (externalIds.length > 0) {
       const CHUNK = 500;
       for (let i = 0; i < externalIds.length; i += CHUNK) {
         const ids = externalIds.slice(i, i + CHUNK);
         const { data: existing } = await supabase
           .from("approval_history")
-          .select("company_db,external_id,decision")
+          .select("*")
           .eq("company_db", companyDb)
           .in("external_id", ids);
-        for (const e of (existing || []) as Array<{ company_db: string; external_id: string; decision: string | null }>) {
-          existingByKey.set(`${e.company_db}::${e.external_id}`, e.decision || "");
+        for (const e of (existing || []) as Array<{ company_db: string; external_id: string; decision: string | null; [key: string]: unknown }>) {
+          existingByKey.set(`${e.company_db}::${e.external_id}`, e);
         }
       }
     }
     const safe = payload.filter((p) => {
       const prev = existingByKey.get(`${p.company_db}::${p.external_id}`);
-      return !((prev === "Y" || prev === "N") && p.decision === "P");
+      if ((prev?.decision === "Y" || prev?.decision === "N") && p.decision === "P") return false;
+      return !prev || !unchangedHanaRow(prev, p);
     });
 
     let upserted = 0;

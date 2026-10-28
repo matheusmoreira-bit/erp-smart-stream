@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { auditCutoff, dedupeAuditDecisions, pendingAuditUpdates, writeAuditBatches, withRemoteTimeout, SAP_HANA_TIMEOUT_MS, type AuditDecision } from "../../supabase/functions/approval-history-sync/audit-batch";
+import { auditCutoff, dedupeAuditDecisions, pendingAuditUpdates, writeAuditBatches, withRemoteTimeout, unchangedHanaRow, SAP_HANA_TIMEOUT_MS, type AuditDecision } from "../../supabase/functions/approval-history-sync/audit-batch";
 
 const now = Date.parse("2026-10-28T15:26:00Z");
 const decision = (entity: string, actor: string, date: string, action = "approve"): AuditDecision => ({
@@ -7,6 +7,12 @@ const decision = (entity: string, actor: string, date: string, action = "approve
 });
 
 describe("audit sync batching and cutoff", () => {
+  it("skips unchanged HANA data but writes changed decisions and document details", () => {
+    const row = { decision: "Y", doc_total: 200, raw: { b: 2, a: 1 }, synced_at: "old" };
+    expect(unchangedHanaRow(row, { ...row, raw: { a: 1, b: 2 }, synced_at: "new" })).toBe(true);
+    expect(unchangedHanaRow(row, { ...row, decision: "N" })).toBe(false);
+    expect(unchangedHanaRow(row, { ...row, doc_total: 201 })).toBe(false);
+  });
   it("falls back to exactly 30 days without prior success", () => {
     expect(auditCutoff(now)).toBe("2026-09-28T15:26:00.000Z");
   });
