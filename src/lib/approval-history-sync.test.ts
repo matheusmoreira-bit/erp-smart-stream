@@ -1,8 +1,12 @@
-// @vitest-environment node
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeAll, afterAll } from "vitest";
+import { AbortSignal as NodeAbortSignal } from "node:util";
 import { readOptionalWebhook, finalSyncStatus } from "../../supabase/functions/approval-history-sync/webhook";
 
 describe("optional approval history webhook", () => {
+  beforeAll(() => {
+    vi.stubGlobal("AbortSignal", { timeout: () => undefined });
+  });
+  afterAll(() => vi.unstubAllGlobals());
   it("returns empty rows and HTTP warning on 404", async () => {
     const result = await readOptionalWebhook("https://example.test", vi.fn<typeof fetch>().mockResolvedValue(new Response("missing", { status: 404 })));
     expect(result).toEqual({ rows: [], warning: "webhook-n8n: indisponível (HTTP 404)" });
