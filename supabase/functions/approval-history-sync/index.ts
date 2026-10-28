@@ -1,9 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireAdminOrSapAdmin, requireAdminOrSapSession, requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
-import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
+import { tryWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { fetchHanaView as fetchHanaViewV2, resolveHanaSchema } from "../_shared/hana-views.ts";
 import { normalizeCompact } from "../_shared/text-normalize.ts";
 import { readOptionalWebhook, finalSyncStatus } from "./webhook.ts";
+import { auditCutoff, dedupeAuditDecisions, pendingAuditUpdates, writeAuditBatches, SAP_HANA_TIMEOUT_MS, type AuditDecision } from "./audit-batch.ts";
+import { isSchedulerSecretRequest, isServiceRoleRequest, requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 
 // HanaAPI V1 (middleware n8n) foi descontinuada — HANA queries usam V2 via fetchHanaViewV2.
 
@@ -213,8 +215,9 @@ async function sapLoginServiceLayer(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ UserName: user, Password: pass, CompanyDB: db }),
+    signal: AbortSignal.timeout(SAP_HANA_TIMEOUT_MS),
   });
-  if (!resp.ok) throw new Error(`Login SAP falhou: ${resp.status} ${await resp.text().catch(() => "")}`);
+  if (!resp.ok) throw new Error(`Login SAP falhou: HTTP ${resp.status}`);
   const json = await resp.json();
   const cookies = resp.headers.get("set-cookie") || "";
   const routeMatch = cookies.match(/B1ROUTEID=([^;]+)/);
@@ -228,6 +231,7 @@ async function sapLogoutServiceLayer(
   try {
     await fetch(`${baseUrl}/Logout`, {
       method: "POST",
+      signal: AbortSignal.timeout(5000),
       headers: { Cookie: `B1SESSION=${s.sessionId}${s.routeId ? `; B1ROUTEID=${s.routeId}` : ""}` },
     });
   } catch { /* ignore */ }
@@ -245,6 +249,7 @@ async function fetchHanaView(
     view,
     sessionId,
     hanaApiUrl,
+    timeoutMs: SAP_HANA_TIMEOUT_MS,
   });
 }
 
@@ -337,7 +342,7 @@ function mapHanaApprovalRow(raw: Record<string, unknown>, companyDb: string) {
 }
 
 async function fetchAndMergeHanaApprovals(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   companyDb: string,
 ): Promise<{ merged: number; upserted: number; skipped?: string; error?: string }> {
   try {
@@ -426,10 +431,12 @@ async function updateSyncState(
   status: string,
   message: string,
   count: number,
+  auditSuccessByCompany?: Record<string, string>,
 ) {
-  await supabase.from("approval_history_sync_state").upsert(
+  const { error } = await supabase.from("approval_history_sync_state").upsert(
     {
       id: 1,
+      ...(auditSuccessByCompany ? { audit_success_by_company: auditSuccessByCompany } : {}),
       last_sync_at: new Date().toISOString(),
       last_status: status,
       last_message: message,
@@ -438,6 +445,7 @@ async function updateSyncState(
     },
     { onConflict: "id" },
   );
+  if (error) throw new Error(`Sync state: ${error.message}`);
 }
 
 async function listApprovalHistory(
@@ -503,12 +511,20 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+  const cloudUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!cloudUrl || !serviceKey) return jsonResponse({ success: false, error: "Configuração indisponível" }, 500);
+  const supabase = createClient(cloudUrl, serviceKey, {
+    global: { fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(15_000) }) },
+  });
 
   let lockAcquired = false;
+  let syncStatus: "success" | "error" = "error";
+  let syncMessage = "Sincronização interrompida";
+  let syncCount = 0;
+  let auditSuccessByCompany: Record<string, string> | undefined;
+  let phase = "authorization";
+  const runStartedAt = new Date().toISOString();
   try {
     let body: { companyDb?: string; action?: string; decision?: string; limit?: number } = {};
     try { body = await req.json(); } catch { /* no body */ }
@@ -519,9 +535,15 @@ Deno.serve(async (req) => {
     // expirada (30 min) — antes o histórico do SAP sumia da tela nesse caso.
     let caller: Awaited<ReturnType<typeof requireAdminOrSapSession>>;
     try {
-      caller = isList
-        ? (await requireUserOrSapSession(req)) as Awaited<ReturnType<typeof requireAdminOrSapSession>>
-        : await requireAdminOrSapSession(req);
+      if (!isList && (isSchedulerSecretRequest(req) || isServiceRoleRequest(req))) {
+        const scheduler = await requireSchedulerOrAdmin(req, corsHeaders);
+        if (!scheduler.ok) return scheduler.response;
+        caller = { source: "cloud_user", userName: "scheduler" } as typeof caller;
+      } else {
+        caller = isList
+          ? (await requireUserOrSapSession(req)) as typeof caller
+          : await requireAdminOrSapSession(req);
+      }
     } catch (err) {
       const r = authErrorResponse(err, corsHeaders);
       if (r) return r;
@@ -537,7 +559,7 @@ Deno.serve(async (req) => {
     }
 
     const companyDb = (body.companyDb || req.headers.get("x-company-db") || "").trim();
-    if (!companyDb) {
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(companyDb)) {
       return jsonResponse({ success: false, error: "companyDb é obrigatório" }, 400);
     }
     if (caller.source === "sap_session" && caller.companyDB !== companyDb) {
@@ -549,11 +571,13 @@ Deno.serve(async (req) => {
 
 
     // Lock anti-execução-paralela
-    lockAcquired = await tryWatcherLock(supabase, "approval-history-sync", 20);
+    lockAcquired = await tryWatcherLock(supabase, "approval-history-sync", 3);
     if (!lockAcquired) {
-      return jsonResponse({ success: true, skipped: "another_run_in_progress" });
+      return jsonResponse({ success: true, skipped: "another_run_in_progress", summary: "Sincronização já em andamento", received: 0, upserted: 0 });
     }
 
+    phase = "webhook";
+    console.log(`[approval-history-sync] phase=${phase} started company=${companyDb}`);
     const { rows, warning: webhookWarning } = await readOptionalWebhook<WebhookRow>(WEBHOOK_URL);
 
     // Mapa empresa (display_name normalizado) -> company_db
@@ -629,94 +653,49 @@ Deno.serve(async (req) => {
       upserted += slice.length;
     }
 
-    // ================================================================
-    // Fase extra: mesclar decisões do audit_log (histórico de ações)
-    // ----------------------------------------------------------------
-    // O webhook n8n só retorna aprovações em aberto (decision = "P"),
-    // portanto as decisões tomadas pelos usuários dentro do ERP Flow
-    // ficam apenas em `audit_log`. Aqui refletimos essas decisões em
-    // `approval_history` para que a aba "Histórico" mostre a decisão
-    // logo após a ação, sem depender do webhook trazer o histórico.
-    //
-    // Estratégia:
-    //  1) Buscar audit_log de approve/reject em approval_request para
-    //     este company_db (últimos 180 dias).
-    //  2) Deduplicar por (entity_id, actor_email) — mais recente vence.
-    //  3) Para cada decisão:
-    //     a) UPDATE em approval_history: qualquer linha pending do
-    //        mesmo code (external_id LIKE '<code>::%') vira Y/N.
-    //     b) UPSERT de uma linha "canônica" chaveada pelo ator, para
-    //        que a decisão apareça mesmo se o webhook nunca retornou
-    //        uma pending row para esse aprovador.
-    // ================================================================
+    // Read pending history once, plan in memory, persist in batches of 200.
+    phase = "audit";
+    console.log(`[approval-history-sync] phase=${phase} started company=${companyDb}`);
     let auditMerged = 0;
     let auditInserted = 0;
     let auditError: string | undefined;
     try {
-      const cutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
-      const { data: auditRows, error: auditReadError } = await supabase
-        .from("audit_log")
-        .select("action, entity_id, actor_email, created_at, details, company_db")
-        .eq("entity_type", "approval_request")
-        .in("action", ["approve", "reject"])
-        .eq("company_db", companyDb)
-        .gte("created_at", cutoff)
-        .order("created_at", { ascending: false })
-        .limit(5000);
-      if (auditReadError) throw new Error(auditReadError.message);
-
-      type AuditRow = {
-        action: string;
-        entity_id: string | null;
-        actor_email: string | null;
-        created_at: string;
-        details: Record<string, unknown> | null;
-        company_db: string | null;
-      };
-
-      // Dedupe: (entity_id, actor_email) — como está ordenado desc, primeiro vence.
-      const seen = new Set<string>();
-      const decisions: AuditRow[] = [];
-      for (const r of ((auditRows || []) as AuditRow[])) {
-        if (!r.entity_id || !r.actor_email) continue;
-        const key = `${r.entity_id}::${r.actor_email.toLowerCase()}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        decisions.push(r);
+      const { data: priorState, error: priorError } = await supabase
+        .from("approval_history_sync_state").select("audit_success_by_company").eq("id", 1).maybeSingle();
+      if (priorError) throw new Error(priorError.message);
+      const watermarks = (priorState?.audit_success_by_company || {}) as Record<string, string>;
+      const cutoff = auditCutoff(Date.parse(runStartedAt), watermarks[companyDb]);
+      const auditRows: AuditDecision[] = [];
+      for (let offset = 0; offset < 5000; offset += 1000) {
+        const { data, error } = await supabase.from("audit_log")
+          .select("action, entity_id, actor_email, created_at, details, company_db")
+          .eq("entity_type", "approval_request").in("action", ["approve", "reject"])
+          .eq("company_db", companyDb).gte("created_at", cutoff).lte("created_at", runStartedAt)
+          .order("created_at", { ascending: false }).order("id", { ascending: false })
+          .range(offset, offset + 999);
+        if (error) throw new Error(error.message);
+        auditRows.push(...(data || []) as AuditDecision[]);
+        if ((data || []).length < 1000) break;
+        if (offset === 4000) throw new Error("Mais de 5000 decisões: checkpoint preservado para evitar perda");
       }
-
-      for (const a of decisions) {
+      const decisions = dedupeAuditDecisions(auditRows);
+      type PendingHistory = { id: string; external_id: string; company_db: string; decision: string | null; [key: string]: unknown };
+      const pendingRows: PendingHistory[] = [];
+      if (decisions.length) {
+        for (let offset = 0; ; offset += 1000) {
+          const { data, error } = await supabase.from("approval_history").select("*")
+            .eq("company_db", companyDb).eq("decision", "P").order("id").range(offset, offset + 999);
+          if (error) throw new Error(error.message);
+          pendingRows.push(...(data || []) as PendingHistory[]);
+          if ((data || []).length < 1000) break;
+        }
+      }
+      const updates = pendingAuditUpdates(pendingRows, decisions, runStartedAt);
+      const canonicalRows = decisions.map((a) => {
         const code = String(a.entity_id);
         const actorEmail = String(a.actor_email).toLowerCase();
         const decision = a.action === "approve" ? "Y" : "N";
-        const details = (a.details || {}) as Record<string, unknown>;
-
-        // (a) Atualiza pending rows do mesmo code (aprovador original).
-        try {
-          const { data: pendingRows, error: pendingReadError } = await supabase
-            .from("approval_history")
-            .select("id, external_id, decision")
-            .eq("company_db", companyDb)
-            .eq("decision", "P")
-            .like("external_id", `${code}::%`);
-          if (pendingReadError) throw new Error(pendingReadError.message);
-          if (pendingRows && pendingRows.length > 0) {
-            const ids = pendingRows.map((p: { id: string }) => p.id);
-            const { error: updErr } = await supabase
-              .from("approval_history")
-              .update({
-                decision,
-                decision_date: a.created_at,
-                synced_at: new Date().toISOString(),
-              })
-              .in("id", ids);
-            if (updErr) throw new Error(updErr.message);
-            auditMerged += ids.length;
-          }
-        } catch (e) {
-          auditError = e instanceof Error ? e.message : String(e);
-          console.warn(`[approval-history-sync] audit merge update falhou ${code}: ${String(e)}`);
-        }
+        const details = a.details || {};
 
         // (b) Upsert linha canônica chaveada pelo ator.
         const docNum = toInt(details.docNum);
@@ -755,17 +734,16 @@ Deno.serve(async (req) => {
           raw: { source: "audit_log", ...details } as unknown as Record<string, unknown>,
           synced_at: new Date().toISOString(),
         };
-        try {
-          const { error: insErr } = await supabase
-            .from("approval_history")
-            .upsert(row, { onConflict: "company_db,external_id" });
-          if (insErr) throw new Error(insErr.message);
-          auditInserted += 1;
-        } catch (e) {
-          auditError = e instanceof Error ? e.message : String(e);
-          console.warn(`[approval-history-sync] audit upsert falhou ${code}: ${String(e)}`);
-        }
-      }
+        return row;
+      });
+      const write = async (batch: Record<string, unknown>[]) => {
+        const { error } = await supabase.from("approval_history").upsert(batch, { onConflict: "company_db,external_id" });
+        if (error) throw new Error(error.message);
+      };
+      auditMerged = await writeAuditBatches(updates, write);
+      auditInserted = await writeAuditBatches(canonicalRows, write);
+      auditSuccessByCompany = { ...watermarks, [companyDb]: runStartedAt };
+      console.log(`[approval-history-sync] phase=audit finished decisions=${decisions.length} merged=${auditMerged} upserted=${auditInserted} cutoff=${cutoff}`);
     } catch (e) {
       auditError = e instanceof Error ? e.message : String(e);
       console.warn(`[approval-history-sync] merge audit_log falhou: ${String(e)}`);
@@ -775,6 +753,8 @@ Deno.serve(async (req) => {
     // Fase extra: HANA view VW_PEDIDOS_COMPRA_APROVACOES (Apiuser)
     // Ignora empresas de teste; traz decisões finais (Y/N) do SAP puro.
     // ================================================================
+    phase = "hana";
+    console.log(`[approval-history-sync] phase=${phase} started company=${companyDb}`);
     let hanaResult: { merged: number; upserted: number; skipped?: string; error?: string } = { merged: 0, upserted: 0 };
     if (!isTestCompanyDb(companyDb)) {
       hanaResult = await fetchAndMergeHanaApprovals(supabase, companyDb);
@@ -785,15 +765,18 @@ Deno.serve(async (req) => {
     const summary = `Sincronizados ${upserted} (teste:${skippedTest}, sem-empresa:${skippedUnknownCompany}, regressões:${skippedRegression}, audit-merge:${auditMerged}, audit-upsert:${auditInserted}, hana-merge:${hanaResult.merged}, hana-upsert:${hanaResult.upserted}${hanaResult.skipped ? `, hana-skipped:${hanaResult.skipped}` : ""}${hanaResult.error ? `, hana-error:${hanaResult.error}` : ""})`;
     const finalSummary = [summary, webhookWarning, auditError ? `audit-error:${auditError}` : undefined].filter(Boolean).join("; ");
     const status = finalSyncStatus(auditError, hanaResult.error);
-    await updateSyncState(supabase, status, finalSummary, upserted);
-    await releaseWatcherLock(supabase, "approval-history-sync", status === "error" ? "error" : "ok", finalSummary);
+    syncStatus = status;
+    syncMessage = finalSummary;
+    syncCount = upserted + auditMerged + auditInserted + hanaResult.upserted;
+    console.log(`[approval-history-sync] phase=complete status=${status} count=${syncCount}`);
 
     return jsonResponse({
       success: status === "success",
       summary: finalSummary,
       webhook: { warning: webhookWarning || null },
       received: rows.length,
-      upserted,
+      upserted: syncCount,
+      webhookUpserted: upserted,
       audit: { merged: auditMerged, upserted: auditInserted, error: auditError },
       hana: hanaResult,
       skipped: { test: skippedTest, unknown_company: skippedUnknownCompany, regression: skippedRegression },
@@ -802,9 +785,31 @@ Deno.serve(async (req) => {
 
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    await updateSyncState(supabase, "error", message, 0).catch(() => {});
-    if (lockAcquired) await releaseWatcherLock(supabase, "approval-history-sync", "error", message);
-    return jsonResponse({ success: false, error: message }, 500);
+    syncMessage = `phase=${phase}: ${message}`;
+    console.warn(`[approval-history-sync] ${syncMessage}`);
+    return jsonResponse({ success: false, error: syncMessage }, 500);
+  } finally {
+    // Never overwrite the running owner's state when auth/list/lock contention exits.
+    if (lockAcquired) {
+      try {
+        await updateSyncState(supabase, syncStatus, syncMessage, syncCount, auditSuccessByCompany);
+      } catch (error) {
+        syncStatus = "error";
+        syncMessage = `Falha ao persistir sync state: ${error instanceof Error ? error.message : String(error)}`;
+        console.warn(`[approval-history-sync] ${syncMessage}`);
+        await updateSyncState(supabase, "error", syncMessage, syncCount, auditSuccessByCompany).catch(() => {});
+      } finally {
+        const { error } = await supabase.rpc("release_watcher_lock", {
+          _name: "approval-history-sync", _status: syncStatus === "error" ? "error" : "ok", _message: syncMessage,
+        });
+        if (error) {
+          console.warn(`[approval-history-sync] lock release failed: ${error.message}`);
+          await supabase.rpc("release_watcher_lock", {
+            _name: "approval-history-sync", _status: "error", _message: syncMessage,
+          });
+        }
+      }
+    }
   }
 });
 // schema fix: SBO_OPENGAMING 1784592109
