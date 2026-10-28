@@ -1,5 +1,4 @@
 import { describe, expect, it, vi, beforeAll, afterAll } from "vitest";
-import { AbortSignal as NodeAbortSignal } from "node:util";
 import { readOptionalWebhook, finalSyncStatus } from "../../supabase/functions/approval-history-sync/webhook";
 
 describe("optional approval history webhook", () => {
