@@ -1,6 +1,6 @@
 # Roadmap — Melhorias de segurança (pentest)
 
-- [ ] André Coura — plano autorizado; aplicação bloqueada porque a sessão administrativa disponível não passou pelo MFA. Nenhuma permissão ou regra de domínio alterada.
+- [ ] André Coura — plano autorizado; sessão conectada recebida pelas ferramentas não inclui comprovação de MFA e has_role recusa autorização administrativa. Aplicação bloqueada; nenhuma permissão ou regra de domínio alterada.
 - [x] André Coura — esclarecido: administrador é global, não restrito à Cactus Tecnologia.
 
 - [x] F01 — Cadastro aberto / domínio só no navegador
