@@ -1129,6 +1129,7 @@ export type Database = {
       }
       approval_history_sync_state: {
         Row: {
+          audit_success_by_company: Json
           id: number
           last_count: number | null
           last_message: string | null
@@ -1137,6 +1138,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          audit_success_by_company?: Json
           id?: number
           last_count?: number | null
           last_message?: string | null
@@ -1145,6 +1147,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          audit_success_by_company?: Json
           id?: number
           last_count?: number | null
           last_message?: string | null

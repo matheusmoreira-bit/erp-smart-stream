@@ -1,0 +1,2 @@
+ALTER TABLE public.approval_history_sync_state ADD COLUMN IF NOT EXISTS audit_success_by_company jsonb NOT NULL DEFAULT '{}'::jsonb;
+COMMENT ON COLUMN public.approval_history_sync_state.audit_success_by_company IS 'Per-company start timestamp of the last completed audit phase; failed audit phases never advance this checkpoint. Existing RLS and grants are unchanged.';
