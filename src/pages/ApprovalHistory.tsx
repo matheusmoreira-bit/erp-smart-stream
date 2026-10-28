@@ -186,6 +186,10 @@ export default function ApprovalHistory() {
   const handleSync = async () => {
     try {
       const r = await sync();
+      if (r.skipped === "another_run_in_progress") {
+        toast.info("Já existe uma sincronização em andamento. Aguarde a conclusão.");
+        return;
+      }
       toast.success(`Sincronizado: ${r.upserted} registros`);
     } catch (e) {
       console.error("[ApprovalHistory] sync failed:", e);

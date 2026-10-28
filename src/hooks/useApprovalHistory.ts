@@ -402,7 +402,7 @@ export function useApprovalHistory(
         throw new Error(body?.error || `HTTP ${res.status}`);
       }
       await load();
-      return body as { received: number; upserted: number };
+      return body as { received: number; upserted: number; skipped?: "another_run_in_progress" };
     } finally {
       setIsSyncing(false);
     }

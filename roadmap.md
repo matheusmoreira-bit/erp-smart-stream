@@ -1,7 +1,9 @@
 # Roadmap — Melhorias de segurança (pentest)
 
+- [x] Histórico de Aprovações — audit em lotes de 200 e checkpoint por empresa, SAP/HANA limitado a 15s, finally para estado/trava, somente trava presa liberada; 19 testes passaram, função publicada e scheduler retornou HTTP 200 em 19,53s (HANA 9968 recebidos, zero alterações).
+
 - [x] Histórico de Aprovações — filtro Minhas com identidade canônica e webhook não fatal; nove testes passaram e somente approval-history-sync foi publicada.
-- [ ] Histórico de Aprovações — validar sincronização real de SBO_ANAGAMING: sessão administrativa das ferramentas recusada por MFA (HTTP 403); estado permanece error de 28/10 14:54:05 UTC, 0 decisões Y/N desde 07/10. Não contornar autorização nem modificar scheduler; validação visual autenticada também pendente.
+- [ ] Histórico de Aprovações — decisões desde 07/10 continuam zero: audit_log não contém novas decisões e dados HANA recebidos continuam até 06/10; atualização da origem SAP/HANA depende do responsável pela integração. Sync agora conclui com success e trava NULL; sessão admin das ferramentas permanece 403 MFA. Validação visual não executada (pedido do usuário exige teste de navegador em prompt separado).
 
 - [ ] André Coura — em 28/10/2026, após Hiller informar MFA concluído no ERP Flow, a sessão fornecida às ferramentas ainda veio sem comprovação do segundo fator; consulta autenticada a has_role retornou false. Aplicação bloqueada pela sessão das ferramentas; não solicitar repetição do MFA como solução garantida. Nenhuma permissão ou regra de domínio alterada.
 - [x] André Coura — esclarecido: administrador é global, não restrito à Cactus Tecnologia.
