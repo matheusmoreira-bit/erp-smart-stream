@@ -377,6 +377,11 @@ export function useApprovalHistory(
       // Extrai substituição do texto para rows SAP (não têm colunas dedicadas).
       const parseSubstitution = (r: ApprovalHistoryRow): ApprovalHistoryRow => {
         if (r.substituted_for_email || r.substituted_for_name) return r;
+        if (r.raw?.actedAsSubstitute) return {
+          ...r,
+          substituted_for_email: typeof r.raw.substitutedForEmail === "string" ? r.raw.substitutedForEmail : null,
+          substituted_for_name: typeof r.raw.substitutedForName === "string" ? r.raw.substitutedForName : null,
+        };
         const m = r.remarks?.match(SUBSTITUTE_RE);
         if (!m) return r;
         return {

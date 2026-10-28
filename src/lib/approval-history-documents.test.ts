@@ -8,6 +8,11 @@ const hana = { company_db: "SBO_ANAGAMING", external_id: "hana::E8682::both", do
   requester_name: "Thiago Moreira", approver_name: "Douglas Ferreira, Douglas Vinicius", decision: "Y", decision_date: "2026-08-05T11:21:00Z", raw: { source: "hana_view" } };
 const audit = { ...hana, external_id: "8964::douglas.vinicius", doc_entry: null, doc_num: 7952, requester_name: null, approver_name: "Douglas Vinicius", approver_email: "douglas.vinicius", raw: { source: "audit_log", docNum: 7952 } };
 describe("SAP historical document reconciliation", () => {
+  it("does not expand an already split person back to all document approvers", () => {
+    const first = splitHanaPeople({ ...hana, raw: { source: "hana_view", "Aprovador(es)": "Douglas Ferreira, Douglas Vinicius" } }, index);
+    expect(splitHanaPeople(first[1], index)).toHaveLength(1);
+    expect(splitHanaPeople(first[1], index)[0].approver_name).toBe("Douglas Vinicius");
+  });
   it("corrects 8964 Gamify to final order 7974, draft 8682 and Thiago Moreira", () => {
     const result = enrichAudit(audit, uniqueHanaMatch(audit, [hana]), { draftEntry: 8682 });
     expect([result.doc_num, result.doc_entry, result.requester_name]).toEqual([7974, 8682, "Thiago Moreira"]);

@@ -407,7 +407,9 @@ async function fetchAndMergeHanaApprovals(
     }
     const canonical = reconcileDecisions([...Array.from(existingByKey.values()).filter(r => rawOf(r).source === "audit_log"), ...payload], directory);
     const canonicalKeys = new Set(canonical.map(r => String(r.external_id)));
-    const safe = payload.filter((p) => canonicalKeys.has(String(p.external_id))).filter((p) => {
+    const safe = payload.map(p => canonicalKeys.has(String(p.external_id)) ? p : {
+      ...p, raw: { ...rawOf(p), superseded_by: "audit_same_draft_approver" },
+    }).filter((p) => {
       const prev = existingByKey.get(`${p.company_db}::${p.external_id}`);
       if ((prev?.decision === "Y" || prev?.decision === "N") && p.decision === "P") return false;
       return !prev || !unchangedHanaRow(prev, p);
@@ -447,7 +449,7 @@ async function lookupApprovalRequests(db: ReturnType<typeof createClient>, compa
   if (String(creds.username || "").toLowerCase() !== "apiuser" || !creds.password || !creds.service_layer_url) return found;
   const base = normalizeSapBaseUrl(creds.service_layer_url);
   let session: { sessionId: string; routeId: string };
-  try { session = await sapLoginServiceLayer(base, creds.username, creds.password, creds.company_db || company); }
+  try { session = await withRemoteTimeout(() => sapLoginServiceLayer(base, creds.username, creds.password, creds.company_db || company), "Login SAP"); }
   catch { return found; }
   const deadline = Date.now() + 18000;
   try {
