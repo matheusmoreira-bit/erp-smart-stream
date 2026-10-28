@@ -1,7 +1,7 @@
 // Edge function: approval-daily-digest
 // Lembrete diário (dias úteis, 08:00 BRT) das aprovações pendentes — ERP Flow + SAP.
 // Canais: e-mail (cron approval-daily-digest) e WhatsApp (cron approval-daily-whatsapp).
-// Substituições ativas redirecionam ao substituto "em nome de <titular>".
+// Férias redirecionam; substituições recíprocas preservam também as pendências próprias.
 // Exige scheduler/admin. Suporta { dry_run, channels: ["email"|"whatsapp"], force }.
 // deno-lint-ignore-file no-explicit-any
 
@@ -311,7 +311,7 @@ Deno.serve(async (req) => {
     };
 
     const { data: subsRaw } = await sb.from("approver_substitutes")
-      .select("company_db, official_email, official_name, substitute_email, substitute_name, cost_center_prefixes, starts_at, ends_at")
+      .select("company_db, official_email, official_name, substitute_email, substitute_name, cost_center_prefixes, starts_at, ends_at, reason")
       .is("revoked_at", null).lte("starts_at", now.toISOString()).gt("ends_at", now.toISOString());
     const subs = (subsRaw || []) as Substitution[];
     const { recipients, unresolved, redirected } = buildRecipients(docs, resolve, subs);
@@ -361,7 +361,16 @@ Deno.serve(async (req) => {
         if (channels.includes("whatsapp")) preview.whatsapp = buildWhatsApp(top, red, "Aprovador");
         preview.docs_of_top = top.docs.length;
       }
-      return json({ ok: true, dryRun: true, channels, ...stats, preview });
+      const recipientBreakdown = recipients.map((r) => ({
+        name: r.person.name,
+        own: r.docs.filter((d) => d.on_behalf_of === null).length,
+        on_behalf: r.docs.filter((d) => d.on_behalf_of !== null).length,
+        on_behalf_by_official: Array.from(new Set(r.docs.map((d) => d.on_behalf_of).filter(Boolean)))
+          .map((name) => ({ name, docs: r.docs.filter((d) => d.on_behalf_of === name).length })),
+        email_available: !!r.person.email,
+        whatsapp_available: !!phoneFor(r.person),
+      }));
+      return json({ ok: true, dryRun: true, channels, ...stats, recipient_breakdown: recipientBreakdown, preview });
     }
 
     for (const rec of recipients) {

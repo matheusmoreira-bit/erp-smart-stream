@@ -33,6 +33,7 @@ export interface Substitution {
   substitute_email: string;
   substitute_name: string | null;
   cost_center_prefixes: string[] | null;
+  reason?: string | null;
 }
 
 export interface Recipient {
@@ -96,10 +97,18 @@ function substitutionApplies(s: Substitution, doc: ReminderDoc): boolean {
   return doc.cost_centers.some((cc) => prefixes.some((p) => cc.startsWith(p)));
 }
 
-/**
- * Agrupa por destinatário. Substituição ativa redireciona ao substituto
- * ("em nome de <titular>") e o titular não recebe aquele documento.
- */
+/** Ausência explícita no cadastro existente (não há campo separado de ausência). */
+function isAbsence(s: Substitution): boolean {
+  return /\b(ferias|ausencia|ausente|afastamento|afastado|licenca)\b/.test(normKey(s.reason));
+}
+
+/** Reciprocidade só vale quando as duas direções cobrem o mesmo documento. */
+function isReciprocal(s: Substitution, official: Person, substitute: Person, doc: ReminderDoc, substitutions: Substitution[]): boolean {
+  return substitutions.some((reverse) => personMatches(substitute, reverse.official_email)
+    && personMatches(official, reverse.substitute_email) && substitutionApplies(reverse, doc));
+}
+
+/** Agrupa por destinatário, preservando titulares presentes e deduplicando documentos. */
 export function buildRecipients(
   docs: ReminderDoc[],
   resolve: (approverKey: string) => Person | null,
@@ -107,18 +116,34 @@ export function buildRecipients(
 ): { recipients: Recipient[]; unresolved: string[]; redirected: number } {
   const map = new Map<string, Recipient>();
   const unresolved = new Set<string>();
-  let redirected = 0;
+  const officialsByDoc = new Map<ReminderDoc, Map<string, Person>>();
+  const activeByCompany = new Map<string, Set<string>>();
   for (const doc of docs) {
     const officials = new Map<string, Person>();
     for (const k of doc.approver_keys) {
       const p = resolve(k);
       if (!p) { unresolved.add(k); continue; }
       officials.set(p.key, p);
+      const active = activeByCompany.get(doc.company_db) || new Set<string>();
+      active.add(p.key);
+      activeByCompany.set(doc.company_db, active);
     }
+    officialsByDoc.set(doc, officials);
+  }
+  const addDoc = (target: Person, doc: ReminderDoc, onBehalf: string | null) => {
+    const r = map.get(target.key) || { person: target, docs: [] };
+    const existing = r.docs.find((d) => d.key === doc.key && d.company_db === doc.company_db);
+    if (!existing) r.docs.push({ ...doc, on_behalf_of: onBehalf });
+    // A pendência própria prevalece, independentemente da ordem de coleta.
+    else if (onBehalf === null) existing.on_behalf_of = null;
+    map.set(target.key, r);
+  };
+  let redirected = 0;
+  for (const doc of docs) {
+    const officials = officialsByDoc.get(doc);
+    if (!officials) continue;
     for (const official of officials.values()) {
       const sub = substitutions.find((s) => personMatches(official, s.official_email) && substitutionApplies(s, doc));
-      let target = official;
-      let onBehalf: string | null = null;
       if (sub) {
         const sp = resolve(normKey(sub.substitute_email)) || {
           key: normKey(sub.substitute_email),
@@ -126,13 +151,17 @@ export function buildRecipients(
           name: sub.substitute_name || sub.substitute_email,
           codes: [normKey(sub.substitute_email)],
         };
-        target = sp;
-        onBehalf = sub.official_name || official.name;
+        const reciprocal = isReciprocal(sub, official, sp, doc, substitutions);
+        const substituteAbsent = substitutions.some((s) => personMatches(sp, s.official_email)
+          && substitutionApplies(s, doc) && isAbsence(s));
+        const activePresentSubstitute = activeByCompany.get(doc.company_db)?.has(sp.key)
+          && !substituteAbsent && !isAbsence(sub);
+        if (reciprocal || activePresentSubstitute) addDoc(official, doc, null);
+        addDoc(sp, doc, sub.official_name || official.name);
         redirected++;
+      } else {
+        addDoc(official, doc, null);
       }
-      const r = map.get(target.key) || { person: target, docs: [] };
-      if (!r.docs.some((d) => d.key === doc.key)) r.docs.push({ ...doc, on_behalf_of: onBehalf });
-      map.set(target.key, r);
     }
   }
   for (const r of map.values()) r.docs.sort((a, b) => b.days_open - a.days_open);
