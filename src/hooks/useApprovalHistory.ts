@@ -34,6 +34,10 @@ export interface ApprovalHistoryRow {
   draft_entry?: number | null;
   po_doc_num?: number | null;
   decision_precision?: "individual" | "document";
+  /** Nível da alçada (ERP Flow: level_order). */
+  level_order?: number | null;
+  /** "Reenvio" quando o mesmo aprovador decide de novo o mesmo nível do pedido. */
+  repeat_label?: string | null;
   /** Preenchido apenas para rows internos (permite abrir o mapa de relações) */
   expense_id?: string | null;
   /** Rastreabilidade: quando a decisão foi tomada por um substituto autorizado */
@@ -85,6 +89,14 @@ const SUBSTITUTE_RE =
 // Escapa caracteres com significado especial no filtro `or()` do PostgREST.
 function escapePgrstList(v: string): string {
   return v.replace(/([,()])/g, "\\$1");
+}
+
+/** Decisão de auditoria sem fornecedor, valor e número: não representa documento. */
+export function isEmptyHistoryDecision(r: Pick<ApprovalHistoryRow, "card_name" | "doc_total" | "doc_num" | "source" | "raw">): boolean {
+  const auditSource = r.source === "audit_log" || r.raw?.source === "audit_log";
+  if (!auditSource) return false;
+  const provisional = Number(r.raw?.docNum ?? r.raw?.provisional_doc_num ?? r.doc_num) || 0;
+  return !(r.card_name || "").trim() && !Number(r.doc_total) && !provisional;
 }
 
 export function useApprovalHistory(
@@ -285,6 +297,7 @@ export function useApprovalHistory(
             remarks: l.remarks || null,
             stage_name: l.level_order ? `Nível ${l.level_order}` : null,
             step: l.level_order || null,
+            level_order: l.level_order ?? null,
             synced_at: l.decided_at || l.created_at,
             source: "erp_flow" as const,
             expense_id: l.expense_id,
@@ -294,6 +307,14 @@ export function useApprovalHistory(
           } as ApprovalHistoryRow;
         })
         .filter(Boolean) as ApprovalHistoryRow[];
+      // Repetições internas (mesmo pedido + nível + aprovador) são mantidas e sinalizadas.
+      const repeatCount = new Map<string, number>();
+      for (const r of [...internalRows].sort((a, b) => String(a.decision_date).localeCompare(String(b.decision_date)))) {
+        const key = `${r.expense_id}|${r.level_order ?? 0}|${(r.approver_email || r.approver_name || "").toLowerCase()}`;
+        const n = (repeatCount.get(key) || 0) + 1;
+        repeatCount.set(key, n);
+        r.repeat_label = n > 1 ? `Reenvio (${n}ª decisão)` : null;
+      }
 
       // ============================================================
       // 3) Histórico de ações (audit_log) — decisões SAP feitas no app.
@@ -347,7 +368,8 @@ export function useApprovalHistory(
             substituted_for_email: substitutedForEmail,
             substituted_for_name: displayUserNameOrEmpty(substitutedForName || substitutedForEmail) || null,
           } as ApprovalHistoryRow;
-        });
+        })
+        .filter((r) => !isEmptyHistoryDecision(r));
 
       // Dedupe SAP × interno pelo par (company_db, doc_entry, decision, step).
       const sapKey = new Set(
@@ -392,8 +414,10 @@ export function useApprovalHistory(
       };
 
       let merged = [
-        ...((sapRows || []) as ApprovalHistoryRow[]).map((r) =>
-          parseSubstitution({ ...r, source: r.raw?.source === "audit_log" ? "audit_log" as const : "sap" as const,
+        ...((sapRows || []) as ApprovalHistoryRow[]).filter((r) => !isEmptyHistoryDecision(r)).map((r) =>
+          parseSubstitution({ ...r,
+            currency: !["audit_log", "hana_view"].includes(String(r.raw?.source ?? "")) && (!r.currency || r.currency === "R$") ? "BRL" : r.currency,
+            source: r.raw?.source === "audit_log" ? "audit_log" as const : "sap" as const,
             draft_entry: Number(r.raw?.draft_entry || r.raw?.draftEntry || (r.raw?.source === "hana_view" ? r.doc_entry : 0)) || null,
             po_doc_num: Number(r.raw?.po_doc_num || (r.raw?.source === "hana_view" ? r.doc_num : 0)) || null,
             decision_precision: r.raw?.decision_precision === "document" ? "document" : "individual" }),

@@ -1,4 +1,4 @@
-import { backfillDocuments, readCompanyHistory, readDirectory, writeHistory } from "./document-backfill.ts";
+import { backfillDocuments, reconcileDocumentMatches, readCompanyHistory, readDirectory, writeHistory } from "./document-backfill.ts";
 import { enrichAudit, positiveInt, rawOf, reconcileDecisions, splitHanaPeople, uniqueHanaMatch, type HistoryRecord } from "./document-reconciliation.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireAdminOrSapAdmin, requireAdminOrSapSession, requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
@@ -561,13 +561,15 @@ async function listMine(
   try { await requireAdminOrSapAdmin(req); isAdmin = true; } catch { /* comum */ }
 
   let companies: string[];
+  // Bases de teste nunca entram em "Minhas" (nem com "Todas as empresas").
+  const { data: all } = await supabase.from("companies").select("company_db,is_test");
+  const testDbs = new Set(((all || []) as Array<{ company_db: string; is_test: boolean | null }>).filter((r) => r.is_test).map((r) => r.company_db));
   if (isSap) {
-    companies = [c.companyDB || body.companyDb];
+    companies = [c.companyDB || body.companyDb].filter((db) => !testDbs.has(db));
   } else {
-    const { data: all } = await supabase.from("companies").select("company_db");
-    const candidates = body.allCompanies
+    const candidates = (body.allCompanies
       ? ((all || []) as Array<{ company_db: string }>).map((r) => r.company_db)
-      : [body.companyDb];
+      : [body.companyDb]).filter((db) => !testDbs.has(db));
     if (isAdmin) companies = candidates;
     else {
       const checks = await Promise.all(candidates.map(async (db) => {
@@ -610,7 +612,7 @@ Deno.serve(async (req) => {
   let phase = "authorization";
   const runStartedAt = new Date().toISOString();
   try {
-    let body: { companyDb?: string; action?: string; decision?: string; limit?: number; from?: string; to?: string; allCompanies?: boolean; cursor?: number } = {};
+    let body: { companyDb?: string; action?: string; decision?: string; limit?: number; from?: string; to?: string; allCompanies?: boolean; cursor?: number; mode?: string } = {};
     try { body = await req.json(); } catch { /* no body */ }
     const isMine = body.action === "list_mine";
     const isList = body.action === "list" || isMine;
@@ -668,7 +670,9 @@ Deno.serve(async (req) => {
       lockAcquired = await tryWatcherLock(supabase, "approval-history-sync", 3);
       if (!lockAcquired) return jsonResponse({ success: false, skipped: "another_run_in_progress" }, 409);
       phase = "backfill_documents";
-      const result = await backfillDocuments(supabase, companyDb, cursor, codes => lookupApprovalRequests(supabase, companyDb, codes));
+      const result = body.mode === "document_match"
+        ? { ...(await reconcileDocumentMatches(supabase, companyDb)), corrected: 0, done: true }
+        : await backfillDocuments(supabase, companyDb, cursor, codes => lookupApprovalRequests(supabase, companyDb, codes));
       syncStatus = "success";
       syncCount = result.corrected;
       syncMessage = `Correção de documentos: ${JSON.stringify(result)}`;

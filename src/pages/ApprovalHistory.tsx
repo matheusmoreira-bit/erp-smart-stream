@@ -1,4 +1,4 @@
-import { historyDocumentLabel, historyDecisionDate } from "@/lib/approval-history-documents";
+import { historyDocumentLabel, historyDecisionDate, historyLevelLabel } from "@/lib/approval-history-documents";
 import { useSearchState } from "@/hooks/useSearchState";
 import { useMemo, useRef, useState, useEffect } from "react";
 import { useCanViewAllDocuments } from "@/hooks/useCanViewAllDocuments";
@@ -242,6 +242,7 @@ export default function ApprovalHistory() {
                   { header: "Decisão", cell: (r: typeof filtered[number]) => r.decision === "Y" ? "Aprovado" : r.decision === "N" ? "Rejeitado" : String(r.decision ?? "—") },
                   { header: "Doc #", cell: (r: typeof filtered[number]) => historyDocumentLabel(r) },
                   { header: "Esboço", cell: (r: typeof filtered[number]) => r.draft_entry ? String(r.draft_entry) : "—" },
+                  { header: "Nível", cell: (r: typeof filtered[number]) => historyLevelLabel(r) },
                   { header: "Tipo", cell: (r: typeof filtered[number]) => r.doc_type_name || "—" },
                   { header: "Parceiro", cell: (r: typeof filtered[number]) => r.card_name || "—" },
                   { header: "Solicitante", cell: (r: typeof filtered[number]) => displayUserName(r.requester_name || r.requester_code) },
@@ -552,6 +553,7 @@ function HistoryCard({ row, onRelationsMap, companyLabel }: { row: ApprovalHisto
           </div>
           <h3 className="font-mono font-semibold mt-1">{historyDocumentLabel(row)}</h3>
           {row.po_doc_num && row.draft_entry && <p className="text-xs text-muted-foreground">esboço #{row.draft_entry}</p>}
+          {row.source === "erp_flow" && historyLevelLabel(row) !== "—" && <p className="text-xs text-muted-foreground">{historyLevelLabel(row)}</p>}
         </div>
         <div className="text-right flex items-start gap-1">
           {onRelationsMap && (
