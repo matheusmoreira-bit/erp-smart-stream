@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
 import { readOptionalWebhook, finalSyncStatus } from "../../supabase/functions/approval-history-sync/webhook";
 
