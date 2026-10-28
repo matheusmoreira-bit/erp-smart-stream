@@ -1,5 +1,7 @@
 # Roadmap — Melhorias de segurança (pentest)
 
+- [ ] Histórico de Aprovações — corrigir identidade no filtro Minhas e tornar webhook não fatal; testar, publicar somente approval-history-sync e conferir SBO_ANAGAMING.
+
 - [ ] André Coura — em 28/10/2026, após Hiller informar MFA concluído no ERP Flow, a sessão fornecida às ferramentas ainda veio sem comprovação do segundo fator; consulta autenticada a has_role retornou false. Aplicação bloqueada pela sessão das ferramentas; não solicitar repetição do MFA como solução garantida. Nenhuma permissão ou regra de domínio alterada.
 - [x] André Coura — esclarecido: administrador é global, não restrito à Cactus Tecnologia.
 - [x] André Coura — caminho de verificação conferido: tela Verificação em duas etapas, autenticador e Confirmar; sessão das ferramentas pode omitir comprovação mesmo após MFA no app.

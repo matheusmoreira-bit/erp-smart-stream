@@ -3,6 +3,7 @@ import { requireAdminOrSapAdmin, requireAdminOrSapSession, requireUserOrSapSessi
 import { tryWatcherLock, releaseWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { fetchHanaView as fetchHanaViewV2, resolveHanaSchema } from "../_shared/hana-views.ts";
 import { normalizeCompact } from "../_shared/text-normalize.ts";
+import { readOptionalWebhook, finalSyncStatus } from "./webhook.ts";
 
 // HanaAPI V1 (middleware n8n) foi descontinuada — HANA queries usam V2 via fetchHanaViewV2.
 
@@ -553,29 +554,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, skipped: "another_run_in_progress" });
     }
 
-    const res = await fetch(WEBHOOK_URL, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-    });
-    const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`Webhook HTTP ${res.status}: ${text.slice(0, 300)}`);
-    }
-
-    let parsed: unknown;
-    try { parsed = JSON.parse(text); }
-    catch {
-      throw new Error(`Resposta inesperada do webhook: ${text.slice(0, 300)}`);
-    }
-
-    const groups: Array<{ data?: WebhookRow[] }> = Array.isArray(parsed)
-      ? (parsed as Array<{ data?: WebhookRow[] }>)
-      : [parsed as { data?: WebhookRow[] }];
-
-    const rows: WebhookRow[] = [];
-    for (const g of groups) {
-      if (Array.isArray(g?.data)) rows.push(...g.data);
-    }
+    const { rows, warning: webhookWarning } = await readOptionalWebhook<WebhookRow>(WEBHOOK_URL);
 
     // Mapa empresa (display_name normalizado) -> company_db
     const { data: companiesData } = await supabase
@@ -672,9 +651,10 @@ Deno.serve(async (req) => {
     // ================================================================
     let auditMerged = 0;
     let auditInserted = 0;
+    let auditError: string | undefined;
     try {
       const cutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
-      const { data: auditRows } = await supabase
+      const { data: auditRows, error: auditReadError } = await supabase
         .from("audit_log")
         .select("action, entity_id, actor_email, created_at, details, company_db")
         .eq("entity_type", "approval_request")
@@ -683,6 +663,7 @@ Deno.serve(async (req) => {
         .gte("created_at", cutoff)
         .order("created_at", { ascending: false })
         .limit(5000);
+      if (auditReadError) throw new Error(auditReadError.message);
 
       type AuditRow = {
         action: string;
@@ -712,12 +693,13 @@ Deno.serve(async (req) => {
 
         // (a) Atualiza pending rows do mesmo code (aprovador original).
         try {
-          const { data: pendingRows } = await supabase
+          const { data: pendingRows, error: pendingReadError } = await supabase
             .from("approval_history")
             .select("id, external_id, decision")
             .eq("company_db", companyDb)
             .eq("decision", "P")
             .like("external_id", `${code}::%`);
+          if (pendingReadError) throw new Error(pendingReadError.message);
           if (pendingRows && pendingRows.length > 0) {
             const ids = pendingRows.map((p: { id: string }) => p.id);
             const { error: updErr } = await supabase
@@ -728,9 +710,11 @@ Deno.serve(async (req) => {
                 synced_at: new Date().toISOString(),
               })
               .in("id", ids);
-            if (!updErr) auditMerged += ids.length;
+            if (updErr) throw new Error(updErr.message);
+            auditMerged += ids.length;
           }
         } catch (e) {
+          auditError = e instanceof Error ? e.message : String(e);
           console.warn(`[approval-history-sync] audit merge update falhou ${code}: ${String(e)}`);
         }
 
@@ -775,12 +759,15 @@ Deno.serve(async (req) => {
           const { error: insErr } = await supabase
             .from("approval_history")
             .upsert(row, { onConflict: "company_db,external_id" });
-          if (!insErr) auditInserted += 1;
+          if (insErr) throw new Error(insErr.message);
+          auditInserted += 1;
         } catch (e) {
+          auditError = e instanceof Error ? e.message : String(e);
           console.warn(`[approval-history-sync] audit upsert falhou ${code}: ${String(e)}`);
         }
       }
     } catch (e) {
+      auditError = e instanceof Error ? e.message : String(e);
       console.warn(`[approval-history-sync] merge audit_log falhou: ${String(e)}`);
     }
 
@@ -796,14 +783,18 @@ Deno.serve(async (req) => {
     }
 
     const summary = `Sincronizados ${upserted} (teste:${skippedTest}, sem-empresa:${skippedUnknownCompany}, regressões:${skippedRegression}, audit-merge:${auditMerged}, audit-upsert:${auditInserted}, hana-merge:${hanaResult.merged}, hana-upsert:${hanaResult.upserted}${hanaResult.skipped ? `, hana-skipped:${hanaResult.skipped}` : ""}${hanaResult.error ? `, hana-error:${hanaResult.error}` : ""})`;
-    await updateSyncState(supabase, "success", summary, upserted);
-    await releaseWatcherLock(supabase, "approval-history-sync", "ok", summary);
+    const finalSummary = [summary, webhookWarning, auditError ? `audit-error:${auditError}` : undefined].filter(Boolean).join("; ");
+    const status = finalSyncStatus(auditError, hanaResult.error);
+    await updateSyncState(supabase, status, finalSummary, upserted);
+    await releaseWatcherLock(supabase, "approval-history-sync", status === "error" ? "error" : "ok", finalSummary);
 
     return jsonResponse({
-      success: true,
+      success: status === "success",
+      summary: finalSummary,
+      webhook: { warning: webhookWarning || null },
       received: rows.length,
       upserted,
-      audit: { merged: auditMerged, upserted: auditInserted },
+      audit: { merged: auditMerged, upserted: auditInserted, error: auditError },
       hana: hanaResult,
       skipped: { test: skippedTest, unknown_company: skippedUnknownCompany, regression: skippedRegression },
       companyDb,
