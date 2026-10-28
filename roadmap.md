@@ -1,6 +1,7 @@
 # Roadmap — Melhorias de segurança (pentest)
 
-- [ ] Histórico de Aprovações — corrigir identidade no filtro Minhas e tornar webhook não fatal; testar, publicar somente approval-history-sync e conferir SBO_ANAGAMING.
+- [x] Histórico de Aprovações — filtro Minhas com identidade canônica e webhook não fatal; nove testes passaram e somente approval-history-sync foi publicada.
+- [ ] Histórico de Aprovações — validar sincronização real de SBO_ANAGAMING: sessão administrativa das ferramentas recusada por MFA (HTTP 403); estado permanece error de 28/10 14:54:05 UTC, 0 decisões Y/N desde 07/10. Não contornar autorização nem modificar scheduler; validação visual autenticada também pendente.
 
 - [ ] André Coura — em 28/10/2026, após Hiller informar MFA concluído no ERP Flow, a sessão fornecida às ferramentas ainda veio sem comprovação do segundo fator; consulta autenticada a has_role retornou false. Aplicação bloqueada pela sessão das ferramentas; não solicitar repetição do MFA como solução garantida. Nenhuma permissão ou regra de domínio alterada.
 - [x] André Coura — esclarecido: administrador é global, não restrito à Cactus Tecnologia.
