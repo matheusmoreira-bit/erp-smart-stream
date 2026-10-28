@@ -8,3 +8,4 @@
 
 - A idempotência da criação de pedidos (expense-mutation) usa conteúdo + hash dos anexos + boleto e só vale por 10 min sem chave explícita — pedidos iguais com NFs diferentes são legítimos; duplicidade de documento fica em submitted_document_hashes.
 - "Minhas decisões" no Histórico de Aprovações usa action=list_mine: identidade (aliases), empresas acessíveis e período são resolvidos no servidor a partir do JWT/sessão SAP, com teto de 5.000 linhas por fonte — o cliente nunca informa aliases.
+- Approval reminders run only from approval-daily-digest (channels email/whatsapp, one cron per channel, business days in America/Sao_Paulo), merging Flow and SAP pending docs, redirecting active substitutes and deduping per day via message_send_log — single source avoids double reminders.
