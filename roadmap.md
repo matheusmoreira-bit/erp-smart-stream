@@ -1,6 +1,6 @@
 # Roadmap — Melhorias de segurança (pentest)
 
-- [ ] Backup de saída Drive compartilhado: planejar exportação de tabelas de negócio segura, retomável e diária às 06:30 UTC; conexão Google expirada bloqueia identidade/acesso e primeira execução. Anexos exigem download pelo recurso de Storage da plataforma, não cópia automática com service role.
+- [ ] Backup de saída Drive: implementar exportação de negócio retomável às 06:30 UTC. Douglas confirmado como douglas.vinicius@growth.gg; listagem/criação HTTP 200, pasta ERP-Flow-Backup criada. Bloqueio: conexão não vinculável porque proprietário do projeto não tem acesso. Anexos ficam pendentes pela restrição de backup Storage da plataforma.
 
 - [x] Lembretes — reciprocidade/fixas preservam pendências próprias e dedupe privilegia própria; férias mantidas. Nove testes passaram, função publicada, dry_run HTTP 200 nos dois canais: Leonardo 0 próprias + 1 Santiago; Santiago 1 própria + 0 em nome; Marco 2 Fernanda; Tagiane sem pendências na simulação. Agendamentos inalterados.
 

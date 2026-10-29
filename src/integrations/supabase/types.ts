@@ -4551,6 +4551,45 @@ export type Database = {
         }
         Relationships: []
       }
+      gdrive_export_chunks: {
+        Row: {
+          chunk_no: number
+          content: string
+          path: string
+        }
+        Insert: {
+          chunk_no: number
+          content: string
+          path: string
+        }
+        Update: {
+          chunk_no?: number
+          content?: string
+          path?: string
+        }
+        Relationships: []
+      }
+      gdrive_export_state: {
+        Row: {
+          cycle_started_at: string
+          singleton: boolean
+          state: Json
+          updated_at: string
+        }
+        Insert: {
+          cycle_started_at?: string
+          singleton?: boolean
+          state?: Json
+          updated_at?: string
+        }
+        Update: {
+          cycle_started_at?: string
+          singleton?: boolean
+          state?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       hana_health_probes: {
         Row: {
           base_url: string
