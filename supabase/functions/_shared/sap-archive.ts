@@ -29,7 +29,25 @@ export const ARCHIVE_DOC_SPECS: ArchiveDocSpec[] = [
   { key: "sales_orders", label: "Pedidos de venda", endpoint: "Orders", restoreOrder: 50 },
   { key: "sales_invoices", label: "NF de saída", endpoint: "Invoices", restoreOrder: 60 },
   { key: "incoming_payments", label: "Contas a receber (recebimentos)", endpoint: "IncomingPayments", restoreOrder: 70 },
+  { key: "purchase_credit_notes", label: "Devoluções de NF de entrada", endpoint: "PurchaseCreditNotes", restoreOrder: 35 },
+  { key: "sales_credit_notes", label: "Devoluções de NF de saída", endpoint: "CreditNotes", restoreOrder: 65 },
 ];
+
+/** Empresas cobertas pelo arquivo (produção). Bases de teste ficam de fora. */
+export const ARCHIVE_COMPANIES = [
+  "cactus_providers", "SBO_ANAGAMING", "SBO_CACTUS", "SBO_INSTITUTO_ANA", "open_gaming_sa",
+];
+
+/** Bloqueia o arquivo quando a integração SAP está pausada ou a empresa em standalone. */
+export async function archiveBlockedReason(companyDb: string): Promise<string | null> {
+  const { getIntegrationPause } = await import("./integration-pause.ts");
+  const { getStandaloneMode } = await import("./standalone-mode.ts");
+  const pause = await getIntegrationPause("sap_b1");
+  if (pause) return `Integração SAP pausada até ${pause.paused_until}`;
+  const sm = await getStandaloneMode(companyDb);
+  if (sm) return `Empresa ${companyDb} em modo standalone`;
+  return null;
+}
 
 export function specByKey(key: string): ArchiveDocSpec | undefined {
   return ARCHIVE_DOC_SPECS.find((s) => s.key === key);

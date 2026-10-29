@@ -9,6 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 import { ARCHIVE_BUCKET, sapFetchFile, sapGet, sapLogin, sapLogout } from "../_shared/sap-archive.ts";
+import { archiveBlockedReason } from "../_shared/sap-archive.ts";
 
 const corsHeaders = {
   ...baseCorsHeaders,
@@ -52,6 +53,14 @@ Deno.serve(async (req) => {
     if (!companyDb || !/^[A-Za-z0-9_\-]+$/.test(companyDb)) {
       return json(400, { error: "company_db obrigatório" });
     }
+    const blocked = await archiveBlockedReason(companyDb);
+    if (blocked) return json(200, { done: true, skipped: true, reason: blocked });
+
+    if (body?.retry_errors === true) {
+      await sb.from("sap_archive_attachments").update({ status: "pending" })
+        .eq("company_db", companyDb).eq("status", "error");
+    }
+    const maxPerRun = Math.min(Math.max(Number(body?.limit) || 200, 1), 500);
 
     const { data: runRow } = await sb.from("sap_archive_runs").insert({
       company_db: companyDb, kind: "attachments", status: "running", triggered_by: auth.source,
@@ -73,11 +82,12 @@ Deno.serve(async (req) => {
         .eq("company_db", companyDb)
         .not("attachment_entry", "is", null)
         .eq("attachments_total", 0)
-        .limit(20);
+        .limit(8);
       const list = (docs || []) as any[];
       if (list.length === 0) break;
 
-      for (const doc of list) {
+      // Concorrência limitada para não sobrecarregar o Service Layer.
+      await Promise.all(list.map(async (doc) => {
         try {
           const att = await sapGet(session, `Attachments2(${doc.attachment_entry})`);
           const lines: any[] = Array.isArray(att?.Attachments2_Lines) ? att.Attachments2_Lines : [];
@@ -107,7 +117,7 @@ Deno.serve(async (req) => {
             .update({ attachments_total: -1, last_error: msg })
             .eq("id", doc.id);
         }
-      }
+      }));
     }
 
     // 2) Baixa os arquivos pendentes.
@@ -117,12 +127,12 @@ Deno.serve(async (req) => {
         .select("id, doc_type, doc_entry, attachment_entry, line_num, file_name, file_extension")
         .eq("company_db", companyDb)
         .eq("status", "pending")
-        .limit(10);
+        .limit(4);
       const list = (pend || []) as any[];
-      if (list.length === 0) break;
+      if (list.length === 0 || downloaded + failed >= maxPerRun) break;
 
-      for (const a of list) {
-        if (Date.now() - started > TIME_BUDGET_MS) break;
+      await Promise.all(list.map(async (a) => {
+        if (Date.now() - started > TIME_BUDGET_MS) return;
         const fullName = a.file_extension ? `${a.file_name}.${a.file_extension}` : a.file_name;
         try {
           const bytes = await sapFetchFile(session, a.attachment_entry, fullName);
@@ -146,7 +156,7 @@ Deno.serve(async (req) => {
             .update({ status: "error", last_error: msg })
             .eq("id", a.id);
         }
-      }
+      }));
     }
 
     const { count: pending } = await sb
