@@ -82,11 +82,12 @@ Deno.serve(async (req) => {
         .eq("company_db", companyDb)
         .not("attachment_entry", "is", null)
         .eq("attachments_total", 0)
-        .limit(20);
+        .limit(8);
       const list = (docs || []) as any[];
       if (list.length === 0) break;
 
-      for (const doc of list) {
+      // Concorrência limitada para não sobrecarregar o Service Layer.
+      await Promise.all(list.map(async (doc) => {
         try {
           const att = await sapGet(session, `Attachments2(${doc.attachment_entry})`);
           const lines: any[] = Array.isArray(att?.Attachments2_Lines) ? att.Attachments2_Lines : [];
@@ -116,7 +117,7 @@ Deno.serve(async (req) => {
             .update({ attachments_total: -1, last_error: msg })
             .eq("id", doc.id);
         }
-      }
+      }));
     }
 
     // 2) Baixa os arquivos pendentes.
@@ -126,12 +127,12 @@ Deno.serve(async (req) => {
         .select("id, doc_type, doc_entry, attachment_entry, line_num, file_name, file_extension")
         .eq("company_db", companyDb)
         .eq("status", "pending")
-        .limit(10);
+        .limit(4);
       const list = (pend || []) as any[];
       if (list.length === 0 || downloaded + failed >= maxPerRun) break;
 
-      for (const a of list) {
-        if (Date.now() - started > TIME_BUDGET_MS) break;
+      await Promise.all(list.map(async (a) => {
+        if (Date.now() - started > TIME_BUDGET_MS) return;
         const fullName = a.file_extension ? `${a.file_name}.${a.file_extension}` : a.file_name;
         try {
           const bytes = await sapFetchFile(session, a.attachment_entry, fullName);
@@ -155,7 +156,7 @@ Deno.serve(async (req) => {
             .update({ status: "error", last_error: msg })
             .eq("id", a.id);
         }
-      }
+      }));
     }
 
     const { count: pending } = await sb
