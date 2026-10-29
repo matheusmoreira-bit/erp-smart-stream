@@ -19,7 +19,7 @@ function loadAuth() {
     is: () => query,
     maybeSingle: async () => ({ data: { credential_value: databaseCredential }, error: null }),
   };
-  const source = readFileSync(new URL("../../supabase/functions/_shared/automation-auth.ts", import.meta.url), "utf8");
+  const source = readFileSync("supabase/functions/_shared/automation-auth.ts", "utf8");
   const compiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
@@ -62,7 +62,7 @@ describe("scheduler database-only authentication", () => {
       headers: { "x-scheduler-secret": legacyCredential },
     }), {});
     expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("Legacy authentication must fail");
+    if (!("response" in result)) throw new Error("Legacy authentication must fail");
     expect(result.response.status).toBe(401);
   });
 
