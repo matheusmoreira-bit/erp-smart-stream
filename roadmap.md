@@ -1,5 +1,7 @@
 # Roadmap — Melhorias de segurança (pentest)
 
+- [ ] Backup de saída Drive compartilhado: planejar exportação de tabelas de negócio segura, retomável e diária às 06:30 UTC; conexão Google expirada bloqueia identidade/acesso e primeira execução. Anexos exigem download pelo recurso de Storage da plataforma, não cópia automática com service role.
+
 - [x] Lembretes — reciprocidade/fixas preservam pendências próprias e dedupe privilegia própria; férias mantidas. Nove testes passaram, função publicada, dry_run HTTP 200 nos dois canais: Leonardo 0 próprias + 1 Santiago; Santiago 1 própria + 0 em nome; Marco 2 Fernanda; Tagiane sem pendências na simulação. Agendamentos inalterados.
 
 - [x] Histórico SAP — metadados de esboço/pedido, solicitante, identidade individual HANA e dedupe implementados; backfill concluído nas quatro empresas autorizadas. 8964 confirmado como pedido 7974/esboço 8682. 34 testes passaram. Sem número final: ANA 103, Cactus 47, Instituto 13, Open Gaming 3. Navegador autenticado/exportações aguardam prompt separado; NO-GO para confirmação visual em Live.
