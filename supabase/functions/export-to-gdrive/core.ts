@@ -4,6 +4,7 @@ export const PENDING_BUCKETS = ["expense-attachments", "sap-archive", "registrat
 const sensitive = /secret|token|password|credential|private.?key|api.?key|access.?key|authorization|cookie|encrypted|session|signed.?url|webhook/i;
 export function sanitize(value: unknown): unknown {
   if (typeof value === "string") {
+    try { if (/^\s*[\[{]/.test(value)) return JSON.stringify(sanitize(JSON.parse(value))); } catch { /* Preserve non-JSON business text. */ }
     if (/Bearer\s+\S+|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.|(?:sk_live_|sk_test_|sb_secret_)[A-Za-z0-9]+|https?:\/\/[^\s]*[?&](?:token|key|signature|secret)=/i.test(value)) return "[REDACTED]";
     return value;
   }
