@@ -18,6 +18,7 @@ import {
   sapLogin,
   sapLogout,
 } from "../_shared/sap-archive.ts";
+import { archiveBlockedReason } from "../_shared/sap-archive.ts";
 
 const corsHeaders = {
   ...baseCorsHeaders,
@@ -57,6 +58,8 @@ Deno.serve(async (req) => {
     if (!companyDb || !/^[A-Za-z0-9_\-]+$/.test(companyDb)) {
       return json(400, { error: "company_db obrigatório" });
     }
+    const blocked = await archiveBlockedReason(companyDb);
+    if (blocked) return json(200, { done: true, skipped: true, reason: blocked });
     const pageSize = Math.min(Math.max(Number(body?.page_size) || 50, 10), 200);
     // Incremental é o padrão: só busca tudo quando o chamador pedir full.
     const incremental = body?.incremental === false ? false : true;

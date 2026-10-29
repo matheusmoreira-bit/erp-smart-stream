@@ -9,6 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 import { ARCHIVE_BUCKET, sapFetchFile, sapGet, sapLogin, sapLogout } from "../_shared/sap-archive.ts";
+import { archiveBlockedReason } from "../_shared/sap-archive.ts";
 
 const corsHeaders = {
   ...baseCorsHeaders,
@@ -52,6 +53,14 @@ Deno.serve(async (req) => {
     if (!companyDb || !/^[A-Za-z0-9_\-]+$/.test(companyDb)) {
       return json(400, { error: "company_db obrigatório" });
     }
+    const blocked = await archiveBlockedReason(companyDb);
+    if (blocked) return json(200, { done: true, skipped: true, reason: blocked });
+
+    if (body?.retry_errors === true) {
+      await sb.from("sap_archive_attachments").update({ status: "pending" })
+        .eq("company_db", companyDb).eq("status", "error");
+    }
+    const maxPerRun = Math.min(Math.max(Number(body?.limit) || 200, 1), 500);
 
     const { data: runRow } = await sb.from("sap_archive_runs").insert({
       company_db: companyDb, kind: "attachments", status: "running", triggered_by: auth.source,
@@ -119,7 +128,7 @@ Deno.serve(async (req) => {
         .eq("status", "pending")
         .limit(10);
       const list = (pend || []) as any[];
-      if (list.length === 0) break;
+      if (list.length === 0 || downloaded + failed >= maxPerRun) break;
 
       for (const a of list) {
         if (Date.now() - started > TIME_BUDGET_MS) break;

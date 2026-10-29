@@ -18,6 +18,7 @@ import {
   sapLogout,
   specByKey,
 } from "../_shared/sap-archive.ts";
+import { archiveBlockedReason } from "../_shared/sap-archive.ts";
 
 const corsHeaders = {
   ...baseCorsHeaders,
@@ -57,6 +58,8 @@ Deno.serve(async (req) => {
     if (!companyDb || !/^[A-Za-z0-9_\-]+$/.test(companyDb)) {
       return json(400, { error: "company_db obrigatório" });
     }
+    const blocked = await archiveBlockedReason(companyDb);
+    if (blocked) return json(200, { done: true, skipped: true, reason: blocked });
     const pageSize = Math.min(Math.max(Number(body?.page_size) || 20, 5), 50);
     // Incremental é o padrão: a base atual está sendo desativada e não queremos
     // varreduras completas. Só faz cópia total quando pedirem incremental=false.
@@ -67,6 +70,24 @@ Deno.serve(async (req) => {
 
     const specs = requested.map(specByKey).filter(Boolean) as typeof ARCHIVE_DOC_SPECS;
     if (specs.length === 0) return json(400, { error: "doc_types inválidos" });
+
+    if (body?.survey === true) {
+      session = await sapLogin(sb, companyDb);
+      const counts: Record<string, { docs: number | null; with_attachments: number | null; since_2025: number | null; error?: string }> = {};
+      for (const spec of specs) {
+        try {
+          const n = async (f?: string) => Number(await sapGet(session!, `${spec.endpoint}/$count${f ? qs({ $filter: f }) : ""}`));
+          counts[spec.key] = {
+            docs: await n(),
+            with_attachments: await n("AttachmentEntry ne null"),
+            since_2025: await n("DocDate ge '2025-01-01'"),
+          };
+        } catch (e) {
+          counts[spec.key] = { docs: null, with_attachments: null, since_2025: null, error: (e as Error).message.slice(0, 200) };
+        }
+      }
+      return json(200, { survey: true, company_db: companyDb, counts });
+    }
 
     const { data: runRow } = await sb.from("sap_archive_runs").insert({
       company_db: companyDb,
