@@ -170,7 +170,12 @@ async function uploadStep(sb:SB,state:State,f:FileState) {
   }
   await save(sb,state);
 }
+let attachmentsDone=false;
 function publicManifest(state:State,sapDone:boolean) {
+  if(attachmentsDone) return {...publicManifestBase(state,sapDone),attachments_status:"concluido",attachment_pending:[]};
+  return publicManifestBase(state,sapDone);
+}
+function publicManifestBase(state:State,sapDone:boolean) {
   return {origin:"ERP Flow",cutoff:state.cycle,status:canComplete(state.tablesDone,sapDone,PENDING_BUCKETS.length,state.errors.length)?"completo":"em andamento", tables_done:state.tablesDone,sap_complete:sapDone, account:state.account, files:state.files.map(({path,rows,bytes,hash,status,id})=>({path,rows,bytes,sha256:hash,status,id})), excluded:EXCLUDED, reviewed_catalog:CATALOG.map(s=>({table:s.table,excluded_columns:s.excluded_columns,review_required:s.review})), attachment_pending:PENDING_BUCKETS.map(bucket=>({bucket,status:"pendente",reason:"Cópia administrativa de Storage em backup integral não permitida pelas instruções da plataforma"})), errors:state.errors, transactional_snapshot:false};
 }
 async function run(sb:SB,manual:boolean):Promise<Row> {
@@ -179,6 +184,7 @@ async function run(sb:SB,manual:boolean):Promise<Row> {
   try {
     const {data,error}=await sb.from("gdrive_export_state").select("state").eq("singleton",true).maybeSingle();
     if(error)throw new Error("Falha ao carregar cursor");
+    {const {data:n}=await sb.from("gdrive_attachment_notice_state").select("completed_at").eq("singleton",true).maybeSingle();attachmentsDone=!!n?.completed_at;}
     state=data?.state as State|undefined;
     if(!state)state={table:0,cycle:new Date().toISOString(),tablesDone:false,files:[],errors:[],uploadedBytes:0,uploadedFiles:0,phase:"tables"};
     if(state.tablesDone && state.files.every(f=>f.status==="complete") && state.cycle.slice(0,10)!==new Date().toISOString().slice(0,10)) {
