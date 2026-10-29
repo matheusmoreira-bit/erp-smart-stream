@@ -7,8 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 import { logSend } from "../_shared/send-log.ts";
 import { ARCHIVE_COMPANIES } from "../_shared/sap-archive.ts";
-import { drive, putSmall } from "../export-to-gdrive/drive.ts";
-import { SHARED_DRIVE } from "../export-to-gdrive/core.ts";
+import { drive, putSmall, SHARED_DRIVE } from "./drive.ts";
 import { BUCKETS, bucketForDrivePath, compareBucket, decide, sapInitialLoadDone, type Bucket, type BucketStat, type Item, type Mode } from "./core.ts";
 
 const SOURCE = "attachment-backup-notice";
