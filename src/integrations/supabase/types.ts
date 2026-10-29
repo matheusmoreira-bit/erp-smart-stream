@@ -4494,6 +4494,30 @@ export type Database = {
         }
         Relationships: []
       }
+      gdrive_attachment_notice_state: {
+        Row: {
+          completed_at: string | null
+          initial_sent_at: string | null
+          last_check: Json | null
+          singleton: boolean
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          initial_sent_at?: string | null
+          last_check?: Json | null
+          singleton?: boolean
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          initial_sent_at?: string | null
+          last_check?: Json | null
+          singleton?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       gdrive_backup_settings: {
         Row: {
           created_at: string
@@ -11243,6 +11267,14 @@ export type Database = {
       session_started_at: { Args: { _session_id: string }; Returns: string }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      storage_backup_inventory: {
+        Args: { p_buckets: string[] }
+        Returns: {
+          bucket_id: string
+          bytes: number
+          name: string
+        }[]
+      }
       substitute_grants_for_me: {
         Args: { _substitute_identifier: string }
         Returns: {
