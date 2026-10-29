@@ -98,8 +98,12 @@ Deno.serve(async (req) => {
     const link = `https://drive.google.com/drive/folders/${rootId}`;
     const { data: notice } = await sb.from("gdrive_attachment_notice_state").select("*").eq("singleton", true).maybeSingle();
 
-    const { data: inv, error: invErr } = await sb.rpc("storage_backup_inventory", { p_buckets: [...BUCKETS] });
-    if (invErr) throw new Error("Falha ao ler inventário do storage");
+    const inv: any[] = [];
+    for (let from = 0; from < 500_000; from += 1000) {
+      const { data, error: invErr } = await sb.rpc("storage_backup_inventory", { p_buckets: [...BUCKETS] }).order("bucket_id").order("name").range(from, from + 999);
+      if (invErr) throw new Error("Falha ao ler inventário do storage");
+      inv.push(...((data || []) as any[])); if ((data || []).length < 1000) break;
+    }
     const storageBy = new Map<Bucket, Item[]>(BUCKETS.map((b) => [b, []]));
     for (const r of (inv || []) as any[]) storageBy.get(r.bucket_id)?.push({ name: r.name, bytes: Number(r.bytes || 0) });
     const driveBy = await listDrive(rootId);
