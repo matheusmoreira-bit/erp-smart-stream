@@ -14,7 +14,7 @@ const INTERVALS: Record<string, number> = {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
-  try { requireIntegrationService(req); } catch (error) { return authErrorResponse(error, CORS_HEADERS) ?? jsonResponse({ error: "Falha ao verificar identidade" }, 503); }
+  try { await requireIntegrationService(req); } catch (error) { return authErrorResponse(error, CORS_HEADERS) ?? jsonResponse({ error: "Falha ao verificar identidade" }, 503); }
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
