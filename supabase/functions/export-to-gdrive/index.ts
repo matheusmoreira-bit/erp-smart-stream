@@ -10,7 +10,7 @@ const NAME = "export-to-gdrive";
 const cors = { "Access-Control-Allow-Origin":"https://erp-flow.cactuscorporation.com", "Access-Control-Allow-Headers":"authorization,content-type,x-scheduler-secret" };
 type Row = Record<string,unknown>;
 type HashState = { values:Record<string,unknown>; buffer:number[] };
-type FileState = { path:string; chunks:number; rows:number; bytes:number; hash?:string; hashState?:HashState; upload?:string; offset?:number; id?:string; status:"staging"|"pending"|"complete"; json:boolean };
+type FileState = { path:string; chunks:number; rows:number; bytes:number; hash?:string; hashState?:HashState; upload?:string; offset?:number; id?:string; status:"staging"|"pending"|"complete"; json:boolean; binary?:boolean };
 type State = { table:number; last?:Row; root?:string; account?:string; files:FileState[]; cycle:string; tablesDone:boolean; errors:string[]; uploadedBytes:number; uploadedFiles:number; phase:string; };
 const encoder = new TextEncoder();
 const json = (body:unknown,status=200) => new Response(JSON.stringify(body),{ status, headers:{...cors,"Content-Type":"application/json"} });
@@ -24,14 +24,14 @@ async function save(sb:SB,state:State) {
   const {error}=await sb.from("gdrive_export_state").upsert({singleton:true,cycle_started_at:state.cycle,state,updated_at:new Date().toISOString()});
   if(error) throw new Error("Impossible de sauvegarder le curseur");
 }
-function hashText(f:FileState,text:string) {
+function hashText(f:FileState,text:string,raw?:Uint8Array) {
   const hash=sha256.create();
   if(f.hashState) {
     const h=hash as unknown as Record<string,unknown>;
     for(const [k,v] of Object.entries(f.hashState.values)) h[k]=v;
     (h.buffer as Uint8Array).set(f.hashState.buffer);
   }
-  const bytes=encoder.encode(text); hash.update(bytes); f.bytes+=bytes.length;
+  const bytes=raw || encoder.encode(text); hash.update(bytes); f.bytes+=bytes.length;
   const h=hash as unknown as Record<string,unknown>; const values:Record<string,unknown>={};
   for(const [k,v] of Object.entries(h)) if(typeof v==="number" || typeof v==="boolean") values[k]=v;
   f.hashState={values,buffer:Array.from(h.buffer as Uint8Array)};
@@ -41,6 +41,14 @@ async function append(sb:SB,f:FileState,text:string) {
   const {error}=await sb.from("gdrive_export_chunks").upsert({path:f.path,chunk_no:f.chunks,content:text});
   if(error) throw new Error("Falha ao persistir lote de exportação");
   f.chunks++; hashText(f,text);
+}
+async function gzipAppend(sb:SB,f:FileState,text:string) {
+  const stream=new Blob([text]).stream().pipeThrough(new CompressionStream("gzip"));
+  const bytes=new Uint8Array(await new Response(stream).arrayBuffer());
+  let encoded="";for(let i=0;i<bytes.length;i+=8192)encoded+=String.fromCharCode(...bytes.slice(i,i+8192));
+  const {error}=await sb.from("gdrive_export_chunks").upsert({path:f.path,chunk_no:f.chunks,content:btoa(encoded)});
+  if(error)throw new Error("Falha ao persistir auditoria compactada");
+  f.binary=true;f.chunks++;hashText(f,"",bytes);
 }
 function file(state:State,path:string,jsonFile:boolean):FileState {
   let f=state.files.find(f=>f.path===path);
@@ -100,11 +108,22 @@ async function tablePage(sb:SB,state:State) {
       if(alias.chunks===0)await append(sb,alias,"\uFEFF"+spec.columns.map(csvCell).join(";")+"\r\n");
       await append(sb,alias,csvRows(items,spec.columns));alias.rows+=items.length;
     }
+    if(spec.table==="audit_trail" || spec.table==="audit_trail_archive") {
+      const months=new Map<string,Row[]>();
+      for(const item of items) {const month=String(item.ts || "").slice(0,7);if(!/^\d{4}-\d{2}$/.test(month))throw new Error("Data de auditoria inválida");const list=months.get(month)||[];list.push(item);months.set(month,list);}
+      const columns=["id","ts","actor_id","actor_email","actor_role","schema_name","table_name","op","row_pk","old_data","new_data","changed_cols","prev_hash","row_hash","app_context"];
+      for(const [month,list] of months) {
+        const audit=file(state,`auditoria/audit_trail-${month}.csv.gz`,false);
+        const text=(audit.chunks===0?"\uFEFF"+columns.map(csvCell).join(";")+"\r\n":"")+csvRows(list,columns);
+        await gzipAppend(sb,audit,text);audit.rows+=list.length;
+      }
+    }
   }
   if(rows.length) state.last=rows[rows.length-1];
   if(rows.length<200) {
     const files=state.files.filter(f=>f.status==="staging" && (f.path.endsWith(`/${spec.table}${f.json ? ".json" : ".csv"}`) || (spec.table==="sap_archive_documents" && f.path.endsWith("/documentos.csv")) || (spec.table==="sap_archive_master_data" && f.path.endsWith("/cadastros.csv"))));
     for(const f of files) {if(f.json) await append(sb,f,"]"); f.status="pending";f.hashState=undefined;}
+    if(spec.table==="audit_trail_archive")for(const f of state.files.filter(f=>f.path.endsWith(".csv.gz"))){f.status="pending";f.hashState=undefined;}
     state.table++;state.last=undefined;
   }
   await save(sb,state);
@@ -133,7 +152,7 @@ async function uploadStep(sb:SB,state:State,f:FileState) {
   for(let chunk=0;chunk<f.chunks && copied<count;chunk++) {
     const {data,error}=await sb.from("gdrive_export_chunks").select("content").eq("path",f.path).eq("chunk_no",chunk).single();
     if(error)throw new Error("Lote de arquivo indisponível");
-    const bytes=encoder.encode(data.content);
+    const bytes=f.binary?Uint8Array.from(atob(data.content),c=>c.charCodeAt(0)):encoder.encode(data.content);
     if(sourceOffset+bytes.length>offset) {
       const begin=Math.max(0,offset-sourceOffset);const part=bytes.slice(begin,begin+count-copied);body.set(part,copied);copied+=part.length;
     }
