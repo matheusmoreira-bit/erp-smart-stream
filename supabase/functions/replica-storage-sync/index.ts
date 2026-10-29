@@ -6,6 +6,7 @@
 import postgres from "npm:postgres@3.4.4";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
+import { getSchedulerSecret } from "../_shared/automation-auth.ts";
 import { parseTarget, targetConfig } from "../_shared/replica-target.ts";
 
 const corsHeaders = {
@@ -124,7 +125,7 @@ Deno.serve(async (req) => {
     try {
       await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/replica-storage-sync`, {
         method: "POST", signal: ctl.signal,
-        headers: { "Content-Type": "application/json", "x-scheduler-secret": Deno.env.get("SCHEDULER_SECRET") || "" },
+        headers: { "Content-Type": "application/json", "x-scheduler-secret": await getSchedulerSecret() },
         body: JSON.stringify({ hop: hop + 1, target }),
       });
     } catch (e) {

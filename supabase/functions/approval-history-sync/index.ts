@@ -622,7 +622,7 @@ Deno.serve(async (req) => {
     // expirada (30 min) — antes o histórico do SAP sumia da tela nesse caso.
     let caller: Awaited<ReturnType<typeof requireAdminOrSapSession>>;
     try {
-      if (!isList && (isSchedulerSecretRequest(req) || isServiceRoleRequest(req))) {
+      if (!isList && ((await isSchedulerSecretRequest(req)) || isServiceRoleRequest(req))) {
         const scheduler = await requireSchedulerOrAdmin(req, corsHeaders);
         if (!scheduler.ok) return scheduler.response;
         caller = { source: "cloud_user", userName: "scheduler" } as typeof caller;
@@ -664,7 +664,7 @@ Deno.serve(async (req) => {
       if (!["SBO_ANAGAMING", "SBO_CACTUS", "SBO_INSTITUTO_ANA", "open_gaming_sa"].includes(companyDb)) {
         return jsonResponse({ success: false, error: "Empresa fora do escopo autorizado" }, 400);
       }
-      if (!(isSchedulerSecretRequest(req) || isServiceRoleRequest(req))) await requireAdminOrSapAdmin(req);
+      if (!((await isSchedulerSecretRequest(req)) || isServiceRoleRequest(req))) await requireAdminOrSapAdmin(req);
       const cursor = Number(body.cursor ?? 0);
       if (!Number.isSafeInteger(cursor) || cursor < 0) return jsonResponse({ success: false, error: "Cursor inválido" }, 400);
       lockAcquired = await tryWatcherLock(supabase, "approval-history-sync", 3);

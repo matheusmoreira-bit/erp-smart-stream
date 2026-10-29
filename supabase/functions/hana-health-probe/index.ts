@@ -166,7 +166,7 @@ Deno.serve(withEdgeMetrics("hana-health-probe", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    try { requireIntegrationService(req); }
+    try { await requireIntegrationService(req); }
     catch { await requireAdmin(req); }
   } catch (error) {
     return authErrorResponse(error, corsHeaders) || new Response(JSON.stringify({ error: "Acesso negado" }), { status: 403, headers: corsHeaders });
