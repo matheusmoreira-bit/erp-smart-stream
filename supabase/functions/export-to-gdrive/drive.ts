@@ -4,7 +4,7 @@ export class DriveError extends Error {
   constructor(public status: number) { super(status === 403 || status === 404 ? "sem acesso ao Drive" : `Google Drive HTTP ${status}`); }
 }
 export function headers(extra: Record<string, string> = {}): Record<string, string> {
-  const key = Deno.env.get("GDRIVE_EXIT_CONNECTION_KEY");
+  const key = Deno.env.get("GOOGLE_DRIVE_API_KEY");
   const app = Deno.env.get("LOVABLE_API_KEY");
   if (!key || !app) throw new Error("Conexão Douglas não vinculada ao projeto; proprietário precisa receber Can use na conexão e vinculá-la");
   return { Authorization: `Bearer ${app}`, "X-Connection-Api-Key": key, ...extra };
