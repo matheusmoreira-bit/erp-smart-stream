@@ -29,9 +29,7 @@ export function isServiceRoleRequest(req: Request): boolean {
 }
 
 // Fonte única: system_credentials (cron/scheduler_secret), lido via system_credentials_v
-// com service role e cache curto. Durante a transição, a env SCHEDULER_SECRET (e
-// aliases) também é aceita; desligar via ACCEPT_ENV_SCHEDULER_SECRET = false.
-const ACCEPT_ENV_SCHEDULER_SECRET = true;
+// com service role e cache curto. Segredos antigos de env não são aceitos.
 const SECRET_TTL_MS = 60_000;
 let cachedSecret: { value: string; at: number } | null = null;
 
@@ -55,25 +53,13 @@ export async function getSchedulerSecret(): Promise<string> {
   }
 }
 
-function envSchedulerSecrets(): string[] {
-  if (!ACCEPT_ENV_SCHEDULER_SECRET) return [];
-  return [
-    Deno.env.get("SCHEDULER_SECRET"),
-    Deno.env.get("AUTOMATION_SECRET"),
-    Deno.env.get("INTERNAL_FUNCTION_SECRET"),
-  ].map((v) => (v || "").trim()).filter(Boolean);
-}
-
 export async function isSchedulerSecretRequest(req: Request): Promise<boolean> {
   const provided = (req.headers.get("x-scheduler-secret")
     || req.headers.get("x-internal-key")
     || req.headers.get("x-automation-secret")
     || "").trim();
   if (!provided) return false;
-  const candidates = [await getSchedulerSecret(), ...envSchedulerSecrets()].filter(Boolean);
-  let ok = false;
-  for (const c of candidates) ok = timingSafeEqual(provided, c) || ok;
-  return ok;
+  return timingSafeEqual(provided, await getSchedulerSecret());
 }
 
 export async function requireSchedulerOrAdmin(
