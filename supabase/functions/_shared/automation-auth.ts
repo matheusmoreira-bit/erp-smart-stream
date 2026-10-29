@@ -28,16 +28,52 @@ export function isServiceRoleRequest(req: Request): boolean {
   return timingSafeEqual(bearer(req), serviceKey);
 }
 
-export function isSchedulerSecretRequest(req: Request): boolean {
-  const configured = Deno.env.get("SCHEDULER_SECRET")
-    || Deno.env.get("AUTOMATION_SECRET")
-    || Deno.env.get("INTERNAL_FUNCTION_SECRET")
-    || "";
-  const provided = req.headers.get("x-scheduler-secret")
+// Fonte única: system_credentials (cron/scheduler_secret), lido via system_credentials_v
+// com service role e cache curto. Durante a transição, a env SCHEDULER_SECRET (e
+// aliases) também é aceita; desligar via ACCEPT_ENV_SCHEDULER_SECRET = false.
+const ACCEPT_ENV_SCHEDULER_SECRET = true;
+const SECRET_TTL_MS = 60_000;
+let cachedSecret: { value: string; at: number } | null = null;
+
+export async function getSchedulerSecret(): Promise<string> {
+  if (cachedSecret && Date.now() - cachedSecret.at < SECRET_TTL_MS) return cachedSecret.value;
+  try {
+    const { data, error } = await serviceClient()
+      .from("system_credentials_v")
+      .select("credential_value")
+      .eq("system_name", "cron")
+      .eq("credential_key", "scheduler_secret")
+      .is("company_db", null)
+      .maybeSingle();
+    if (error) throw error;
+    const value = String((data as { credential_value?: string } | null)?.credential_value || "").trim();
+    cachedSecret = { value, at: Date.now() };
+    return value;
+  } catch (e) {
+    console.error("scheduler secret lookup failed", (e as Error).message);
+    return cachedSecret?.value || "";
+  }
+}
+
+function envSchedulerSecrets(): string[] {
+  if (!ACCEPT_ENV_SCHEDULER_SECRET) return [];
+  return [
+    Deno.env.get("SCHEDULER_SECRET"),
+    Deno.env.get("AUTOMATION_SECRET"),
+    Deno.env.get("INTERNAL_FUNCTION_SECRET"),
+  ].map((v) => (v || "").trim()).filter(Boolean);
+}
+
+export async function isSchedulerSecretRequest(req: Request): Promise<boolean> {
+  const provided = (req.headers.get("x-scheduler-secret")
     || req.headers.get("x-internal-key")
     || req.headers.get("x-automation-secret")
-    || "";
-  return timingSafeEqual(provided, configured);
+    || "").trim();
+  if (!provided) return false;
+  const candidates = [await getSchedulerSecret(), ...envSchedulerSecrets()].filter(Boolean);
+  let ok = false;
+  for (const c of candidates) ok = timingSafeEqual(provided, c) || ok;
+  return ok;
 }
 
 export async function requireSchedulerOrAdmin(
@@ -45,7 +81,7 @@ export async function requireSchedulerOrAdmin(
   corsHeaders: Record<string, string>,
 ): Promise<AutomationAuth> {
   if (isServiceRoleRequest(req)) return { ok: true, source: "service_role" };
-  if (isSchedulerSecretRequest(req)) return { ok: true, source: "scheduler_secret" };
+  if (await isSchedulerSecretRequest(req)) return { ok: true, source: "scheduler_secret" };
 
   try {
     await requireAdmin(req);

@@ -1,3 +1,4 @@
+import { isSchedulerSecretRequest } from "../_shared/automation-auth.ts";
 // Reprocessamento de roteamento de aprovação.
 //
 // Contexto: quando o centro de custo do documento não possui regra na matriz,
@@ -160,9 +161,7 @@ Deno.serve(async (req) => {
     isAdminCaller = true;
     actorLabel = "sistema";
   }
-  const schedulerSecret = (req.headers.get("x-scheduler-secret") || "").trim();
-  const expectedSecret = (Deno.env.get("SCHEDULER_SECRET") || "").trim();
-  if (schedulerSecret && expectedSecret && schedulerSecret === expectedSecret) {
+  if (await isSchedulerSecretRequest(req)) {
     isAdminCaller = true;
     actorLabel = "sistema";
   }
