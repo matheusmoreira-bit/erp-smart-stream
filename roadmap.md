@@ -2,7 +2,7 @@
 
 - [x] Backup Drive: export-to-gdrive publicada, catálogo de 159 tabelas/52 exclusões, cursores e staging privados, destino configurado, job 573 diário 06:30 UTC; job 69 inativo. Testes de segurança/CSV/conclusão passaram. Primeira chamada HTTP 200 com resultado error registrado (zero arquivos/bytes).
 - [ ] Backup Drive: vincular conexão Douglas; proprietário do projeto precisa de Can use na conexão. Conta douglas.vinicius@growth.gg e acesso lista/criação HTTP 200; pasta ERP-Flow-Backup criada. Não usar conexão alheia nem copiar chave da chamada avulsa para a função.
-- [ ] Backup Drive: exportação real/leitura de volta, comprovar retomada e uploads, auditoria mensal .csv.gz, índice documental completo e verificação de conclusão SAP; teste integral bloqueado pela conexão não vinculada. Anexos pendentes pela restrição de backup Storage da plataforma; manifest não declara completo.
+- [ ] Backup Drive: exportação real/leitura de volta e comprovar retomada/uploads; auditoria mensal .csv.gz implementada mas não exercitada em dados reais. Índice documental completo e verificação de conclusão SAP pendentes; conexão não vinculada bloqueia teste integral. Anexos pendentes pela restrição de backup Storage da plataforma; manifest não declara completo.
 
 - [x] Lembretes — reciprocidade/fixas preservam pendências próprias e dedupe privilegia própria; férias mantidas. Nove testes passaram, função publicada, dry_run HTTP 200 nos dois canais: Leonardo 0 próprias + 1 Santiago; Santiago 1 própria + 0 em nome; Marco 2 Fernanda; Tagiane sem pendências na simulação. Agendamentos inalterados.
 
