@@ -32,3 +32,6 @@
 
 - [x] CNAB standalone: fases 1–3 implementadas (lista Flow, trava, boleto, retorno, conciliação)
 - [ ] CNAB standalone: relatório de fornecedores sem perfil, ensaio na empresa de teste e homologação Sicoob (até 15/10)
+
+- [ ] Arquivo SAP produção: carga inicial em andamento (ANA, Cactus, Instituto, Open Gaming); conferir conclusão e crons diários.
+- [ ] S3: aguardando decisão do Douglas para ativar espelhamento do bucket sap-archive e backup diário do banco.
