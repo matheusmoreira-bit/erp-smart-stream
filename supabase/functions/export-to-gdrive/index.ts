@@ -82,6 +82,7 @@ async function tablePage(sb:SB,state:State) {
   const rows=(data || []) as Row[];
   const groups=new Map<string,Row[]>();
   for(const row of rows) {
+    if((spec.table==="audit_trail" || spec.table==="audit_trail_archive") && /credential|token|session|api_keys|auth\./i.test(String(row.table_name || ""))) continue;
     const company=await companyFor(sb,row); const group=groups.get(company)||[];
     group.push(sanitize(row) as Row);groups.set(company,group);
   }
@@ -94,10 +95,15 @@ async function tablePage(sb:SB,state:State) {
     await append(sb,cf,csvRows(items,spec.columns));
     await append(sb,jf,items.map((r,i)=>(jf.rows+i>0?",":"")+JSON.stringify(r)).join(""));
     cf.rows+=items.length;jf.rows+=items.length;
+    if(spec.table==="sap_archive_documents" || spec.table==="sap_archive_master_data") {
+      const alias=file(state,`arquivo-sap/${safeSegment(company)}/${spec.table==="sap_archive_documents"?"documentos":"cadastros"}.csv`,false);
+      if(alias.chunks===0)await append(sb,alias,"\uFEFF"+spec.columns.map(csvCell).join(";")+"\r\n");
+      await append(sb,alias,csvRows(items,spec.columns));alias.rows+=items.length;
+    }
   }
   if(rows.length) state.last=rows[rows.length-1];
   if(rows.length<200) {
-    const files=state.files.filter(f=>f.status==="staging" && f.path.endsWith(`/${spec.table}${f.json ? ".json" : ".csv"}`));
+    const files=state.files.filter(f=>f.status==="staging" && (f.path.endsWith(`/${spec.table}${f.json ? ".json" : ".csv"}`) || (spec.table==="sap_archive_documents" && f.path.endsWith("/documentos.csv")) || (spec.table==="sap_archive_master_data" && f.path.endsWith("/cadastros.csv"))));
     for(const f of files) {if(f.json) await append(sb,f,"]"); f.status="pending";f.hashState=undefined;}
     state.table++;state.last=undefined;
   }
@@ -156,6 +162,11 @@ async function run(sb:SB,manual:boolean):Promise<Row> {
     if(error)throw new Error("Falha ao carregar cursor");
     state=data?.state as State|undefined;
     if(!state)state={table:0,cycle:new Date().toISOString(),tablesDone:false,files:[],errors:[],uploadedBytes:0,uploadedFiles:0,phase:"tables"};
+    if(state.tablesDone && state.files.every(f=>f.status==="complete") && state.cycle.slice(0,10)!==new Date().toISOString().slice(0,10)) {
+      const {error}=await sb.from("gdrive_export_chunks").delete().gte("chunk_no",0);
+      if(error)throw new Error("Falha ao reiniciar ciclo de exportação");
+      state={table:0,cycle:new Date().toISOString(),tablesDone:false,files:[],errors:[],uploadedBytes:0,uploadedFiles:0,phase:"tables"};
+    }
     const {data:log,error:logError}=await sb.from("infra_backup_log").insert({kind:"db",status:"running",trigger:manual?"manual":"cron",bucket:"google-drive",manifest:{destination:SHARED_DRIVE}}).select("id").single();
     if(logError)throw new Error("Falha ao registrar execução de backup");logId=String(log.id);
     const {error:settingsError}=await sb.from("gdrive_backup_settings").update({run_status:"running",run_started_at:new Date().toISOString(),run_error:null,run_trigger:manual?"manual":"cron"}).eq("singleton",true);
