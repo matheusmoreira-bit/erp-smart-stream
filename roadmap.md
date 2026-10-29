@@ -34,4 +34,5 @@
 - [ ] CNAB standalone: relatório de fornecedores sem perfil, ensaio na empresa de teste e homologação Sicoob (até 15/10)
 
 - [ ] Arquivo SAP produção: carga inicial em andamento (ANA, Cactus, Instituto, Open Gaming); conferir conclusão e crons diários.
-- [ ] S3: aguardando decisão do Douglas para ativar espelhamento do bucket sap-archive e backup diário do banco.
+- [x] Finalização S3: jobs 571/572 desativados e lidos de volta como active=false, sem apagar ou alterar código de backup; S3 não será utilizado.
+- [x] Finalização agendador: aceitação de env antiga e aliases removida; 47 funções dependentes republicadas; hana-health-probe HTTP 200 com banco / 401 com env antiga; três testes passaram e build OK.
