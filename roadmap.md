@@ -1,5 +1,6 @@
 # Roadmap — Melhorias de segurança (pentest)
 
+- [ ] Complemento Backup de anexos: apresentar SQL exato e aguardar aprovação de uma única política SELECT para expense-attachments/nfse-xmls com has_role(auth.uid(), admin)/MFA; depois aplicar, remover bloqueios locais desses buckets e testar nfse-pdfs/expense-attachments sem funções privilegiadas ou mudanças nas outras políticas.
 - [x] Backup de anexos: página administrativa implementada com cliente autenticado/RLS existente, mapeamento compartilhado do aviso, partes locais ~200 MB, progresso, retomada e auditoria; expense-attachments/nfse-xmls bloqueados, sem novas políticas, funções ou escrita no Storage. Estado do Drive indisponível porque a tabela existente não tem política de leitura.
 - [ ] Backup de anexos: teste real nfse-pdfs bloqueado por MFA. Sessão obtida autorizadamente para Douglas, mas has_role retornou false e a página exibiu Acesso negado; nenhum documento real baixado. Confirmar download/ZIP/auditoria somente com sessão administrativa válida, sem contornar a proteção.
 
