@@ -519,6 +519,13 @@
       "when": 1793295811580,
       "tag": "0073_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1793716102786,
+      "tag": "0074_attachment_backup_admin_read",
+      "breakpoints": true
     }
   ]
 }
