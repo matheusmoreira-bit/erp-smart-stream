@@ -22,6 +22,7 @@ function inventories() {
 }
 
 beforeEach(() => {
+  vi.stubGlobal("AbortSignal", { timeout: () => new AbortController().signal });
   mocks.user = null;
   mocks.rpc.mockReset();
   mocks.getUser.mockReset().mockImplementation(async () => ({ data: { user: mocks.user }, error: null }));
@@ -30,7 +31,7 @@ beforeEach(() => {
     : { abortSignal: () => Promise.resolve(result()) });
   localStorage.clear();
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("inventário vinculado ao usuário autenticado", () => {
   it("aguarda user null → usuário e aplica os resultados dos seis buckets", async () => {
