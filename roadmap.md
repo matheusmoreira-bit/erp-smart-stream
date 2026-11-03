@@ -1,5 +1,7 @@
 # Roadmap — Melhorias de segurança (pentest)
 
+- [ ] Corrigir inventário Backup de anexos: consulta SECURITY INVOKER com RLS, resultados independentes por bucket, testes e publicação; confirmar sessão real sem contornar MFA.
+
 - [x] Complemento Backup de anexos: SQL exato aprovado e aplicado em 0074_attachment_backup_admin_read.sql; uma política SELECT authenticated/has_role(auth.uid(), admin)/MFA para expense-attachments/nfse-xmls, lida de volta. Políticas restantes e seis buckets privados preservados; bloqueios locais removidos e fluxo uniforme para seis buckets. Testes de ZIP e contrato SQL adicionados.
 - [x] Backup de anexos: página administrativa implementada com cliente autenticado/RLS existente, mapeamento compartilhado do aviso, partes locais ~200 MB, progresso, retomada e auditoria; expense-attachments/nfse-xmls bloqueados, sem novas políticas, funções ou escrita no Storage. Estado do Drive indisponível porque a tabela existente não tem política de leitura.
 - [ ] Backup de anexos: testes reais nfse-pdfs/expense-attachments e permissão positiva admin com MFA bloqueados por sessão sem MFA. Rechecagem após a política: has_role retornou false e a página exibiu Acesso negado; nenhum documento real baixado. Confirmar download/ZIP/auditoria somente com sessão administrativa válida, sem contornar a proteção.

@@ -10561,6 +10561,7 @@ export type Database = {
           cutoff: string
         }[]
       }
+      attachment_backup_inventory: { Args: { p_bucket: string }; Returns: Json }
       audit_trail_filter_options: {
         Args: never
         Returns: {
