@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { zip } from "fflate";
 import { Archive, Download, ExternalLink, Loader2, RefreshCw, RotateCcw, Square } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -58,15 +58,17 @@ export default function AttachmentBackup() {
       const saved: unknown = checkpoint ? JSON.parse(localStorage.getItem(checkpoint) || "[]") : [];
       setCompleted(new Set(Array.isArray(saved) ? saved.filter((s): s is string => typeof s === "string") : []));
     } catch { setCompleted(new Set()); }
-    return () => { cancelled.current = true; owner.current = null; loadGeneration.current++; };
+    return () => { cancelled.current = true; owner.current = null; };
   }, [checkpoint, user?.id]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    if (!user?.id) return;
     const generation = ++loadGeneration.current;
     setLoading(true); setError("");
     setRows(BUCKETS.map(bucket => ({ bucket, files: [], loading: true })));
     try {
-      await requireAdmin();
+      if (await requireAdmin() !== user.id) throw new Error("Sessão alterada");
+      if (generation !== loadGeneration.current) return;
       await loadInventories(inventory, row => {
         if (generation === loadGeneration.current) setRows(old => old.map(current => current.bucket === row.bucket ? row : current));
       });
@@ -77,8 +79,11 @@ export default function AttachmentBackup() {
       }
     }
     finally { if (generation === loadGeneration.current) setLoading(false); }
-  };
-  useEffect(() => { void load(); }, []);
+  }, [user?.id]);
+  useEffect(() => {
+    if (user?.id) void load();
+    return () => { loadGeneration.current++; };
+  }, [load, user?.id]);
 
   const prepare = async (bucket?: Bucket) => {
     if (busy || ready) return;
