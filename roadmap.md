@@ -1,6 +1,7 @@
 # Roadmap — Melhorias de segurança (pentest)
 
-- [ ] Corrigir inventário Backup de anexos: consulta SECURITY INVOKER com RLS, resultados independentes por bucket, testes e publicação; confirmar sessão real sem contornar MFA.
+- [x] Corrigir inventário Backup de anexos: migration 0075 SECURITY INVOKER/RLS, uma consulta JSON por bucket sem corte de 1.000 linhas, seis consultas independentes com timeout e resultados/erros imediatos; 17 testes passaram e build OK. Gargalo comprovado no código: varredura sequencial, 3.291 pastas/4.384 arquivos no expense-attachments antes de mostrar qualquer bucket.
+- [ ] Inventário Backup de anexos: validação positiva/tempo e ZIP real dependem de sessão administrativa com aal2 disponível às ferramentas; sessão --self não herdou MFA e RPC recusou com 42501 em 540 ms. Não comprovado se a sessão publicada teve erro de list/RLS vazio; publicação solicitada após testes, confirmação de implantação pendente.
 
 - [x] Complemento Backup de anexos: SQL exato aprovado e aplicado em 0074_attachment_backup_admin_read.sql; uma política SELECT authenticated/has_role(auth.uid(), admin)/MFA para expense-attachments/nfse-xmls, lida de volta. Políticas restantes e seis buckets privados preservados; bloqueios locais removidos e fluxo uniforme para seis buckets. Testes de ZIP e contrato SQL adicionados.
 - [x] Backup de anexos: página administrativa implementada com cliente autenticado/RLS existente, mapeamento compartilhado do aviso, partes locais ~200 MB, progresso, retomada e auditoria; expense-attachments/nfse-xmls bloqueados, sem novas políticas, funções ou escrita no Storage. Estado do Drive indisponível porque a tabela existente não tem política de leitura.
