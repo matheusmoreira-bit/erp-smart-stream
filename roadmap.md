@@ -1,6 +1,6 @@
 # Roadmap — Melhorias de segurança (pentest)
 
-- [ ] Backup de anexos em lote (Douglas/Hiller): verificar papel de Hiller e limites antes de implementar; ZIPs retomáveis no navegador com teste pequeno nfse-pdfs. Bloqueado pela regra da plataforma que proíbe código com service-role para copiar arquivos Storage; não criar alternativa que contorne essa restrição.
+- [ ] Backup de anexos em lote (Douglas/Hiller): autorizado somente navegador/sessão autenticada/RLS existente, sem service-role, funções administrativas ou novas políticas. Preparar página com ZIPs de ~200 MB, progresso, retomada e registro; manter expense-attachments/nfse-xmls bloqueados. Teste nfse-pdfs depende de sessão administrativa com MFA; sessão disponível está signed_out.
 
 - [x] Backup Drive: export-to-gdrive publicada, catálogo de 159 tabelas/52 exclusões, cursores e staging privados, destino configurado, job 573 diário 06:30 UTC; job 69 inativo. Testes de segurança/CSV/conclusão passaram. Primeira chamada HTTP 200 com resultado error registrado (zero arquivos/bytes).
 - [x] Backup Drive: conexão Douglas vinculada em 29/10 às 17:26 UTC, conta douglas.vinicius@growth.gg confirmada; export-to-gdrive usa GOOGLE_DRIVE_API_KEY da conexão vinculada e foi republicada. Job 573 executado sem exibir segredos; seis pastas, LEIA-ME, manifest e índice confirmados no Drive (3 arquivos, 33.566 bytes). Cinco testes passaram; build OK.
