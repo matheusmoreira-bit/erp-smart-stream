@@ -1,7 +1,8 @@
+// @vitest-environment node
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const sql = readFileSync(new URL("../../drizzle/migrations/0074_attachment_backup_admin_read.sql", import.meta.url), "utf8");
+const sql = readFileSync("drizzle/migrations/0074_attachment_backup_admin_read.sql", "utf8");
 
 describe("contrato da política de leitura aprovada", () => {
   it("cria exatamente uma política somente SELECT para authenticated", () => {
