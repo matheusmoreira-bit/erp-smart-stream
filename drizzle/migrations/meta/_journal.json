@@ -526,6 +526,13 @@
       "when": 1793716102786,
       "tag": "0074_attachment_backup_admin_read",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1793717406000,
+      "tag": "0075_attachment_backup_inventory_invoker",
+      "breakpoints": true
     }
   ]
 }
