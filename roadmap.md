@@ -1,5 +1,6 @@
 # Roadmap — Melhorias de segurança (pentest)
 
+- [ ] Corrigir corrida user null → usuário no Backup de anexos: carregar por user.id, testar transição/troca de conta, publicar e apresentar diff; sem alterar RPC ou permissões.
 - [x] Corrigir inventário Backup de anexos: migration 0075 SECURITY INVOKER/RLS, uma consulta JSON por bucket sem corte de 1.000 linhas, seis consultas independentes com timeout e resultados/erros imediatos; 17 testes passaram e build OK. Gargalo comprovado no código: varredura sequencial, 3.291 pastas/4.384 arquivos no expense-attachments antes de mostrar qualquer bucket.
 - [ ] Inventário Backup de anexos: validação positiva/tempo e ZIP real dependem de sessão administrativa com aal2 disponível às ferramentas; sessão --self não herdou MFA e RPC recusou com 42501 em 540 ms. Não comprovado se a sessão publicada teve erro de list/RLS vazio; publicação solicitada após testes, confirmação de implantação pendente.
 
