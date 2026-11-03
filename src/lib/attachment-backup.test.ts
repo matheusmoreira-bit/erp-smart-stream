@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { BLOCKED_BUCKETS, PART_BYTES, splitParts, zipPath, fileKey, retryFile, type BackupFile } from "./attachment-backup";
+import { BUCKETS, PART_BYTES, splitParts, zipPath, fileKey, retryFile, type BackupFile } from "./attachment-backup";
 const file = (name: string, bytes = 10): BackupFile => ({ bucket: "nfse-pdfs", name, bytes, version: "1" });
 
 describe("backup local de anexos", () => {
@@ -17,8 +17,17 @@ describe("backup local de anexos", () => {
   it("rejeita traversal e colisões sem sobrescrever arquivos", () => {
     expect(splitParts([file("../secret"), file("a.pdf"), file("a.pdf")]).rejected).toHaveLength(2);
   });
-  it("mantém os dois buckets sem SELECT bloqueados", () => {
-    expect(BLOCKED_BUCKETS).toEqual(["expense-attachments", "nfse-xmls"]);
+  it("inclui os seis buckets no fluxo de ZIP sem bloquear os dois autorizados", () => {
+    expect(BUCKETS).toEqual(["expense-attachments", "sap-archive", "registration-attachments", "nf-entrada-files", "nfse-pdfs", "nfse-xmls"]);
+    const files = BUCKETS.map(bucket => ({ ...file(bucket === "sap-archive" ? "SBO_CACTUS/a.pdf" : "folder/a.pdf"), bucket }));
+    expect(splitParts(files).parts.flat()).toHaveLength(6);
+    expect(splitParts(files).rejected).toEqual([]);
+  });
+  it("preserva o destino de expense-attachments", () => {
+    expect(zipPath({ ...file("uuid/nota.pdf"), bucket: "expense-attachments" })).toBe("anexos-pedidos-flow/uuid/nota.pdf");
+  });
+  it("preserva o destino de nfse-xmls", () => {
+    expect(zipPath({ ...file("SBO_CACTUS/nota.xml"), bucket: "nfse-xmls" })).toBe("outros-anexos/nfse-xmls/SBO_CACTUS/nota.xml");
   });
   it("tenta no máximo três vezes", async () => {
     vi.useFakeTimers();

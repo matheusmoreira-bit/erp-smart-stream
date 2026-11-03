@@ -2,8 +2,6 @@ import { BUCKETS, driveFolderFor, type Bucket } from "../../supabase/functions/a
 
 export { BUCKETS, driveFolderFor, type Bucket };
 export const PART_BYTES = 200 * 1024 * 1024;
-// These two buckets have no SELECT policy. Never substitute an empty list for denied access.
-export const BLOCKED_BUCKETS: readonly Bucket[] = ["expense-attachments", "nfse-xmls"];
 export type BackupFile = { bucket: Bucket; name: string; bytes: number; version: string };
 export const fileKey = (file: BackupFile) => JSON.stringify([file.bucket, file.name, file.bytes, file.version]);
 

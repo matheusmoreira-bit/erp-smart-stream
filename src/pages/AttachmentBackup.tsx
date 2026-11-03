@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { BUCKETS, BLOCKED_BUCKETS, driveFolderFor, fileKey, zipPath, splitParts, retryFile, downloadZip, PART_BYTES, type BackupFile, type Bucket } from "@/lib/attachment-backup";
+import { BUCKETS, driveFolderFor, fileKey, zipPath, splitParts, retryFile, downloadZip, PART_BYTES, type BackupFile, type Bucket } from "@/lib/attachment-backup";
 
 type Inventory = { bucket: Bucket; files: BackupFile[]; error?: string };
 type Ready = { blob: Blob; name: string; files: BackupFile[] };
@@ -24,7 +24,6 @@ async function requireAdmin() {
 }
 
 async function inventory(bucket: Bucket): Promise<BackupFile[]> {
-  if (BLOCKED_BUCKETS.includes(bucket)) throw new Error("Sem política de leitura autorizada");
   const files: BackupFile[] = [];
   const folders = [""];
   const seen = new Set<string>();
