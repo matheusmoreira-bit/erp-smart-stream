@@ -147,6 +147,7 @@ const BACKOFFICE_MORE_GROUPS: { label: string; items: BackofficeNavItem[] }[] = 
       { key: "document_timeline", label: "Trilha por documento", icon: HistoryIcon, to: "/auditoria/documento" },
       { key: "integration_health", label: "Saúde das integrações", icon: Activity, to: "/backoffice/saude-integracoes" },
       { key: "infra_health", label: "Infraestrutura e backups", icon: Server, to: "/backoffice/infra-health" },
+      { key: "attachment_backup", label: "Backup de anexos", icon: Database, to: "/backoffice/backup-anexos" },
       { key: "db_performance", label: "Desempenho do banco", icon: Database, to: "/backoffice/desempenho-banco" },
       { key: "flow_performance", label: "Performance dos fluxos", icon: Gauge, to: "/backoffice/performance" },
     ],
