@@ -129,7 +129,7 @@ export default function AttachmentBackup() {
       if (bytes.length > PART_BYTES) throw new Error("ZIP excedeu o limite de 200 MB");
       await audit("attachment_backup_prepared", downloaded);
       if (cancelled.current || owner.current !== requestOwner) return;
-      setReady({ blob: new Blob([bytes], { type: "application/zip" }), name: `erp-flow-${bucket || "anexos"}-${Date.now()}.zip`, files: downloaded });
+      setReady({ blob: new Blob([new Uint8Array(bytes).buffer], { type: "application/zip" }), name: `erp-flow-${bucket || "anexos"}-${Date.now()}.zip`, files: downloaded });
     } catch (e) { toast.error(message(e)); }
     finally { setBusy(false); }
   };

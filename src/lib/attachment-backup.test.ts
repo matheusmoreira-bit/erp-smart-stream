@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { BLOCKED_BUCKETS, PART_BYTES, splitParts, zipPath, retryFile, type BackupFile } from "./attachment-backup";
+import { BLOCKED_BUCKETS, PART_BYTES, splitParts, zipPath, fileKey, retryFile, type BackupFile } from "./attachment-backup";
 const file = (name: string, bytes = 10): BackupFile => ({ bucket: "nfse-pdfs", name, bytes, version: "1" });
 
 describe("backup local de anexos", () => {
@@ -32,5 +32,10 @@ describe("backup local de anexos", () => {
     const op = vi.fn();
     await expect(retryFile(op, () => true)).rejects.toThrow("Cancelado");
     expect(op).not.toHaveBeenCalled();
+  });
+  it("retoma apenas arquivos já solicitados da mesma versão", () => {
+    const a = file("a.pdf"); const b = file("b.pdf");
+    const completed = new Set([fileKey(a)]);
+    expect([a, b, { ...a, version: "2" }].filter(f => !completed.has(fileKey(f)))).toEqual([b, { ...a, version: "2" }]);
   });
 });
