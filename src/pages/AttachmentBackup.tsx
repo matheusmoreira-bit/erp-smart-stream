@@ -8,9 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { BUCKETS, driveFolderFor, fileKey, zipPath, splitParts, retryFile, downloadZip, PART_BYTES, type BackupFile, type Bucket } from "@/lib/attachment-backup";
+import { BUCKETS, driveFolderFor, fileKey, zipPath, splitParts, retryFile, downloadZip, PART_BYTES, parseInventory, loadInventories, type InventoryRow, type BackupFile, type Bucket } from "@/lib/attachment-backup";
 
-type Inventory = { bucket: Bucket; files: BackupFile[]; error?: string };
 type Ready = { blob: Blob; name: string; files: BackupFile[] };
 const DRIVE_URL = "https://drive.google.com/drive/folders/0AEGlkXe3D_4wUk9PVA";
 const message = (e: unknown) => e instanceof Error ? e.message : "Falha na operação";
@@ -24,27 +23,9 @@ async function requireAdmin() {
 }
 
 async function inventory(bucket: Bucket): Promise<BackupFile[]> {
-  const files: BackupFile[] = [];
-  const folders = [""];
-  const seen = new Set<string>();
-  while (folders.length) {
-    const folder = folders.shift();
-    if (folder === undefined || seen.has(folder)) continue;
-    seen.add(folder);
-    for (let offset = 0; ; offset += 100) {
-      const { data, error } = await supabase.storage.from(bucket).list(folder, { limit: 100, offset, sortBy: { column: "name", order: "asc" } });
-      if (error) throw new Error(error.message);
-      for (const item of data) {
-        const name = folder ? `${folder}/${item.name}` : item.name;
-        if (!item.id && !item.metadata) { folders.push(name); continue; }
-        const bytes = Number(item.metadata?.size);
-        if (!Number.isSafeInteger(bytes) || bytes < 0) throw new Error("Tamanho de arquivo indisponível");
-        files.push({ bucket, name, bytes, version: item.updated_at || item.id || "" });
-      }
-      if (data.length < 100) break;
-    }
-  }
-  return files;
+  const { data, error } = await supabase.rpc("attachment_backup_inventory", { p_bucket: bucket }).abortSignal(AbortSignal.timeout(25_000));
+  if (error) throw new Error(error.message);
+  return parseInventory(bucket, data);
 }
 
 async function audit(action: string, files: BackupFile[]) {
@@ -58,7 +39,7 @@ async function audit(action: string, files: BackupFile[]) {
 
 export default function AttachmentBackup() {
   const { user } = useAuth();
-  const [rows, setRows] = useState<Inventory[]>([]);
+  const [rows, setRows] = useState<InventoryRow[]>(BUCKETS.map(bucket => ({ bucket, files: [], loading: true })));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -68,6 +49,7 @@ export default function AttachmentBackup() {
   const [completed, setCompleted] = useState<Set<string>>(new Set());
   const cancelled = useRef(false);
   const owner = useRef<string | null>(null);
+  const loadGeneration = useRef(0);
   const checkpoint = user ? `attachment-backup:${user.id}` : null;
   useEffect(() => {
     owner.current = user?.id ?? null;
@@ -76,21 +58,25 @@ export default function AttachmentBackup() {
       const saved: unknown = checkpoint ? JSON.parse(localStorage.getItem(checkpoint) || "[]") : [];
       setCompleted(new Set(Array.isArray(saved) ? saved.filter((s): s is string => typeof s === "string") : []));
     } catch { setCompleted(new Set()); }
-    return () => { cancelled.current = true; owner.current = null; };
+    return () => { cancelled.current = true; owner.current = null; loadGeneration.current++; };
   }, [checkpoint, user?.id]);
 
   const load = async () => {
+    const generation = ++loadGeneration.current;
     setLoading(true); setError("");
+    setRows(BUCKETS.map(bucket => ({ bucket, files: [], loading: true })));
     try {
       await requireAdmin();
-      const result: Inventory[] = [];
-      for (const bucket of BUCKETS) {
-        try { result.push({ bucket, files: await inventory(bucket) }); }
-        catch (e) { result.push({ bucket, files: [], error: message(e) }); }
+      await loadInventories(inventory, row => {
+        if (generation === loadGeneration.current) setRows(old => old.map(current => current.bucket === row.bucket ? row : current));
+      });
+    } catch (e) {
+      if (generation === loadGeneration.current) {
+        setError(message(e));
+        setRows(BUCKETS.map(bucket => ({ bucket, files: [], loading: false, error: message(e) })));
       }
-      setRows(result);
-    } catch (e) { setError(message(e)); }
-    finally { setLoading(false); }
+    }
+    finally { if (generation === loadGeneration.current) setLoading(false); }
   };
   useEffect(() => { void load(); }, []);
 
@@ -100,7 +86,7 @@ export default function AttachmentBackup() {
     const requestOwner = user?.id;
     try {
       if (!requestOwner || await requireAdmin() !== requestOwner) throw new Error("Sessão alterada");
-      const remaining = rows.filter(r => !r.error && (!bucket || r.bucket === bucket)).flatMap(r => r.files).filter(f => !completed.has(fileKey(f)));
+      const remaining = rows.filter(r => !r.loading && !r.error && (!bucket || r.bucket === bucket)).flatMap(r => r.files).filter(f => !completed.has(fileKey(f)));
       const { parts, rejected } = splitParts(remaining);
       setFailures(rejected.map(f => `${f.bucket}/${f.name}: tamanho acima do limite, caminho inválido ou duplicado`));
       const part = parts[0];
@@ -154,7 +140,8 @@ export default function AttachmentBackup() {
       <p className="text-sm text-muted-foreground">Extraia o ZIP e arraste a pasta para ERP-Flow-Backup no <a className="inline-flex items-center gap-1 text-primary underline" href={DRIVE_URL} target="_blank" rel="noreferrer">Drive compartilhado<ExternalLink className="h-3 w-3" /></a>.</p>
       <p className="text-sm text-muted-foreground">Status no Drive indisponível para esta sessão. Os ZIPs incluem arquivos autorizados, não apenas pendentes.</p>
       {error && <p role="alert" className="text-destructive">{error}</p>}
-      {loading ? <div role="status" className="flex items-center gap-2 py-12 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Conferindo arquivos autorizados…</div> : <div className="overflow-x-auto border-y border-border"><table className="w-full text-left text-sm"><thead className="bg-muted/40 text-muted-foreground"><tr>{["Bucket", "Arquivos / MB", "No Drive", "Destino", ""].map((text, i) => <th key={i} className="px-3 py-3 font-medium">{text}</th>)}</tr></thead><tbody className="divide-y divide-border">{rows.map(row => <tr key={row.bucket}><td className="px-3 py-4"><span className="break-all font-medium">{row.bucket}</span>{row.error && <div className="mt-1 max-w-64 text-xs text-destructive">{row.error}</div>}</td><td className="whitespace-nowrap px-3 py-4">{row.error ? "—" : `${row.files.length} / ${(row.files.reduce((s, f) => s + f.bytes, 0) / 1048576).toFixed(1)}`}</td><td className="px-3 py-4">—</td><td className="px-3 py-4"><span className="break-all text-xs text-muted-foreground">{driveFolderFor(row.bucket)}</span></td><td className="px-3 py-4">{row.error ? <Badge variant="outline">Bloqueado</Badge> : <Button variant="outline" size="sm" disabled={busy || !!ready || !row.files.some(f => !completed.has(fileKey(f)))} onClick={() => void prepare(row.bucket)}><Archive className="mr-2 h-4 w-4" />Preparar ZIP</Button>}</td></tr>)}</tbody></table></div>}
+      <p role="status" aria-live="polite" className="flex items-center gap-2 text-sm text-muted-foreground">{loading && <Loader2 className="h-4 w-4 animate-spin" />}{rows.filter(r => !r.loading).length} / {BUCKETS.length} buckets conferidos · {rows.reduce((n, r) => n + r.files.length, 0)} arquivos{loading ? " (parcial)" : ""}</p>
+      <div className="overflow-x-auto border-y border-border"><table className="w-full text-left text-sm"><thead className="bg-muted/40 text-muted-foreground"><tr>{["Bucket", "Arquivos / MB", "No Drive", "Destino", ""].map((text, i) => <th key={i} className="px-3 py-3 font-medium">{text}</th>)}</tr></thead><tbody className="divide-y divide-border">{rows.map(row => <tr key={row.bucket}><td className="px-3 py-4"><span className="break-all font-medium">{row.bucket}</span>{row.error && <div role="alert" className="mt-1 max-w-64 text-xs text-destructive">{row.error}</div>}</td><td className="whitespace-nowrap px-3 py-4">{row.loading ? <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Consultando…</span> : row.error ? "—" : `${row.files.length} / ${(row.files.reduce((s, f) => s + f.bytes, 0) / 1048576).toFixed(1)}`}{!row.loading && !row.error && !row.files.length && <div className="text-xs text-muted-foreground">Nenhum arquivo visível para esta sessão</div>}</td><td className="px-3 py-4">—</td><td className="px-3 py-4"><span className="break-all text-xs text-muted-foreground">{driveFolderFor(row.bucket)}</span></td><td className="px-3 py-4">{row.error ? <Badge variant="outline">Falha na consulta</Badge> : <Button variant="outline" size="sm" disabled={row.loading || busy || !!ready || !row.files.some(f => !completed.has(fileKey(f)))} onClick={() => void prepare(row.bucket)}><Archive className="mr-2 h-4 w-4" />Preparar ZIP</Button>}</td></tr>)}</tbody></table></div>
       {(busy || ready) && <section className="space-y-3 border-y border-border py-4" aria-live="polite"><div className="flex flex-wrap items-center justify-between gap-3"><span>{busy ? `Preparando ${progress.done} de ${progress.total}` : `ZIP pronto · ${ready?.files.length} arquivos · ${((ready?.blob.size || 0) / 1048576).toFixed(1)} MB`}</span>{busy ? <Button variant="outline" onClick={() => { cancelled.current = true; }}><Square className="mr-2 h-4 w-4" />Cancelar</Button> : <Button onClick={save}><Download className="mr-2 h-4 w-4" />Baixar ZIP</Button>}</div><Progress value={progress.total ? progress.done / progress.total * 100 : 0} /></section>}
       {failures.length > 0 && <section className="space-y-2"><h2 className="font-medium text-destructive">Arquivos não incluídos ({failures.length})</h2><ul className="max-h-64 space-y-1 overflow-auto text-sm text-muted-foreground">{failures.map((f, i) => <li className="break-all" key={i}>{f}</li>)}</ul></section>}
     </main>

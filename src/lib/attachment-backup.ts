@@ -5,6 +5,31 @@ export const PART_BYTES = 200 * 1024 * 1024;
 export type BackupFile = { bucket: Bucket; name: string; bytes: number; version: string };
 export const fileKey = (file: BackupFile) => JSON.stringify([file.bucket, file.name, file.bytes, file.version]);
 
+export type InventoryRow = { bucket: Bucket; files: BackupFile[]; loading: boolean; error?: string };
+
+export function parseInventory(bucket: Bucket, data: unknown): BackupFile[] {
+  if (!Array.isArray(data)) throw new Error("Inventário inválido");
+  return data.map((value: unknown) => {
+    if (!value || typeof value !== "object" || !("name" in value) || typeof value.name !== "string" || !("bytes" in value) || value.bytes === null || value.bytes === "" || !("version" in value) || typeof value.version !== "string") {
+      throw new Error("Metadados de arquivo indisponíveis");
+    }
+    const bytes = Number(value.bytes);
+    if (!Number.isSafeInteger(bytes) || bytes < 0) throw new Error("Tamanho de arquivo indisponível");
+    return { bucket, name: value.name, bytes, version: value.version };
+  });
+}
+
+// Independent completions keep a slow or failed bucket from hiding the others.
+export async function loadInventories(
+  fetchBucket: (bucket: Bucket) => Promise<BackupFile[]>,
+  onRow: (row: InventoryRow) => void,
+): Promise<void> {
+  await Promise.all(BUCKETS.map(async bucket => {
+    try { onRow({ bucket, files: await fetchBucket(bucket), loading: false }); }
+    catch (error) { onRow({ bucket, files: [], loading: false, error: error instanceof Error ? error.message : "Falha ao consultar inventário" }); }
+  }));
+}
+
 export function zipPath(file: BackupFile): string {
   const segments = file.name.split("/");
   if (segments.some(s => !s || s === "." || s === ".." || /[\\\x00-\x1f:]/.test(s))) {
