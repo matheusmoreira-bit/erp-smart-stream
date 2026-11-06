@@ -791,7 +791,7 @@ export function useExpenses(
             const ctx = {
               total_amount: totalAmount,
               cost_center: cc,
-              project: input.project || "",
+              project: input.project || input.items.find((it) => !cc || (it.cost_center || "").trim() === cc)?.project || "",
               requester_name: session.userName,
               // Legado: mantém supplier_name como "Nome Código" para regras existentes.
               supplier_name: `${input.supplier_name || ""} ${input.supplier_code || ""}`.trim(),
@@ -844,7 +844,7 @@ export function useExpenses(
                 {
                   total_amount: totalAmount,
                   cost_center: ccForFallback,
-                  project: input.project || "",
+                  project: input.project || input.items.find((it) => !ccForFallback || (it.cost_center || "").trim() === ccForFallback)?.project || "",
                   currency: input.currency || "BRL",
                   doc_type: docType,
                 },

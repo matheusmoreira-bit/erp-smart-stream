@@ -20,6 +20,7 @@ import {
   type PriorApproval,
 } from "./approval-reprocess.ts";
 import type { RateioItem, RateioChainContext } from "./rateio-chain.ts";
+import { buildApprovalItemContext, type ApprovalContextItem } from "./approval-item-context.ts";
 
 export type SegmentResolution = "direct" | "branch_fallback" | "rule_without_levels";
 
@@ -73,7 +74,7 @@ async function levelsOf(admin: SupabaseClient, ruleId: string): Promise<Approval
  */
 export async function buildRateioSegments(
   admin: SupabaseClient,
-  items: RateioItem[],
+  items: (RateioItem & ApprovalContextItem)[],
   ctx: RateioChainContext,
   opts?: { allowSingle?: boolean },
 ): Promise<RateioSegment[] | null> {
@@ -116,6 +117,10 @@ export async function buildRateioSegments(
       currency: ctx.currency || "BRL",
       doc_type: ctx.docType,
       rateio_type: String(ctx.rateioType || "padrao").toLowerCase(),
+      ...buildApprovalItemContext(rows.filter((it) =>
+        String(it.cost_center || ctx.headerCostCenter || "").trim().toLowerCase() === g.cc.toLowerCase() &&
+        String(it.project || ctx.headerProject || "").trim().toLowerCase() === g.project.toLowerCase(),
+      )),
     };
     const direct = findMatchingRule(rules, evalCtx, ctx.docType);
     const hierMatch = pickHierarchicalFallbackRule(rules, evalCtx, ctx.docType);
@@ -416,7 +421,7 @@ export async function persistSegmentSubset(
  */
 export async function buildReembolsoSegments(
   admin: SupabaseClient,
-  items: RateioItem[],
+  items: (RateioItem & ApprovalContextItem)[],
   ctx: RateioChainContext,
 ): Promise<RateioSegment[] | null> {
   if (!ctx.companyDb) return null;
@@ -455,6 +460,7 @@ export async function buildReembolsoSegments(
     currency: ctx.currency || "BRL",
     doc_type: ctx.docType,
     rateio_type: "reembolso",
+    ...buildApprovalItemContext(items),
   };
 
   const match = findMatchingRule(reembolsoRules, evalCtx, ctx.docType);
