@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 import { rematchRuleFromMatrix } from "../../supabase/functions/_shared/expense-rule-rematch";
 import { findMatchingRule, type RuleCriterion, type RuleRow } from "../../supabase/functions/_shared/rule-match";
 import { buildApprovalItemContext } from "../../supabase/functions/_shared/approval-item-context";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 const rule: RuleRow = {
   id: "48507a04-d5a4-46ca-84df-57cd12d985bf", name: "Reembolso (OUT00007) | 7K",
@@ -25,7 +24,7 @@ function client(items = [item], rules = [rule], error: { message: string } | nul
     query.select.mockReturnValue(query); query.eq.mockReturnValue(query);
     return query;
   });
-  return { admin: { from } as unknown as SupabaseClient, from };
+  return { admin: { from } as unknown as Parameters<typeof rematchRuleFromMatrix>[0], from };
 }
 describe("expense matrix rematch", () => {
   it("matches OUT00007 + line project 7K with empty headers at creation", async () => {
