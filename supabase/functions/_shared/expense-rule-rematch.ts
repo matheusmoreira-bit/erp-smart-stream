@@ -1,6 +1,16 @@
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { findMatchingRule, pickHierarchicalFallbackRule, type RuleRow } from "./rule-match.ts";
 import { buildApprovalItemContext, type ApprovalContextItem } from "./approval-item-context.ts";
+
+interface MatrixReadResult {
+  data: unknown;
+  error: { message: string } | null;
+}
+interface MatrixReadQuery extends PromiseLike<MatrixReadResult> {
+  eq(column: string, value: string | boolean): MatrixReadQuery;
+}
+interface MatrixReadClient {
+  from(table: string): { select(columns: string): MatrixReadQuery };
+}
 
 /**
  * Reavalia a matriz de aprovação para um documento que está sem `approval_rule_id`.
@@ -9,7 +19,7 @@ import { buildApprovalItemContext, type ApprovalContextItem } from "./approval-i
  * exata nem a alçada do ramo do CC existem.
  */
 export async function rematchRuleFromMatrix(
-  admin: SupabaseClient,
+  admin: MatrixReadClient,
   ctx: {
     companyDb: string;
     docType: string;
