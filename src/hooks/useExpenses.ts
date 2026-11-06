@@ -15,7 +15,7 @@ import { pickHierarchicalFallbackRule } from "@/lib/approval-fallback";
 import { isAttachmentRequiredForDocument } from "@/lib/attachment-validation";
 
 /** Aprovadora global quando a matriz não tem regra aplicável (todas as empresas). */
-const MATRIX_FALLBACK_APPROVER_NAME = "Matheus Moreira";
+const MATRIX_FALLBACK_APPROVER_NAME = "Douglas Vinicius";
 
 import {
   enqueueOutbox,
