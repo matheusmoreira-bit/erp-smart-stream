@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { rematchRuleFromMatrix } from "../../supabase/functions/_shared/expense-rule-rematch";
-import type { RuleRow } from "../../supabase/functions/_shared/rule-match";
+import { findMatchingRule, type RuleCriterion, type RuleRow } from "../../supabase/functions/_shared/rule-match";
+import { buildApprovalItemContext } from "../../supabase/functions/_shared/approval-item-context";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const rule: RuleRow = {
@@ -42,7 +43,7 @@ describe("expense matrix rematch", () => {
     expect(await rematchRuleFromMatrix(admin, { ...ctx, project: "VERA", items: [item] })).toBeNull();
   });
   it("does not borrow the first line project for another cost center", async () => {
-    const ccRule = { ...rule, criteria: [...rule.criteria as [], { field: "cost_center", operator: "equal", value: "9.9.9" }] };
+    const ccRule = { ...rule, criteria: [...rule.criteria as RuleCriterion[], { field: "cost_center", operator: "equal", value: "9.9.9" }] };
     const { admin } = client([item], [ccRule]);
     expect(await rematchRuleFromMatrix(admin, { ...ctx, items: [item, { ...item, cost_center: "9.9.9", project: "VERA" }] })).toBeNull();
   });
@@ -54,5 +55,9 @@ describe("expense matrix rematch", () => {
   it("fails visibly on a matrix read error instead of declaring a gap", async () => {
     const { admin } = client([item], [], { message: "read failed" });
     await expect(rematchRuleFromMatrix(admin, { ...ctx, items: [item] })).rejects.toThrow("read failed");
+  });
+  it("keeps item-specific rules isolated to the items of each segment", () => {
+    expect(findMatchingRule([rule], { project: "7K", ...buildApprovalItemContext([item]) }, "purchase")?.id).toBe(rule.id);
+    expect(findMatchingRule([rule], { project: "7K", ...buildApprovalItemContext([{ ...item, item_code: "OTHER" }]) }, "purchase")).toBeNull();
   });
 });
