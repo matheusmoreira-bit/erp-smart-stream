@@ -1,6 +1,6 @@
 # Roadmap — Melhorias de segurança (pentest)
 
-- [ ] Validar pela tela um novo reembolso sintético em Test (OUT00007/7K) e conferir Daniela como aprovadora, sem alterar pedidos existentes; depende de sessão autorizada e regra válida na empresa Test.
+- [ ] Validar pela tela um novo reembolso sintético em Test (OUT00007/7K) e conferir Daniela como aprovadora: navegador em /compras redirecionou ao MFA em 06/11/2026; empresas Test ativas (BASE 003 ANA Gaming/Providers FGR) não têm regra OUT00007, e as quatro Test que apontam Daniela estão inativas. Sete testes de rematch passaram, mas não substituem criação real. Nenhum pedido, regra ou empresa alterado; bloqueado por sessão autorizada e empresa Test ativa com regra válida.
 
 - [x] Reembolsos: criação ignorava projeto das linhas e rematch omitia critérios de item; contexto compartilhado corrigido, segmentos mantêm tokens próprios, erros de leitura não viram lacuna. OUT00007/7K reproduzido antes e aprovado depois; 51 testes e build OK. Funções expense-mutation/expense-approval-action/expense-reassign-approver republicadas por dependência compartilhada; nenhum pedido/regras alterado. Validação pela tela com pedido sintético em Test aguarda prompt separado; ajuste cliente depende de publicação do app.
 
