@@ -1,6 +1,6 @@
 # Roadmap — Melhorias de segurança (pentest)
 
-- [ ] Open Gaming: restabelecer consulta HANA e concluir atualização de usuários sem alterar permissões; diagnóstico aponta timeout/sem rota para o servidor HANA. Verificar conectividade e executar leitura autenticada antes de qualquer mudança de configuração.
+- [ ] Open Gaming: restabelecer consulta HANA e concluir atualização de usuários sem alterar permissões. Ambos os endereços autorizados (atual e anterior) ficaram inacessíveis na porta 8001; logs da função também mostram timeout/sem rota. Consulta com sessão injetada recusada com 403 por falta de comprovação MFA; nenhuma configuração, permissão ou cadastro alterado. Bloqueado por conectividade do servidor HANA e sessão administrativa verificável pelas ferramentas.
 
 - [ ] Solicitação 06/11 19:47 UTC: validação bloqueada. Sessão injetada restaurada no navegador em /compras voltou à tela "Verificação em duas etapas"; nenhum erro de código MFA comprovado e nenhuma proteção alterada. Consulta atual confirmou duas empresas Test ativas sem OUT00007 e quatro empresas Test inativas com regra OUT00007 ativa. Sete testes de rematch passaram; nenhum pedido criado/alterado. Aguarda sessão legitimamente MFA-validada disponível à verificação e decisão autorizada sobre empresa Test elegível; repetir MFA na interface não garante transferência às ferramentas.
 
