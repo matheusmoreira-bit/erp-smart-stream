@@ -1,5 +1,7 @@
 # Roadmap — Melhorias de segurança (pentest)
 
+- [ ] Open Gaming: restabelecer consulta HANA e concluir atualização de usuários sem alterar permissões; diagnóstico aponta timeout/sem rota para o servidor HANA. Verificar conectividade e executar leitura autenticada antes de qualquer mudança de configuração.
+
 - [ ] Solicitação 06/11 19:47 UTC: validação bloqueada. Sessão injetada restaurada no navegador em /compras voltou à tela "Verificação em duas etapas"; nenhum erro de código MFA comprovado e nenhuma proteção alterada. Consulta atual confirmou duas empresas Test ativas sem OUT00007 e quatro empresas Test inativas com regra OUT00007 ativa. Sete testes de rematch passaram; nenhum pedido criado/alterado. Aguarda sessão legitimamente MFA-validada disponível à verificação e decisão autorizada sobre empresa Test elegível; repetir MFA na interface não garante transferência às ferramentas.
 
 - [ ] Validar pela tela um novo reembolso sintético em Test (OUT00007/7K) e conferir Daniela como aprovadora: navegador em /compras redirecionou ao MFA em 06/11/2026; empresas Test ativas (BASE 003 ANA Gaming/Providers FGR) não têm regra OUT00007, e as quatro empresas Test com regra de Daniela estão inativas (as regras estão ativas). Sete testes de rematch passaram, mas não substituem criação real. Nenhum pedido, regra ou empresa alterado; bloqueado por sessão autorizada e empresa Test ativa com regra válida.
