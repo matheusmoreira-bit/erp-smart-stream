@@ -1,5 +1,7 @@
 # Roadmap — Melhorias de segurança (pentest)
 
+- [ ] Reatribuir somente a etapa pendente de #B08DCB1A a marco.tulio e de #868BF55F a ketlhenn.monteiro; preservar matriz, níveis concluídos e permissões, e conferir gravação de volta.
+
 - [x] Assistente: busca corrigida em copilot-chat/index.ts e expense-detail.ts; itens ordenados por created_at e anexos file_name/file_size, falhas das quatro leituras propagadas sem falso resultado vazio. Sete testes em expense-detail.test.ts passaram, build OK; somente copilot-chat publicada. AGENTS.md atualizado; nenhum pedido, permissão ou validação alterado.
 - [ ] Assistente: validação ponta a ponta autenticada permanece bloqueada; em 12/11 após 13:58 UTC, sessão injetada restaurada no navegador em /backoffice/copiloto mostrou Acesso negado e chamada à função publicada retornou HTTP 403 exigindo segundo fator, antes de consultar o pedido 9463. A sessão --self também havia retornado 403. GO para correção testada; NO-GO para confirmação do fluxo real até sessão com MFA verificável nas ferramentas; nenhum código, pedido, permissão ou validação de segurança alterado nesta verificação.
 
