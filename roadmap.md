@@ -68,3 +68,6 @@
 - [x] Finalização S3: jobs 571/572 desativados e lidos de volta como active=false, sem apagar ou alterar código de backup; S3 não será utilizado.
 - [x] Finalização agendador: aceitação de env antiga e aliases removida; 47 funções dependentes republicadas; hana-health-probe HTTP 200 com banco / 401 com env antiga; três testes passaram e build OK.
 - [x] Aviso semanal de anexos pendentes de cópia manual para o Drive (attachment-backup-notice, jobs 574/575)
+
+- [x] HANA API — endereço trocado para http://187.111.23.22:8001 (ANA, Cactus, Instituto, Open Gaming; anterior guardado em hana_api_url_backup_20261112). Rede OK: /health 200 em 0,4 s e a HanaAPI respondeu ao Flow às 16:31 UTC.
+- [ ] HANA API — consultas ainda falham: HanaAPI devolveu 504 "Tempo limite da consulta HANA excedido" (banco HANA atrás da API) e o login SAP Service Layer (Wevy) retornou 503 "No server is available" às 16:31 e timeout às 16:35 UTC. Depende da Wevy/equipe SAP.
