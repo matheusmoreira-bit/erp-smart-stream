@@ -4,6 +4,7 @@ import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { enforceRateLimit, rateLimitResponse } from "../_shared/rate-limit.ts";
 import { callerHasMfa, isUserImpersonating } from "../_shared/auth.ts";
+import { readExpenseDetail } from "./expense-detail.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -419,13 +420,7 @@ async function runTool(
     }
     case "expense_detail": {
       const id = String(args.expense_id);
-      const [{ data: exp }, { data: items }, { data: history }, { data: attachments }] = await Promise.all([
-        sb.from("expenses").select("*").eq("id", id).maybeSingle(),
-        sb.from("expense_items").select("*").eq("expense_id", id).order("line_num"),
-        sb.from("expense_approval_log").select("*").eq("expense_id", id).order("created_at"),
-        sb.from("expense_attachments").select("id, filename, size_bytes, mime_type, created_at").eq("expense_id", id),
-      ]);
-      return { expense: exp, items, history, attachments };
+      return await readExpenseDetail(sb, id);
     }
     case "query_approval_rules": {
       const companyDb = await resolveCompanyDb(sb, args.company_db);
