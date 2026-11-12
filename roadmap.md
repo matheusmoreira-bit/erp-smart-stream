@@ -1,6 +1,7 @@
 # Roadmap — Melhorias de segurança (pentest)
 
-- [ ] Contingência HANA 12/11: autorizar somente 187.111.23.22:8001 no validador compartilhado, testar e publicar; alteração do endereço pela função credentials recusada com 403 por falta de segundo fator na sessão --self. Sem contorno de MFA; apontamento e consulta HANA autenticada aguardam sessão administrativa verificável.
+- [x] Contingência HANA 12/11: somente 187.111.23.22:8001 incluído na exceção HTTP; quatro testes passaram (porta/IP distintos e credenciais/query/fragmento continuam rejeitados), build OK, 19 funções HANA publicadas. Teste público sem credenciais recebeu HTTP 404 em 427 ms; não comprova consulta HANA. Alterados secure-transport.ts, secure-transport.test.ts, AGENTS.md e roadmap.md; autorização registrada em memória. Revisão de segurança: validações locais OK, permissões/RLS/auth não alteradas; HTTP sem criptografia é risco explicitamente autorizado, demais itens globais não revalidados.
+- [ ] Contingência HANA: apontamento da Open Gaming e consulta autenticada bloqueados pela função credentials (403 exigindo MFA na sessão --self); nenhum endereço gravado, sem bypass. NO-GO para afirmar conectividade HANA autenticada até sessão administrativa verificável.
 
 - [x] Reatribuição individual confirmada por leitura de volta: #B08DCB1A → Marco Tulio (nível 2, Open Gaming); #868BF55F → Ketlhenn Monteiro (nível 1, ANA). Ambos pendentes, regras e níveis preservados, sem segmentos, troca condicionada aos valores anteriores e registrada em audit_log; permissões e código intactos.
 
