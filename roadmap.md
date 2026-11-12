@@ -1,5 +1,7 @@
 # Roadmap — Melhorias de segurança (pentest)
 
+- [ ] HANA API — solicitação 12/11 17:52 UTC: restaurar somente os cinco apontamentos para o IP anterior 189.20.156.34:8001 a partir do backup, preservando caminhos, credenciais, permissões e validações; confirmar por leitura de volta.
+
 - [x] Contingência HANA 12/11: somente 187.111.23.22:8001 incluído na exceção HTTP; quatro testes passaram (porta/IP distintos e credenciais/query/fragmento continuam rejeitados), build OK, 19 funções HANA publicadas. Teste público sem credenciais recebeu HTTP 404 em 427 ms; não comprova consulta HANA. Alterados secure-transport.ts, secure-transport.test.ts, AGENTS.md e roadmap.md; autorização registrada em memória. Revisão de segurança: validações locais OK, permissões/RLS/auth não alteradas; HTTP sem criptografia é risco explicitamente autorizado, demais itens globais não revalidados.
 - [ ] Contingência HANA: apontamento da Open Gaming e consulta autenticada bloqueados pela função credentials (403 exigindo MFA na sessão --self); nenhum endereço gravado, sem bypass. NO-GO para afirmar conectividade HANA autenticada até sessão administrativa verificável.
 
