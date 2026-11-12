@@ -9,6 +9,7 @@
 import { generateDynamicToken } from "./sap-middleware-token.ts";
 
 import { requireHttpsEndpoint } from "./secure-transport.ts";
+import { isHanaCircuitOpen } from "./hana-circuit.ts";
 
 /**
  * Overrides de schema HANA por companyDB do Service Layer.
@@ -179,6 +180,14 @@ export async function fetchHanaView(
   }
   const queryString = qs.toString();
 
+  // Disjuntor: HANA sem comunicação de rede nas últimas tentativas → falha
+  // rápido em vez de esperar o timeout inteiro (evita estourar 150 s).
+  if (await isHanaCircuitOpen(bases[0])) {
+    throw new Error(
+      `HANA view ${view} falhou (v2, todos os IPs): HanaAPI sem comunicação nas últimas tentativas (${bases[0]}); nova tentativa liberada em até 60 s.`,
+    );
+  }
+
   let resp: Response | undefined;
   let lastErr: unknown = null;
   for (const base of bases) {
@@ -219,7 +228,7 @@ export async function fetchHanaView(
         Date.now() - started,
         `sem comunicação: ${message}`,
       );
-      lastErr = new Error(message.toLowerCase().includes("abort") || message.toLowerCase().includes("timeout")
+      lastErr = new Error(/abort|timeout|timed out/i.test(message)
         ? `timeout após ${timeoutMs}ms em ${base}`
         : message);
       continue;
