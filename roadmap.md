@@ -1,5 +1,7 @@
 # Roadmap — Melhorias de segurança (pentest)
 
+- [ ] Contingência HANA 12/11: autorizar somente 187.111.23.22:8001 no validador compartilhado, testar e publicar; alteração do endereço pela função credentials recusada com 403 por falta de segundo fator na sessão --self. Sem contorno de MFA; apontamento e consulta HANA autenticada aguardam sessão administrativa verificável.
+
 - [x] Reatribuição individual confirmada por leitura de volta: #B08DCB1A → Marco Tulio (nível 2, Open Gaming); #868BF55F → Ketlhenn Monteiro (nível 1, ANA). Ambos pendentes, regras e níveis preservados, sem segmentos, troca condicionada aos valores anteriores e registrada em audit_log; permissões e código intactos.
 
 - [x] Assistente: busca corrigida em copilot-chat/index.ts e expense-detail.ts; itens ordenados por created_at e anexos file_name/file_size, falhas das quatro leituras propagadas sem falso resultado vazio. Sete testes em expense-detail.test.ts passaram, build OK; somente copilot-chat publicada. AGENTS.md atualizado; nenhum pedido, permissão ou validação alterado.
