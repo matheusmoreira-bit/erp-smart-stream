@@ -1,7 +1,9 @@
 # Roadmap — Melhorias de segurança (pentest)
 
+- [x] HANA API — rollback solicitado 12/11 17:52 UTC: cinco apontamentos restaurados exatamente do backup para 189.20.156.34:8001; leitura independente confirmou restored_exactly=true nos cinco registros. Caminho /data/, bases de teste, credenciais, permissões e validações preservados. Conectividade não retestada nesta solicitação; recuperação das consultas permanece pendente externa.
+
 - [x] Contingência HANA 12/11: somente 187.111.23.22:8001 incluído na exceção HTTP; quatro testes passaram (porta/IP distintos e credenciais/query/fragmento continuam rejeitados), build OK, 19 funções HANA publicadas. Teste público sem credenciais recebeu HTTP 404 em 427 ms; não comprova consulta HANA. Alterados secure-transport.ts, secure-transport.test.ts, AGENTS.md e roadmap.md; autorização registrada em memória. Revisão de segurança: validações locais OK, permissões/RLS/auth não alteradas; HTTP sem criptografia é risco explicitamente autorizado, demais itens globais não revalidados.
-- [ ] Contingência HANA: apontamento da Open Gaming e consulta autenticada bloqueados pela função credentials (403 exigindo MFA na sessão --self); nenhum endereço gravado, sem bypass. NO-GO para afirmar conectividade HANA autenticada até sessão administrativa verificável.
+- [x] Contingência HANA: apontamento posteriormente realizado nas quatro empresas e revertido a pedido do usuário em 12/11 17:52 UTC; consulta autenticada não comprovada, sem bypass de MFA.
 
 - [x] Reatribuição individual confirmada por leitura de volta: #B08DCB1A → Marco Tulio (nível 2, Open Gaming); #868BF55F → Ketlhenn Monteiro (nível 1, ANA). Ambos pendentes, regras e níveis preservados, sem segmentos, troca condicionada aos valores anteriores e registrada em audit_log; permissões e código intactos.
 
@@ -69,5 +71,5 @@
 - [x] Finalização agendador: aceitação de env antiga e aliases removida; 47 funções dependentes republicadas; hana-health-probe HTTP 200 com banco / 401 com env antiga; três testes passaram e build OK.
 - [x] Aviso semanal de anexos pendentes de cópia manual para o Drive (attachment-backup-notice, jobs 574/575)
 
-- [x] HANA API — endereço trocado para http://187.111.23.22:8001 (ANA, Cactus, Instituto, Open Gaming; anterior guardado em hana_api_url_backup_20261112). Rede OK: /health 200 em 0,4 s e a HanaAPI respondeu ao Flow às 16:31 UTC.
+- [x] HANA API — troca temporária para http://187.111.23.22:8001 revertida a pedido do usuário em 12/11 17:52 UTC; ANA, Cactus, Instituto, Open Gaming e configuração hana_api novamente em 189.20.156.34:8001, conforme backup hana_api_url_backup_20261112.
 - [ ] HANA API — consultas ainda falham: HanaAPI devolveu 504 "Tempo limite da consulta HANA excedido" (banco HANA atrás da API) e o login SAP Service Layer (Wevy) retornou 503 "No server is available" às 16:31 e timeout às 16:35 UTC. Depende da Wevy/equipe SAP.
