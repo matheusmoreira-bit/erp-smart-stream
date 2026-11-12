@@ -1,6 +1,7 @@
 # Roadmap — Melhorias de segurança (pentest)
 
-- [ ] Assistente: corrigir busca de itens/anexos com colunas reais e erros explícitos; testar e publicar somente copilot-chat, mantendo permissões e validações. Verificação autenticada depende de sessão administrativa com MFA válida.
+- [x] Assistente: busca corrigida em copilot-chat/index.ts e expense-detail.ts; itens ordenados por created_at e anexos file_name/file_size, falhas das quatro leituras propagadas sem falso resultado vazio. Sete testes em expense-detail.test.ts passaram, build OK; somente copilot-chat publicada. AGENTS.md atualizado; nenhum pedido, permissão ou validação alterado.
+- [ ] Assistente: validação ponta a ponta autenticada permanece bloqueada; sessão --self de Hiller retornou HTTP 403 exigindo segundo fator em 12/11, após publicação. GO para correção testada; NO-GO para confirmação do fluxo real até sessão com MFA verificável, sem contornar a proteção.
 
 - [ ] PagCorp/Cactus: restabelecer consulta de transações. Logs de 11/11 às 18:52–19:00 UTC confirmam autenticação de cliente aceita e login PagCorp recusado (HTTP 400, corpo Forbidden/403); mesma configuração teve consulta bem-sucedida em 01/10, sem alteração posterior nas credenciais. Reproduzido em 11/11 após 19:11 UTC por consulta GET autenticada com a sessão disponibilizada do solicitante, período 01–11/11: autenticação Flow passou e PagCorp voltou a recusar Authentication/Login; não é o bloqueio administrativo da função credentials. Bloqueado pela validação/liberação da conta de integração no PagCorp ou substituição autorizada das credenciais; nenhuma permissão, credencial ou código alterado. Aviso SAP é independente e sua recuperação não foi comprovada nesta verificação.
 
