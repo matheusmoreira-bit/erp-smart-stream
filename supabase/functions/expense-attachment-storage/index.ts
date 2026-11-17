@@ -32,6 +32,7 @@ import {
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { resolveCallerAliases, normalizeIdentity } from "../_shared/user-aliases.ts";
 import { canonicalIdentity, emailLocalPart, normalizeText } from "../_shared/text-normalize.ts";
+import { loadUnifiedPurchaseRule, unifiedApprovalTargets } from "../_shared/unified-purchase-approval.ts";
 
 const BUCKET = "expense-attachments";
 const SIGN_TTL_SECONDS = 300;
@@ -194,6 +195,14 @@ async function canReadOwned(admin: SupabaseClient, caller: Caller, owned: Owned)
   if (owned.kind === "expense") {
     // Approvers of the current level should also be able to open attachments.
     if (callerOwns(caller, row.current_approver)) return true;
+    const unifiedRuleId = await loadUnifiedPurchaseRule(admin, String(row.company_db || ""), row.doc_type);
+    if (unifiedRuleId && unifiedRuleId === row.approval_rule_id) {
+      const { data, error } = await admin.from("approval_rule_levels")
+        .select("level_order, approver_name, approver_email, require_all").eq("rule_id", unifiedRuleId);
+      if (error) throw new Error(`Falha ao verificar aprovadores do anexo: ${error.message}`);
+      const targets = unifiedApprovalTargets(data || [], String(row.requester_name || "") || null, String(row.requester_email || "") || null);
+      if (targets.some((target) => callerOwns(caller, target.approver_name) || callerOwns(caller, target.approver_email))) return true;
+    }
   }
   // Grupos de permissão que veem todos os documentos (todos menos "Usuário")
   // também podem abrir todos os anexos.

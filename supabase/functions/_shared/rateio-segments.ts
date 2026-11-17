@@ -21,6 +21,7 @@ import {
 } from "./approval-reprocess.ts";
 import type { RateioItem, RateioChainContext } from "./rateio-chain.ts";
 import { buildApprovalItemContext, type ApprovalContextItem } from "./approval-item-context.ts";
+import { loadUnifiedPurchaseRule } from "./unified-purchase-approval.ts";
 
 export type SegmentResolution = "direct" | "branch_fallback" | "rule_without_levels";
 
@@ -81,6 +82,7 @@ export async function buildRateioSegments(
   const allowSingle = opts?.allowSingle === true;
   const rows = (items || []).filter(Boolean);
   if (!ctx.companyDb) return null;
+  if (await loadUnifiedPurchaseRule(admin, ctx.companyDb, ctx.docType)) return null;
   if (!allowSingle && rows.length < 2) return null;
 
   const groups = new Map<string, { cc: string; project: string; amount: number }>();
@@ -425,6 +427,7 @@ export async function buildReembolsoSegments(
   ctx: RateioChainContext,
 ): Promise<RateioSegment[] | null> {
   if (!ctx.companyDb) return null;
+  if (await loadUnifiedPurchaseRule(admin, ctx.companyDb, ctx.docType)) return null;
 
   // 1) Trilhas padrão da matriz — avaliadas como se não houvesse tipo de rateio.
   const standard = await buildRateioSegments(

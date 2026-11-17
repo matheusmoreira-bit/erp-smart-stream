@@ -1242,6 +1242,7 @@ export type Database = {
       }
       approval_rules: {
         Row: {
+          approval_mode: string | null
           auto_approve: boolean
           company_db: string
           cost_center: string | null
@@ -1260,6 +1261,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          approval_mode?: string | null
           auto_approve?: boolean
           company_db: string
           cost_center?: string | null
@@ -1278,6 +1280,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          approval_mode?: string | null
           auto_approve?: boolean
           company_db?: string
           cost_center?: string | null
@@ -10553,6 +10556,10 @@ export type Database = {
         }[]
       }
       api_key_register_use: { Args: { _id: string }; Returns: undefined }
+      apply_unified_purchase_approval: {
+        Args: { _company_db: string; _test: boolean }
+        Returns: Json
+      }
       approvals_feed_bundle: { Args: { _company_db: string }; Returns: Json }
       archive_audit_trail: {
         Args: { _batch_limit?: number; _keep_months?: number }

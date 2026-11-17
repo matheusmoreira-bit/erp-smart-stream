@@ -9,6 +9,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { requireAdminOrSapAdmin, authErrorResponse } from "../_shared/auth.ts";
 import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { requireAdmin } from "../_shared/auth.ts";
 
 interface LevelInput {
   level_order?: number;
@@ -18,7 +19,8 @@ interface LevelInput {
 }
 
 interface Body {
-  action?: "create" | "update" | "toggle" | "delete";
+  action?: "create" | "update" | "toggle" | "delete" | "unify_purchase";
+  test?: boolean;
   id?: string;
   company_db?: string;
   name?: string;
@@ -75,6 +77,24 @@ Deno.serve(async (req) => {
   }
 
   const action = body.action;
+  if (action === "unify_purchase") {
+    try {
+      await requireAdmin(req);
+      if (typeof body.company_db !== "string" || !body.company_db.trim() || typeof body.test !== "boolean") {
+        return json(400, { error: "Empresa e ambiente são obrigatórios." });
+      }
+      const url = Deno.env.get("SUPABASE_URL");
+      const key = Deno.env.get("SUPABASE_ANON_KEY");
+      const authorization = req.headers.get("Authorization");
+      if (!url || !key || !authorization) return json(500, { error: "Configuração de autenticação indisponível." });
+      const client = createClient(url, key, { global: { headers: { Authorization: authorization } }, auth: { persistSession: false } });
+      const { data, error } = await client.rpc("apply_unified_purchase_approval", { _company_db: body.company_db.trim(), _test: body.test });
+      if (error) return json(error.code === "42501" ? 403 : 409, { error: error.message });
+      return json(200, { result: data });
+    } catch (err) {
+      return authErrorResponse(err, corsHeaders) || json(500, { error: "Falha ao aplicar alçada única." });
+    }
+  }
   if (!action || !["create", "update", "toggle", "delete"].includes(action)) {
     return json(400, { error: "action deve ser create, update, toggle ou delete." });
   }

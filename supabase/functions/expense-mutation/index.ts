@@ -45,6 +45,7 @@ import { assertCompanyAccess } from "../_shared/company-access.ts";
 import { isNativeErpExpenseOrigin } from "../_shared/expense-origin.ts";
 import { CACTUS_TECNOLOGIA_DB, notifyCactusExpenseCreated } from "../_shared/expense-created-notify.ts";
 import { buildCreateFingerprintPayload } from "../_shared/expense-create-fingerprint.ts";
+import { loadUnifiedPurchaseRule } from "../_shared/unified-purchase-approval.ts";
 
 
 
@@ -485,7 +486,8 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any, re
   // If pendente_aprovacao and approval_rule_id provided, verify rule exists & is active.
   // Quando houve redirecionamento de CC, a regra enviada pelo cliente foi calculada
   // com o CC antigo — reavaliamos a matriz com o CC/projeto corrigidos.
-  let ruleId = input.approval_rule_id ? String(input.approval_rule_id) : null;
+  const unifiedRuleId = await loadUnifiedPurchaseRule(admin, companyDb, docType);
+  let ruleId = unifiedRuleId || (input.approval_rule_id ? String(input.approval_rule_id) : null);
 
   if (ruleId) {
     const { data: rule, error } = await admin
@@ -502,7 +504,7 @@ async function actionCreate(admin: SupabaseClient, caller: Caller, body: any, re
 
   // Rematch quando houve redirecionamento de CC OU quando o cliente não
   // conseguiu casar nenhuma regra (ex.: CC/projeto só existem nos itens).
-  if (ccRedirected || !ruleId) {
+  if (!unifiedRuleId && (ccRedirected || !ruleId)) {
     const rematched = await rematchRuleFromMatrix(admin, {
       companyDb,
       docType,
@@ -1074,6 +1076,11 @@ async function actionUpdate(admin: SupabaseClient, caller: Caller, body: any) {
     const nextApproverFromClient = rateioChanged
       ? (input.new_current_approver ?? null)
       : null;
+    const unifiedRuleId = await loadUnifiedPurchaseRule(admin, String(current.company_db || ""), current.doc_type);
+    if (unifiedRuleId) {
+      nextRuleId = unifiedRuleId;
+      updates.approval_rule_id = unifiedRuleId;
+    }
 
     // Sem regra vinculada (ex.: documento criado antes do CC ser preenchido nos
     // itens, ou rateio alterado sem regra enviada pelo cliente): antes de cair
@@ -1547,6 +1554,11 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
     }
   }
 
+  const unifiedRuleId = await loadUnifiedPurchaseRule(admin, String(current.company_db || ""), current.doc_type);
+  if (unifiedRuleId && !isPagCorpExpense(current.origin)) {
+    current.approval_rule_id = unifiedRuleId;
+    current.current_level_order = 1;
+  }
   // Cartão corporativo (PagCorp) nunca entra em fluxo de aprovação.
   const autoApprovedByRule = isPagCorpExpense(current.origin)
     || await isAutomaticApprovalRule(admin, current.approval_rule_id);
@@ -1616,6 +1628,7 @@ async function actionSubmit(admin: SupabaseClient, caller: Caller, body: any) {
       status: "pendente_aprovacao",
       current_level_order: resolvedLevel,
       current_approver: resolvedApprover,
+      approval_rule_id: current.approval_rule_id,
     })
     .eq("id", expenseId);
   if (error) return json(500, { error: `Falha ao submeter: ${error.message}` });

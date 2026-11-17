@@ -59,6 +59,7 @@ import {
 } from "../_shared/user-aliases.ts";
 import { emailLocalPart, identityMatches, normalizeText, stripDiacritics as baseStripDiacritics, tokenizePerson } from "../_shared/text-normalize.ts";
 import { isNativeErpExpenseOrigin } from "../_shared/expense-origin.ts";
+import { loadUnifiedPurchaseRule, unifiedApprovalTargets } from "../_shared/unified-purchase-approval.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -645,14 +646,17 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     levels = (lvls || []) as any;
   }
 
+  const unifiedRuleId = await loadUnifiedPurchaseRule(admin, String(exp.company_db || ""), exp.doc_type);
+  const unifiedDocument = unifiedRuleId !== null && unifiedRuleId === exp.approval_rule_id;
+
   // RATEIO: quando as linhas pertencem a alçadas diferentes (CC/projeto
   // distintos), CADA segmento segue a sua própria cadeia, de forma
   // INDEPENDENTE. O documento só é aprovado quando todos os segmentos
   // concluírem. Não há mescla de cadeias.
   let segmentRows: SegmentRow[] = [];
   try {
-    segmentRows = await loadRateioSegments(admin, expenseId);
-    if (segmentRows.length === 0) {
+    segmentRows = unifiedDocument ? [] : await loadRateioSegments(admin, expenseId);
+    if (!unifiedDocument && segmentRows.length === 0) {
       // Backfill para documentos criados antes dos fluxos por segmento.
       const { data: rateioItems } = await admin
         .from("expense_items")
@@ -729,7 +733,9 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     ? pendingSegments
         .map((s) => ({ name: s.current_approver, email: s.current_approver_email }))
         .filter((t) => !requesterMatchesApprover(requesterIdName, requesterIdEmail, t.name, t.email))
-    : (unanimousCurrentLevel
+    : (unifiedDocument
+      ? unifiedApprovalTargets(levels, requesterIdName, requesterIdEmail).map((row) => ({ name: row.approver_name, email: row.approver_email }))
+      : unanimousCurrentLevel
       ? currentLevelRowsNoSelf.map((row) => ({ name: row.approver_name, email: row.approver_email }))
       : (overrideApprover
         ? [{

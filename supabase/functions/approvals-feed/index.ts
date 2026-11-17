@@ -403,7 +403,7 @@ Deno.serve(async (req) => {
     const allIds = docs.map((doc) => String(doc.id || "")).filter(Boolean);
     if (allIds.length > 0) {
       const [segmentsResult, logsResult] = await Promise.all([
-        admin.from("expense_approval_segments").select("*").in("expense_id", allIds),
+        admin.from("expense_approval_segments").select("*").in("expense_id", allIds).neq("status", "substituido"),
         admin
           .from("expense_approval_log")
           .select("expense_id, level_order, decision, approver_name, approver_email, substituted_for_name, substituted_for_email, decided_at, created_at")
