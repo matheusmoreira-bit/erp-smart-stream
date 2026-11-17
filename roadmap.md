@@ -1,5 +1,7 @@
 # Roadmap — Melhorias de segurança (pentest)
 
+- [ ] Solicitação 17/11 — unificar alçadas de compras e pagamentos de notas em um nível Juliana Gavineli OU Mauricio Farias e transferir pendências para Juliana, preservando histórico e impedindo autoaprovação. Alteração ainda não aplicada: verificação autenticada de approval-rule-manage retornou HTTP 403 exigindo segundo fator na sessão disponível às ferramentas; não usar SQL privilegiado para contornar a exigência. Escopo e execução ampla aguardam aprovação do plano e sessão administrativa legitimamente validada.
+
 - [x] HANA API — rollback solicitado 12/11 17:52 UTC: cinco apontamentos restaurados exatamente do backup para 189.20.156.34:8001; leitura independente confirmou restored_exactly=true nos cinco registros. Caminho /data/, bases de teste, credenciais, permissões e validações preservados. Conectividade não retestada nesta solicitação; recuperação das consultas permanece pendente externa.
 
 - [x] Contingência HANA 12/11: somente 187.111.23.22:8001 incluído na exceção HTTP; quatro testes passaram (porta/IP distintos e credenciais/query/fragmento continuam rejeitados), build OK, 19 funções HANA publicadas. Teste público sem credenciais recebeu HTTP 404 em 427 ms; não comprova consulta HANA. Alterados secure-transport.ts, secure-transport.test.ts, AGENTS.md e roadmap.md; autorização registrada em memória. Revisão de segurança: validações locais OK, permissões/RLS/auth não alteradas; HTTP sem criptografia é risco explicitamente autorizado, demais itens globais não revalidados.
