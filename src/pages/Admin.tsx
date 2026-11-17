@@ -136,6 +136,7 @@ const BACKOFFICE_MORE_GROUPS: { label: string; items: BackofficeNavItem[] }[] = 
     items: [
       { key: "admin_users", label: "Administradores", icon: ShieldCheck, to: "/usuarios/administradores" },
       { key: "access_review", label: "Revisão de acessos", icon: ShieldCheck, to: "/backoffice/revisao-acessos" },
+      { key: "access_control", label: "Controle de acesso", icon: ShieldCheck, to: "/backoffice/controle-acesso" },
       { key: "api_keys", label: "Chaves de API", icon: KeyRound, to: "/backoffice/chaves-api" },
       { key: "sap_users", label: "Usuários SAP", icon: Users, to: "/backoffice/sap-users/replicate" },
     ],

@@ -3,6 +3,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { admin, getSapCreds, sapLogin, sapGet } from "../_shared/audit-pay/sap.ts";
+import { assertErpAccess, ErpAccessError } from "../_shared/erp-access.ts";
 import {
   buildFlowBaselineSnapshot,
   buildPoBaselineSnapshot,
@@ -30,6 +31,8 @@ async function authorize(req: Request, companyDb: string) {
   const token = auth.replace("Bearer ", "");
   const { data, error } = await sb.auth.getClaims(token);
   if (error || !data?.claims) throw new Error("UNAUTHORIZED");
+  if (typeof data.claims.sub !== 'string') throw new Error('UNAUTHORIZED');
+  await assertErpAccess(admin(), { userId: data.claims.sub });
   const { data: allowed } = await sb.rpc("can_access_audit_console", { _company_db: companyDb });
   if (!allowed) throw new Error("FORBIDDEN");
   return String(data.claims.email ?? data.claims.sub ?? "");
@@ -216,7 +219,7 @@ Deno.serve(async (req) => {
     return json({ error: "action inválida" }, 400);
   } catch (e) {
     const msg = String((e as Error).message ?? e);
-    const status = msg === "UNAUTHORIZED" ? 401 : msg === "FORBIDDEN" ? 403 : 500;
+    const status = e instanceof ErpAccessError ? e.status : msg === "UNAUTHORIZED" ? 401 : msg === "FORBIDDEN" ? 403 : 500;
     return json({ error: msg }, status);
   }
 });

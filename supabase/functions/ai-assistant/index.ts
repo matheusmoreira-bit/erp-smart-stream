@@ -1,6 +1,7 @@
 // AI Assistant: chat with tools to query system data
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callerHasMfa } from "../_shared/auth.ts";
+import { assertErpAccess, ErpAccessError } from "../_shared/erp-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -341,6 +342,8 @@ Deno.serve(async (req) => {
     // service-role client for read-only data tool calls
     const sbAdmin = createClient(SUPABASE_URL, SERVICE_KEY);
 
+    await assertErpAccess(sbAdmin, { userId });
+
     const { messages, threadId } = await req.json() as { messages: any[]; threadId?: string };
 
     // Persist last user message
@@ -430,7 +433,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     console.error("ai-assistant error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Erro" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: e instanceof ErpAccessError ? e.status : 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

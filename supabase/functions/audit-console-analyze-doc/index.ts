@@ -3,6 +3,7 @@
 // confronts against SAP data in the run, and generates divergences.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { hashInput, getCachedAnalysis, saveAnalysis } from "../_shared/ai-doc-cache.ts";
+import { assertErpAccess, ErpAccessError } from "../_shared/erp-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,6 +28,7 @@ async function requireAdmin(req: Request): Promise<string> {
   if (error || !user) throw new Error("UNAUTHORIZED");
   const { data: isAdmin } = await sb.rpc("has_role", { _user_id: user.id, _role: "admin" });
   if (!isAdmin) throw new Error("FORBIDDEN");
+  await assertErpAccess(admin(), { userId: user.id });
   return user.email ?? "";
 }
 
@@ -215,7 +217,7 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     const msg = (e as Error).message ?? String(e);
-    const status = msg === "UNAUTHORIZED" ? 401 : msg === "FORBIDDEN" ? 403 : 500;
+    const status = e instanceof ErpAccessError ? e.status : msg === "UNAUTHORIZED" ? 401 : msg === "FORBIDDEN" ? 403 : 500;
     return new Response(JSON.stringify({ error: msg }), {
       status, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -6,6 +6,7 @@ import { parse as parseXml } from "https://deno.land/x/xml@2.1.3/mod.ts";
 import { notifySalesMilestone } from "../_shared/sales-notify.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { callerHasMfa } from "../_shared/auth.ts";
+import { assertErpAccess, ErpAccessError } from "../_shared/erp-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -135,6 +136,7 @@ Deno.serve(async (req) => {
     if (!token) return json({ error: "unauthorized" }, 401);
     const { data: userData, error: userErr } = await admin.auth.getUser(token);
     if (userErr || !userData?.user) return json({ error: "unauthorized" }, 401);
+    await assertErpAccess(admin, { userId: userData.user.id });
     const actorEmail = (userData.user.email || "").toLowerCase();
     const { data: adminRole } = await admin.rpc("has_role", {
       _user_id: userData.user.id,
@@ -370,6 +372,6 @@ Deno.serve(async (req) => {
     return json({ ok: true, to, cc, attachments: attachments.length });
   } catch (e) {
     console.error("nfse-send-email error:", e);
-    return json({ error: e instanceof Error ? e.message : String(e) }, 500);
+    return json({ error: e instanceof Error ? e.message : String(e) }, e instanceof ErpAccessError ? e.status : 500);
   }
 });

@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { callerHasMfa, isCorporateEmail } from "../_shared/auth.ts";
+import { assertErpAccess, ErpAccessError } from "../_shared/erp-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -52,6 +53,8 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    await assertErpAccess(adminClient, { userId: caller.id });
 
     const url = new URL(req.url);
     const method = req.method;
@@ -248,8 +251,8 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
+    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : 'Erro interno' }), {
+      status: err instanceof ErpAccessError ? err.status : 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

@@ -3562,6 +3562,42 @@ export type Database = {
         }
         Relationships: []
       }
+      erp_access_control: {
+        Row: {
+          allowed_user_ids: string[]
+          coverage_note: string
+          coverage_verified: boolean
+          enabled: boolean
+          id: boolean
+          manager_user_ids: string[]
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          allowed_user_ids?: string[]
+          coverage_note?: string
+          coverage_verified?: boolean
+          enabled?: boolean
+          id?: boolean
+          manager_user_ids?: string[]
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          allowed_user_ids?: string[]
+          coverage_note?: string
+          coverage_verified?: boolean
+          enabled?: boolean
+          id?: boolean
+          manager_user_ids?: string[]
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
       erp_session_cache: {
         Row: {
           company_db: string
@@ -10749,6 +10785,13 @@ export type Database = {
           recipients_created: number
         }[]
       }
+      erp_access_actor_admitted: {
+        Args: { _email?: string; _sap_user?: string }
+        Returns: boolean
+      }
+      erp_access_admitted: { Args: { _user_id?: string }; Returns: boolean }
+      erp_access_is_manager: { Args: never; Returns: boolean }
+      erp_access_status: { Args: never; Returns: Json }
       find_open_registration_duplicate:
         | {
             Args: { p_tax_id?: string; p_title?: string; p_type: string }
@@ -11169,6 +11212,10 @@ export type Database = {
           _reason?: string
         }
         Returns: undefined
+      }
+      manage_erp_access: {
+        Args: { _action: string; _email?: string; _expected_version: number }
+        Returns: Json
       }
       my_mfa_status: { Args: never; Returns: Json }
       notification_conditions_match: {

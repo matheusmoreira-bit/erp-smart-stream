@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { isErpSessionRevoked } from "./session-revocation.ts";
+import { assertErpAccess, ErpAccessError } from "./erp-access.ts";
 
 
 export class AuthError extends Error {
@@ -198,6 +199,11 @@ export async function requireUser(req: Request) {
   }
   await assertMfaAndSessionAge(req, user.id);
   await assertNotImpersonatingWrite(req, user.id);
+  try { await assertErpAccess(svcClient(), { userId: user.id }); }
+  catch (error) {
+    if (error instanceof ErpAccessError) throw new AuthError(error.message, error.status);
+    throw error;
+  }
   return user;
 }
 
@@ -365,7 +371,6 @@ async function requireUserUnchecked(req: Request) {
   if (error || !data?.user) {
     console.warn("[requireUser] getUser failed", {
       error: error ? String((error as Error).message || error) : null,
-      tokenPrefix: token.slice(0, 24),
     });
     throw new AuthError("Não autenticado", 401);
   }
@@ -589,6 +594,11 @@ export async function validateSapSession(req: Request) {
     if (revoked || deprovision.data) return null;
   } catch {
     throw new AuthError("Não foi possível verificar a sessão ERP. Tente novamente.", 503);
+  }
+  try { await assertErpAccess(admin, { sapUser: signed.userName }); }
+  catch (error) {
+    if (error instanceof ErpAccessError) throw new AuthError(error.message, error.status);
+    throw error;
   }
   return signed;
 }

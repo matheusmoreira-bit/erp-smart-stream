@@ -60,6 +60,7 @@ import {
 import { emailLocalPart, identityMatches, normalizeText, stripDiacritics as baseStripDiacritics, tokenizePerson } from "../_shared/text-normalize.ts";
 import { isNativeErpExpenseOrigin } from "../_shared/expense-origin.ts";
 import { loadUnifiedPurchaseRule, unifiedApprovalTargets } from "../_shared/unified-purchase-approval.ts";
+import { assertErpAccess, ErpAccessError } from "../_shared/erp-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -487,6 +488,13 @@ Deno.serve(withEdgeMetrics("expense-approval-action", async (req, _mctx) => {
     const bearer = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     if (serviceKey && bearer === serviceKey) {
+      try { await assertErpAccess(admin, { email: internalActorEmail }); }
+      catch (error) {
+        return await respond(error instanceof ErpAccessError ? error.status : 503, {
+          error: error instanceof ErpAccessError ? error.message : 'Não foi possível verificar o acesso.',
+          stage: 'auth_cloud',
+        });
+      }
       internalActor = true;
       callerEmail = internalActorEmail;
       callerIdentity = internalActorEmail;

@@ -61,6 +61,8 @@ import SlaDashboard from "./pages/SlaDashboard.tsx";
 import BackofficeRetryQueue from "./pages/BackofficeRetryQueue.tsx";
 import BackofficeRoadmap from "./pages/BackofficeRoadmap.tsx";
 import AttachmentBackup from "./pages/AttachmentBackup.tsx";
+import ErpAccessControl from "./pages/ErpAccessControl.tsx";
+import { ErpAccessGate } from "./components/ErpAccessGate.tsx";
 
 import { AdminRoute } from "./components/AdminRoute.tsx";
 import { GlobalAiChat } from "./components/GlobalAiChat.tsx";
@@ -98,6 +100,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <ErpAccessGate>
         <SapProvider>
           <PermissionsV2Provider>
           <TestCompanyVisibilityGate />
@@ -142,6 +145,7 @@ const App = () => (
               <Route path="/backoffice/sla-dashboard" element={<AdminRoute><SlaDashboard /></AdminRoute>} />
               <Route path="/backoffice/roadmap" element={<AdminRoute><BackofficeRoadmap /></AdminRoute>} />
               <Route path="/backoffice/backup-anexos" element={<AdminRoute><AttachmentBackup /></AdminRoute>} />
+              <Route path="/backoffice/controle-acesso" element={<ErpAccessControl />} />
 
               <Route path="/backoffice/baixas-pagcorp" element={<Navigate to="/auditoria/baixas-pagcorp" replace />} />
 
@@ -253,6 +257,7 @@ const App = () => (
 
           </PermissionsV2Provider>
         </SapProvider>
+        </ErpAccessGate>
       </TooltipProvider>
     </QueryClientProvider>
   </ThemeProvider>

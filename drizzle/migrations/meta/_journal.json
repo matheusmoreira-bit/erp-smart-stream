@@ -540,6 +540,13 @@
       "when": 1794928170510,
       "tag": "0076_unified_purchase_approval",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1794950396889,
+      "tag": "0077_reversible_erp_access_control",
+      "breakpoints": true
     }
   ]
 }

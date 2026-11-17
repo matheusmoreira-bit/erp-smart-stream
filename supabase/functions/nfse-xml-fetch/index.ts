@@ -8,6 +8,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
+import { assertErpAccess, ErpAccessError } from "../_shared/erp-access.ts";
 
 const corsHeaders = {
   ...baseCorsHeaders,
@@ -109,6 +110,8 @@ Deno.serve(async (req) => {
     if (!token) return json({ error: "unauthorized" }, 401);
     const { data: userData, error: userErr } = await admin.auth.getUser(token);
     if (userErr || !userData?.user) return json({ error: "unauthorized" }, 401);
+
+    await assertErpAccess(admin, { userId: userData.user.id });
 
     const body = await req.json().catch(() => ({}));
     const companyDb = String(body?.company_db || req.headers.get("x-company-db") || "").trim();
@@ -213,6 +216,6 @@ Deno.serve(async (req) => {
     }
   } catch (e) {
     console.error("[nfse-xml-fetch]", (e as Error)?.message);
-    return json({ error: String((e as Error)?.message || e) }, 500);
+    return json({ error: String((e as Error)?.message || e) }, e instanceof ErpAccessError ? e.status : 500);
   }
 });

@@ -39,12 +39,7 @@ Deno.serve(async (req) => {
   let _http = 200;
   let _err: string | null = null;
   try {
-    // OMIE proxy is decoupled from Backoffice (Lovable Cloud) auth.
-    // OMIE itself is the ERP authentication: the function only ever uses
-    // credentials stored per company_db in system_credentials.
-
-
-
+    // All interactive actions require the same verified identity and company scope.
     const body = await req.json();
     const { action, company_db, endpoint, params } = body;
     _action = typeof action === "string" ? action : "unknown";
@@ -67,7 +62,19 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch OMIE credentials from system_credentials
+    const caller = await requireUser(req);
+    if (!caller.email) throw new AuthError('Sessão sem e-mail', 401);
+    const callerClient = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_ANON_KEY') || '', {
+      global: { headers: { Authorization: req.headers.get('Authorization') || '' } },
+      auth: { persistSession: false },
+    });
+    const authorization = await callerClient.rpc('is_email_allowed_for_omie_company', {
+      _email: caller.email, _company_db: company_db,
+    });
+    if (authorization.error) throw new AuthError('Não foi possível validar a empresa.', 503);
+    if (authorization.data !== true) throw new AuthError('Acesso não autorizado para esta empresa OMIE.', 403);
+
+    // Fetch credentials only after identity, admission and company authorization.
     const { data: creds, error: credErr } = await supabase
       .from("system_credentials_v")
       .select("credential_key, credential_value")

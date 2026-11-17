@@ -3,6 +3,7 @@
 // NÃO altera status nem reabre o fluxo de aprovação: apenas atualiza os
 // dados do documento e registra a mudança na trilha de auditoria.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { requireAdmin, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -75,6 +76,7 @@ Deno.serve(async (req) => {
 
     let actorEmail = "service_role";
     if (token !== serviceKey) {
+      await requireAdmin(req);
       const asCaller = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
         global: { headers: { Authorization: `Bearer ${token}` } },
       });
@@ -301,6 +303,8 @@ Deno.serve(async (req) => {
       sap_doc_num: sapDoc?.DocNum ?? expense.sap_doc_num,
     });
   } catch (e) {
+    const denied = authErrorResponse(e, corsHeaders);
+    if (denied) return denied;
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
 });

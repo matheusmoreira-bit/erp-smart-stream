@@ -4,6 +4,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { enforceSapLinePrices } from "../_shared/sap-line-prices.ts";
 import { mergeSapDocumentLines } from "../_shared/sap-line-merge.ts";
+import { requireAdmin, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -41,15 +42,7 @@ Deno.serve(async (req) => {
     if (!isInternal) {
       if (!token) return json({ error: "UNAUTHORIZED" }, 401);
       if (token !== serviceKey) {
-        // Autorização real: só service role ou admin consegue ler system_credentials (RLS).
-        const asCaller = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
-          global: { headers: { Authorization: `Bearer ${token}` } },
-        });
-        const { error: authzErr } = await asCaller
-          .from("system_credentials_v")
-          .select("id")
-          .limit(1);
-        if (authzErr) return json({ error: "Apenas administradores podem alterar linhas já integradas." }, 403);
+        await requireAdmin(req);
       }
     }
 
@@ -347,6 +340,8 @@ Deno.serve(async (req) => {
 
 
   } catch (e) {
+    const denied = authErrorResponse(e, corsHeaders);
+    if (denied) return denied;
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
 });

@@ -5,6 +5,7 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { enforceRateLimit, rateLimitResponse } from "../_shared/rate-limit.ts";
 import { callerHasMfa, isUserImpersonating } from "../_shared/auth.ts";
 import { readExpenseDetail } from "./expense-detail.ts";
+import { assertErpAccess, ErpAccessError } from "../_shared/erp-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -796,6 +797,8 @@ Deno.serve(withEdgeMetrics("copilot-chat", async (req, _mctx) => {
     if (!isAdmin) return json({ error: "Acesso restrito a administradores." }, 403);
     if (!callerHasMfa(req)) return json({ error: "Confirme o código de verificação (segundo fator) para usar o copiloto." }, 403);
 
+    await assertErpAccess(sbAdmin, { userId: userData.user.id });
+
     const rl = await enforceRateLimit(sbAdmin, {
       scope: "copilot-chat",
       identifier: userData.user.id,
@@ -917,7 +920,7 @@ Deno.serve(withEdgeMetrics("copilot-chat", async (req, _mctx) => {
     });
   } catch (e) {
     console.error("copilot-chat error:", e);
-    return json({ error: e instanceof Error ? e.message : "Erro" }, 500);
+    return json({ error: e instanceof Error ? e.message : "Erro" }, e instanceof ErpAccessError ? e.status : 500);
   }
 }));
 

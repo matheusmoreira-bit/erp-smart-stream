@@ -11,6 +11,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
 import { sha256Hex } from "../_shared/approval-notify.ts";
+import { assertErpAccess, ErpAccessError } from "../_shared/erp-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -60,6 +61,13 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (!rec) return json(404, { error: "Link inválido ou já removido." });
+
+  try { await assertErpAccess(admin, { email: rec.approver_email }); }
+  catch (error) {
+    return json(error instanceof ErpAccessError ? error.status : 503, {
+      error: error instanceof ErpAccessError ? error.message : 'Não foi possível verificar o acesso.',
+    });
+  }
 
   const expired = new Date(rec.expires_at).getTime() < Date.now();
 
