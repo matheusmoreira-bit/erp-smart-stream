@@ -6,6 +6,7 @@
 //   { mode: "full" }                    -> varredura completa (cron horário)
 //   { mode: "single", documento: "..." } -> reprocessa um fornecedor (Auditoria)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 import { releaseWatcherLock, tryWatcherLock, isTestCompanyDb } from "../_shared/watcher-lock.ts";
 import { KYP_ADAPTERS } from "../_shared/kyp/becompliance.ts";
 import { resolveBeComplianceConfig } from "../_shared/kyp/config.ts";
@@ -417,6 +418,9 @@ async function executar(
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+
+  const authorized = await requireSchedulerOrAdmin(req, corsHeaders);
+  if (!authorized.ok) return authorized.response;
 
   const sb = service();
   const body = await req.json().catch(() => ({} as Record<string, unknown>));

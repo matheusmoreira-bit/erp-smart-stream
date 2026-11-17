@@ -547,6 +547,20 @@
       "when": 1794950396889,
       "tag": "0077_reversible_erp_access_control",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1794952179201,
+      "tag": "0078_erp_access_storage_restriction",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1794952402111,
+      "tag": "0079_erp_access_rpc_admission",
+      "breakpoints": true
     }
   ]
 }

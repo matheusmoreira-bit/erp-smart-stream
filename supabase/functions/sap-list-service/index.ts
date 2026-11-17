@@ -15,6 +15,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { sapFetch } from "../_shared/sap-fetch.ts";
 import { getStandaloneMode, isStandaloneBypass } from "../_shared/standalone-mode.ts";
+import { requireUserOrSapSession, authErrorResponse, AuthError } from "../_shared/auth.ts";
+import { isServiceRoleRequest } from "../_shared/automation-auth.ts";
 
 const corsHeaders = {
   ...baseCorsHeaders,
@@ -82,6 +84,7 @@ function buildQS(params: Record<string, string | number> = {}, extra: Record<str
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
+    const caller = isServiceRoleRequest(req) ? null : await requireUserOrSapSession(req);
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const companyDb: string | undefined = body?.company_db || req.headers.get("x-company-db") || undefined;
     const endpoint: string | undefined = body?.endpoint;
@@ -104,6 +107,19 @@ Deno.serve(async (req) => {
     }
 
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    if (caller) {
+      if ('companyDB' in caller) {
+        if (caller.companyDB !== companyDb) throw new AuthError('Empresa divergente da sessão.', 403);
+      } else {
+        const callerClient = createClient(Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_ANON_KEY') || '', {
+          global: { headers: { Authorization: req.headers.get('Authorization') || '' } },
+        });
+        const allowed = await callerClient.rpc('is_email_allowed_for_company', { _email: caller.email, _company_db: companyDb });
+        if (allowed.error) throw new AuthError('Não foi possível verificar a empresa.', 503);
+        if (allowed.data !== true) throw new AuthError('Acesso negado para esta empresa.', 403);
+      }
+    }
 
     // Modo standalone: a empresa opera só com os cadastros já copiados para o
     // banco do Flow. Nenhuma chamada ao Service Layer é feita.
@@ -257,6 +273,8 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
+    const denied = authErrorResponse(e, corsHeaders);
+    if (denied) return denied;
     const msg = (e as Error).message || "erro desconhecido";
     const transient = /timeout|timed out|idle timeout|AbortError|network|erro de rede|ECONNRESET|ECONNREFUSED|fetch failed|Login SAP falhou|\b50[234]\b/i.test(msg);
     // Falhas transitórias do SAP não devem derrubar a tela: devolvemos 200 com

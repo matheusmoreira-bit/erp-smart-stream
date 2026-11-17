@@ -10604,6 +10604,7 @@ export type Database = {
           cutoff: string
         }[]
       }
+      assert_erp_rpc_access: { Args: never; Returns: undefined }
       attachment_backup_inventory: { Args: { p_bucket: string }; Returns: Json }
       audit_trail_filter_options: {
         Args: never

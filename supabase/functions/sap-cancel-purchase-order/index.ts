@@ -4,6 +4,8 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
+import { requireAdmin, authErrorResponse } from "../_shared/auth.ts";
+import { isServiceRoleRequest } from "../_shared/automation-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -79,6 +81,7 @@ Deno.serve(async (req) => {
   if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
+    if (!isServiceRoleRequest(req)) await requireAdmin(req);
     const { companyDb, docEntries, reason, finalStatus } = await req.json();
     if (!companyDb) throw new Error("companyDb obrigatório");
     if (!Array.isArray(docEntries) || docEntries.length === 0)
@@ -205,6 +208,8 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
+    const denied = authErrorResponse(e, corsHeaders);
+    if (denied) return denied;
     const msg = e instanceof Error ? e.message : String(e);
     return new Response(JSON.stringify({ success: false, error: msg }), {
       status: 200,

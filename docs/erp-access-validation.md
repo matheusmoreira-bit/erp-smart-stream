@@ -12,6 +12,7 @@ Cinco pessoas autorizadas: Mauricio Farias, Juliana Gavineli, Artur Angelo, Hill
 - Omie exige identidade e empresa em todas as ações antes de ler credenciais. Corrigida prova de administrador inadequada em alteração de linha integrada; agora usa verificação administrativa com MFA existente.
 - Tela `/backoffice/controle-acesso`, acessível pelo menu administrativo; bloqueio de montagem da experiência antes de carregar provedores de ERP, consulta periódica e estados de erro/acesso negado.
 - Ativação recusada no servidor até revisão completa da cobertura. Cliente não pode marcar a cobertura como validada.
+- 46 funções privilegiadas recebem admissão antes do corpo original (0079); contratos e filtros mantidos. Verificadores de identidade/MFA e recuperação permanecem separados.
 
 ## Verificado
 - 33 testes aprovados: 7 de admissão, 8 de alçada única e 18 de reprocessamento.
@@ -19,15 +20,17 @@ Cinco pessoas autorizadas: Mauricio Farias, Juliana Gavineli, Artur Angelo, Hill
 - Sessão injetada disponível ao script: status 200; gestão enable/disable/allow recusada 403 por ausência de MFA verificável, sem alteração de versão.
 - Sessão da ferramenta administrativa com MFA: status 200 e seis contas corretas; enable recusado 403 pela trava de cobertura; disable executado 200 e lido de volta `enabled=false`, versão 2, auditoria atribuída a Hiller.
 - Tentativa de remover Douglas recusada; vínculo preservado.
-- Sete buckets privados confirmados. Nenhuma política de Storage alterada.
+- Sete buckets privados confirmados. Após aprovação explícita de Hiller, quatro políticas restritivas de Storage foram aplicadas em 0078; nenhuma permissão adicional foi concedida e as políticas anteriores permanecem obrigatórias.
 - Novas funções específicas e principais consumidoras da guarda foram implantadas; a revisão de todas as variantes/consumidoras ainda não está completa.
+- Todas as consumidoras diretas de auth.ts localizadas e as principais verificações próprias foram republicadas; variantes técnicas ainda dependem da sua autenticação específica.
+- Ensaio local PostgreSQL com dados exclusivamente sintéticos aplicou exatamente 0077/0078/0079 e passou: cinco pessoas admitidas, outro admin/sessão existente bloqueados, tabelas/anexos/RPC SQL e PL/pgSQL bloqueados, MFA obrigatório, responsáveis protegidos, conflito de versão recusado, reabertura individual e restauração por Douglas com quatro ações auditadas. Fixture e ensaio em scripts/tests/erp-access-fixture.sql e scripts/tests/erp-access-integration.py. Não representa verificação de sessões reais dos aprovadores ou navegador.
 
 ## Bloqueadores que impedem ativação
-1. **Aprovação da proteção de anexos:** a regra vigente exige aprovação explícita do SQL antes de mudar políticas de Storage. Proposta exata em `docs/erp-access-storage-proposal.sql`; só restringe e não concede novos acessos.
-2. **RPCs privilegiadas:** várias funções SECURITY DEFINER acessíveis ao cliente contornam RLS por desenho; todas precisam de admissão explícita ou cobertura comprovada antes da ativação. Inventário encontrou, entre outras, `get_nf_entrada_cache_by_po`, `list_baixas_by_invoice`, consultas de substituição e diretoria.
-3. **Ensaio Test:** falta testar bloqueio ativo, sessão existente, admissão individual, restauração geral e recuperação dos dois administradores em ambiente isolado. O backend da prévia é o mesmo de produção: não ligar globalmente para realizar esse ensaio.
+1. **Proteção de anexos aprovada e aplicada:** etapa concluída em 0078, SQL exato em `docs/erp-access-storage-proposal.sql`; ensaio sintético de leitura bloqueada/restaurada passou.
+2. **RPCs privilegiadas:** admissão adicionada às 46 funções de recursos localizadas; verificadores de identidade, MFA, configuração de permissões e telemetria mínima permanecem fora do gate. Leitura do catálogo confirmou a cobertura aplicada, mas não todos os resultados de cada RPC com dados reais.
+3. **Ensaio Test:** regra de acesso/rollback passou em PostgreSQL isolado; ainda falta ponta a ponta pelas sessões reais de Flow/SAP/OMIE, inclusive recuperação dos dois admins pelo aplicativo. O backend da prévia é o mesmo de produção: não ligar globalmente para realizar esse ensaio.
 4. **Conferência visual:** não executada, conforme exigência de navegador em solicitação separada. A sessão do script não carrega MFA verificado; não contornar nem afirmar que a tela administrativa foi exercitada.
-5. **Links emitidos e dados locais:** URLs já emitidas podem continuar válidas até a expiração; caminhos comuns têm TTL de 5–10 minutos, notificações podem usar janela maior. Conteúdo já baixado não pode ser revogado remotamente. Revisar todos os emissores antes de declarar bloqueio integral.
+5. **Links emitidos e dados locais:** URLs já emitidas podem continuar válidas até a expiração; caminhos comuns têm TTL de 5–10 minutos e resend-missing-attachment-notifications usa sete dias. RLS nova não revoga esses links já assinados. Conteúdo já baixado não pode ser revogado remotamente. Não rotacionar chaves, apagar arquivos ou declarar bloqueio integral para contornar esse limite; requer decisão explícita sobre essa janela.
 
 ## Revisão de segurança desta mudança
 - OK: sem novas chaves/segredos, UUIDs verificados, MFA preservado, auditoria, gestão parametrizada/validada, sem alteração de permissões de negócio, fail-closed nos verificadores.

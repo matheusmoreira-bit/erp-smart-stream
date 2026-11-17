@@ -1,5 +1,5 @@
--- PROPOSAL ONLY: not applied. Requires explicit approval under the existing
--- attachment-backup security rule. Restrictive policies never grant access;
+-- Approved by Hiller and applied in 0078_erp_access_storage_restriction.sql.
+-- Restrictive policies never grant access;
 -- existing bucket, company, ownership and MFA permissions remain mandatory.
 -- Covers all seven currently private ERP buckets, including SAP archive.
 CREATE POLICY erp_access_storage_select
