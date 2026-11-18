@@ -11,6 +11,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { requireAdminOrSapModule, authErrorResponse } from "../_shared/auth.ts";
 import { buildSapBaseUrl, loadSapCreds, sapSessionLogin, sapLogoutSession } from "../_shared/sap-cache.ts";
+import { authorizeCompany } from "../_shared/resource-access.ts";
 
 const corsHeaders = {
   ...baseCorsHeaders,
@@ -64,6 +65,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (!companyDb || !DATE_RE.test(from) || !DATE_RE.test(to) || from > to) {
       return json({ error: "Parâmetros inválidos: informe company_db, from e to (YYYY-MM-DD)." }, 400);
     }
+    await authorizeCompany(req, companyDb, "financial_review", "view");
 
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -165,6 +167,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     return json({ ap, ar, ar_source: arSource, ar_note: arNote });
   } catch (e) {
+    const authResponse = authErrorResponse(e, corsHeaders);
+    if (authResponse) return authResponse;
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
 });

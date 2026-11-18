@@ -2,7 +2,8 @@
 // (IncomingPayment) no SAP quitando o Down Payment, informando a conta bancária.
 // POST /functions/v1/advance-reconcile  body: { advance_id, data_recebimento, conta_codigo, conta_nome? }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
-import { parseSapHeaders, requireUser, validateSapSession } from "../_shared/auth.ts";
+import { parseSapHeaders, requireUser, validateSapSession, authErrorResponse } from "../_shared/auth.ts";
+import { authorizeCompany, requireUuid } from "../_shared/resource-access.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
 
@@ -87,7 +88,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => ({}));
-    const advanceId = String(body.advance_id || "").trim();
+    const advanceId = requireUuid(body.advance_id, "advance_id");
     const dataRecebimento = String(body.data_recebimento || "").trim();
     const contaCodigo = String(body.conta_codigo || "").trim();
     const contaNome = body.conta_nome ? String(body.conta_nome) : null;
@@ -110,6 +111,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (advErr || !adv) return json(404, { ok: false, errorMessage: advErr?.message || "Adiantamento não encontrado." });
     if (adv.company_db !== sap.companyDB) return json(403, { ok: false, errorMessage: "Adiantamento pertence a outra empresa." });
+    await authorizeCompany(req, adv.company_db, "sales", "create");
     if (adv.advance_type !== "customer") return json(400, { ok: false, errorMessage: "Apenas adiantamentos de cliente são reconciliados por esta rotina." });
     if (!adv.sap_doc_entry) return json(400, { ok: false, errorMessage: "Adiantamento ainda não integrado ao ERP." });
     if (adv.sap_incoming_payment_doc_entry) {
@@ -169,6 +171,8 @@ Deno.serve(async (req) => {
 
     return json(200, { ok: true, sapDocEntry });
   } catch (e) {
+    const authResponse = authErrorResponse(e, corsHeaders);
+    if (authResponse) return authResponse;
     return json(500, { ok: false, errorMessage: (e as Error).message || "Falha ao reconciliar adiantamento." });
   }
 });

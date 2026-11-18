@@ -3,7 +3,8 @@
 // POST /functions/v1/nf-entrada-erp-status
 //   body: { import_id: string } | { company_db: string, limit?: number }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { requireUserOrSapSession } from "../_shared/auth.ts";
+import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
+import { authorizeCompany, requireUuid } from "../_shared/resource-access.ts";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
 import { corsFor, rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
@@ -60,7 +61,9 @@ Deno.serve(async (req) => {
 
   try {
     await requireUserOrSapSession(req);
-  } catch {
+  } catch (err) {
+    const authResponse = authErrorResponse(err, cors);
+    if (authResponse) return authResponse;
     return json({ success: false, error: "Faça login no SAP pela tela antes de sincronizar." }, cors, 401);
   }
 
@@ -80,6 +83,15 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+    if (importId) requireUuid(importId, "import_id");
+    if (companyDbIn) await authorizeCompany(req, companyDbIn, "nf_entrada", "view");
+    if (importId) {
+      const { data: target, error: targetError } = await supabase.from("nf_entrada_imports")
+        .select("sap_company_db").eq("id", importId).maybeSingle();
+      if (targetError) throw targetError;
+      if (!target) return json({ success: false, error: "Nota não encontrada" }, cors, 404);
+      await authorizeCompany(req, target.sap_company_db, "nf_entrada", "view");
+    }
 
     let query = supabase
       .from("nf_entrada_imports")
@@ -94,6 +106,7 @@ Deno.serve(async (req) => {
     if (!rows || rows.length === 0) return json({ success: true, synced: 0, results: [] }, cors);
 
     const companyDb = String((rows as any[])[0].sap_company_db || companyDbIn || "");
+    await authorizeCompany(req, companyDb, "nf_entrada", "view");
     if (!companyDb) return json({ success: false, error: "Nota sem empresa definida no ERP." }, cors, 400);
     // Nunca misturar empresas numa mesma chamada.
     const filtered = (rows as any[]).filter((r) => r.sap_company_db === companyDb);
@@ -139,6 +152,8 @@ Deno.serve(async (req) => {
 
     return json({ success: true, synced: results.filter((r) => r.ok).length, results }, cors);
   } catch (e) {
+    const authResponse = authErrorResponse(e, cors);
+    if (authResponse) return authResponse;
     const msg = e instanceof Error ? e.message : String(e);
     return json({ success: false, error: msg }, cors, 500);
   } finally {

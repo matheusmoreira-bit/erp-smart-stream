@@ -18,6 +18,8 @@ import { logIntegrationCall } from "../_shared/integration-log.ts";
 import { linkNfToAp } from "../_shared/link-nf-ap.ts";
 import { notifyPagcorpSettlementPending } from "../_shared/pagcorp-settlement-notify.ts";
 import { requireSchedulerAdminOrUserSession, requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
+import { authorizeCompany, requireUuid } from "../_shared/resource-access.ts";
+import { validateSapSession, authErrorResponse } from "../_shared/auth.ts";
 import { blockIfIntegrationsDisabled } from "../_shared/integrations-mode.ts";
 
 const sapCorsHeaders = {
@@ -511,7 +513,7 @@ Deno.serve(async (req) => {
   const userSapRoute = req.headers.get("x-sap-route") || "";
   const userSapCompanyDb = req.headers.get("x-company-db") || "";
   const userSapUser = req.headers.get("x-sap-user") || "";
-  const userSapCookie = userSapSession
+  let userSapCookie = userSapSession
     ? `B1SESSION=${userSapSession}${userSapRoute ? `; ROUTEID=${userSapRoute}` : ""}`
     : "";
   if (req.method === "POST") {
@@ -539,6 +541,23 @@ Deno.serve(async (req) => {
   if (!auth.ok) {
     safeWarn(requestId, "unauthorized", { manualLogId, hasAuthorization: Boolean(req.headers.get("authorization")) });
     return auth.response;
+  }
+  try {
+    if (manualLogId) {
+      requireUuid(manualLogId, "logId");
+      const { data: target, error } = await sb.from("pagcorp_integration_log")
+        .select("company_db").eq("id", manualLogId).maybeSingle();
+      if (error) throw error;
+      if (!target) return new Response(JSON.stringify({ error: "Registro não encontrado" }), { status: 404, headers: responseHeaders(requestId) });
+      if (auth.source !== "service_role" && auth.source !== "scheduler_secret") {
+        await authorizeCompany(req, target.company_db, "pagcorp", "integrate");
+      }
+      // Raw cookies are never trusted, even when the caller also has a Cloud session.
+      const provenSap = userSapCookie ? await validateSapSession(req) : null;
+      if (!provenSap || provenSap.companyDB !== target.company_db) userSapCookie = "";
+    }
+  } catch (err) {
+    return authErrorResponse(err, sapCorsHeaders) ?? new Response(JSON.stringify({ error: "Falha ao verificar a autorização" }), { status: 503, headers: responseHeaders(requestId) });
   }
   const disabled = blockIfIntegrationsDisabled(sapCorsHeaders);
   if (disabled) return disabled;

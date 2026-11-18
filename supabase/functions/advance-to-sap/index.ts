@@ -2,7 +2,9 @@
 // POST /functions/v1/advance-to-sap  body: { advance_id: string }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { ensureCopyToTargetDocument } from "../_shared/sap-attach-copy.ts";
-import { requireUserOrSapSession } from "../_shared/auth.ts";
+import { requireUserOrSapSession, AuthError, authErrorResponse } from "../_shared/auth.ts";
+import { authorizeDocument, requireUuid } from "../_shared/resource-access.ts";
+import { isServiceRoleRequest } from "../_shared/automation-auth.ts";
 import { tryAcquireIntegrationLock, releaseIntegrationLock } from "../_shared/sap-fetch.ts";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
 import { getStandaloneMode, standaloneResponse } from "../_shared/standalone-mode.ts";
@@ -72,9 +74,12 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   { const _pause = await getIntegrationPause("sap_b1"); if (_pause) return pauseResponse(_pause, corsHeaders); }
 
+  const internalRetry = isServiceRoleRequest(req) && req.headers.get("x-internal-retry") === "1";
   try {
-    await requireUserOrSapSession(req);
-  } catch {
+    if (!internalRetry) await requireUserOrSapSession(req);
+  } catch (err) {
+    const authResponse = authErrorResponse(err, corsHeaders);
+    if (authResponse) return authResponse;
     return new Response(JSON.stringify({ success: false, error: "Faça login no SAP pela tela antes de integrar." }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -83,11 +88,12 @@ Deno.serve(async (req) => {
 
   let advanceId: string | null = null;
   let supabase: ReturnType<typeof createClient> | null = null;
+  let authorized = false;
+  let lockAcquired = false;
 
   try {
     const body = await req.json();
-    advanceId = body.advance_id;
-    if (!advanceId) throw new Error("advance_id obrigatório");
+    advanceId = requireUuid(body.advance_id, "advance_id");
 
     supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
@@ -97,6 +103,8 @@ Deno.serve(async (req) => {
       .eq("id", advanceId)
       .single();
     if (aErr || !adv) throw new Error(`Adiantamento não encontrado: ${aErr?.message ?? ""}`);
+    if (!internalRetry) await authorizeDocument(req, supabase, adv, adv.advance_type === "customer" ? "sales" : "expenses", "integrate");
+    authorized = true;
 
     if (adv.sap_doc_entry) {
       return new Response(
@@ -105,6 +113,9 @@ Deno.serve(async (req) => {
       );
     }
 
+    if (!["approved", "integrated", "failed"].includes(String(adv.status)) || !adv.approved_at) {
+      throw new AuthError("Adiantamento precisa estar aprovado antes da integração", 409);
+    }
     // Lock anti-duplicação: impede dois cliques simultâneos de criar 2 DPIs no SAP.
     const acquired = await tryAcquireIntegrationLock(supabase, "advance_payments", advanceId);
     if (!acquired) {
@@ -118,6 +129,7 @@ Deno.serve(async (req) => {
       );
     }
 
+    lockAcquired = true;
     const companyDb: string = adv.company_db;
     {
       const _sa = await getStandaloneMode(companyDb);
@@ -259,8 +271,10 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
+    const authResponse = authErrorResponse(e, corsHeaders);
+    if (authResponse) return authResponse;
     const msg = e instanceof Error ? e.message : String(e);
-    if (supabase && advanceId) {
+    if (authorized && supabase && advanceId) {
       await supabase
         .from("advance_payments")
         .update({ status: "failed", sap_integration_status: "error", sap_integration_error: msg })
@@ -282,7 +296,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } finally {
-    if (supabase && advanceId) {
+    if (lockAcquired && supabase && advanceId) {
       await releaseIntegrationLock(supabase, "advance_payments", advanceId);
     }
   }

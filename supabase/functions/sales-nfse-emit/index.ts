@@ -8,7 +8,8 @@
 //   { action: "sync-status", company_db: string }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { corsHeaders as baseCorsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { requireUserOrSapSession } from "../_shared/auth.ts";
+import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
+import { authorizeCompany, authorizeDocument } from "../_shared/resource-access.ts";
 import { notifySalesMilestone } from "../_shared/sales-notify.ts";
 
 const corsHeaders = {
@@ -98,6 +99,7 @@ Deno.serve(async (req) => {
     if (action === "sync-status") {
       const companyDb = String(body?.company_db || "").trim();
       if (!companyDb) return json({ error: "company_db obrigatório" }, 400);
+      await authorizeCompany(req, companyDb, "sales", "view");
 
       const { data: rows, error } = await supabase
         .from("sales_order_invoices")
@@ -187,6 +189,7 @@ Deno.serve(async (req) => {
         ? (body.doc_entries as unknown[]).map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0)
         : [];
       if (!companyDb) return json({ error: "company_db obrigatório" }, 400);
+      await authorizeCompany(req, companyDb, "sales", "view");
       if (docEntries.length === 0) return json({ statuses: {} });
       if (docEntries.length > 200) return json({ error: "Limite de 200 documentos por consulta." }, 400);
 
@@ -252,10 +255,11 @@ Deno.serve(async (req) => {
       const docEntry = Number(body?.sap_invoice_doc_entry ?? NaN);
       const reason = String(body?.reason || "").trim().slice(0, 250);
       if (!companyDb) return json({ error: "company_db obrigatório" }, 400);
-      if (!Number.isFinite(docEntry) || docEntry <= 0) {
+      if (!Number.isSafeInteger(docEntry) || docEntry <= 0) {
         return json({ error: "Documento inválido para cancelamento." }, 400);
       }
 
+      await authorizeCompany(req, companyDb, "sales", "delete");
       const creds = await loadCreds(supabase, companyDb);
       const baseUrl = buildBaseUrl(creds.service_layer_url);
       const session = await sapLogin(baseUrl, creds.username, creds.password, creds.company_db || companyDb);
@@ -334,6 +338,7 @@ Deno.serve(async (req) => {
     };
 
     if (isNative) {
+      await authorizeCompany(req, nativeCompanyDb, "sales", "create");
       expense = {
         id: null,
         company_db: nativeCompanyDb,
@@ -359,11 +364,12 @@ Deno.serve(async (req) => {
     } else {
       const { data: exp, error: expErr } = await supabase
         .from("expenses")
-        .select("id, doc_type, status, company_db, supplier_code, supplier_name, total_amount, currency, sap_doc_entry, sap_doc_num, remarks")
+        .select("*")
         .eq("id", expenseId)
         .maybeSingle();
       if (expErr) throw new Error(expErr.message);
       if (!exp) return json({ error: "Pedido de venda não encontrado" }, 404);
+      await authorizeDocument(req, supabase, exp, "sales", "create", { expenseId });
       if (exp.doc_type !== "sales") return json({ error: "Documento não é um pedido de venda" }, 400);
       if (!exp.sap_doc_entry) {
         return json({ error: "Pedido ainda não foi integrado ao ERP. Aguarde a integração." }, 400);
@@ -541,6 +547,8 @@ Deno.serve(async (req) => {
       auto_send_detail: autoSend.ok ? null : autoSend.detail ?? null,
     });
   } catch (e) {
+    const authResponse = authErrorResponse(e, corsHeaders);
+    if (authResponse) return authResponse;
     console.error("sales-nfse-emit error", e);
     return json({ error: (e as Error).message || "Erro inesperado" }, 500);
   }

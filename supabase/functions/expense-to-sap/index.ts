@@ -6,7 +6,8 @@ import { isAttachmentEmergencyActive, notifyEmergencyContacts } from "../_shared
 // Body: { expense_id: string }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { PDFDocument, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
-import { requireUserOrSapSession } from "../_shared/auth.ts";
+import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
+import { authorizeDocument, requireUuid } from "../_shared/resource-access.ts";
 import { tryAcquireIntegrationLock, releaseIntegrationLock } from "../_shared/sap-fetch.ts";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
 import { getStandaloneMode, standaloneResponse } from "../_shared/standalone-mode.ts";
@@ -698,6 +699,8 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     try {
       await requireUserOrSapSession(req);
     } catch (err) {
+      const authResponse = authErrorResponse(err, corsHeaders);
+      if (authResponse) return authResponse;
       return new Response(
         JSON.stringify({ success: false, error: "Faça login no ERP Flow antes de integrar." }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -714,6 +717,8 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
   let attachmentLinkStatus: StageStatus = "not_applicable";
   let expenseId: string | null = null;
   let supabase: ReturnType<typeof createClient> | null = null;
+  let authorized = false;
+  let lockAcquired = false;
   let pagcorpLog: any = null;
   let pagcorpLogWritten = false;
   // Payloads antigos ainda podem enviar skip_attachments, mas integração sem
@@ -787,7 +792,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
 
   try {
     const body = await req.json();
-    expenseId = body.expense_id;
+    expenseId = requireUuid(body.expense_id, "expense_id");
     pagcorpLog = body.pagcorp_log || null;
     skipAttachments = body.skip_attachments === true;
     if (!expenseId) throw new Error("expense_id obrigatório");
@@ -804,6 +809,13 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       .eq("id", expenseId)
       .single();
     if (expErr || !expense) throw new Error(`Despesa não encontrada: ${expErr?.message ?? ""}`);
+    if (!isServiceRoleCall) await authorizeDocument(req, supabase, expense,
+      expense.doc_type === "sales" ? "sales" : "expenses", body.patch_document === true ? "edit" : "integrate", { expenseId });
+    authorized = true;
+    if (pagcorpLog) {
+      pagcorpLog.companyDb = expense.company_db;
+      pagcorpLog.integratedBy = null;
+    }
     expenseSnapshot = expense;
 
     const { data: company } = await supabase
@@ -907,6 +919,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
         );
       }
       // O cancelamento também é conferido depois do lock. Isso fecha a corrida
+      lockAcquired = true;
       // em que o operador cancela entre a leitura inicial e a aquisição do lock.
       if (await isExpenseIntegrationCancelled(supabase, expenseId)) {
         return new Response(
@@ -2032,6 +2045,11 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
+    const authResponse = authErrorResponse(e, corsHeaders);
+    if (authResponse) return authResponse;
+    if (!authorized) return new Response(JSON.stringify({ success: false, error: "Documento não encontrado" }), {
+      status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
     const msg = e instanceof Error ? e.message : "Erro desconhecido";
     console.error("expense-to-sap error:", msg);
     // Best-effort: persist whatever stage statuses we collected before the throw.
@@ -2081,7 +2099,7 @@ Deno.serve(withEdgeMetrics("expense-to-sap", async (req, _mctx) => {
     );
   } finally {
     // Libera o lock anti-duplicação (no-op se nunca foi adquirido).
-    if (supabase && expenseId) {
+    if (lockAcquired && supabase && expenseId) {
       await releaseIntegrationLock(supabase, "expenses", expenseId);
     }
   }

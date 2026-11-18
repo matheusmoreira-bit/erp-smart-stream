@@ -5,6 +5,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { requireUserOrSapSessionHeaders, requireAdminOrSapModule, authErrorResponse } from "../_shared/auth.ts";
+import { authorizeCompany, requireUuid } from "../_shared/resource-access.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
 const corsHeaders = {
@@ -104,6 +105,54 @@ Deno.serve(async (req) => {
     return s.slice(0, max);
   };
 
+  // Preflight the full batch before any write; IDs derive scope from persisted rows.
+  try {
+    const permission = action.startsWith("delete") ? "delete" :
+      action === "catalog" ? "view" : action.startsWith("save") ? "edit" : "view";
+    const companies = new Set<string>();
+    const checkRow = async (table: string, id: unknown, proposed?: unknown) => {
+      const key = requireUuid(id, "id");
+      const { data, error } = await sb.from(table).select("company_db").eq("id", key).maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error("Registro não encontrado");
+      if (proposed && proposed !== data.company_db) throw new Error("Não é permitido mover registro entre empresas");
+      companies.add(data.company_db);
+      return data.company_db;
+    };
+    if (action === "delete" || action === "delete-supplier-rule" || action === "delete-card-supplier") {
+      const table = action === "delete" ? "pagcorp_card_mapping" :
+        action === "delete-supplier-rule" ? "pagcorp_description_supplier_rules" : "pagcorp_card_supplier_mapping";
+      body.company_db = await checkRow(table, body.id, body.company_db);
+    } else if (action === "save" || action === "catalog") {
+      const rows = action === "save" ? body.rows : body.cards;
+      if (!Array.isArray(rows) || rows.length > 500) return jsonResp({ error: "Lote inválido" }, 400);
+      for (const row of rows) {
+        if (!row || typeof row.company_db !== "string") return jsonResp({ error: "Empresa obrigatória em cada registro" }, 400);
+        companies.add(row.company_db);
+        if (action === "save" && row.id) await checkRow("pagcorp_card_mapping", row.id, row.company_db);
+      }
+    } else {
+      const company = body.company_db || req.headers.get("x-company-db");
+      if (typeof company !== "string") return jsonResp({ error: "company_db obrigatório" }, 400);
+      companies.add(company);
+      if (action === "save-card-supplier" && body.rule?.id) await checkRow("pagcorp_card_supplier_mapping", body.rule.id, company);
+      if (action === "save-supplier-rules") {
+        if (!Array.isArray(body.rules) || body.rules.length > 500) return jsonResp({ error: "Lote inválido" }, 400);
+        for (const rule of body.rules) if (rule.id) await checkRow("pagcorp_description_supplier_rules", rule.id, company);
+      }
+    }
+    for (const company of companies) await authorizeCompany(req, company, "pagcorp", permission);
+    if (action === "save") {
+      for (const row of body.rows) if (!row.id) await authorizeCompany(req, row.company_db, "pagcorp", "create");
+    } else if (action === "save-supplier-rules" && body.rules.some((rule: { id?: string }) => !rule.id)) {
+      await authorizeCompany(req, body.company_db || req.headers.get("x-company-db"), "pagcorp", "create");
+    } else if (action === "save-card-supplier" && !body.rule?.id) {
+      await authorizeCompany(req, body.company_db || req.headers.get("x-company-db"), "pagcorp", "create");
+    }
+  } catch (err) {
+    return authErrorResponse(err, corsHeaders) ?? jsonResp({ error: serializeError(err) }, 400);
+  }
+
   if (action === "list-card-supplier") {
     const companyDb = String(body?.company_db || req.headers.get("x-company-db") || "").trim();
     if (!companyDb) return jsonResp({ error: "company_db obrigatório" }, 400);
@@ -119,7 +168,7 @@ Deno.serve(async (req) => {
   if (action === "save-card-supplier" || action === "delete-card-supplier") {
     let actor = "";
     try {
-      const who: any = await requireAdminOrSapModule(req, "pagcorp");
+      const who: any = await requireAdminOrSapModule(req, "pagcorp", { companyDb: body.company_db || req.headers.get("x-company-db"), action: action === "delete-card-supplier" ? "delete" : "edit" });
       actor = String(who?.email || who?.userName || who?.user?.email || "");
     } catch (err) {
       return authErrorResponse(err, corsHeaders) ?? jsonResp({ error: "Sem permissão" }, 403);
@@ -291,7 +340,7 @@ Deno.serve(async (req) => {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const { error } = await sb.from("pagcorp_description_supplier_rules").delete().eq("id", id);
+      const { error } = await sb.from("pagcorp_description_supplier_rules").delete().eq("id", id).eq("company_db", body.company_db);
       if (error) throw error;
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -305,7 +354,7 @@ Deno.serve(async (req) => {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const { error } = await sb.from("pagcorp_card_mapping").delete().eq("id", id);
+      const { error } = await sb.from("pagcorp_card_mapping").delete().eq("id", id).eq("company_db", body.company_db);
       if (error) throw error;
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -365,7 +414,7 @@ Deno.serve(async (req) => {
 
       if (r.id) {
         const { data, error } = await sb
-          .from("pagcorp_card_mapping").update(payload).eq("id", r.id).select().single();
+          .from("pagcorp_card_mapping").update(payload).eq("id", r.id).eq("company_db", r.company_db).select().single();
         if (error) throw error;
         results.push(data);
       } else if (payload.is_fallback) {

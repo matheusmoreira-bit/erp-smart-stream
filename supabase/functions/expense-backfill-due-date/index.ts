@@ -10,7 +10,9 @@
 // UPDATE the expense with the extracted values.
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { validateSapSession, requireUser, AuthError } from "../_shared/auth.ts";
+import { requireUserOrSapSession, requireAdminOrSapAdmin, AuthError } from "../_shared/auth.ts";
+
+import { authorizeCompany, authorizeDocument, requireUuid } from "../_shared/resource-access.ts";
 
 const BUCKET = "expense-attachments";
 
@@ -26,57 +28,6 @@ function json(status: number, body: unknown) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-}
-
-function normalize(s: unknown): string {
-  return String(s ?? "").toLowerCase().trim();
-}
-function emailPrefix(v: string): string {
-  const s = normalize(v);
-  const i = s.indexOf("@");
-  return i > 0 ? s.slice(0, i) : s;
-}
-function isOwner(caller: string, exp: Record<string, unknown>): boolean {
-  const c = normalize(caller);
-  if (!c) return false;
-  const cp = emailPrefix(c);
-  return [exp.requester_email, exp.requester_name, exp.created_by_email]
-    .map(normalize)
-    .some((v) => v && (v === c || emailPrefix(v) === cp));
-}
-
-interface Caller {
-  identity: string | null;
-  email: string | null;
-  isCloudAdmin: boolean;
-  isSuperUser: boolean;
-}
-
-async function identifyCaller(req: Request, admin: SupabaseClient): Promise<Caller> {
-  let identity: string | null = null;
-  let email: string | null = null;
-  let isCloudAdmin = false;
-  let isSuperUser = false;
-
-  try {
-    const u = await requireUser(req);
-    email = u.email || null;
-    identity = u.email || null;
-    const { data } = await admin.rpc("has_role", { _user_id: u.id, _role: "admin" });
-    if (data === true) isCloudAdmin = true;
-  } catch (e) { if (!(e instanceof AuthError)) throw e; }
-
-  const sap = await validateSapSession(req);
-  if (sap) {
-    if (!identity) identity = sap.userName;
-    try {
-      const { data: mapped } = await admin.rpc("is_sap_user_admin", {
-        _sap_username: sap.userName.toLowerCase(),
-      });
-      if (mapped === true) isSuperUser = true;
-    } catch { /* ignore */ }
-  }
-  return { identity, email, isCloudAdmin, isSuperUser };
 }
 
 const EXTRACT_PROMPT = `Você é um assistente que lê documentos fiscais (NF, boleto, invoice) — em português, inglês ou espanhol — e devolve APENAS um JSON com estas chaves:
@@ -223,39 +174,26 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  let caller: Caller;
-  try { caller = await identifyCaller(req, admin); }
-  catch (e) {
-    if (e instanceof AuthError) return json(e.status, { error: e.message });
-    return json(500, { error: e instanceof Error ? e.message : String(e) });
-  }
-  if (!caller.identity && !caller.isCloudAdmin) {
-    return json(401, { error: "Não autenticado" });
-  }
-
+  try { await requireUserOrSapSession(req); }
+  catch (e) { return json(e instanceof AuthError ? e.status : 500, { error: e instanceof Error ? e.message : "Falha na autenticação" }); }
   const action = String(body?.action || "one");
-  const isPrivileged = caller.isCloudAdmin || caller.isSuperUser;
 
   try {
     if (action === "one") {
-      const expenseId = String(body?.expense_id || "");
-      if (!expenseId) return json(400, { error: "expense_id é obrigatório" });
-
-      if (!isPrivileged) {
-        const { data: exp } = await admin.from("expenses").select("*").eq("id", expenseId).maybeSingle();
-        if (!exp) return json(404, { error: "Despesa não encontrada" });
-        if (!isOwner(caller.identity || "", exp as any)) {
-          return json(403, { error: "Sem permissão para reprocessar esta despesa" });
-        }
-      }
+      const expenseId = requireUuid(body?.expense_id, "expense_id");
+      const { data: exp, error } = await admin.from("expenses").select("*").eq("id", expenseId).maybeSingle();
+      if (error) throw error;
+      if (!exp) return json(404, { error: "Despesa não encontrada" });
+      await authorizeDocument(req, admin, exp, exp.doc_type === "sales" ? "sales" : "expenses", "edit", { ownerOnly: true });
 
       const res = await processOne(admin, expenseId);
       return json(res.ok ? 200 : 400, res);
     }
 
     if (action === "batch") {
-      if (!isPrivileged) return json(403, { error: "Apenas administradores" });
+      const privileged = await requireAdminOrSapAdmin(req);
       const companyDb = body?.company_db ? String(body.company_db) : null;
+      if ("companyDB" in privileged) await authorizeCompany(req, companyDb, "expenses", "edit");
       const limit = Math.min(50, Math.max(1, Number(body?.limit) || 20));
 
       let q = admin
@@ -283,6 +221,7 @@ Deno.serve(async (req) => {
 
     return json(400, { error: `Ação desconhecida: ${action}` });
   } catch (e) {
+    if (e instanceof AuthError) return json(e.status, { error: e.message });
     console.error("[expense-backfill-due-date]", e);
     return json(500, { error: e instanceof Error ? e.message : String(e) });
   }

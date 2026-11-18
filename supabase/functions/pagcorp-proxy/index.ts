@@ -1,5 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { requireUserOrSapSessionHeaders, authErrorResponse } from "../_shared/auth.ts";
+import { authorizeCompany } from "../_shared/resource-access.ts";
+import { pagcorpReceiptUrl } from "../_shared/pagcorp-receipt-url.ts";
 import { logIntegrationCall } from "../_shared/integration-log.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 
@@ -298,6 +300,7 @@ Deno.serve(async (req) => {
     const companyDb = url.searchParams.get("companyDb") || undefined;
     _action = action || "default";
     _company_db = companyDb ?? null;
+    await authorizeCompany(req, companyDb, "pagcorp", "view");
 
     // ── Receipt file proxy: ?action=receipt&receiptId=X&companyDb=Y ──
     if (action === "receipt") {
@@ -308,12 +311,13 @@ Deno.serve(async (req) => {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      if (receiptId && !/^[A-Za-z0-9_-]{1,200}$/.test(receiptId)) return new Response(JSON.stringify({ error: "Recibo inválido" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       const creds = await getCredentials(companyDb);
       const apiToken = await getAuthToken(creds);
 
       const candidates: string[] = [];
       if (directUrl) {
-        candidates.push(directUrl);
+        candidates.push(pagcorpReceiptUrl(directUrl, creds.api_base_url));
       } else if (receiptId) {
         const base = creds.api_base_url;
         candidates.push(
@@ -330,7 +334,7 @@ Deno.serve(async (req) => {
       let lastStatus = 0;
       let lastBody = "";
       for (const u of candidates) {
-        const r = await fetch(u, { headers: { Authorization: `Bearer ${apiToken}` } });
+        const r = await fetch(pagcorpReceiptUrl(u, creds.api_base_url), { redirect: "error", headers: { Authorization: `Bearer ${apiToken}` } });
         if (r.ok) { fileRes = r; break; }
         lastStatus = r.status;
         lastBody = await r.text().catch(() => "");
@@ -360,7 +364,7 @@ Deno.serve(async (req) => {
         const j = await fileRes.json().catch(() => null) as any;
         const follow = j?.url || j?.fileUrl || j?.downloadUrl || j?.link;
         if (follow) {
-          const r2 = await fetch(follow, { headers: { Authorization: `Bearer ${apiToken}` } });
+          const r2 = await fetch(pagcorpReceiptUrl(String(follow), creds.api_base_url), { redirect: "error", headers: { Authorization: `Bearer ${apiToken}` } });
           if (r2.ok) {
             const ct2 = r2.headers.get("content-type") || "application/octet-stream";
             const buf2 = await r2.arrayBuffer();
