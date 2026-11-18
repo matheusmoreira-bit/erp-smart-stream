@@ -15,6 +15,7 @@ Cinco pessoas autorizadas: Mauricio Farias, Juliana Gavineli, Artur Angelo, Hill
 - 46 funções privilegiadas recebem admissão antes do corpo original (0079); contratos e filtros mantidos. Verificadores de identidade/MFA e recuperação permanecem separados.
 
 ## Verificado
+- Retomada 18/11 12:21 UTC: ferramenta administrativa confirmou MFA por status HTTP 200, manager=true, cinco pessoas/six contas e ready=false; restrição segue enabled=false, versão 2. Sessão do navegador automatizado ainda pede MFA e não permite comprovar recuperação visual. A confirmação administrativa não remove a trava de cobertura; revisão profunda ainda aguarda notificação.
 - Revisão 18/11 12:15 UTC: varredura rápida concluída; todos os achados retornados estavam previamente dispensados pelo usuário, sem novos achados acionáveis. Isso não equivale a aprovação integral. Revisão profunda iniciada, aguardando notificação de conclusão.
 - Reexecução em 18/11: 33 testes aprovados. Navegador com sessão injetada chegou à verificação em duas etapas; não foi possível exercitar a gestão nem a recuperação sem a confirmação MFA. Nenhum código de autenticação solicitado no chat e nenhuma validação contornada.
 - 33 testes aprovados: 7 de admissão, 8 de alçada única e 18 de reprocessamento.
