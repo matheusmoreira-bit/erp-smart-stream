@@ -47,6 +47,14 @@ Assinatura cobre operação/corpo, caminho, parâmetros, serviço e identidade; 
 
 ## Revisão de segurança
 
+### Retomada 18/11 16:43 UTC
+
+- Status administrativo autenticado retornou HTTP 200 com manager=true; bloqueio desligado, ready=false e versão 2. Sem alteração de configuração, perfis ou chaves.
+- Os dois nomes de credenciais estão presentes no Cloud. Inventário confirmou zero autorizações técnicas cadastradas. Lotus tem CASSINO/VERA como projetos da chave, não autorização de empresas; a chave Thiago não tem projetos definidos.
+- 33 testes focados passaram em integration-machine.test.ts, integration-admission.test.ts e erp-access.test.ts: leitura assinada sintética, replay, assinatura expirada/adulterada, chave/serviço incorretos, revogação, escopo de empresa, decisões técnicas proibidas e ausência de fallback de pessoa bloqueada.
+- Empresas aprovadas, localização dos consumidores e instalação externa continuam não confirmadas. A conexão disponível é Google Drive; isso não identifica nem comprova acesso aos ambientes de execução. Solicitar empresas e localização/responsável de cada consumidor antes de cadastrar escopos ou declarar consulta externa funcional. Nenhuma credencial foi lida, exportada ou instalada nesta retomada.
+- NO-GO para instalação externa concluída, validação positiva real ou ativação global até essas informações e evidências serem fornecidas.
+
 ### Retomada: credenciais exclusivas
 
 Na solicitação de 18/11 15:17 UTC, o usuário salvou INTEGRATION_MACHINE_LOTUS e INTEGRATION_MACHINE_THIAGO_APPROVALS pelo formulário seguro com opção de geração e cópia para o ambiente externo. O agente não recebeu os valores. expense-tracking-api e external-approvals-api foram republicadas; 73 testes sintéticos passaram novamente. Estado consultado permanece enabled=false/coverage_verified=false, versão 2, e zero autorizações técnicas cadastradas.
