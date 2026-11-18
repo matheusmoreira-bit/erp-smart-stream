@@ -10,7 +10,7 @@ import { validateApiKey } from "../_shared/api-keys.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "x-api-key, content-type",
+  "Access-Control-Allow-Headers": "x-api-key, authorization, content-type",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
     { auth: { persistSession: false } },
   );
   const keyCheck = await validateApiKey(authClient, req, "pagcorp-status-api", "PAGCORP_STATUS_API_KEY");
-  if (!keyCheck.valid) return json({ error: keyCheck.reason || "Unauthorized" }, 401);
+  if (!keyCheck.valid) return json({ error: keyCheck.reason || "Unauthorized" }, keyCheck.status ?? 401);
 
 
   const url = new URL(req.url);

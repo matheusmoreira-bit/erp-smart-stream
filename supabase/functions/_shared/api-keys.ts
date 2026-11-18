@@ -4,6 +4,7 @@
 // claro só é exibido uma vez, no momento da criação.
 // Compatibilidade: as chaves legadas guardadas em secrets de ambiente
 // (EXTERNAL_APPROVALS_API_KEY, PAGCORP_STATUS_API_KEY) continuam válidas.
+import { checkIntegrationAdmission, type IntegrationAdmission } from './integration-admission.ts';
 
 // Cliente mínimo aceito (evita conflito entre versões do supabase-js).
 // deno-lint-ignore no-explicit-any
@@ -32,6 +33,8 @@ export function providedKeyFrom(req: Request): string {
 
 export interface ApiKeyValidation {
   valid: boolean;
+  status?: number;
+  admission?: IntegrationAdmission;
   reason?: string;
   keyId?: string;
   keyName?: string;
@@ -67,6 +70,12 @@ export async function validateApiKey(
     if (data.expires_at && new Date(data.expires_at).getTime() < Date.now()) {
       return { valid: false, reason: "API key expirada" };
     }
+    let admission: IntegrationAdmission;
+    try { admission = await checkIntegrationAdmission(admin, req); }
+    catch (error) {
+      return { valid: false, status: error instanceof Error && 'status' in error && typeof error.status === 'number' ? error.status : 503,
+        reason: error instanceof Error ? error.message : 'Não foi possível verificar o acesso.' };
+    }
     // Telemetria de uso — nunca bloqueia a requisição.
     admin
       .from("api_keys")
@@ -76,6 +85,7 @@ export async function validateApiKey(
     admin.rpc("api_key_register_use", { _id: data.id }).then(() => {}, () => {});
     return {
       valid: true,
+      admission,
       keyId: data.id,
       keyName: data.name,
       projectCodes: Array.isArray(data.project_codes)
@@ -88,7 +98,13 @@ export async function validateApiKey(
   if (legacyEnvName) {
     const legacy = Deno.env.get(legacyEnvName);
     if (legacy && safeEqual(provided, legacy)) {
-      return { valid: true, legacy: true, keyName: `${legacyEnvName} (legada)` };
+      try {
+        const admission = await checkIntegrationAdmission(admin, req);
+        return { valid: true, legacy: true, keyName: `${legacyEnvName} (legada)`, admission };
+      } catch (error) {
+        return { valid: false, status: error instanceof Error && 'status' in error && typeof error.status === 'number' ? error.status : 503,
+          reason: error instanceof Error ? error.message : 'Não foi possível verificar o acesso.' };
+      }
     }
   }
 

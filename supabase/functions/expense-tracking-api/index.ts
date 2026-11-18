@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
   );
 
   const keyCheck = await validateApiKey(admin, req, "expense-tracking-api");
-  if (!keyCheck.valid) return json({ error: keyCheck.reason || "Unauthorized" }, 401);
+  if (!keyCheck.valid) return json({ error: keyCheck.reason || "Unauthorized" }, keyCheck.status ?? 401);
   if (!keyCheck.projectCodes?.length) {
     return json({ error: "Credencial sem projetos autorizados" }, 403);
   }

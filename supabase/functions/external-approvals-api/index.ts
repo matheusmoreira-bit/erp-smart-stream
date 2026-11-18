@@ -16,6 +16,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
 import { validateApiKey } from "../_shared/api-keys.ts";
+import { assertIntegrationActor } from "../_shared/integration-admission.ts";
+import { authErrorResponse } from "../_shared/auth.ts";
 import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
 
 
@@ -620,7 +622,7 @@ Deno.serve(async (req) => {
   try {
     const keyCheck = await validateApiKey(sb(), req, "external-approvals-api", "EXTERNAL_APPROVALS_API_KEY");
     if (!keyCheck.valid) {
-      return json(401, { error: keyCheck.reason || "API key inválida ou ausente" });
+      return json(keyCheck.status ?? 401, { error: keyCheck.reason || "API key inválida ou ausente" });
     }
 
 
@@ -662,6 +664,15 @@ Deno.serve(async (req) => {
     }
 
     const admin = sb();
+    if (keyCheck.admission) {
+      try { await assertIntegrationActor(admin, keyCheck.admission, userCode); }
+      catch (error) {
+        return authErrorResponse(error, corsHeaders) ?? json(
+          error instanceof Error && 'status' in error && typeof error.status === 'number' ? error.status : 503,
+          { error: error instanceof Error ? error.message : 'Não foi possível verificar o responsável.' },
+        );
+      }
+    }
 
     // Rate limit: 30 chamadas/min por (company_db × user_code|* × IP).
     const rl = await enforceRateLimit(admin, {
