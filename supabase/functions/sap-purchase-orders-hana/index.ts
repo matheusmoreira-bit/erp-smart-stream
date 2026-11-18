@@ -1,3 +1,5 @@
+import { authorizeCompany } from "../_shared/resource-access.ts";
+import { authErrorResponse } from "../_shared/auth.ts";
 // Edge function: sap-purchase-orders-hana
 // Lista pedidos de compra a partir da view HANA VW_ACOMPANHAMENTO_PEDIDOS.
 // Autentica como Apiuser da empresa, chama a HANA view, agrega por pedido
@@ -301,6 +303,15 @@ Deno.serve(async (req) => {
     if (!companyDb) {
       return new Response(JSON.stringify({ error: "company_db obrigatório" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (auth.source === "user_or_sap") {
+      try {
+        await authorizeCompany(req, companyDb, "expenses", "view");
+      } catch (err) {
+        return authErrorResponse(err, corsHeaders) ?? new Response(JSON.stringify({ error: "Acesso negado" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
     }
 
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);

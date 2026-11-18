@@ -270,7 +270,12 @@ export default function AccessReview() {
       "decidido_por",
       "decidido_em",
     ];
-    const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    // Neutralize spreadsheet formulas (=, +, -, @, tab, CR) before quoting.
+    const esc = (v: unknown) => {
+      let s = String(v ?? "");
+      if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+      return `"${s.replace(/"/g, '""')}"`;
+    };
     const lines = filtered.map((it) =>
       [
         selected.name,

@@ -119,7 +119,7 @@ Deno.serve(async (req) => {
     const existingPath = kind === "xml" ? row.xml_storage_path : row.pdf_storage_path;
     if (existingPath) {
       const { data: signed, error: signErr } = await supabase.storage
-        .from("nf-entrada-files").createSignedUrl(existingPath, 60 * 10);
+        .from("nf-entrada-files").createSignedUrl(existingPath, 60);
       if (!signErr && signed?.signedUrl) {
         return new Response(JSON.stringify({ url: signed.signedUrl, cached: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
       .eq("id", row.id);
 
     const { data: signed, error: signErr } = await supabase.storage
-      .from("nf-entrada-files").createSignedUrl(storagePath, 60 * 10);
+      .from("nf-entrada-files").createSignedUrl(storagePath, 60);
     if (signErr || !signed?.signedUrl) {
       return new Response(JSON.stringify({ error: `Não foi possível gerar signed URL: ${signErr?.message}` }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },

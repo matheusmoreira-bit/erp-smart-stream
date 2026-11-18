@@ -1,3 +1,4 @@
+import { requireSchedulerAdminOrUserSession } from "../_shared/automation-auth.ts";
 // Edge function: nf-entrada-sap-watcher
 // Polling periódico: reconcilia o estado de Pedido/NF no SAP sem criar
 // documentos. A criação do esboço de NF é uma ação explícita e separada.
@@ -209,6 +210,8 @@ async function resolveEffectivePoFromDraft(
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const auth = await requireSchedulerAdminOrUserSession(req, corsHeaders);
+  if (!auth.ok) return auth.response;
 
   const sb = createClient(
     Deno.env.get("SUPABASE_URL")!,

@@ -35,7 +35,7 @@ import { canonicalIdentity, emailLocalPart, normalizeText } from "../_shared/tex
 import { loadUnifiedPurchaseRule, unifiedApprovalTargets } from "../_shared/unified-purchase-approval.ts";
 
 const BUCKET = "expense-attachments";
-const SIGN_TTL_SECONDS = 300;
+const SIGN_TTL_SECONDS = 60;
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25MB per file
 
 const corsHeaders = {

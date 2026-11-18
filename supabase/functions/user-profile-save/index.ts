@@ -8,7 +8,7 @@
 // chamador; garante que sessão SAP só edita o próprio perfil.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
-import { requireUserOrSapSession, authErrorResponse } from "../_shared/auth.ts";
+import { requireUserOrSapSession, requireAdminOrSapModule, authErrorResponse } from "../_shared/auth.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { canonicalUserKey } from "../_shared/text-normalize.ts";
 import { callerOwnsUserCode } from "../_shared/user-aliases.ts";
@@ -50,6 +50,8 @@ Deno.serve(async (req) => {
     );
 
     if (body.action === "list") {
+      // The directory of all collaborators is limited to the user-management module.
+      await requireAdminOrSapModule(req, "users");
       const { data, error } = await admin
         .from("collaborator_profiles")
         .select("user_code, display_name, email, phone");

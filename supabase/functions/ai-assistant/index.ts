@@ -1,3 +1,4 @@
+import { safeFilterTerm } from "../_shared/postgrest-filter.ts";
 // AI Assistant: chat with tools to query system data
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callerHasMfa } from "../_shared/auth.ts";
@@ -193,7 +194,7 @@ async function runTool(name: string, args: Record<string, unknown>, sb: ReturnTy
       return grouped;
     }
     case "search_users": {
-      const q = String(args.query || "");
+      const q = safeFilterTerm(args.query);
       const { data, error } = await sb.from("user_licenses")
         .select("user_code, user_name, company_db, license_type, has_license, is_locked")
         .or(`user_code.ilike.%${q}%,user_name.ilike.%${q}%`)
@@ -244,8 +245,8 @@ async function runTool(name: string, args: Record<string, unknown>, sb: ReturnTy
       return (rules || []).map((r: any) => ({ ...r, levels: (levels || []).filter((l: any) => l.rule_id === r.id) }));
     }
     case "search_suppliers": {
-      const q = String(args.query || "");
-      const limit = Number(args.limit || 20);
+      const q = safeFilterTerm(args.query);
+      const limit = Math.min(Math.max(Number(args.limit) || 20, 1), 100);
       const { data, error } = await sb.from("suppliers")
         .select("id, card_code, card_name, federal_tax_id, email, phone1, bill_to_country, is_active, company_db")
         .or(`card_name.ilike.%${q}%,federal_tax_id.ilike.%${q}%,email.ilike.%${q}%`)

@@ -1,3 +1,4 @@
+import { escapeHtml } from "../_shared/html-escape.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { EmailAPIError, sendLovableEmail } from "npm:@lovable.dev/email-js@0.1.0";
 
@@ -558,12 +559,12 @@ async function sendValidationNotificationEmail(
   const rows = issues.map((i) => {
     const typeLabel = i.type === "supplier_not_found" ? "Fornecedor" : "Item";
     return `<tr>
-      <td style="padding:8px;border:1px solid #ddd">${i.expenseId}</td>
-      <td style="padding:8px;border:1px solid #ddd">${i.employeeName || "-"}</td>
-      <td style="padding:8px;border:1px solid #ddd">${i.description}</td>
+      <td style="padding:8px;border:1px solid #ddd">${escapeHtml(i.expenseId)}</td>
+      <td style="padding:8px;border:1px solid #ddd">${escapeHtml(i.employeeName || "-")}</td>
+      <td style="padding:8px;border:1px solid #ddd">${escapeHtml(i.description)}</td>
       <td style="padding:8px;border:1px solid #ddd">R$ ${i.amount.toFixed(2)}</td>
-      <td style="padding:8px;border:1px solid #ddd">${typeLabel}</td>
-      <td style="padding:8px;border:1px solid #ddd"><code>${i.code || "vazio"}</code></td>
+      <td style="padding:8px;border:1px solid #ddd">${escapeHtml(typeLabel)}</td>
+      <td style="padding:8px;border:1px solid #ddd"><code>${escapeHtml(i.code || "vazio")}</code></td>
     </tr>`;
   }).join("");
 
@@ -573,7 +574,7 @@ async function sendValidationNotificationEmail(
       <p>A integração automática do PagCorp encontrou <strong>${issues.length}</strong> despesa(s) que não puderam ser integradas por falta de cadastro no SAP.</p>
       ${supplierIssues.length > 0 ? `<p>🔴 <strong>${supplierIssues.length}</strong> fornecedor(es) não encontrado(s)</p>` : ""}
       ${itemIssues.length > 0 ? `<p>🟡 <strong>${itemIssues.length}</strong> item(ns) não encontrado(s)</p>` : ""}
-      <p><strong>Empresa:</strong> ${companyDB}</p>
+      <p><strong>Empresa:</strong> ${escapeHtml(companyDB)}</p>
       <table style="width:100%;border-collapse:collapse;margin:16px 0">
         <thead>
           <tr style="background:#f3f4f6">

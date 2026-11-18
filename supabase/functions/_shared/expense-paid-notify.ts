@@ -1,3 +1,4 @@
+import { maskEmail } from "./html-escape.ts";
 // Notificação de "Pedido de compra pago".
 //
 // Dispara quando o ciclo do pedido chega a pago (título liquidado no ERP).
@@ -271,7 +272,7 @@ export async function notifyExpensePaid(
         if (target.audience !== "supplier") await notifyInApp(sb, row, target.email);
       } else {
         summary.errors++;
-        console.warn(`[expense-paid-notify] falha para ${target.email}: ${result.error}`);
+        console.warn(`[expense-paid-notify] falha para ${maskEmail(target.email)}: ${result.error}`);
       }
     }
   } catch (e) {

@@ -1,3 +1,4 @@
+import { safeFilterTerm } from "../_shared/postgrest-filter.ts";
 import { withEdgeMetrics } from "../_shared/edge-metrics.ts";
 // Copilot IA (Backoffice) — chat com acesso ao banco + ações operacionais auditadas.
 // Baseado no padrão ai-assistant + report-ai-chat (SSE streaming da resposta final).
@@ -166,26 +167,12 @@ const readTools = [
     function: {
       name: "describe_schema",
       description:
-        "Descobre o schema real do banco: lista tabelas e colunas (nome + tipo). Use SEMPRE antes de escrever um run_sql_read sobre tabelas que você não conhece, ou quando um SELECT falhar por coluna inexistente.",
+        "Descobre o schema real do banco: lista tabelas e colunas (nome + tipo). Use para entender tabelas e colunas antes de escolher a tool de leitura adequada.",
       parameters: {
         type: "object",
         properties: {
           table: { type: "string", description: "Nome (ou parte) da tabela. Omita para listar todas as tabelas do schema public." },
         },
-        additionalProperties: false,
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "run_sql_read",
-      description:
-        "Executa SELECT ad-hoc (somente leitura) via RPC pública. Use para cruzamentos, agregações e contagens que outras tools não cobrem. Uma única sentença SELECT, sempre com LIMIT.",
-      parameters: {
-        type: "object",
-        properties: { sql: { type: "string" } },
-        required: ["sql"],
         additionalProperties: false,
       },
     },
@@ -373,7 +360,9 @@ async function resolveCompanyDb(sb: SupabaseClient, input?: string): Promise<str
   const raw = String(input).trim();
   const { data: exact } = await sb.from("companies").select("company_db").eq("company_db", raw).maybeSingle();
   if (exact?.company_db) return exact.company_db;
-  const { data } = await sb.from("companies").select("company_db, name").or(`company_db.ilike.%${raw}%,name.ilike.%${raw}%`).limit(2);
+  const term = safeFilterTerm(raw);
+  if (!term) return raw;
+  const { data } = await sb.from("companies").select("company_db, name").or(`company_db.ilike.%${term}%,name.ilike.%${term}%`).limit(2);
   if (data && data.length === 1) return data[0].company_db;
   return raw; // fall back so caller sees empty result rather than silent remap
 }
@@ -493,7 +482,7 @@ async function runTool(
       return data;
     }
     case "search_users": {
-      const q = String(args.query || "").trim();
+      const q = safeFilterTerm(args.query);
       if (!q) return [];
       const [ul, cp] = await Promise.all([
         sb.from("user_licenses").select("user_code, user_name, company_db, license_type, is_locked")
@@ -516,14 +505,9 @@ async function runTool(
     }
     case "run_sql_read": {
 
-      const sql = String(args.sql || "").trim();
-      if (!/^select\b/i.test(sql) || /;\s*\S/.test(sql)) {
-        return { error: "Somente uma sentença SELECT é permitida." };
-      }
-      // Depende de RPC 'copilot_read_query' criada por migration (SECURITY DEFINER, apenas admins).
-      const { data, error } = await scopedSb.rpc("copilot_read_query", { p_sql: sql });
-      if (error) return { error: error.message };
-      return data;
+      // Free-form SQL from model output is disabled: prompt-injected text could
+      // turn it into broad data extraction. Use the specific read tools instead.
+      return { error: "Consulta SQL livre desativada por segurança. Use as ferramentas de leitura específicas." };
     }
 
     // ============ WRITE ============
@@ -654,13 +638,13 @@ function buildSystemPrompt(actorEmail: string) {
 CONTEXTO
 - Data/hora atual (America/Sao_Paulo): ${today}
 - Administrador logado: ${actorEmail}
-- Banco: PostgreSQL (Supabase). Você tem leitura ampla via tools e SQL (SELECT) e um conjunto de ações de escrita auditadas.
+- Banco: PostgreSQL. Você tem leitura via tools específicas (sem SQL livre) e um conjunto de ações de escrita auditadas.
 
 MÉTODO DE TRABALHO (obrigatório)
 1. Entenda o pedido. Se for ambíguo em UM ponto crítico, faça UMA pergunta objetiva — caso contrário assuma o cenário mais provável, diga a suposição e siga.
-2. NUNCA responda "não consigo" ou "não tenho acesso" antes de tentar. Você tem \`describe_schema\` + \`run_sql_read\`: quase toda pergunta sobre dados é respondível.
+2. NUNCA responda "não consigo" ou "não tenho acesso" antes de tentar. Use as tools de leitura disponíveis antes de concluir.
 3. Investigue em profundidade: encadeie várias tools na mesma resposta. Consultou e veio vazio? Mude a hipótese (nome parcial, período maior, outra tabela, sem filtro de empresa) e tente de novo antes de concluir "não há registros".
-4. Ao usar \`run_sql_read\`: se não tiver certeza das colunas, chame \`describe_schema\` primeiro. Se o SELECT falhar, LEIA a mensagem de erro, corrija e refaça — até 3 tentativas antes de reportar.
+4. Se uma tool falhar, LEIA a mensagem de erro, ajuste os parâmetros e refaça — até 3 tentativas antes de reportar.
 5. Não invente números, IDs, e-mails, nomes de tabela ou status. Tudo vem de tool.
 
 QUALIDADE DA RESPOSTA

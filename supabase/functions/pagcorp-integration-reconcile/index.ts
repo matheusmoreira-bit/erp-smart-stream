@@ -1,3 +1,4 @@
+import { authorizeCompany } from "../_shared/resource-access.ts";
 // Reconciliação PagCorp ⇄ ERP Flow / SAP.
 //
 // Problema tratado: quando o pedido de compra é criado a partir de uma
@@ -87,6 +88,11 @@ Deno.serve(async (req) => {
 
   const companyDb = String(body.companyDb || "").trim();
   if (!companyDb) return json({ error: "companyDb obrigatório" }, 400);
+  try {
+    await authorizeCompany(req, companyDb, "pagcorp", "view");
+  } catch (err) {
+    return authErrorResponse(err, corsHeaders) ?? json({ error: "Acesso negado" }, 403);
+  }
 
   const transactions = (Array.isArray(body.transactions) ? body.transactions : [])
     .map((t) => ({

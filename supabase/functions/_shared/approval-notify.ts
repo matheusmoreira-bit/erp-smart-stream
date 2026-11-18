@@ -1,3 +1,4 @@
+import { maskEmail } from "./html-escape.ts";
 // Notificação de aprovação multicanal (in-app + e-mail mobile-first + Slack).
 //
 // Regras:
@@ -549,11 +550,11 @@ export async function notifyApprovalPending(admin: any, input: ApprovalNotifyInp
     })) {
       const prefs = await substitutePrefs(admin, sub.email, sub.name);
       if (!prefs.enabled) {
-        console.log("[approval-notify] substituto optou por não receber avisos:", sub.email);
+        console.log("[approval-notify] substituto optou por não receber avisos:", maskEmail(sub.email));
         continue;
       }
       if (prefs.min_amount > 0 && Number(input.totalAmount || 0) < prefs.min_amount) {
-        console.log("[approval-notify] valor abaixo do mínimo configurado pelo substituto:", sub.email);
+        console.log("[approval-notify] valor abaixo do mínimo configurado pelo substituto:", maskEmail(sub.email));
         continue;
       }
       const officialLabel = input.approverName || email || "o aprovador titular";

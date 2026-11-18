@@ -209,7 +209,7 @@ Deno.serve(async (req) => {
 
     const { data: signed, error: signedError } = await supabase.storage
       .from(PDF_BUCKET)
-      .createSignedUrl(storagePath, 300);
+      .createSignedUrl(storagePath, 60);
     if (signedError || !signed?.signedUrl) {
       return json({ error: `Falha ao abrir DANFSe: ${signedError?.message || "URL ausente"}` }, 500);
     }

@@ -407,6 +407,8 @@ async function generateAiInsights(runId: string, companyDB: string, divergences:
 async function processRun(runId: string, companyDB: string, dateFrom: string, dateTo: string) {
   const sb = admin();
   try {
+    // companyDB is interpolated into an or() filter; accept only plain identifiers.
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(companyDB)) throw new Error("Empresa inválida");
     await updateRun(runId, { status: "running", current_step: "Carregando regras", progress_pct: 5 });
     const { data: rulesData } = await sb
       .from("audit_console_rules")

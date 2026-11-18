@@ -1,5 +1,6 @@
+import { authorizeCompany } from "../_shared/resource-access.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { requireUser, authErrorResponse } from "../_shared/auth.ts";
+import { requireUser, requireAdmin, authErrorResponse } from "../_shared/auth.ts";
 
 
 const corsHeaders = {
@@ -42,6 +43,9 @@ Deno.serve(async (req) => {
 
     const url = new URL(req.url);
     const companyDb = url.searchParams.get("company_db");
+    // A company filter needs a grant for that company; the all-companies view stays admin-only.
+    if (companyDb) await authorizeCompany(req, companyDb, "users", "view");
+    else await requireAdmin(req);
     const normalizedDb = normalizeDbName(companyDb);
     const candidates = Array.from(new Set([companyDb, normalizedDb].filter(Boolean) as string[]));
 

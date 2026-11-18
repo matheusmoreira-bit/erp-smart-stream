@@ -1,3 +1,4 @@
+import { escapeHtml } from "../_shared/html-escape.ts";
 // Synapse — Notificações de andamento de Pedidos de Compra
 // Marcos: approved, grpo (NF entrada), ap_invoice (contas a pagar), ap_paid (baixado)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
@@ -179,15 +180,15 @@ function renderEmailHtml(opts: {
       <div style="font-size:20px;font-weight:600;margin-top:4px">${meta.title}</div>
     </div>
     <div style="padding:24px">
-      <p style="margin:0 0 16px;font-size:14px;line-height:1.5">Olá${opts.po.RequesterName ? ` ${opts.po.RequesterName}` : ""},</p>
+      <p style="margin:0 0 16px;font-size:14px;line-height:1.5">Olá${opts.po.RequesterName ? ` ${escapeHtml(opts.po.RequesterName)}` : ""},</p>
       <p style="margin:0 0 20px;font-size:14px;line-height:1.5">${meta.intro}</p>
       <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <tr><td style="padding:6px 0;color:#6b7280">Empresa</td><td style="padding:6px 0;text-align:right">${opts.companyDb}</td></tr>
-        <tr><td style="padding:6px 0;color:#6b7280">Pedido</td><td style="padding:6px 0;text-align:right">#${opts.po.DocNum} (entry ${opts.po.DocEntry})</td></tr>
-        <tr><td style="padding:6px 0;color:#6b7280">Data</td><td style="padding:6px 0;text-align:right">${opts.po.DocDate || "-"}</td></tr>
-        <tr><td style="padding:6px 0;color:#6b7280">Fornecedor</td><td style="padding:6px 0;text-align:right">${opts.po.CardName || opts.po.CardCode || "-"}</td></tr>
-        <tr><td style="padding:6px 0;color:#6b7280">Total</td><td style="padding:6px 0;text-align:right;font-weight:600">${brl(opts.po.DocTotal, opts.po.DocCurrency || "BRL")}</td></tr>
-        ${linked ? `<tr><td style="padding:6px 0;color:#6b7280">Documento vinculado</td><td style="padding:6px 0;text-align:right">#${linked.DocNum} — ${brl(linked.DocTotal, linked.DocCurrency || "BRL")}</td></tr>` : ""}
+        <tr><td style="padding:6px 0;color:#6b7280">Empresa</td><td style="padding:6px 0;text-align:right">${escapeHtml(opts.companyDb)}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Pedido</td><td style="padding:6px 0;text-align:right">#${escapeHtml(opts.po.DocNum)} (entry ${escapeHtml(opts.po.DocEntry)})</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Data</td><td style="padding:6px 0;text-align:right">${escapeHtml(opts.po.DocDate || "-")}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Fornecedor</td><td style="padding:6px 0;text-align:right">${escapeHtml(opts.po.CardName || opts.po.CardCode || "-")}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Total</td><td style="padding:6px 0;text-align:right;font-weight:600">${escapeHtml(brl(opts.po.DocTotal, opts.po.DocCurrency || "BRL"))}</td></tr>
+        ${linked ? `<tr><td style="padding:6px 0;color:#6b7280">Documento vinculado</td><td style="padding:6px 0;text-align:right">#${escapeHtml(linked.DocNum)} — ${escapeHtml(brl(linked.DocTotal, linked.DocCurrency || "BRL"))}</td></tr>` : ""}
       </table>
       <p style="margin:24px 0 0;font-size:12px;color:#6b7280;line-height:1.5">Notificação automática — não responda a este email.</p>
     </div>

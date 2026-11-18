@@ -1,3 +1,5 @@
+import { authorizeCompany } from "../_shared/resource-access.ts";
+import { authErrorResponse } from "../_shared/auth.ts";
 // Edge function: sales-nfse-reconcile
 // Conferência das NFS-e EMITIDAS (notas de saída).
 //
@@ -244,6 +246,11 @@ Deno.serve(async (req) => {
       return json({ error: "periodo_inicio e periodo_fim devem estar no formato YYYY-MM-DD" }, 400);
     }
     if (inicio > fim) return json({ error: "Período inválido" }, 400);
+    try {
+      await authorizeCompany(req, companyDb, "sales", "view");
+    } catch (err) {
+      return authErrorResponse(err, corsHeaders) ?? json({ error: "Acesso negado" }, 403);
+    }
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,

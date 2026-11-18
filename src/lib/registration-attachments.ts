@@ -75,7 +75,7 @@ export async function getRegistrationAttachmentUrl(att: RegistrationAttachment):
   }
   const { data, error } = await supabase.storage
     .from(REGISTRATION_BUCKET)
-    .createSignedUrl(att.path, 300);
+    .createSignedUrl(att.path, 60);
   if (error || !data?.signedUrl) throw new Error(error?.message || "Não foi possível gerar o link do anexo.");
   return data.signedUrl;
 }

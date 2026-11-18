@@ -1,3 +1,4 @@
+import { escapeHtml } from "../_shared/html-escape.ts";
 // Detecta usuários SAP com licença PRO/CRM que ficaram >15 dias sem login
 // e envia alerta via WhatsApp + e-mail. Re-alerta uma vez por semana ISO.
 
@@ -407,12 +408,12 @@ Deno.serve(async (req) => {
       await sendWhatsApp(msg);
 
       const html = `
-        <h2>Licenças ociosas — ${display}</h2>
+        <h2>Licenças ociosas — ${escapeHtml(display)}</h2>
         <p>${list.length} usuário(s) com licença <b>PRO/CRM</b> sem login há mais de <b>${IDLE_DAYS} dias</b>:</p>
         <table cellpadding="6" cellspacing="0" border="1" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px">
           <thead><tr style="background:#f3f4f6"><th>Usuário</th><th>Código</th><th>Licença</th><th>Dias sem login</th><th>Último login</th></tr></thead>
           <tbody>
-            ${list.map((u) => `<tr><td>${u.user_name}</td><td>${u.user_code}</td><td>${u.license_type}</td><td>${u.days_idle === 9999 ? "nunca" : u.days_idle}</td><td>${u.last_login ? new Date(u.last_login).toLocaleDateString("pt-BR") : "—"}</td></tr>`).join("")}
+            ${list.map((u) => `<tr><td>${escapeHtml(u.user_name)}</td><td>${escapeHtml(u.user_code)}</td><td>${escapeHtml(u.license_type)}</td><td>${u.days_idle === 9999 ? "nunca" : u.days_idle}</td><td>${u.last_login ? new Date(u.last_login).toLocaleDateString("pt-BR") : "—"}</td></tr>`).join("")}
           </tbody>
         </table>`;
       await sendEmail(`[Licenças ociosas] ${display} — ${list.length} usuário(s)`, html);

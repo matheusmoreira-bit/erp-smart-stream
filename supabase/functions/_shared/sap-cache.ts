@@ -1,3 +1,4 @@
+import { requireSchedulerAdminOrUserSession } from "./automation-auth.ts";
 // Helpers compartilhados pelos watchers de cache SAP (sap-nf-entrada-sync,
 // sap-po-cache-sync, sap-vendor-payment-cache-sync, sap-fluxo-analise-sync).
 //
@@ -208,6 +209,9 @@ export async function runSapCacheWatcher(
   { watcherName, timeBudgetMs = 90_000, supportBackfill = true, stateTable, syncCompany }: RunWatcherOpts,
 ): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  // Cron sends the scheduler secret; manual refreshes come from signed-in sessions.
+  const auth = await requireSchedulerAdminOrUserSession(req, corsHeaders);
+  if (!auth.ok) return auth.response;
 
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const gotLock = await tryWatcherLock(sb, watcherName, 10);

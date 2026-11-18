@@ -10617,6 +10617,10 @@ export type Database = {
         Args: { _hours?: number; _start: string }
         Returns: string
       }
+      caller_owns_identifier: {
+        Args: { _identifier: string }
+        Returns: boolean
+      }
       can_access_audit_console: {
         Args: { _company_db: string }
         Returns: boolean
