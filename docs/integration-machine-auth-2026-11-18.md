@@ -47,6 +47,12 @@ Assinatura cobre operação/corpo, caminho, parâmetros, serviço e identidade; 
 
 ## Revisão de segurança
 
+### Retomada: credenciais exclusivas
+
+Na solicitação de 18/11 15:17 UTC, o usuário salvou INTEGRATION_MACHINE_LOTUS e INTEGRATION_MACHINE_THIAGO_APPROVALS pelo formulário seguro com opção de geração e cópia para o ambiente externo. O agente não recebeu os valores. expense-tracking-api e external-approvals-api foram republicadas; 73 testes sintéticos passaram novamente. Estado consultado permanece enabled=false/coverage_verified=false, versão 2, e zero autorizações técnicas cadastradas.
+
+Salvar no Cloud não confirma instalação no consumidor externo. As perguntas sobre localização/responsáveis e empresas foram puladas; não há escopo seguro para habilitar essas autorizações nem evidência de consulta externa assinada. Credenciais no Cloud: concluído; configuração nos dois consumidores e teste positivo ponta a ponta: não verificados e pendentes dessas informações. Não declarar funcionamento externo ou GO global.
+
 Skill revisao-seguranca-lovable: RLS/grants da alteração OK; autorização e entrada escopada OK; nenhum segredo novo no front/log/código; nonce/assinatura/timestamp OK. CORS não concede credenciais de navegador nem dispensa verificação da assinatura; não adicionar os cabeçalhos técnicos a clientes de navegador. HTTPS/SSO/MFA existentes preservados. Configuração global HSTS/CSP, criptografia PII, configurações hospedadas de auth e CodeQL/secret scanning não revalidados nesta alteração. A remoção de literais do script não revoga cópias históricas; rotação depende do responsável.
 
 Arquivos: integration-machine.ts, integration-admission.ts, api-keys.ts, três entrypoints, dois testes integration-*, script hanaapi-finance-sheets.gs, migration 0081 e metadados gerados, AGENTS.md, roadmap.md e este relatório.
