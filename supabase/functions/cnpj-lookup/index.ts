@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
+import { requireSchedulerAdminOrUserSession } from "../_shared/automation-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -71,6 +72,7 @@ function mapPayload(p: any) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  { const _gate = await requireSchedulerAdminOrUserSession(req, corsHeaders); if (!_gate.ok) return _gate.response; }
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   try {

@@ -87,3 +87,8 @@
 
 - [x] HANA API — troca temporária para http://187.111.23.22:8001 revertida a pedido do usuário em 12/11 17:52 UTC; ANA, Cactus, Instituto, Open Gaming e configuração hana_api novamente em 189.20.156.34:8001, conforme backup hana_api_url_backup_20261112.
 - [ ] HANA API — consultas ainda falham: HanaAPI devolveu 504 "Tempo limite da consulta HANA excedido" (banco HANA atrás da API) e o login SAP Service Layer (Wevy) retornou 503 "No server is available" às 16:31 e timeout às 16:35 UTC. Depende da Wevy/equipe SAP.
+
+## Correção das brechas críticas (deep scan 18/11)
+- [x] Fase 1: exigir sessão/rotina autorizada em 9 funções sem login (PagCorp→SAP, Synapse, rematch NF, SLA, JumpCloud/desligamento, CNPJ, backfill anexos, fila NF cron) — publicadas, recusa sem login verificada (401).
+- [ ] Fase 2: checagem de papel/empresa/dono em funções com login (advance-to-sap, expense-to-sap, advance-reconcile, sales-nfse-emit cancel, pagcorp-settlement-watcher, pagcorp-card-mapping delete, pagcorp-proxy URL, cashflow, nf-entrada-erp-status, expense-backfill-due-date).
+- [ ] Fase 3: chaves de API e rotinas agendadas restantes; ensaio isolado; ativação.

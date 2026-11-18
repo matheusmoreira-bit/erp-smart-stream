@@ -3,6 +3,7 @@
 // Invocado por pg_cron (a cada 30 minutos) e também disponível on-demand.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { tryWatcherLock, releaseWatcherLock } from "../_shared/watcher-lock.ts";
+import { requireSchedulerOrAdmin } from "../_shared/automation-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -99,6 +100,7 @@ async function getJumpCloudCredentials(supabase: ReturnType<typeof createClient>
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  { const _gate = await requireSchedulerOrAdmin(req, corsHeaders); if (!_gate.ok) return _gate.response; }
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,

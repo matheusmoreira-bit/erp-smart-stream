@@ -15,6 +15,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { getIntegrationPause, pauseResponse } from "../_shared/integration-pause.ts";
 import { requireUserOrSapSessionHeaders, authErrorResponse } from "../_shared/auth.ts";
+import { isServiceRoleRequest, isSchedulerSecretRequest } from "../_shared/automation-auth.ts";
 import { resolveAdapterForCompany } from "../_shared/nfentrada-adapters/index.ts";
 import type { AdapterContext } from "../_shared/nfentrada-adapters/types.ts";
 
@@ -92,7 +93,8 @@ Deno.serve(async (req) => {
   let actor = "nf-entrada-erp-queue";
 
   // Chamadas de usuário exigem sessão; o cron interno (service role) não.
-  if (!body.cron) {
+  const machine = isServiceRoleRequest(req) || await isSchedulerSecretRequest(req);
+  if (!(body.cron && machine)) {
     try {
       const auth = await requireUserOrSapSessionHeaders(req);
       actor = (auth as any)?.email || req.headers.get("x-sap-user") || actor;

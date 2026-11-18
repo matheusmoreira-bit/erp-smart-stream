@@ -19,6 +19,7 @@ import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 import { rejectForeignOrigin } from "../_shared/cors-allowlist.ts";
 import { buildPagCorpJournalTransactionPairs } from "../_shared/pagcorp-journal-entry.ts";
 import { sapFetch } from "../_shared/sap-fetch.ts";
+import { requireSchedulerAdminOrUserSession } from "../_shared/automation-auth.ts";
 
 const PAGCORP_JOURNAL_PAYLOAD_VERSION = "2026-08-26-pairs-per-transaction-v3";
 
@@ -473,6 +474,7 @@ Deno.serve(async (req) => {
   const foreignOrigin = rejectForeignOrigin(req);
   if (foreignOrigin) return foreignOrigin;
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  { const _gate = await requireSchedulerAdminOrUserSession(req, corsHeaders); if (!_gate.ok) return _gate.response; }
   { const _pause = await getIntegrationPause("sap_b1"); if (_pause) return pauseResponse(_pause, corsHeaders); }
 
   let logId: string | null = null;

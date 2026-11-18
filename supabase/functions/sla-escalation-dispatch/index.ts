@@ -8,6 +8,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.103.0";
 import { notifyApprovalPending } from "../_shared/approval-notify.ts";
 import { emailLocalPart, normalizeText, stripDiacritics as baseStripDiacritics, tokenizePerson } from "../_shared/text-normalize.ts";
+import { requireSchedulerAdminOrUserSession } from "../_shared/automation-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -73,6 +74,7 @@ function addBusinessHours(start: Date, hours: number): Date {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  { const _gate = await requireSchedulerAdminOrUserSession(req, corsHeaders); if (!_gate.ok) return _gate.response; }
 
   const admin = createClient(
     Deno.env.get("SUPABASE_URL")!,

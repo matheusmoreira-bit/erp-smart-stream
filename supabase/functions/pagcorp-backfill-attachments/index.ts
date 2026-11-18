@@ -9,6 +9,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { ensureCopyToTargetDocument } from "../_shared/sap-attach-copy.ts";
 import { requireUser, AuthError } from "../_shared/auth.ts";
+import { isServiceRoleRequest } from "../_shared/automation-auth.ts";
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
 
 const corsHeaders = {
@@ -137,20 +138,7 @@ Deno.serve(async (req) => {
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
   // Admin auth: aceita JWT com role=service_role (backfill via ops) ou usuário Cloud com role admin.
-  const authHeader = req.headers.get("authorization") || "";
-  const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
-  let isServiceRole = false;
-  if (bearer) {
-    try {
-      const parts = bearer.split(".");
-      if (parts.length === 3) {
-        const payload = JSON.parse(
-          atob(parts[1].replace(/-/g, "+").replace(/_/g, "/").padEnd(parts[1].length + (4 - parts[1].length % 4) % 4, "=")),
-        );
-        if (payload?.role === "service_role") isServiceRole = true;
-      }
-    } catch { /* ignore */ }
-  }
+  const isServiceRole = isServiceRoleRequest(req);
   if (!isServiceRole) {
     try {
       const u = await requireUser(req);

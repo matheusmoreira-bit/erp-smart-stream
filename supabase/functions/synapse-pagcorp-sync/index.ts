@@ -5,6 +5,7 @@ const EMAIL_SENDER_DOMAIN = "notify.cactuscorporation.com";
 const EMAIL_FROM_DOMAIN = "notify.cactuscorporation.com";
 import { ensureCopyToTargetDocument } from "../_shared/sap-attach-copy.ts";
 import { sanitizeSapFileName } from "../_shared/sap-filename.ts";
+import { requireSchedulerAdminOrUserSession } from "../_shared/automation-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -663,6 +664,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+  { const _gate = await requireSchedulerAdminOrUserSession(req, corsHeaders); if (!_gate.ok) return _gate.response; }
 
   const supabase = getServiceClient();
 

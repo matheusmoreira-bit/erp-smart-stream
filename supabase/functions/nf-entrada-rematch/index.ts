@@ -35,6 +35,7 @@ async function sapLogin(baseUrl: string, companyDB: string, u: string, p: string
 }
 
 import { findPoForNf, findSupplierCardCode, poCandidatesFromCache, cardCodeFromCache } from "../_shared/nf-po-match.ts";
+import { requireSchedulerAdminOrUserSession } from "../_shared/automation-auth.ts";
 
 
 async function loadSapCreds(
@@ -61,6 +62,7 @@ async function loadSapCreds(
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  { const _gate = await requireSchedulerAdminOrUserSession(req, corsHeaders); if (!_gate.ok) return _gate.response; }
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
