@@ -49,6 +49,8 @@ Assinatura cobre operação/corpo, caminho, parâmetros, serviço e identidade; 
 
 ### Retomada 18/11 16:43 UTC
 
+- Decisão posterior do usuário: ignorar a configuração de ambas as automações e manter seu acesso atual. Cadastro/instalação externa removidos do escopo deste pedido, não concluídos. Nenhuma chave, empresa, perfil, credencial ou autorização técnica alterada. Sob bloqueio futuro, chamadas key-only continuarão sendo recusadas; manter acesso atual não autoriza bypass.
+- Duas chamadas publicadas, uma por consumidor, com chave e sessão propositalmente inválidas retornaram 401. Isso comprova recusa dessas entradas, não autenticação válida com as credenciais salvas nem fluxo externo positivo.
 - Status administrativo autenticado retornou HTTP 200 com manager=true; bloqueio desligado, ready=false e versão 2. Sem alteração de configuração, perfis ou chaves.
 - Os dois nomes de credenciais estão presentes no Cloud. Inventário confirmou zero autorizações técnicas cadastradas. Lotus tem CASSINO/VERA como projetos da chave, não autorização de empresas; a chave Thiago não tem projetos definidos.
 - 33 testes focados passaram em integration-machine.test.ts, integration-admission.test.ts e erp-access.test.ts: leitura assinada sintética, replay, assinatura expirada/adulterada, chave/serviço incorretos, revogação, escopo de empresa, decisões técnicas proibidas e ausência de fallback de pessoa bloqueada.
