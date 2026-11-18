@@ -3,6 +3,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@3.23.8";
 import { validateApiKey } from "../_shared/api-keys.ts";
+import { assertMachineScope } from "../_shared/integration-machine.ts";
 import {
   shapeScopedExpense,
   type ExpenseTrackingApprovalSegment,
@@ -74,6 +75,9 @@ Deno.serve(async (req) => {
   const parsed = QuerySchema.safeParse(Object.fromEntries(url.searchParams.entries()));
   if (!parsed.success) return json({ error: parsed.error.flatten().fieldErrors }, 400);
   const params = parsed.data;
+  const machine = keyCheck.admission?.machine;
+  try { assertMachineScope(machine, params.companyDb, 'read'); }
+  catch { return json({ error: 'Empresa ou operação fora do escopo técnico' }, 403); }
 
   const targetCount = params.expenseId ? 1 : params.offset + params.limit + 1;
   const authorizedItems: ReturnType<typeof shapeScopedExpense>[] = [];
@@ -92,6 +96,7 @@ Deno.serve(async (req) => {
       .order("id", { ascending: false });
 
     if (params.expenseId) expenseQuery = expenseQuery.eq("id", params.expenseId);
+    if (machine) expenseQuery = expenseQuery.in('company_db', machine.company_dbs);
     if (params.companyDb) expenseQuery = expenseQuery.eq("company_db", params.companyDb);
     if (params.status) expenseQuery = expenseQuery.eq("status", params.status);
     if (params.updatedSince) expenseQuery = expenseQuery.gte("updated_at", params.updatedSince);

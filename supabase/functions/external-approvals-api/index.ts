@@ -17,6 +17,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { enforceRateLimit, rateLimitResponse, clientIpFrom } from "../_shared/rate-limit.ts";
 import { validateApiKey } from "../_shared/api-keys.ts";
 import { assertIntegrationActor } from "../_shared/integration-admission.ts";
+import { assertMachineScope } from "../_shared/integration-machine.ts";
 import { authErrorResponse } from "../_shared/auth.ts";
 import { fetchHanaView, resolveHanaSchema } from "../_shared/hana-views.ts";
 
@@ -665,7 +666,10 @@ Deno.serve(async (req) => {
 
     const admin = sb();
     if (keyCheck.admission) {
-      try { await assertIntegrationActor(admin, keyCheck.admission, userCode); }
+      try {
+        assertMachineScope(keyCheck.admission.machine, companyDB, op);
+        await assertIntegrationActor(admin, keyCheck.admission, userCode);
+      }
       catch (error) {
         return authErrorResponse(error, corsHeaders) ?? json(
           error instanceof Error && 'status' in error && typeof error.status === 'number' ? error.status : 503,

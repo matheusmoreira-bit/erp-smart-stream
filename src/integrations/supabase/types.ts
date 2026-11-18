@@ -5073,6 +5073,85 @@ export type Database = {
         }
         Relationships: []
       }
+      integration_machine_grants: {
+        Row: {
+          api_key_id: string
+          company_dbs: string[]
+          created_at: string
+          enabled: boolean
+          expires_at: string
+          id: string
+          name: string
+          operations: string[]
+          project_codes: string[]
+          revoked_at: string | null
+          secret_env_name: string
+          service: string
+        }
+        Insert: {
+          api_key_id: string
+          company_dbs: string[]
+          created_at?: string
+          enabled?: boolean
+          expires_at: string
+          id?: string
+          name: string
+          operations?: string[]
+          project_codes?: string[]
+          revoked_at?: string | null
+          secret_env_name: string
+          service: string
+        }
+        Update: {
+          api_key_id?: string
+          company_dbs?: string[]
+          created_at?: string
+          enabled?: boolean
+          expires_at?: string
+          id?: string
+          name?: string
+          operations?: string[]
+          project_codes?: string[]
+          revoked_at?: string | null
+          secret_env_name?: string
+          service?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_machine_grants_api_key_id_fkey"
+            columns: ["api_key_id"]
+            isOneToOne: false
+            referencedRelation: "api_keys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_machine_nonces: {
+        Row: {
+          expires_at: string
+          grant_id: string
+          nonce: string
+        }
+        Insert: {
+          expires_at: string
+          grant_id: string
+          nonce: string
+        }
+        Update: {
+          expires_at?: string
+          grant_id?: string
+          nonce?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_machine_nonces_grant_id_fkey"
+            columns: ["grant_id"]
+            isOneToOne: false
+            referencedRelation: "integration_machine_grants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integration_pause: {
         Row: {
           created_at: string
@@ -10738,6 +10817,10 @@ export type Database = {
       company_tax_id: { Args: { _company_db: string }; Returns: string }
       consume_csrf_token: {
         Args: { _purpose: string; _subject: string; _token_hash: string }
+        Returns: boolean
+      }
+      consume_integration_machine_nonce: {
+        Args: { _grant_id: string; _nonce: string; _timestamp: number }
         Returns: boolean
       }
       copilot_read_query: { Args: { p_sql: string }; Returns: Json }

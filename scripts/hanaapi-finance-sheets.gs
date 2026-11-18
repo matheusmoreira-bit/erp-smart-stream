@@ -23,12 +23,12 @@ const HANA_FINANCE_SYNC = Object.freeze({
   MAX_RUNTIME_MS: 5 * 60 * 1000,
   WRITE_CHUNK_SIZE: 10000,
   HANA_API_URL: "http://201.48.79.205:8001",
-  DYNAMIC_TOKEN_SECRET: "8f3c7b2a9e1d4f6a5b8c0e3d2f1a6c5b9d0e7f4a2b1c6d5e8f9a0b3c2d1e4f7a",
-  SESSION_ID: "67aefea7-fa97-4674-bb8e-34a257669613-6422",
+  DYNAMIC_TOKEN_SECRET: PropertiesService.getScriptProperties().getProperty("DYNAMIC_TOKEN_SECRET") || "",
+  SESSION_ID: PropertiesService.getScriptProperties().getProperty("SESSION_ID") || "",
   ERP_FLOW_APPROVALS_API_URL:
     "https://ryxlofwbyhkqcvzavbwn.supabase.co/functions/v1/external-approvals-api",
   ERP_FLOW_APPROVALS_API_KEY:
-    "erpf_apr_be4c5771c526628677be4e04696680505b917e60782b6bc5b9351af4323df17a",
+    PropertiesService.getScriptProperties().getProperty("ERP_FLOW_APPROVALS_API_KEY") || "",
 });
 
 function onOpen() {
@@ -204,19 +204,18 @@ function chavePedido_(row) {
 }
 
 function buscarPedidosEmAprovacao_(companyDb) {
+  const payloadBody = JSON.stringify({ op: "list", company_db: companyDb, doc_object_type: "22" });
+  const machineHeaders = assinaturaMaquina_(HANA_FINANCE_SYNC.ERP_FLOW_APPROVALS_API_URL, payloadBody);
   const response = UrlFetchApp.fetch(HANA_FINANCE_SYNC.ERP_FLOW_APPROVALS_API_URL, {
     method: "post",
     contentType: "application/json",
     headers: {
       "X-API-Key": HANA_FINANCE_SYNC.ERP_FLOW_APPROVALS_API_KEY,
       Accept: "application/json",
+      ...machineHeaders,
     },
-    payload: JSON.stringify({
-      op: "list",
-      company_db: companyDb,
-      doc_object_type: "22",
-    }),
-    followRedirects: true,
+    payload: payloadBody,
+    followRedirects: false,
     muteHttpExceptions: true,
   });
   validarHttp_(response, "ERP Flow - pedidos em aprovacao de " + companyDb);
@@ -308,7 +307,7 @@ function buscarViewCompleta_(schema, viewName, startedAt) {
         "X-SAP-Session-ID": HANA_FINANCE_SYNC.SESSION_ID,
         Accept: "application/json",
       },
-      followRedirects: true,
+      followRedirects: false,
       muteHttpExceptions: true,
     });
     validarHttp_(response, schema + "." + viewName + " (offset " + offset + ")");
@@ -484,4 +483,23 @@ function validarCredenciais_(viewName) {
 
 function mensagemErro_(error) {
   return error && error.message ? String(error.message) : String(error || "Erro inesperado");
+}
+
+// Configure properties in the private automation project; never in a shared sheet.
+function assinaturaMaquina_(url, body) {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty("ERP_MACHINE_ID") || "";
+  const secret = props.getProperty("ERP_MACHINE_SIGNING_SECRET") || "";
+  if (!id || !secret) throw new Error("Autenticacao exclusiva da automacao nao configurada.");
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const nonce = Utilities.getUuid().replace(/-/g, "");
+  const target = String(url).match(/^https:\/\/[^/]+(\/[^#]*)$/);
+  if (!target) throw new Error("Endereco HTTPS da integracao invalido.");
+  function hex(bytes) {
+    return bytes.map(function(b) { return ((b + 256) % 256).toString(16).padStart(2, "0"); }).join("");
+  }
+  const bodyHash = hex(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, body, Utilities.Charset.UTF_8));
+  const message = ["erp-machine-v1", id, "external-approvals-api", timestamp, nonce, "POST", target[1], bodyHash].join("\n");
+  return { "X-Machine-Id": id, "X-Machine-Timestamp": timestamp, "X-Machine-Nonce": nonce,
+    "X-Machine-Signature": hex(Utilities.computeHmacSha256Signature(message, secret, Utilities.Charset.UTF_8)) };
 }

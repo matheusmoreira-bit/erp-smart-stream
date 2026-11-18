@@ -71,10 +71,18 @@ export async function validateApiKey(
       return { valid: false, reason: "API key expirada" };
     }
     let admission: IntegrationAdmission;
-    try { admission = await checkIntegrationAdmission(admin, req); }
+    try { admission = await checkIntegrationAdmission(admin, req, { keyId: data.id, service }); }
     catch (error) {
       return { valid: false, status: error instanceof Error && 'status' in error && typeof error.status === 'number' ? error.status : 503,
         reason: error instanceof Error ? error.message : 'Não foi possível verificar o acesso.' };
+    }
+    const projectCodes = Array.isArray(data.project_codes)
+      ? data.project_codes.map((code: unknown) => String(code).trim()).filter(Boolean) : [];
+    if (admission.machine && service === 'expense-tracking-api') {
+      const machineProjects = admission.machine.project_codes;
+      if (!Array.isArray(machineProjects) || !machineProjects.length || machineProjects.some(code => !projectCodes.includes(code))) {
+        return { valid: false, status: 403, reason: 'Projetos técnicos fora do escopo da chave.' };
+      }
     }
     // Telemetria de uso — nunca bloqueia a requisição.
     admin
@@ -88,9 +96,7 @@ export async function validateApiKey(
       admission,
       keyId: data.id,
       keyName: data.name,
-      projectCodes: Array.isArray(data.project_codes)
-        ? data.project_codes.map((code: unknown) => String(code).trim()).filter(Boolean)
-        : [],
+      projectCodes: admission.machine && service === 'expense-tracking-api' ? admission.machine.project_codes : projectCodes,
     };
   }
 
@@ -99,7 +105,7 @@ export async function validateApiKey(
     const legacy = Deno.env.get(legacyEnvName);
     if (legacy && safeEqual(provided, legacy)) {
       try {
-        const admission = await checkIntegrationAdmission(admin, req);
+        const admission = await checkIntegrationAdmission(admin, req, { service });
         return { valid: true, legacy: true, keyName: `${legacyEnvName} (legada)`, admission };
       } catch (error) {
         return { valid: false, status: error instanceof Error && 'status' in error && typeof error.status === 'number' ? error.status : 503,

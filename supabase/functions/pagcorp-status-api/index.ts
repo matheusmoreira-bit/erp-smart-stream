@@ -5,6 +5,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@3.23.8";
 import { openapiSpec } from "./openapi.ts";
 import { validateApiKey } from "../_shared/api-keys.ts";
+import { assertMachineScope } from "../_shared/integration-machine.ts";
 
 
 
@@ -85,6 +86,9 @@ Deno.serve(async (req) => {
   const parsed = QuerySchema.safeParse(raw);
   if (!parsed.success) return json({ error: parsed.error.flatten().fieldErrors }, 400);
   const q = parsed.data;
+  const machine = keyCheck.admission?.machine;
+  try { assertMachineScope(machine, q.companyDb, req.method === 'GET' ? 'read' : 'forbidden'); }
+  catch { return json({ error: 'Empresa ou operação fora do escopo técnico' }, 403); }
 
   const ids = q.transactionIds
     ? q.transactionIds.split(",").map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n > 0).slice(0, 200)
@@ -107,6 +111,7 @@ Deno.serve(async (req) => {
   if (q.transactionId) query = query.eq("pagcorp_expense_id", q.transactionId);
   else if (ids.length) query = query.in("pagcorp_expense_id", ids);
   if (q.companyDb) query = query.eq("company_db", q.companyDb);
+  if (machine) query = query.in('company_db', machine.company_dbs);
   if (q.updatedSince) query = query.gte("updated_at", q.updatedSince);
 
   const { data, error } = await query.range(q.offset, q.offset + q.limit - 1);

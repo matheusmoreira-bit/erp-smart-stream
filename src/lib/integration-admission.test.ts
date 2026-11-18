@@ -23,6 +23,7 @@ function fixture() {
   let enabled = true;
   let failure = false;
   let person = 'blocked';
+  let machineProof = false;
   const effects: string[] = [];
   const admin = {
     from: (table: string) => {
@@ -47,17 +48,28 @@ function fixture() {
     './erp-access.ts': { assertErpAccess: async (_admin: unknown, actor: { sapUser: string }) => {
       effects.push('actor-check'); if (actor.sapUser === 'blocked') throw Object.assign(new Error('blocked'), { status: 403 });
     } },
+    './integration-machine.ts': { hasMachineProof: () => machineProof,
+      verifyMachineProof: async () => ({ id: 'machine', operations: ['list'] }) },
   }) as unknown as Guard;
   const validator = load('supabase/functions/_shared/api-keys.ts', { './integration-admission.ts': guard }) as {
     validateApiKey: (admin: unknown, req: Request, service: string, legacy?: string) => Promise<{ valid: boolean; status?: number }>;
   };
   return { admin, guard, validator, effects, setEnabled: (value: boolean) => { enabled = value; },
-    setPerson: (value: string) => { person = value; }, fail: () => { failure = true; } };
+    setPerson: (value: string) => { person = value; }, setMachine: () => { machineProof = true; }, fail: () => { failure = true; } };
 }
 const keyOnly = () => new Request('https://example.test', { headers: { 'x-api-key': 'synthetic-key', 'x-user-id': 'juliana.gavineli', 'x-scheduler-secret': 'forged' } });
 const human = () => new Request('https://example.test', { headers: { 'x-api-key': 'synthetic-key', authorization: 'Bearer synthetic-human' } });
 
 describe('integration keys cannot bypass ERP admission', () => {
+  it('permits independently verified machine reads under restriction without a human alias', async () => {
+    const f = fixture(); f.setMachine();
+    expect(await f.validator.validateApiKey(f.admin, keyOnly(), 'test')).toMatchObject({ valid: true });
+  });
+  it('does not fall back from a blocked human to an otherwise valid machine proof', async () => {
+    const f = fixture(); f.setMachine();
+    expect(await f.validator.validateApiKey(f.admin, human(), 'test')).toMatchObject({ valid: false, status: 403 });
+    expect(f.effects).toEqual([]);
+  });
   it('denies key-only calls while restricted even with forged exemption headers', async () => {
     const f = fixture();
     await expect(f.guard.checkIntegrationAdmission(f.admin, keyOnly())).rejects.toMatchObject({ status: 403 });
