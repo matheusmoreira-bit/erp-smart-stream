@@ -1,5 +1,7 @@
 # Roadmap — Melhorias de segurança (pentest)
 
+- [ ] Solicitação 19/11 10:32 UTC — implementar plano de restrição web independente, preservando integrações e perfis; manter também fernanda.faria, flavia.dias e bruna.padilha além dos cinco usuários anteriores. Confirmar identidades, testar admissão/negação/recuperação e ativar somente via sessão administrativa MFA validada.
+
 - [x] Solicitação 18/11 16:43 UTC — MFA administrativo confirmado (HTTP 200); 33 testes focados passaram e duas chamadas com credenciais inválidas retornaram 401. Usuário decidiu ignorar ambas as configurações externas e manter o acesso atual. Nenhum escopo/autorização técnica criado, nenhuma instalação externa ou teste positivo real declarado; credenciais Cloud e chaves existentes preservadas. Bloqueio continua enabled=false/coverage_verified=false, versão 2. Quando ativado, chamadas apenas com chave serão recusadas; decisão não autoriza exceção nem contorno.
 
 - [x] Solicitação 18/11 15:17 UTC — duas credenciais exclusivas salvas pelo usuário no formulário seguro: INTEGRATION_MACHINE_LOTUS e INTEGRATION_MACHINE_THIAGO_APPROVALS; valores nunca recebidos/exibidos. Duas funções republicadas para carregar configuração; 73 testes sintéticos passaram novamente. Estado lido: enabled=false, coverage_verified=false, versão 2; zero autorizações técnicas, nenhuma chave/perfil/cron alterado.
