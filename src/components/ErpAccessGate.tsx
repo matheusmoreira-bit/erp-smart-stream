@@ -18,8 +18,9 @@ export function ErpAccessGate({ children }: { children: ReactNode }) {
       try {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) throw sessionError;
-        // Auth and signed-token routes have their own server-side verification.
-        if (!session || pathname === '/login' || pathname.startsWith('/aprovar/')) {
+        // Signed-token routes retain their own verification; authenticated login
+        // callbacks must be checked before redirects, SAP login or admin MFA.
+        if (!session || pathname.startsWith('/aprovar/')) {
           if (!cancelled && run === sequence) setState('allowed');
           return;
         }
@@ -49,7 +50,8 @@ export function ErpAccessGate({ children }: { children: ReactNode }) {
   if (state === 'loading') return <div className="min-h-screen bg-background flex items-center justify-center" role="status" aria-label="Verificando acesso"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
   return <main className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center gap-5 p-6 text-center">
     <LockKeyhole className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
-    <h1 className="text-xl font-semibold">{state === 'blocked' ? 'Acesso temporariamente bloqueado' : 'Não foi possível verificar seu acesso'}</h1>
+    <h1 className="text-xl font-semibold">{state === 'blocked' ? 'Acesso negado' : 'Não foi possível verificar seu acesso'}</h1>
+    {state === 'blocked' && <p className="max-w-md text-sm text-muted-foreground">Seu acesso à página web do ERP Flow está bloqueado. Entre em contato com um administrador para solicitar a liberação.</p>}
     <div className="flex flex-wrap justify-center gap-3">
       <Button variant="outline" onClick={() => { setState('loading'); setReload(value => value + 1); }}><RefreshCw />Tentar novamente</Button>
       <Button variant="ghost" onClick={() => { void supabase.auth.signOut(); }}><LogOut />Sair</Button>
