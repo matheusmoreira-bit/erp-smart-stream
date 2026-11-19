@@ -3573,6 +3573,9 @@ export type Database = {
           updated_at: string
           updated_by: string | null
           version: number
+          web_allowed_user_ids: string[]
+          web_enabled: boolean
+          web_required_emails: string[]
         }
         Insert: {
           allowed_user_ids?: string[]
@@ -3584,6 +3587,9 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           version?: number
+          web_allowed_user_ids?: string[]
+          web_enabled?: boolean
+          web_required_emails?: string[]
         }
         Update: {
           allowed_user_ids?: string[]
@@ -3595,6 +3601,9 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           version?: number
+          web_allowed_user_ids?: string[]
+          web_enabled?: boolean
+          web_required_emails?: string[]
         }
         Relationships: []
       }
@@ -10880,6 +10889,7 @@ export type Database = {
       erp_access_admitted: { Args: { _user_id?: string }; Returns: boolean }
       erp_access_is_manager: { Args: never; Returns: boolean }
       erp_access_status: { Args: never; Returns: Json }
+      erp_web_access_status: { Args: never; Returns: Json }
       find_open_registration_duplicate:
         | {
             Args: { p_tax_id?: string; p_title?: string; p_type: string }
@@ -11302,6 +11312,10 @@ export type Database = {
         Returns: undefined
       }
       manage_erp_access: {
+        Args: { _action: string; _email?: string; _expected_version: number }
+        Returns: Json
+      }
+      manage_erp_web_access: {
         Args: { _action: string; _email?: string; _expected_version: number }
         Returns: Json
       }

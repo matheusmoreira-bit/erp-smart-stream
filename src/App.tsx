@@ -100,11 +100,11 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <BrowserRouter>
         <ErpAccessGate>
         <SapProvider>
           <PermissionsV2Provider>
           <TestCompanyVisibilityGate />
-          <BrowserRouter>
             <OfflineResilienceAgent />
             <AppVersionAgent />
             <StandaloneModeBanner />
@@ -247,7 +247,6 @@ const App = () => (
             </Routes>
             </RequireAuth>
             <MobileBottomNav />
-          </BrowserRouter>
           <TestCompanyBanner />
           <DefaultPasswordWarning />
           <WhatsNewWizard />
@@ -258,6 +257,7 @@ const App = () => (
           </PermissionsV2Provider>
         </SapProvider>
         </ErpAccessGate>
+        </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>
   </ThemeProvider>

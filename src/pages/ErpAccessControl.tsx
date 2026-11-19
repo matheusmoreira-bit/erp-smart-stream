@@ -9,10 +9,15 @@ import { AdminMfaGate } from '@/components/AdminMfaGate';
 import { accessStatusSchema, type ErpAccessStatus } from '@/lib/erp-access-control';
 
 export default function ErpAccessControl() {
-  return <AdminMfaGate><AccessManagement /></AdminMfaGate>;
+  return <AdminMfaGate>
+    <BackofficePageHeader title="Controle de acesso" icon={<LockKeyhole className="h-5 w-5" />} />
+    <AccessManagement kind="web" />
+    <AccessManagement kind="global" />
+  </AdminMfaGate>;
 }
 
-function AccessManagement() {
+function AccessManagement({ kind }: { kind: 'web' | 'global' }) {
+  const isWeb = kind === 'web';
   const [status, setStatus] = useState<ErpAccessStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -22,39 +27,42 @@ function AccessManagement() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const result = await supabase.rpc('erp_access_status');
+      const result = await supabase.rpc(isWeb ? 'erp_web_access_status' : 'erp_access_status');
       if (result.error) throw result.error;
       setStatus(accessStatusSchema.parse(result.data));
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível carregar a configuração.'); }
     finally { setLoading(false); }
-  }, []);
+  }, [isWeb]);
   useEffect(() => { void load(); }, [load]);
   const change = async (action: 'enable' | 'disable' | 'allow' | 'remove', target?: string) => {
     if (!status || busy || loading || error) return;
     setBusy(true); setError(null);
     try {
-      const result = await supabase.rpc('manage_erp_access', { _action: action, _expected_version: status.version, _email: target ?? null });
+      const result = await supabase.rpc(isWeb ? 'manage_erp_web_access' : 'manage_erp_access', { _action: action, _expected_version: status.version, _email: target ?? null });
       if (result.error) throw result.error;
       setStatus(accessStatusSchema.parse(result.data)); setEmail(''); setConfirmation(null);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível salvar. Atualize a configuração.'); }
     finally { setBusy(false); }
   };
   const submit = (event: FormEvent) => { event.preventDefault(); void change('allow', email.trim()); };
-  return <div className="min-h-screen bg-background text-foreground">
-    <BackofficePageHeader title="Controle de acesso" icon={<LockKeyhole className="h-5 w-5" />} actions={<Button variant="outline" size="icon" title="Atualizar configuração" aria-label="Atualizar configuração" disabled={busy || loading} onClick={() => { void load(); }}><RefreshCw className={loading ? 'animate-spin' : ''} /></Button>} />
-    <main className="max-w-4xl mx-auto p-4 md:p-8 space-y-8">
+  return <section className="bg-background text-foreground border-b border-border" aria-label={isWeb ? 'Restrição da página web' : 'Bloqueio global'}>
+    <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8">
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="text-xl font-semibold">{isWeb ? 'Restrição da página web' : 'Bloqueio global · dados e integrações'}</h2>
+        <Button variant="outline" size="icon" title="Atualizar configuração" aria-label={`Atualizar ${isWeb ? 'restrição web' : 'bloqueio global'}`} disabled={busy || loading} onClick={() => { void load(); }}><RefreshCw className={loading ? 'animate-spin' : ''} /></Button>
+      </div>
       {error && <div role="alert" className="border border-destructive rounded-md p-4 text-destructive">{error}<Button variant="outline" className="ml-3" disabled={busy} onClick={() => { void load(); }}>Atualizar</Button></div>}
       {loading ? <div role="status" aria-label="Carregando configuração"><Loader2 className="h-6 w-6 animate-spin" /></div> : status && !status.manager ? <p role="alert">Acesso negado — somente administradores autorizados com MFA.</p> : status && <>
         <section className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <h2 className="text-lg font-semibold">{status.enabled ? 'Acesso restrito ativo' : 'Acesso geral — permissões atuais'}</h2>
             <Button variant={status.enabled ? 'outline' : 'default'} disabled={busy || !!error || (!status.enabled && !status.ready)} onClick={() => setConfirmation(status.enabled ? 'disable' : 'enable')}>
-              {status.enabled ? <UnlockKeyhole /> : <LockKeyhole />}{status.enabled ? 'Restaurar acesso geral' : 'Ativar restrição'}
+              {status.enabled ? <UnlockKeyhole /> : <LockKeyhole />}{status.enabled ? 'Restaurar acesso geral' : isWeb ? 'Restringir página web' : 'Ativar bloqueio global'}
             </Button>
           </div>
           {!status.ready && <p role="status" className="text-sm text-muted-foreground">Ativação indisponível: {status.coverage_note}</p>}
-          {confirmation && <div role="alertdialog" aria-labelledby="access-confirm" className="border border-border rounded-md p-4 space-y-3">
-            <h3 id="access-confirm" className="font-medium">{confirmation === 'enable' ? 'Bloquear todos, exceto a lista abaixo?' : 'Restaurar as permissões anteriores de todos?'}</h3>
+          {confirmation && <div role="alertdialog" aria-labelledby={`access-confirm-${kind}`} className="border border-border rounded-md p-4 space-y-3">
+            <h3 id={`access-confirm-${kind}`} className="font-medium">{confirmation === 'enable' ? isWeb ? 'Restringir as telas aos usuários abaixo, mantendo as integrações?' : 'Bloquear todos, exceto a lista abaixo?' : 'Restaurar o acesso de todos?'}</h3>
             <div className="flex gap-3"><Button disabled={busy} onClick={() => { void change(confirmation); }}>{busy && <Loader2 className="animate-spin" />}Confirmar</Button><Button variant="ghost" disabled={busy} onClick={() => setConfirmation(null)}>Cancelar</Button></div>
           </div>}
         </section>
@@ -67,11 +75,11 @@ function AccessManagement() {
             </li>)}
           </ul>}
           <form onSubmit={submit} className="space-y-2">
-            <Label htmlFor="access-email">Liberar pessoa</Label>
-            <div className="flex flex-col sm:flex-row gap-3"><Input id="access-email" type="email" autoComplete="email" maxLength={254} required value={email} onChange={event => setEmail(event.target.value)} placeholder="E-mail corporativo completo" disabled={busy} className="min-w-0" /><Button type="submit" disabled={busy || !!error || !email.trim()}><UserPlus />Liberar</Button></div>
+            <Label htmlFor={`access-email-${kind}`}>Liberar pessoa</Label>
+            <div className="flex flex-col sm:flex-row gap-3"><Input id={`access-email-${kind}`} type="email" autoComplete="email" maxLength={254} required value={email} onChange={event => setEmail(event.target.value)} placeholder="E-mail corporativo completo" disabled={busy} className="min-w-0" /><Button type="submit" disabled={busy || !!error || !email.trim()}><UserPlus />Liberar</Button></div>
           </form>
         </section>
       </>}
-    </main>
-  </div>;
+    </div>
+  </section>;
 }

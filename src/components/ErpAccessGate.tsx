@@ -3,9 +3,11 @@ import { Loader2, LockKeyhole, LogOut, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { accessStatusSchema } from '@/lib/erp-access-control';
+import { useLocation } from 'react-router-dom';
 
-/** Admission presentation only: server guards and RLS remain authoritative. */
+/** Web presentation restriction is independent of authoritative resource guards. */
 export function ErpAccessGate({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
   const [state, setState] = useState<'loading' | 'allowed' | 'blocked' | 'error'>('loading');
   const [reload, setReload] = useState(0);
   useEffect(() => {
@@ -17,14 +19,17 @@ export function ErpAccessGate({ children }: { children: ReactNode }) {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) throw sessionError;
         // Auth and signed-token routes have their own server-side verification.
-        if (!session || window.location.pathname === '/login' || window.location.pathname.startsWith('/aprovar/')) {
+        if (!session || pathname === '/login' || pathname.startsWith('/aprovar/')) {
           if (!cancelled && run === sequence) setState('allowed');
           return;
         }
         const { data, error } = await supabase.rpc('erp_access_status');
         if (error) throw error;
         const status = accessStatusSchema.parse(data);
-        if (!cancelled && run === sequence) setState(status.admitted ? 'allowed' : 'blocked');
+        const web = await supabase.rpc('erp_web_access_status');
+        if (web.error) throw web.error;
+        const webStatus = accessStatusSchema.parse(web.data);
+        if (!cancelled && run === sequence) setState(status.admitted && webStatus.admitted ? 'allowed' : 'blocked');
       } catch {
         if (!cancelled && run === sequence) setState('error');
       }
@@ -38,7 +43,7 @@ export function ErpAccessGate({ children }: { children: ReactNode }) {
     const focus = () => { void evaluate(); };
     window.addEventListener('focus', focus);
     return () => { cancelled = true; sequence++; subscription.unsubscribe(); window.clearInterval(interval); window.removeEventListener('focus', focus); };
-  }, [reload]);
+  }, [reload, pathname]);
 
   if (state === 'allowed') return <>{children}</>;
   if (state === 'loading') return <div className="min-h-screen bg-background flex items-center justify-center" role="status" aria-label="Verificando acesso"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;

@@ -575,6 +575,13 @@
       "when": 1795014448783,
       "tag": "0081_integration_machine_admission",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1795084926621,
+      "tag": "0082_independent_web_access_restriction",
+      "breakpoints": true
     }
   ]
 }
