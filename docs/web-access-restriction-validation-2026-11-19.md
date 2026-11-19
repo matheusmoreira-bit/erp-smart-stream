@@ -3,6 +3,14 @@
 ## Resultado
 Preparação concluída; **NO-GO para ativação** até resolver os dois impedimentos abaixo. Nenhum usuário foi bloqueado, nenhuma integração ou perfil foi alterado.
 
+## Retomada às 10:53 UTC
+- MFA administrativo confirmado pelo endpoint publicado: status global e web HTTP 200, `manager=true`.
+- Incluído `scope=web` no endpoint `erp-access-manage`, com enum validado, mesmo JWT/MFA e default global intacto. Função publicada e quatro testes de contrato acrescidos.
+- Tentativa real autorizada de incluir `flavia.alves@growth.gg` retornou HTTP 400 “Conta confirmada não encontrada”. Consulta independente ao Auth retornou zero contas para esse e-mail. Não criada conta, não substituído e-mail, não alterada lista.
+- Chamada com token inválido retornou 401. Todos os 42 testes passaram.
+- Navegador restaurado ainda mostra MFA; as ferramentas de chamada publicada reconheceram o MFA, mas isso não verifica os controles visuais com a sessão restaurada. Nenhum código MFA foi pedido nem contornado.
+- Restrição web e global mantidas desligadas, versão 2; não executada ação de ativação, conforme solicitação expressa do usuário.
+
 ## Identidades
 - Confirmadas: Mauricio, Juliana, Artur, Douglas, duas contas de Hiller, Fernanda Faria e Bruna Padilha.
 - Hiller corrigiu Flavia para `flavia.alves@growth.gg`; essa conta não existe no Auth. O diretório SAP contém Flavia Alves com outro e-mail, que não foi usado como substituição nem recebeu nova permissão.

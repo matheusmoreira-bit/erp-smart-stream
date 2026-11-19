@@ -5,6 +5,7 @@ import { rejectForeignOrigin } from '../_shared/cors-allowlist.ts';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
 const schema = z.object({
+  scope: z.enum(['global', 'web']).default('global'),
   action: z.enum(['status', 'enable', 'disable', 'allow', 'remove']),
   version: z.number().int().nonnegative().optional(),
   email: z.string().email().max(254).optional(),
@@ -32,8 +33,8 @@ Deno.serve(async req => {
     const input = parsed.data;
     if (input.action !== 'status' && input.version === undefined) return json({ error: 'Atualize a configuração.' }, 400);
     const result = input.action === 'status'
-      ? await caller.rpc('erp_access_status')
-      : await caller.rpc('manage_erp_access', { _action: input.action, _expected_version: input.version, _email: input.email ?? null });
+      ? await caller.rpc(input.scope === 'web' ? 'erp_web_access_status' : 'erp_access_status')
+      : await caller.rpc(input.scope === 'web' ? 'manage_erp_web_access' : 'manage_erp_access', { _action: input.action, _expected_version: input.version, _email: input.email ?? null });
     if (result.error) return json({ error: result.error.message }, result.error.code === '42501' ? 403 : result.error.code === '40001' ? 409 : 400);
     return json(result.data);
   } catch (error) {
