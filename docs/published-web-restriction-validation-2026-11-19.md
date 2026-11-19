@@ -1,5 +1,15 @@
 # Validação da restrição web publicada — 19/11/2026
 
+## Retomada às 11:53 UTC — sessão realmente bloqueada
+
+- Criada conta temporária fora da lista via ferramenta gerenciada, sem alterar contas existentes, permissões ou configuração. A ferramenta informou ambiente compartilhado de produção e remoção automática ao encerrar o turno.
+- Navegador local em `/login`, com a sessão temporária e sem interceptação de respostas: verificadores publicados retornaram admissão global verdadeira e admissão web falsa. A página exibiu **“Acesso negado”**, antes de login SAP ou MFA administrativo; `/compras` também recusou. Screenshots desktop e mobile inspecionados.
+- Sessão existente do solicitante: admissão web verdadeira; chegou à verificação MFA existente. Isso confirma passagem pela restrição, não a execução das tarefas internas.
+- Oito contas obrigatórias de sete pessoas continuam confirmadas e permitidas. Não houve login individual nas outras sete contas.
+- 36 testes focados passaram, incluindo compatibilidade de chave válida com restrição web ativa e global desligada. MasterTax possui três registros `ok` posteriores à ativação, último em 11:49:07 UTC. As duas chaves externas continuam ativas, mas seus últimos usos são anteriores à ativação; consumidores Lotus e Thiago não foram exercitados.
+- **Limite importante:** a conta temporária recebeu uma sessão gerenciada, não fez OAuth Google interativo. O fluxo pós-sessão foi comprovado com recusa real; Google completo e versão publicada continuam não verificados. Nenhuma sessão do ERP foi enviada ao Cloudflare.
+- **GO** para a recusa pós-sessão no código atual; **NO-GO** para declarar Google/publicação e todas as exceções/integrações ponta a ponta. Alterados apenas este relatório e `roadmap.md`; nenhuma correção de aplicação foi necessária.
+
 ## Resultado
 
 **NO-GO para declarar validação ponta a ponta da página publicada.** Nenhuma falha de aplicação comprovada; não alterar acesso, perfis, integrações ou proteção do Cloudflare com base nessa limitação.
