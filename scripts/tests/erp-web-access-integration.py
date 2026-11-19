@@ -72,4 +72,14 @@ actor(douglas, "SELECT public.manage_erp_web_access('disable',5,NULL);")
 assert json.loads(actor(blocked, 'SELECT public.erp_web_access_status();'))['admitted'] is True
 assert sql("SELECT count(*) FROM public.audit_log WHERE action LIKE 'erp_web_access_%';") == '5'
 assert sql('SELECT enabled FROM public.erp_access_control;') == 'f'
-print('PASS: eight people/nine accounts; pending Flavia; blocked admin; MFA; stale version; recovery protection; independent API admission; individual reopen; Douglas rollback; audit.')
+# User-approved final list excludes Flavia; future access still uses normal allow.
+sql("UPDATE public.erp_access_control SET web_required_emails=array_remove(web_required_emails,'flavia.alves@growth.gg');")
+actor(hiller, "SELECT public.manage_erp_web_access('remove',6,'flavia.alves@growth.gg');")
+assert json.loads(actor(hiller, 'SELECT public.erp_web_access_status();'))['ready'] is True
+actor(hiller, "SELECT public.manage_erp_web_access('enable',7,NULL);")
+for email in users:
+    expected = email not in (blocked, 'flavia.alves@growth.gg')
+    assert json.loads(actor(email, 'SELECT public.erp_web_access_status();'))['admitted'] is expected, email
+assert sql('SELECT cardinality(web_allowed_user_ids) FROM public.erp_access_control;') == '8'
+assert sql('SELECT enabled FROM public.erp_access_control;') == 'f'
+print('PASS: seven people/eight accounts without Flavia; future allow supported; pending account; blocked admin; MFA; stale version; recovery protection; independent API admission; individual reopen; Douglas rollback; audit.')

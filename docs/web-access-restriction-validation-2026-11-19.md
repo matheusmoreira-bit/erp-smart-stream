@@ -2,6 +2,15 @@
 
 ## Resultado
 Preparação concluída; **NO-GO para ativação** até resolver os dois impedimentos abaixo. Nenhum usuário foi bloqueado, nenhuma integração ou perfil foi alterado.
+Atualização às 11:05 UTC: **configuração da restrição web ativada**, após dispensa expressa de Flavia e confirmação administrativa de MFA. Sete pessoas/oito contas permanecem permitidas, bloqueio global desligado; integrações e perfis inalterados. O estado anterior acima descreve a preparação, não o estado atual.
+
+## Ativação autorizada às 11:04 UTC
+- Retirada somente Flavia das contas obrigatórias com auditoria e incremento para versão 3; conta não criada nem liberada.
+- Status web autenticado confirmou `ready=true`, `manager=true`. Ação `enable` via endpoint MFA retornou HTTP 200, `enabled=true`, `admitted=true`, versão 4, com auditoria em nome de Hiller.
+- Leitura independente confirmou `web_enabled=true`, `enabled=false`, oito contas. 42 testes passaram novamente.
+- Preview restaurado confirmou admissão de Hiller e restrição ativa, mas a gestão visual ainda pede MFA nessa sessão restaurada.
+- Não foi possível verificar o efeito na página publicada: domínio corporativo redireciona à proteção Cloudflare Access, sem sessão disponível para essa camada; URL pública alternativa também não forneceu o aplicativo à leitura. Ausência de scripts nessa resposta não prova versão desatualizada. Não houve publicação nem alteração de proteção externa.
+- Liberação individual e reabertura geral permanecem disponíveis em Controle de acesso, seção Restrição da página web, mediante administrador de recuperação com MFA. Recuperação já testada no ensaio sintético; não foi desligada a configuração de produção para repetir esse ensaio.
 
 ## Retomada às 10:53 UTC
 - MFA administrativo confirmado pelo endpoint publicado: status global e web HTTP 200, `manager=true`.
