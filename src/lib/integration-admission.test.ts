@@ -21,6 +21,7 @@ function load(path: string, dependencies: Record<string, unknown>) {
 }
 function fixture() {
   let enabled = true;
+  let webEnabled = false;
   let failure = false;
   let person = 'blocked';
   let machineProof = false;
@@ -31,7 +32,7 @@ function fixture() {
       query.select = query.eq = () => query;
       query.update = () => { effects.push('usage-update'); return query; };
       query.maybeSingle = async () => table === 'erp_access_control'
-        ? { data: failure ? null : { enabled }, error: failure ? new Error('offline') : null }
+        ? { data: failure ? null : { enabled, web_enabled: webEnabled }, error: failure ? new Error('offline') : null }
         : { data: { id: 'key', name: 'synthetic', service: 'test', project_codes: ['TEST'] }, error: null };
       query.then = (resolve: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(resolve);
       return query;
@@ -55,6 +56,7 @@ function fixture() {
     validateApiKey: (admin: unknown, req: Request, service: string, legacy?: string) => Promise<{ valid: boolean; status?: number }>;
   };
   return { admin, guard, validator, effects, setEnabled: (value: boolean) => { enabled = value; },
+    setWebEnabled: (value: boolean) => { webEnabled = value; },
     setPerson: (value: string) => { person = value; }, setMachine: () => { machineProof = true; }, fail: () => { failure = true; } };
 }
 const keyOnly = () => new Request('https://example.test', { headers: { 'x-api-key': 'synthetic-key', 'x-user-id': 'juliana.gavineli', 'x-scheduler-secret': 'forged' } });
@@ -87,6 +89,13 @@ describe('integration keys cannot bypass ERP admission', () => {
   it('preserves key-only automation while gate remains disabled', async () => {
     const f = fixture(); f.setEnabled(false);
     expect(await f.validator.validateApiKey(f.admin, keyOnly(), 'test')).toMatchObject({ valid: true });
+  });
+  it('preserves key-only integration admission with web restriction active and global restriction disabled', async () => {
+    const f = fixture(); f.setEnabled(false); f.setWebEnabled(true);
+    expect(await f.guard.checkIntegrationAdmission(f.admin, keyOnly())).toEqual({ restricted: false });
+    expect(await f.validator.validateApiKey(f.admin, keyOnly(), 'test')).toMatchObject({ valid: true });
+    f.setEnabled(true);
+    expect(await f.validator.validateApiKey(f.admin, keyOnly(), 'test')).toMatchObject({ valid: false, status: 403 });
   });
   it('checks latest gate value on every call and resumes after reopening', async () => {
     const f = fixture();
